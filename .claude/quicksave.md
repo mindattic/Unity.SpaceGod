@@ -9,6 +9,18 @@ quicksave is a manual backfill of the crash-recovery convention (`quicksave`/`qu
 below as the reasoned continuation of the project from its last real commit, not as something
 already underway.
 
+## What the original build session said needs the owner (verbatim from its final report)
+Session: Launcher tab, transcript `49c440fd-b1be-4b18-96d6-1726e4def952` (scratch copy in
+`D:\Projects\MindAttic\_recovery\launcher-solarsystem-49c440fd`). It finished and pushed before the crash.
+- **Not checked:** how it *feels* to fly with mouse and keyboard — needs the owner at the controls.
+- Only Earth's Moon is placed accurately along its orbit; other moons' orbital positions are
+  placeholders (motion is right). At gameplay scale, transiting ships follow a path between where
+  planets *appear*, not the true straight line (true path at realistic scale). The swim-speed
+  readout can show "0.9 c" at gameplay scale. No combat or economy yet.
+- No free carrier/battleship models with a clear licence were found, so warships are code-built;
+  freighters/haulers/couriers use Kenney's Space Kit (public domain).
+On resume, ask the owner how the Homeworld-style flight felt before picking the next item.
+
 ## Decisions locked this session
 - The crash-recovery convention (`.claude\commands\quicksave.md`, `.claude\commands\quickload.md`,
   `.claude\hooks\quickload-on-do.ps1`, `.claude\settings.json` registering the `UserPromptSubmit`
