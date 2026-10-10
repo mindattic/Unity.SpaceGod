@@ -1,0 +1,170 @@
+using System;
+
+namespace SolarSystem.Core
+{
+    /// <summary>
+    /// Computes where every body is at a Julian date by two-body Kepler propagation of its
+    /// elements. Positions are km in the J2000 ecliptic frame; "relative" means relative to the
+    /// parent body, "helio" means relative to the Sun's centre.
+    ///
+    /// Analytic propagation (not numerical integration) is deliberate: it is exact for any time
+    /// warp, never drifts, and can be evaluated at arbitrary future dates, which ship flight
+    /// planning needs for intercepts.
+    /// </summary>
+    public sealed class Ephemeris
+    {
+        public BodyCatalog Catalog { get; }
+        public double Jd { get; private set; } = double.NaN;
+
+        readonly DVec3[] relative;
+        readonly DVec3[] helio;
+        readonly DVec3[] velocity;
+        readonly FrameBasis[] frames;
+        readonly int moonIndex = -1;
+        readonly int earthIndex = -1;
+        readonly double moonMassFraction;
+
+        public Ephemeris(BodyCatalog catalog)
+        {
+            Catalog = catalog;
+            relative = new DVec3[catalog.Count];
+            helio = new DVec3[catalog.Count];
+            velocity = new DVec3[catalog.Count];
+            frames = new FrameBasis[catalog.Count];
+
+            for (int i = 0; i < catalog.Count; i++)
+            {
+                var b = catalog[i];
+                frames[i] = b.Plane == OrbitPlane.ParentEquator && b.ParentIndex >= 0
+                    ? FrameBasis.FromPole(catalog[b.ParentIndex].SpinAxis)
+                    : FrameBasis.Ecliptic;
+            }
+
+            if (catalog.TryGet("Earth", out var earth) && catalog.TryGet("Moon", out var moon) && moon.ParentIndex == earth.Index)
+            {
+                earthIndex = earth.Index;
+                moonIndex = moon.Index;
+                moonMassFraction = moon.Gm / (earth.Gm + moon.Gm);
+            }
+        }
+
+        public DVec3 Relative(int body) => relative[body];
+        public DVec3 Helio(int body) => helio[body];
+
+        /// <summary>Velocity relative to the parent, km/s.</summary>
+        public DVec3 RelativeVelocityKmS(int body) => velocity[body] / Astro.SecondsPerDay;
+
+        public void Update(double jd)
+        {
+            Jd = jd;
+            for (int i = 0; i < Catalog.Count; i++)
+            {
+                var b = Catalog[i];
+                if (b.Elements == null)
+                {
+                    relative[i] = DVec3.Zero;
+                    velocity[i] = DVec3.Zero;
+                    continue;
+                }
+                var k = b.Elements.At(jd);
+                relative[i] = frames[i].ToEcliptic(Kepler.Position(k));
+                velocity[i] = frames[i].ToEcliptic(Kepler.Velocity(k));
+            }
+
+            // JPL's "Earth" elements are the Earth-Moon barycentre; Earth sits 4,670 km from it.
+            if (earthIndex >= 0)
+                relative[earthIndex] -= relative[moonIndex] * moonMassFraction;
+
+            for (int i = 0; i < Catalog.Count; i++)
+            {
+                int p = Catalog[i].ParentIndex;
+                helio[i] = p < 0 ? relative[i] : helio[p] + relative[i];
+            }
+        }
+
+        /// <summary>Heliocentric position of one body at an arbitrary date, without touching the cached frame.</summary>
+        public DVec3 HelioAt(int body, double jd)
+        {
+            var b = Catalog[body];
+            if (b.Elements == null) return DVec3.Zero;
+            var rel = frames[body].ToEcliptic(Kepler.Position(b.Elements.At(jd)));
+            if (body == earthIndex)
+                rel -= RelativeAt(moonIndex, jd) * moonMassFraction;
+            return HelioAt(b.ParentIndex, jd) + rel;
+        }
+
+        DVec3 RelativeAt(int body, double jd) =>
+            frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd)));
+
+        /// <summary>Samples one full orbit (relative to the parent) with the elements at <paramref name="jd"/>.</summary>
+        public void SampleOrbit(int body, double jd, DVec3[] output)
+        {
+            var b = Catalog[body];
+            var k = b.Elements.At(jd);
+            int n = output.Length;
+            for (int i = 0; i < n; i++)
+            {
+                // Uniform in eccentric anomaly, so eccentric orbits get points where curvature is.
+                double ecc = Astro.TwoPi * i / (n - 1);
+                double m = ecc - k.E * Math.Sin(ecc);
+                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m)));
+            }
+        }
+
+        /// <summary>
+        /// Samples one full orbit starting at the body's current position and running backwards
+        /// along it, so a fading alpha ramp along the samples reads as a trail behind the body.
+        /// </summary>
+        public void SampleOrbitTrail(int body, double jd, DVec3[] output)
+        {
+            var b = Catalog[body];
+            var k = b.Elements.At(jd);
+            double now = Kepler.SolveEccentricAnomaly(k.MeanAnomaly, k.E);
+            int n = output.Length;
+            double sense = k.MeanMotion >= 0 ? 1 : -1;
+            for (int i = 0; i < n; i++)
+            {
+                double ecc = now - sense * Astro.TwoPi * i / (n - 1);
+                double m = ecc - k.E * Math.Sin(ecc);
+                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m)));
+            }
+        }
+
+        /// <summary>Orbital speed relative to the parent (km/s) from vis-viva.</summary>
+        public double OrbitalSpeedKmS(int body)
+        {
+            var b = Catalog[body];
+            if (b.ParentIndex < 0) return 0;
+            double gm = Catalog[b.ParentIndex].Gm + b.Gm;
+            return Kepler.VisVivaSpeed(gm, relative[body].Length, b.Elements.At(Jd).A);
+        }
+
+        readonly struct FrameBasis
+        {
+            readonly DVec3 x;
+            readonly DVec3 y;
+            readonly DVec3 z;
+
+            FrameBasis(DVec3 x, DVec3 y, DVec3 z)
+            {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+            }
+
+            public static readonly FrameBasis Ecliptic = new FrameBasis(DVec3.UnitX, DVec3.UnitY, DVec3.UnitZ);
+
+            /// <summary>Equatorial frame of a pole: x toward the equator's ascending node on the ecliptic.</summary>
+            public static FrameBasis FromPole(DVec3 pole)
+            {
+                var z = pole.Normalized;
+                var node = DVec3.Cross(DVec3.UnitZ, z);
+                var x = node.LengthSquared < 1e-12 ? DVec3.UnitX : node.Normalized;
+                var y = DVec3.Cross(z, x);
+                return new FrameBasis(x, y, z);
+            }
+
+            public DVec3 ToEcliptic(DVec3 v) => x * v.X + y * v.Y + z * v.Z;
+        }
+    }
+}

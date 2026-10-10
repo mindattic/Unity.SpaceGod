@@ -1,0 +1,161 @@
+using System.Collections.Generic;
+using SolarSystem.Core;
+using UnityEngine;
+
+namespace SolarSystem.Rendering
+{
+    /// <summary>
+    /// Builds the model under a ship's root: a Kenney Space Kit craft (CC0) for small civilian
+    /// classes, or a procedural hull for warships (and as a fallback). Models are normalised to one
+    /// unit long, centred, nose on +Z, and re-materialed with the Sun-lit ship shader.
+    /// </summary>
+    public static class ShipModels
+    {
+        // Kenney's craft face -Z; yaw 180 puts the nose on +Z.
+        const float KenneyYaw = 180f;
+
+        static readonly Dictionary<string, GameObject> Prototypes = new Dictionary<string, GameObject>();
+        static readonly Dictionary<(string, Faction), Material[]> MaterialCache = new Dictionary<(string, Faction), Material[]>();
+        static Material proceduralMaterial;
+        static Transform prototypeRoot;
+
+        public static GameObject Build(Ship ship, Transform parent, out List<Renderer> renderers)
+        {
+            renderers = new List<Renderer>();
+            string kenney = KenneyModelFor(ship);
+            if (kenney != null)
+            {
+                var model = InstantiateKenney(kenney, ship.Faction, parent, renderers);
+                if (model != null) return model;
+            }
+
+            var go = new GameObject("Hull");
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.Get(ship.Spec.Class, ship.Faction);
+            var mr = go.AddComponent<MeshRenderer>();
+            if (proceduralMaterial == null)
+            {
+                proceduralMaterial = Materials.Create(Materials.Ship, "ShipProcedural");
+                proceduralMaterial.SetFloat("_UseVertexColor", 1);
+            }
+            mr.sharedMaterial = proceduralMaterial;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            renderers.Add(mr);
+            return go;
+        }
+
+        static string KenneyModelFor(Ship ship)
+        {
+            switch (ship.Spec.Class)
+            {
+                case ShipClass.Freighter: return ship.Id % 2 == 0 ? "craft_cargoA" : "craft_cargoB";
+                case ShipClass.Miner: return "craft_miner";
+                case ShipClass.Courier: return ship.Id % 2 == 0 ? "craft_speederA" : "craft_racer";
+                default: return null;
+            }
+        }
+
+        static GameObject InstantiateKenney(string modelName, Faction faction, Transform parent, List<Renderer> renderers)
+        {
+            if (!Prototypes.TryGetValue(modelName, out var prototype))
+            {
+                var source = Resources.Load<GameObject>("Ships/" + modelName);
+                prototype = source != null ? Normalise(source, modelName) : null;
+                Prototypes[modelName] = prototype;
+            }
+            if (prototype == null) return null;
+
+            var instance = Object.Instantiate(prototype, parent, false);
+            instance.name = modelName;
+            instance.SetActive(true);
+            var materials = MaterialsFor(modelName, faction, prototype);
+            int index = 0;
+            foreach (var r in instance.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = new Material[r.sharedMaterials.Length];
+                for (int i = 0; i < mats.Length; i++) mats[i] = materials[Mathf.Min(index++, materials.Length - 1)];
+                r.sharedMaterials = mats;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                renderers.Add(r);
+            }
+            return instance;
+        }
+
+        /// <summary>Wraps the imported model so it is one unit long, centred, nose +Z. Kept inactive as a template.</summary>
+        static GameObject Normalise(GameObject source, string modelName)
+        {
+            if (prototypeRoot == null)
+            {
+                prototypeRoot = new GameObject("ShipPrototypes").transform;
+                prototypeRoot.gameObject.SetActive(false);
+                Object.DontDestroyOnLoad(prototypeRoot.gameObject);
+            }
+
+            var wrapper = new GameObject(modelName);
+            wrapper.transform.SetParent(prototypeRoot, false);
+            var model = Object.Instantiate(source, wrapper.transform, false);
+            // Kenney roots carry a layout offset from the kit's sample scene; drop it before centring.
+            model.transform.localPosition = Vector3.zero;
+            model.transform.localRotation = Quaternion.Euler(0, KenneyYaw, 0);
+
+            var renderers = model.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return null;
+            var bounds = new Bounds();
+            bool first = true;
+            foreach (var r in renderers)
+            {
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                var mb = mf.sharedMesh.bounds;
+                var m = wrapper.transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                for (int c = 0; c < 8; c++)
+                {
+                    var corner = mb.center + Vector3.Scale(mb.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1));
+                    var p = m.MultiplyPoint3x4(corner);
+                    if (first)
+                    {
+                        bounds = new Bounds(p, Vector3.zero);
+                        first = false;
+                    }
+                    else bounds.Encapsulate(p);
+                }
+            }
+
+            float length = Mathf.Max(bounds.size.z, 1e-4f);
+            float s = 1f / length;
+            model.transform.localScale *= s;
+            model.transform.localPosition = -bounds.center * s;
+            return wrapper;
+        }
+
+        static Material[] MaterialsFor(string modelName, Faction faction, GameObject prototype)
+        {
+            if (MaterialCache.TryGetValue((modelName, faction), out var cached)) return cached;
+            var list = new List<Material>();
+            var accent = new Color(faction.Color.R, faction.Color.G, faction.Color.B);
+            foreach (var r in prototype.GetComponentsInChildren<Renderer>(true))
+            {
+                foreach (var source in r.sharedMaterials)
+                {
+                    var m = Materials.Create(Materials.Ship, "Ship_" + modelName);
+                    m.SetFloat("_UseVertexColor", 0);
+                    var color = Color.gray;
+                    if (source != null)
+                    {
+                        if (source.HasProperty("_BaseColor")) color = source.GetColor("_BaseColor");
+                        else if (source.HasProperty("_Color")) color = source.GetColor("_Color");
+                        // Kenney's red trim becomes the owner's livery.
+                        if (source.name.ToLowerInvariant().Contains("red")) color = accent;
+                    }
+                    m.SetColor("_Color", color);
+                    list.Add(m);
+                }
+            }
+            cached = list.Count > 0 ? list.ToArray() : new[] { Materials.Create(Materials.Ship, "Ship_" + modelName) };
+            MaterialCache[(modelName, faction)] = cached;
+            return cached;
+        }
+    }
+}
