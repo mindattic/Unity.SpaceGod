@@ -43,14 +43,28 @@ namespace SolarSystem.Core
         /// <summary>Fighters left aboard (carriers); losses are made good at a yard.</summary>
         public int Fighters;
 
-        public ShipCombat(CombatSpec spec)
+        /// <summary>The inside of the hull: compartments, who is in them, and any boarding fight.</summary>
+        public readonly Interior Interior;
+
+        /// <param name="hull">The ship class, or null for a defence platform.</param>
+        public ShipCombat(CombatSpec spec, ShipClass? hull = null)
         {
             Spec = spec;
             Hull = spec.Hull;
             Shield = spec.Shield;
             Fighters = spec.Squadrons * 6;
             for (int i = 0; i < spec.Layout.Length; i++) Subsystems.Add(new Subsystem(spec.Layout[i], i));
+            Interior = hull.HasValue ? Interior.For(hull.Value, spec.Crew, spec.Marines) : Interior.ForPlatform(spec.Crew, spec.Marines);
         }
+
+        /// <summary>
+        /// Crippled but not destroyed: no working engines, a hull nearly gone, or a lost bridge on a
+        /// badly holed ship. A disabled ship drifts and can be boarded.
+        /// </summary>
+        public bool Disabled => Alive && (EngineFactor <= 0 || HullFraction < 0.12 || (!BridgeIntact && HullFraction < 0.4));
+
+        /// <summary>Marines aboard and free to go boarding (those not already fighting off boarders).</summary>
+        public double MarinesAvailable => Interior.UnderBoarding ? 0 : Interior.Marines;
 
         public double HullFraction => Math.Max(0, Hull / Spec.Hull);
         public bool Alive => Hull > 0;
@@ -140,6 +154,7 @@ namespace SolarSystem.Core
                 if (s.Def.Weapon != null) s.Ammo = s.Def.Weapon.Ammo;
             }
             Shield = Spec.Shield;
+            Interior.Muster(Spec.Crew, Spec.Marines);
         }
 
         public void RestoreFighters(int count) => Fighters = Math.Min(Spec.Squadrons * 6, Fighters + count);

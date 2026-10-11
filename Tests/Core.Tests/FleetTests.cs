@@ -20,8 +20,9 @@ namespace SolarSystem.Core.Tests
         public void DefaultFleetHasEveryClassAndSomeShipsUnderway()
         {
             var (fleet, _) = Create();
+            // The classic fleet predates breachers (they sail with the pirates of the full world).
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
-                Assert.Contains(fleet.Ships, s => s.Spec.Class == c);
+                if (c != ShipClass.Breacher) Assert.Contains(fleet.Ships, s => s.Spec.Class == c);
             Assert.True(fleet.Ships.Count >= 40);
             Assert.Contains(fleet.Ships, s => !s.IsEscort && s.Phase == ShipPhase.Transit);
             Assert.Contains(fleet.Ships, s => !s.IsEscort && s.Phase == ShipPhase.Parked);

@@ -8,7 +8,7 @@ namespace SolarSystem
     /// Runs the <see cref="SceneTour"/> once, saving a screenshot at each stop through MindAttic.Capture,
     /// then quits. Used to verify a build visually and to produce the README images. Run a
     /// capture-enabled player with <c>-capture screen</c> (add <c>video</c> to film the tour too);
-    /// shots go to R:\MindAttic\Capture\UnitySolarSystem\{timestamp}.png, each sidecar tagged with its stop.
+    /// shots go to R:\MindAttic\Capture\UnitySolarSystem\UnitySolarSystem_{timestamp}.png, each sidecar tagged with its stop.
     /// </summary>
     public sealed class CaptureRunner : MonoBehaviour
     {

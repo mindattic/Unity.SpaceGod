@@ -140,6 +140,26 @@ namespace SolarSystem.Views
                     e.Color = new Color(1f, 0.8f, 0.5f) * 2f;
                     e.Life = 3.2f;
                     break;
+                case FxKind.Breach:
+                    e.Color = new Color(0.85f, 0.92f, 1f) * 1.2f;
+                    e.Life = 2.2f;
+                    break;
+                case FxKind.PodBounce:
+                    e.Color = new Color(0.4f, 0.75f, 1f);
+                    e.Life = 0.5f;
+                    break;
+                case FxKind.Captured:
+                    e.Color = Color.Lerp(faction, Color.white, 0.3f) * 1.4f;
+                    e.Life = 2.5f;
+                    break;
+                case FxKind.Latch:
+                    e.Color = new Color(1f, 0.9f, 0.6f);
+                    e.Life = 0.8f;
+                    break;
+                case FxKind.Pulse:
+                    e.Color = new Color(0.45f, 0.85f, 1f) * 1.3f;
+                    e.Life = 3.5f;
+                    break;
                 default:
                     return;
             }
@@ -171,6 +191,33 @@ namespace SolarSystem.Views
                     Sprite(c, Mathf.Max(r, PixelSize(c, 10)), e.Color * fade, Shape.Ring);
                     break;
                 }
+                case FxKind.Breach:
+                {
+                    // Atmosphere venting from the hole: a bright puff and a jet streaming outward.
+                    var c = Point(e.Battle, e.A);
+                    var outward = Point(e.Battle, e.A + (e.A - e.B).Normalized * (0.3 + 1.2 * t)) - c;
+                    float r = (float)(e.Size * app.BattleKmScale) * (0.3f + t);
+                    Sprite(c, Mathf.Max(r, PixelSize(c, 10)), e.Color * fade * 0.8f, Shape.Radial);
+                    Ribbon(c, c + outward, 3f, e.Color * fade);
+                    break;
+                }
+                case FxKind.PodBounce:
+                case FxKind.Captured:
+                {
+                    var c = e.Unit != null && e.Unit.Present ? Point(e.Battle, e.Unit.Pos) : Point(e.Battle, e.A);
+                    float r = (float)(e.Size * 0.8 * app.BattleKmScale) * (e.Kind == FxKind.Captured ? 0.8f + t : 1f);
+                    Sprite(c, Mathf.Max(r, PixelSize(c, e.Kind == FxKind.Captured ? 22 : 10)), e.Color * fade, Shape.Ring);
+                    break;
+                }
+                case FxKind.Pulse:
+                {
+                    // The interdiction pulse: a shell racing outward far past the battle.
+                    var c = Point(e.Battle, e.A);
+                    float r = (float)(e.Size * app.BattleKmScale) * (0.1f + 3f * Mathf.Sqrt(t));
+                    Sprite(c, Mathf.Max(r, PixelSize(c, 40 + 400 * t)), e.Color * fade, Shape.Ring);
+                    if (age < 0.3f) Sprite(c, PixelSize(c, 50), Color.white * (1 - age / 0.3f), Shape.Radial);
+                    break;
+                }
                 case FxKind.UnitDestroyed:
                 {
                     var c = Point(e.Battle, e.A);
@@ -198,9 +245,11 @@ namespace SolarSystem.Views
                 var p = Point(b, m.Pos);
                 var side = m.Side >= 0 && m.Side < 2 ? b.SideLeaders[m.Side] : null;
                 var c = side != null ? Color.Lerp(new Color(side.Color.R, side.Color.G, side.Color.B), Color.white, 0.6f) : Color.white;
-                Sprite(p, PixelSize(p, m.Torpedo ? 7 : 5), c * 1.4f, Shape.Radial);
-                var tail = Point(b, m.Pos - m.Vel * (m.Torpedo ? 3.0 : 2.0));
-                Ribbon(tail, p, 1.4f, c * 0.5f);
+                bool pod = m.Kind == MissileKind.Pod;
+                if (pod) c = new Color(1f, 0.75f, 0.35f);
+                Sprite(p, PixelSize(p, pod ? 8 : m.Torpedo ? 7 : 5), c * 1.4f, Shape.Radial);
+                var tail = Point(b, m.Pos - m.Vel * (pod ? 4.0 : m.Torpedo ? 3.0 : 2.0));
+                Ribbon(tail, p, pod ? 2.2f : 1.4f, c * 0.5f);
             }
         }
 

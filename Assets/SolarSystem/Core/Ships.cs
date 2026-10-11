@@ -12,6 +12,9 @@ namespace SolarSystem.Core
         Freighter,
         Miner,
         Courier,
+
+        /// <summary>A small assault ship with a drill prow: it rams a hull and disgorges marines.</summary>
+        Breacher,
     }
 
     public enum ShipRole
@@ -32,6 +35,12 @@ namespace SolarSystem.Core
 
         /// <summary>Riding a hyperlane between two planetary systems.</summary>
         Lane,
+
+        /// <summary>Holding station just off a hyperlane, waiting in ambush (pirates).</summary>
+        Lurk,
+
+        /// <summary>Thrown out of a hyperlane by an interdiction pulse, drifting beside it.</summary>
+        Adrift,
     }
 
     public sealed class ShipClassSpec
@@ -63,6 +72,7 @@ namespace SolarSystem.Core
             new ShipClassSpec(ShipClass.Freighter, "Freighter", 0.6, 0.1, false),
             new ShipClassSpec(ShipClass.Miner, "Ore hauler", 0.3, 0.06, false),
             new ShipClassSpec(ShipClass.Courier, "Courier", 0.08, 1.2, false),
+            new ShipClassSpec(ShipClass.Breacher, "Breacher", 0.18, 0.5, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];
@@ -79,6 +89,9 @@ namespace SolarSystem.Core
 
         /// <summary>A navy that fights wars and builds warships (not the independents).</summary>
         public bool IsMilitary { get; set; }
+
+        /// <summary>How good its marines are, man for man (1 = average). Upgrades raise it.</summary>
+        public double MarineQuality { get; set; } = 1;
 
         /// <summary>Credits from port taxes and its own ships' trade, spent on hulls, repairs and munitions.</summary>
         public double Treasury;
@@ -195,6 +208,24 @@ namespace SolarSystem.Core
         public LaneHop LaneLeg;
         public DVec3 LaneFromOffset, LaneToOffset;
         public double LaneLengthKm;
+
+        /// <summary>Where along the lane this leg starts and stops (part-way, for a lurk or a resumed ride).</summary>
+        public double LaneStartProgress, LaneEndProgress = 1;
+
+        /// <summary>
+        /// Off-lane station: the distance fraction along <see cref="LaneLeg"/> and the sideways offset
+        /// (km) from the lane line, for a ship lurking in ambush or drifting after being pulled out.
+        /// </summary>
+        public double LaneHold;
+        public DVec3 LaneHoldSide;
+
+        /// <summary>A lurk planned for this trip: stop part-way along this lane and wait.</summary>
+        public Lane LurkLane;
+        public double LurkAt, LurkDays;
+
+        /// <summary>Boarded and left adrift (cargo taken, crew gone): no longer flies, burns out of the list later.</summary>
+        public bool Derelict;
+        public double DerelictSinceJd;
 
         /// <summary>Hold size in tonnes (0 for warships).</summary>
         public double CapacityTonnes;

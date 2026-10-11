@@ -326,6 +326,29 @@ namespace SolarSystem.Views
             return true;
         }
 
+        /// <summary>A boarded hulk left adrift: dark, cold, slowly tumbling, never burning out.</summary>
+        public void Derelict(Vector3 relative, Quaternion rotation, float length, float now)
+        {
+            SetVisible(true);
+            var t = Root.transform;
+            t.localPosition = relative;
+            t.localRotation = rotation * Quaternion.Euler(now * 1.3f, now * 0.7f, now * 2.1f);
+            t.localScale = Vector3.one * length;
+            stern.localPosition = Vector3.zero;
+            stern.localRotation = Quaternion.identity;
+            if (bow != null)
+            {
+                bow.localPosition = Vector3.zero;
+                bow.localRotation = Quaternion.identity;
+            }
+            foreach (var g in glows) g.R.enabled = false;
+            block.SetFloat(EngineGlowId, 0f);
+            block.SetFloat(HighlightId, 0f);
+            block.SetColor(ColorId, new Color(0.35f, 0.33f, 0.32f));
+            SetBlock();
+            plume.enabled = false;
+        }
+
         void SetBlock()
         {
             foreach (var r in renderers) r.SetPropertyBlock(block);

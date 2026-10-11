@@ -85,6 +85,8 @@ namespace SolarSystem
         BattleFx battleFx;
         FighterViews fighterViews;
         LaneView laneView;
+        EmbeddedPods embeddedPods;
+        Faction[] viewFaction = new Faction[0];
         readonly Dictionary<ShipCombat, GameObject> platformViews = new Dictionary<ShipCombat, GameObject>();
         Battle battleTimeFor;
 
@@ -92,8 +94,40 @@ namespace SolarSystem
         public double BattleKmScale => Scale.ShipLength(1.0);
 
         /// <summary>Scene position of a point in a battle (km from its anchor).</summary>
-        public DVec3 BattleScene(Battle b, DVec3 localKm) =>
-            bodyScene[b.Body] + Scale.LocalOffset(Catalog[b.Body], b.Anchor) + localKm.SwapYZ * BattleKmScale;
+        public DVec3 BattleScene(Battle b, DVec3 localKm) => BattleAnchorScene(b) + localKm.SwapYZ * BattleKmScale;
+
+        /// <summary>Where a battle is drawn: in orbit of its body, or beside the drawn hyperlane for an ambush.</summary>
+        DVec3 BattleAnchorScene(Battle b)
+        {
+            var site = b.Site;
+            if (site == null) return bodyScene[b.Body] + Scale.LocalOffset(Catalog[b.Body], b.Anchor);
+            var hop = site.Hop;
+            var a = Scale.MapNear(Ephemeris, bodyScene, hop.From, Ephemeris.Helio(hop.From) + site.FromOffset);
+            var c = Scale.MapNear(Ephemeris, bodyScene, hop.To, Ephemeris.Helio(hop.To) + site.ToOffset);
+            double keepOut = Scale.LocalDistance(Catalog.Sun, Hyperlanes.SunKeepOutKm);
+            var onLane = Hyperlanes.Curve(a, c, hop.Lane.Bend, keepOut, site.Progress, DVec3.UnitY);
+            return onLane + SideScene(Ephemeris.Helio(hop.From) + site.FromOffset, site.Side);
+        }
+
+        /// <summary>A sideways offset (true km) beside a lane, in scene units at that distance from the Sun.</summary>
+        DVec3 SideScene(DVec3 nearHelio, DVec3 sideKm) =>
+            sideKm.SwapYZ * Scale.LocalDistanceDerivative(Catalog.Sun, Math.Max(nearHelio.Length, 1e6));
+
+        /// <summary>A ship lurking beside a lane, or drifting after being pulled out of one.</summary>
+        DVec3 LaneHoldScene(Ship ship, out DVec3 along)
+        {
+            var on = Scale.LaneScene(Ephemeris, bodyScene, ship, ship.LaneHold, out along);
+            double ease = Astro.SmoothStep(0, 0.08, Clock.Jd - ship.PhaseStartJd);
+            return on + SideScene(Fleet.LanePoint(ship, Clock.Jd, ship.LaneHold), ship.LaneHoldSide) * ease;
+        }
+
+        /// <summary>The model a battle unit is drawn with (a ship's view, or a platform), for parenting things to its hull.</summary>
+        public Transform UnitTransform(BattleUnit u)
+        {
+            if (u.Ship != null) return u.Ship.Id < shipViews.Length ? shipViews[u.Ship.Id].Root.transform : null;
+            if (u.Kind == UnitKind.Platform && platformViews.TryGetValue(u.Combat, out var go)) return go.transform;
+            return null;
+        }
         LineStrip pathLine;
         Vector3[] pathPoints = new Vector3[64];
 
@@ -143,6 +177,7 @@ namespace SolarSystem
             battleFx = new BattleFx(this, worldRoot);
             fighterViews = new FighterViews(this, worldRoot);
             laneView = new LaneView(this, worldRoot);
+            embeddedPods = new EmbeddedPods(this);
             SubscribeWorld();
             SpaceCamera = new SpaceCamera(this);
             AsteroidBelt = AsteroidBelt.Create(this);
@@ -511,6 +546,11 @@ namespace SolarSystem
                         shipScene[i] = Scale.LaneScene(Ephemeris, bodyScene, ship, st.Progress, out var travel);
                         facing = travel;
                     }
+                    else if (ship.Phase == ShipPhase.Lurk || ship.Phase == ShipPhase.Adrift)
+                    {
+                        shipScene[i] = LaneHoldScene(ship, out var along);
+                        facing = along;
+                    }
                     else
                     {
                         shipScene[i] = TransitScene(ship, st.Progress, out var travel);
@@ -656,12 +696,26 @@ namespace SolarSystem
                     DrawWreck(i, ship);
                     continue;
                 }
+                if (viewFaction.Length != shipViews.Length) Array.Resize(ref viewFaction, shipViews.Length);
+                if (viewFaction[i] == null) viewFaction[i] = ship.Faction;
+                if (viewFaction[i] != ship.Faction)
+                {
+                    // Taken as a prize: repaint in the captor's livery.
+                    Destroy(shipViews[i].Root);
+                    shipViews[i] = new ShipView(ship, worldRoot);
+                    viewFaction[i] = ship.Faction;
+                }
                 var rel = Relative(shipScene[i]);
                 double px = shipLength[i] / Math.Max(rel.magnitude, 1e-9) * pixelsPerUnit;
                 // Too small to read: hide the model, the HUD draws a billboard icon instead.
                 bool visible = px >= 5;
                 shipViews[i].SetVisible(visible);
                 if (!visible) continue;
+                if (ship.Derelict)
+                {
+                    shipViews[i].Derelict(rel, shipRotation[i], (float)shipLength[i], Time.unscaledTime + ship.Id);
+                    continue;
+                }
                 var target = Target.OfShip(ship);
                 var unit = ship.Battle?.UnitOf(ship);
                 bool thrusting = shipStates[i].Burning || (unit != null && unit.Vel.LengthSquared > 1e-4);
@@ -673,6 +727,7 @@ namespace SolarSystem
             UpdatePlatforms();
             laneView.Update(ShowLanes);
             fighterViews.Update();
+            embeddedPods.Update();
             battleFx.Update();
             UpdateOrbitLines(dt);
             UpdatePathLine();
@@ -793,7 +848,7 @@ namespace SolarSystem
         {
             var t = Selected.IsShip ? Selected : Hovered.IsShip ? Hovered : Target.None;
             var ship = t.IsShip ? t.Ship.Controller : null;
-            if (ship == null || ship.Destroyed || ship.Phase == ShipPhase.Parked)
+            if (ship == null || ship.Destroyed || ship.Derelict || ship.Battle != null || (ship.Phase != ShipPhase.Transit && ship.Phase != ShipPhase.Lane))
             {
                 pathLine.Visible = false;
                 return;

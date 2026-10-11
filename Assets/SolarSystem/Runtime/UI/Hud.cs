@@ -360,6 +360,9 @@ namespace SolarSystem.UI
         {
             if (ship.Battle != null) return "IN BATTLE  " + ship.Battle.Name;
             var c = ship.Controller;
+            if (ship.Derelict) return "DERELICT";
+            if (c.Phase == ShipPhase.Lurk) return "lurking on " + c.LaneLeg.Lane.Name;
+            if (c.Phase == ShipPhase.Adrift) return "adrift by " + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Parked) return "@ " + app.Catalog[c.Orbit.Body].Name;
             int dest = c.Journey != null ? c.FinalBody : c.Orbit.Body;
             return (c.Phase == ShipPhase.Lane ? "=> " : "-> ") + app.Catalog[dest].Name;
@@ -411,7 +414,16 @@ namespace SolarSystem.UI
                 lines.Add(("Length", Km(ship.Spec.LengthKm)));
                 lines.Add(("Drive", ship.Spec.AccelG.ToString("0.##", CultureInfo.InvariantCulture) + " g, flip-and-burn; hyperlanes between systems"));
                 if (ship.IsEscort) lines.Add(("Escorting", ship.Leader.Name));
-                if (c.Phase == ShipPhase.Lane)
+                if (c.Phase == ShipPhase.Lurk)
+                {
+                    lines.Add(("Status", "Lying in wait beside the " + c.LaneLeg.Lane.Name + " hyperlane"));
+                    lines.Add(("Until", Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + " more, unless prey comes by"));
+                }
+                else if (c.Phase == ShipPhase.Adrift)
+                {
+                    lines.Add(("Status", "Pulled out of the " + c.LaneLeg.Lane.Name + " hyperlane"));
+                }
+                else if (c.Phase == ShipPhase.Lane)
                 {
                     lines.Add(("Status", "In the " + c.LaneLeg.Lane.Name + " hyperlane, bound for " + app.Catalog[c.FinalBody].Name));
                     lines.Add(("Speed", SpeedText(st.SpeedKmS)));
@@ -442,6 +454,16 @@ namespace SolarSystem.UI
                 foreach (var hp in combat.Subsystems) if (hp.Destroyed) lost++;
                 if (lost > 0) lines.Add(("Damage", lost + " of " + combat.Subsystems.Count + " hardpoints destroyed"));
                 if (combat.Spec.Squadrons > 0) lines.Add(("Fighters", combat.Fighters + " of " + combat.Spec.Squadrons * 6 + " aboard"));
+                var inside = combat.Interior;
+                lines.Add(("Aboard", inside.Crew.ToString("0", CultureInfo.InvariantCulture) + " crew, " + inside.Marines.ToString("0", CultureInfo.InvariantCulture) + " marines" +
+                    (combat.Disabled ? "  ·  DISABLED" : "")));
+                if (inside.UnderBoarding)
+                {
+                    lines.Add(("BOARDED", inside.Boarder.Name + ": " + inside.Boarders.ToString("0", CultureInfo.InvariantCulture) + " boarders hold " + inside.TakenCount + " of " + inside.Compartments.Count + " spaces"));
+                    foreach (var space in inside.Compartments) lines.Add(("  " + space.Name, SpaceText(space)));
+                    if (inside.Log.Count > 0) lines.Add(("", inside.Log[inside.Log.Count - 1].Text));
+                }
+                if (ship.Derelict) lines.Add(("DERELICT", "Boarded, stripped and abandoned"));
                 if (ship.Battle != null) lines.Add(("In battle", ship.Battle.Name + ", " + BattleScore(ship.Battle)));
                 if (ship.Spec.IsMilitary || ship.Faction.IsPirate)
                 {
@@ -592,11 +614,20 @@ namespace SolarSystem.UI
         static string People(double p) =>
             p >= 1e6 ? (p / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " M" : (p / 1e3).ToString("0", CultureInfo.InvariantCulture) + " k";
 
+        static string SpaceText(Compartment c)
+        {
+            string who = c.Taken ? "TAKEN, " + c.Boarders.ToString("0", CultureInfo.InvariantCulture) + " boarders"
+                : c.Contested ? "FIGHTING: " + c.Boarders.ToString("0", CultureInfo.InvariantCulture) + " boarders v " + (c.Marines + c.Crew).ToString("0", CultureInfo.InvariantCulture)
+                : (c.Crew + c.Marines).ToString("0", CultureInfo.InvariantCulture) + " aboard";
+            return who + (c.Vented ? (c.SealIn > 0 ? "  ·  VENTING" : "  ·  sealed, in vacuum") : "");
+        }
+
         string OrderText(GroupOrder o)
         {
             string where = o.Body >= 0 ? app.Catalog[o.Body].Name : "";
             switch (o.Kind)
             {
+                case OrderKind.Ambush: return "Lie in wait on the hyperlanes (toward " + where + ")";
                 case OrderKind.Attack: return "Attack " + where;
                 case OrderKind.Defend: return "Defend " + where;
                 case OrderKind.Siege: return "Besiege " + where;

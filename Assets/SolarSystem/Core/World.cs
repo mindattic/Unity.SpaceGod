@@ -75,6 +75,11 @@ namespace SolarSystem.Core
             w.Pirates = fleet.AddFaction("Black Banner", "", new Rgb(0.95f, 0.22f, 0.2f));
             w.Sol.IsMilitary = w.Belt.IsMilitary = w.Reach.IsMilitary = true;
             w.Pirates.IsPirate = true;
+            w.Sol.MarineQuality = 1.25;
+            w.Reach.MarineQuality = 1.15;
+            w.Belt.MarineQuality = 1.0;
+            w.Pirates.MarineQuality = 1.1;
+            w.Independents.MarineQuality = 0.6;
             w.Sol.Treasury = 4e9;
             w.Belt.Treasury = 2.5e9;
             w.Reach.Treasury = 3.5e9;
@@ -90,10 +95,11 @@ namespace SolarSystem.Core
             fleet.Lanes = Hyperlanes.CreateDefault(ephemeris);
             economy.EstimateTravelDays = fleet.EstimateTravelDays;
             economy.Danger = body => war.Danger(body) * 0.08;
-            economy.ChooseBuild = yard => war.ChooseWarship(yard) ?? w.ChooseBuild(yard);
+            // Yards keep the merchant fleet up first; then the navies take their slips.
+            economy.ChooseBuild = yard => w.TraderCount() < 45 ? w.ChooseBuild(yard) : war.ChooseWarship(yard) ?? w.ChooseBuild(yard);
             economy.ShipBuilt = w.OnShipBuilt;
             fleet.BeforeEvent = economy.AdvanceTo;
-            fleet.IsHeld = ship => ship.Battle != null;
+            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict;
             fleet.Dwell = war.Dwell;
             fleet.Arrived = (ship, when) =>
             {
@@ -354,7 +360,7 @@ namespace SolarSystem.Core
 
         // ---------------------------------------------------------------- shipbuilding
 
-        int TraderCount()
+        public int TraderCount()
         {
             int n = 0;
             foreach (var s in Fleet.Ships)

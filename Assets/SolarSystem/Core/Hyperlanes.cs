@@ -41,6 +41,12 @@ namespace SolarSystem.Core
     public sealed class Hyperlanes
     {
         public readonly List<Lane> Lanes = new List<Lane>();
+
+        /// <summary>
+        /// How dangerous each lane has been lately (ambushes), in days of extra cost when planning a
+        /// route, so traffic shifts to safer lanes until it fades.
+        /// </summary>
+        public readonly Dictionary<Lane, double> Danger = new Dictionary<Lane, double>();
         readonly BodyCatalog catalog;
         readonly Ephemeris ephemeris;
 
@@ -239,7 +245,8 @@ namespace SolarSystem.Core
                     if (lane.A != here && lane.B != here) continue;
                     int next = lane.Other(here);
                     // Each hop also costs the crossing between ramps at a junction: about half a day.
-                    double cost = dist[here] + RideDays(LaneLengthKm(lane, jd)) + 0.5;
+                    Danger.TryGetValue(lane, out double danger);
+                    double cost = dist[here] + RideDays(LaneLengthKm(lane, jd)) + 0.5 + danger;
                     if (dist.TryGetValue(next, out double old) && old <= cost) continue;
                     dist[next] = cost;
                     via[next] = new LaneHop(lane, here, next);

@@ -44,6 +44,7 @@ namespace SolarSystem.Rendering
                 case ShipClass.Destroyer: BuildDestroyer(b); break;
                 case ShipClass.Miner: BuildHauler(b); break;
                 case ShipClass.Courier: BuildCourier(b); break;
+                case ShipClass.Breacher: BuildBreacher(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -132,6 +133,28 @@ namespace SolarSystem.Rendering
             }
             mesh = b.ToMesh("Part_" + kind + (barrels ? "_Barrels" : "") + "_" + faction.Prefix);
             PartCache[(kind, faction, barrels)] = mesh;
+            return mesh;
+        }
+
+        static readonly Dictionary<Faction, Mesh> PodCache = new Dictionary<Faction, Mesh>();
+
+        /// <summary>
+        /// A boarding pod: an armoured cylinder with a fluted drill tip on +Z, one unit long. Stuck in a
+        /// hull, the tip is buried and the tail and its thruster bells stand out of the plating.
+        /// </summary>
+        public static Mesh GetPod(Faction faction)
+        {
+            if (PodCache.TryGetValue(faction, out var mesh)) return mesh;
+            var b = new Builder(faction, WholeHull);
+            b.Cylinder(new Vector3(0, 0, -0.1f), 0.16f, 0.6f, b.Dark, segments: 10);
+            b.Frustum(0.2f, 0.5f, new Vector2(0.3f, 0.3f), new Vector2(0.02f, 0.02f), 0, new Color(0.55f, 0.52f, 0.48f, 1f));
+            foreach (float a in new[] { 0f, 1.57f, 3.14f, 4.71f })
+                b.Box(new Vector3(Mathf.Cos(a) * 0.12f, Mathf.Sin(a) * 0.12f, 0.3f), new Vector3(0.04f, 0.04f, 0.25f), new Color(0.4f, 0.38f, 0.35f, 1f));
+            b.Box(new Vector3(0, 0, -0.1f), new Vector3(0.34f, 0.04f, 0.08f), b.Accent);
+            b.Nozzle(new Vector3(0.07f, 0, -0.42f), 0.05f, 0.06f);
+            b.Nozzle(new Vector3(-0.07f, 0, -0.42f), 0.05f, 0.06f);
+            mesh = b.ToMesh("Pod_" + faction.Prefix);
+            PodCache[faction] = mesh;
             return mesh;
         }
 
@@ -275,6 +298,28 @@ namespace SolarSystem.Rendering
             b.Box(new Vector3(0, 0, -0.35f), new Vector3(0.18f, 0.12f, 0.15f), b.Dark);
             b.Nozzle(new Vector3(-0.05f, 0, -0.45f), 0.04f, 0.05f);
             b.Nozzle(new Vector3(0.05f, 0, -0.45f), 0.04f, 0.05f);
+        }
+
+        /// <summary>A breacher: a squat armoured assault hull behind a massive fluted drill prow.</summary>
+        static void BuildBreacher(Builder b)
+        {
+            b.Frustum(-0.45f, 0.1f, new Vector2(0.2f, 0.16f), new Vector2(0.24f, 0.2f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.095f, -0.12f), new Vector3(0.1f, 0.05f, 0.18f), b.Hull);
+            b.Box(new Vector3(0, 0.11f, -0.08f), new Vector3(0.11f, 0.012f, 0.04f), b.Dark);
+            foreach (float side in new[] { -1f, 1f })
+                b.Box(new Vector3(side * 0.12f, 0, -0.15f), new Vector3(0.02f, 0.12f, 0.5f), b.Accent);
+            // The drill: a collar, then a long cone with fluting ridges.
+            var steel = new Color(0.58f, 0.56f, 0.52f, 1f);
+            b.Box(new Vector3(0, 0, 0.12f), new Vector3(0.22f, 0.18f, 0.04f), b.Dark);
+            b.Frustum(0.14f, 0.5f, new Vector2(0.2f, 0.17f), new Vector2(0.015f, 0.015f), 0, steel);
+            for (int k = 0; k < 4; k++)
+            {
+                float a = Mathf.PI * 0.5f * k + 0.4f;
+                b.Box(new Vector3(Mathf.Cos(a) * 0.06f, Mathf.Sin(a) * 0.05f, 0.27f), new Vector3(0.02f, 0.02f, 0.22f), new Color(0.42f, 0.4f, 0.37f, 1f));
+            }
+            b.Box(new Vector3(0, 0, -0.43f), new Vector3(0.18f, 0.14f, 0.05f), b.Dark);
+            b.Nozzle(new Vector3(-0.06f, 0, -0.46f), 0.035f, 0.04f);
+            b.Nozzle(new Vector3(0.06f, 0, -0.46f), 0.035f, 0.04f);
         }
 
         static void BuildCourier(Builder b)

@@ -9,6 +9,9 @@ namespace SolarSystem.Core
         AttackRun,
         BreakOff,
         Dogfight,
+
+        /// <summary>Flying home to land on the carrier.</summary>
+        Return,
     }
 
     /// <summary>A fighter's pilot and squadron: who leads, where it flies in the formation, how it flies.</summary>
@@ -89,7 +92,7 @@ namespace SolarSystem.Core
                     // Out of the bow and side bays, fanning ahead of the carrier.
                     var pos = carrier.PointOf(carrier.Combat.Subsystems.Find(s => s.Kind == SubsystemKind.Hangar && !s.Destroyed).Def)
                               + carrier.Forward * (0.3 + 0.15 * k) + right * ((q - 1) * 0.6 + (k % 2 == 0 ? 0.1 : -0.1) * k) + up * (0.05 * k);
-                    var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(spec), bomber ? BomberLengthKm : FighterLengthKm, pos, carrier.Forward);
+                    var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(spec, ShipClass.Courier), bomber ? BomberLengthKm : FighterLengthKm, pos, carrier.Forward);
                     u.Vel = carrier.Vel + carrier.Forward * 0.25;
                     u.Fighter = new FighterState
                     {
@@ -106,6 +109,14 @@ namespace SolarSystem.Core
         {
             var f = u.Fighter;
             f.PhaseTime += dt;
+            var carrier = f.Carrier;
+            // Recalled: the shooting is over, or the carrier is pulling out.
+            if (carrier.Present && !carrier.Captured && (b.Mopping || carrier.Fleeing))
+            {
+                if (f.Phase != FighterPhase.Return) Switch(f, FighterPhase.Return);
+                Land(b, u, dt);
+                return;
+            }
             if (f.Lead != null && !f.Lead.Present) f.Lead = NewLead(b, u);
             if (f.Lead == null) Lead(b, u, dt);
             else Wingman(b, u, dt);
@@ -276,6 +287,26 @@ namespace SolarSystem.Core
                     Speed = s.Def.Weapon.MissileSpeedKmS + u.Vel.Length, Hp = 25, Life = 30, Side = u.Side, Torpedo = true,
                 });
                 b.Emit(FxKind.MissileLaunch, u.Pos, u.Pos + u.Forward, 0, u.Side, u, s.Index);
+            }
+        }
+
+        /// <summary>Back to the carrier's hangar and aboard; each landing puts a craft back in its hangar.</summary>
+        static void Land(Battle b, BattleUnit u, double dt)
+        {
+            var carrier = u.Fighter.Carrier;
+            Subsystem bay = null;
+            foreach (var s in carrier.Combat.Subsystems)
+                if (s.Kind == SubsystemKind.Hangar && !s.Destroyed) bay = s;
+            var deck = bay != null ? carrier.PointOf(bay.Def) : carrier.Pos;
+            // Line up astern of the bay and come in matched to the carrier.
+            var approach = deck - carrier.Forward * 0.4;
+            double toDeck = (deck - u.Pos).Length;
+            var goal = toDeck < 0.6 ? deck : approach;
+            Steer(b, u, goal + carrier.Vel * 2, u.Combat.Spec.MaxSpeed, dt, carrier.Vel);
+            if (toDeck < 0.12)
+            {
+                u.Docked = true;
+                carrier.Combat.RestoreFighters(1);
             }
         }
 

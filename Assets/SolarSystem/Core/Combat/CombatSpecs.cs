@@ -10,6 +10,12 @@ namespace SolarSystem.Core
         PointDefense,
         FighterGuns,
         Torpedo,
+
+        /// <summary>Launches drill-tipped boarding pods that punch into a hull and put marines aboard.</summary>
+        BoardingPods,
+
+        /// <summary>A breacher's drill prow: it rams and its assault bay opens into the target.</summary>
+        Drill,
         Engine,
         ShieldGenerator,
         Bridge,
@@ -38,6 +44,12 @@ namespace SolarSystem.Core
         public static readonly WeaponSpec PointDefense = new WeaponSpec { RangeKm = 3.5, Damage = 10, Cooldown = 0.35, Accuracy = 0.5, AntiSmall = true };
         public static readonly WeaponSpec FighterGuns = new WeaponSpec { RangeKm = 1.6, Damage = 14, Cooldown = 0.3, Accuracy = 0.55 };
         public static readonly WeaponSpec Torpedo = new WeaponSpec { RangeKm = 4, Damage = 420, Cooldown = 40, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.9, Salvo = 1, Ammo = 2 };
+
+        /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
+        public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };
+
+        /// <summary>Marines per boarding pod.</summary>
+        public const double PodMarines = 12;
     }
 
     /// <summary>One hardpoint on a hull: its kind, where it sits (ship lengths, nose +Z, up +Y) and its toughness.</summary>
@@ -80,6 +92,8 @@ namespace SolarSystem.Core
                 case SubsystemKind.Bridge: return 320;
                 case SubsystemKind.Hangar: return 520;
                 case SubsystemKind.Reactor: return 650;
+                case SubsystemKind.BoardingPods: return 200;
+                case SubsystemKind.Drill: return 600;
                 case SubsystemKind.FighterGuns: return 30;
                 case SubsystemKind.Torpedo: return 30;
                 default: return 200;
@@ -96,6 +110,7 @@ namespace SolarSystem.Core
                 case SubsystemKind.PointDefense: return WeaponSpec.PointDefense;
                 case SubsystemKind.FighterGuns: return WeaponSpec.FighterGuns;
                 case SubsystemKind.Torpedo: return WeaponSpec.Torpedo;
+                case SubsystemKind.BoardingPods: return WeaponSpec.Pods;
                 default: return null;
             }
         }
@@ -114,6 +129,8 @@ namespace SolarSystem.Core
                 case SubsystemKind.ShieldGenerator: return "Shield generator";
                 case SubsystemKind.Bridge: return "Bridge";
                 case SubsystemKind.Hangar: return "Hangar";
+                case SubsystemKind.BoardingPods: return "Boarding pods";
+                case SubsystemKind.Drill: return "Drill prow";
                 default: return "Reactor";
             }
         }
@@ -133,13 +150,18 @@ namespace SolarSystem.Core
         /// <summary>Fighter squadrons a carrier can launch (6 craft each).</summary>
         public int Squadrons;
 
+        /// <summary>People aboard: the ship's company, and the marines who board and repel boarders.</summary>
+        public double Crew, Marines;
+
         static readonly Dictionary<ShipClass, CombatSpec> Specs = new Dictionary<ShipClass, CombatSpec>
         {
             [ShipClass.Carrier] = new CombatSpec
             {
                 Hull = 26000, Shield = 11000, ShieldRegen = 75, Armor = 6, MaxSpeed = 0.07, Accel = 0.0025, TurnRateDegS = 4, Squadrons = 3,
+                Crew = 3800, Marines = 320,
                 Layout = new[]
                 {
+                    new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.035, 0.25),
                     new SubsystemDef(SubsystemKind.Bridge, 0.07, 0.14, -0.11),
                     new SubsystemDef(SubsystemKind.Hangar, 0, 0.012, 0.44),
                     new SubsystemDef(SubsystemKind.Hangar, 0.125, -0.01, 0.12),
@@ -163,8 +185,10 @@ namespace SolarSystem.Core
             [ShipClass.Battleship] = new CombatSpec
             {
                 Hull = 30000, Shield = 13000, ShieldRegen = 90, Armor = 10, MaxSpeed = 0.09, Accel = 0.003, TurnRateDegS = 5,
+                Crew = 2400, Marines = 260,
                 Layout = new[]
                 {
+                    new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.045, -0.3),
                     new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.045, 0.20),
                     new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.06, 0.07),
                     new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.045, -0.28, true),
@@ -187,8 +211,10 @@ namespace SolarSystem.Core
             [ShipClass.Cruiser] = new CombatSpec
             {
                 Hull = 13000, Shield = 6000, ShieldRegen = 54, Armor = 6, MaxSpeed = 0.14, Accel = 0.005, TurnRateDegS = 8,
+                Crew = 900, Marines = 140,
                 Layout = new[]
                 {
+                    new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.03, 0.05),
                     new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.15),
                     new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.0),
                     new SubsystemDef(SubsystemKind.MissileLauncher, 0.1, 0.014, -0.05),
@@ -207,8 +233,10 @@ namespace SolarSystem.Core
             [ShipClass.Destroyer] = new CombatSpec
             {
                 Hull = 5500, Shield = 2500, ShieldRegen = 30, Armor = 3, MaxSpeed = 0.24, Accel = 0.009, TurnRateDegS = 14,
+                Crew = 280, Marines = 50,
                 Layout = new[]
                 {
+                    new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.035, 0.0),
                     new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.12),
                     new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.07, -0.25),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.05, 0.02, 0.2),
@@ -223,6 +251,7 @@ namespace SolarSystem.Core
             [ShipClass.Freighter] = new CombatSpec
             {
                 Hull = 4500, Shield = 750, ShieldRegen = 9, Armor = 2, MaxSpeed = 0.05, Accel = 0.0015, TurnRateDegS = 3,
+                Crew = 40, Marines = 4,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.07, 0),
@@ -234,6 +263,7 @@ namespace SolarSystem.Core
             [ShipClass.Miner] = new CombatSpec
             {
                 Hull = 6500, Shield = 500, ShieldRegen = 6, Armor = 4, MaxSpeed = 0.04, Accel = 0.0012, TurnRateDegS = 3,
+                Crew = 30, Marines = 0,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.09, 0.3),
@@ -242,9 +272,24 @@ namespace SolarSystem.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
                 },
             },
+            [ShipClass.Breacher] = new CombatSpec
+            {
+                Hull = 3000, Shield = 900, ShieldRegen = 15, Armor = 12, MaxSpeed = 0.3, Accel = 0.012, TurnRateDegS = 18,
+                Crew = 20, Marines = 70,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Drill, 0, 0, 0.45),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, 0.05),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.07, -0.1),
+                    new SubsystemDef(SubsystemKind.Engine, -0.06, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Engine, 0.06, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
+                },
+            },
             [ShipClass.Courier] = new CombatSpec
             {
                 Hull = 1300, Shield = 600, ShieldRegen = 12, Armor = 0, MaxSpeed = 0.35, Accel = 0.02, TurnRateDegS = 30,
+                Crew = 6, Marines = 0,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.035, 0.05),
@@ -260,6 +305,7 @@ namespace SolarSystem.Core
         public static readonly CombatSpec Platform = new CombatSpec
         {
             Hull = 21000, Shield = 11000, ShieldRegen = 66, Armor = 8, MaxSpeed = 0, Accel = 0, TurnRateDegS = 0,
+            Crew = 220, Marines = 60,
             Layout = new[]
             {
                 new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.18, 0.12),

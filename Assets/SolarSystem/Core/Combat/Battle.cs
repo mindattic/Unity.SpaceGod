@@ -40,7 +40,23 @@ namespace SolarSystem.Core
         /// <summary>Fighter-only state (see the fighter AI).</summary>
         public FighterState Fighter;
 
-        public bool Present => !Dead && !Fled;
+        /// <summary>Boarding: the disabled enemy this ship is closing on to board, and the one it is latched to.</summary>
+        public BattleUnit BoardTarget, Latched;
+
+        /// <summary>Where it is fixed to the latched hull (ship lengths in that hull's frame), and the countdown to opening the airlock.</summary>
+        public DVec3 LatchLocal;
+        public double LatchTimer;
+
+        /// <summary>Taken by boarders: it has changed sides and carries a prize crew, so it no longer fights.</summary>
+        public bool Captured;
+
+        /// <summary>A fighter that has landed back aboard its carrier.</summary>
+        public bool Docked;
+
+        /// <summary>Seconds left with drives and shields knocked out by an interdiction pulse.</summary>
+        public double Stunned;
+
+        public bool Present => !Dead && !Fled && !Docked;
         public double Radius => LengthKm * 0.5;
         public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : "Fighter";
 
@@ -53,11 +69,50 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Battle-local position of a hardpoint.</summary>
-        public DVec3 PointOf(SubsystemDef d)
+        public DVec3 PointOf(SubsystemDef d) => PointLocal(new DVec3(d.X, d.Y, d.Z));
+
+        /// <summary>Battle-local position of a point given in ship lengths (right, up, forward).</summary>
+        public DVec3 PointLocal(DVec3 local)
         {
             Basis(out var right, out var up);
-            return Pos + (right * d.X + up * d.Y + Forward * d.Z) * LengthKm;
+            return Pos + (right * local.X + up * local.Y + Forward * local.Z) * LengthKm;
         }
+
+        /// <summary>A battle-local point expressed in ship lengths in this hull's frame.</summary>
+        public DVec3 ToLocal(DVec3 point)
+        {
+            Basis(out var right, out var up);
+            var d = (point - Pos) / Math.Max(LengthKm, 1e-9);
+            return new DVec3(DVec3.Dot(d, right), DVec3.Dot(d, up), DVec3.Dot(d, Forward));
+        }
+    }
+
+    public enum MissileKind
+    {
+        Missile,
+        Torpedo,
+        Pod,
+    }
+
+    /// <summary>A boarding pod or breacher stuck in a hull: where (ship lengths in that hull's frame), whose, and pointing which way.</summary>
+    public sealed class Embedded
+    {
+        public BattleUnit Unit;
+        public DVec3 Local;
+        public DVec3 Inward;
+        public int Side;
+        public bool Breacher;
+    }
+
+    /// <summary>A battle fought in open space beside a hyperlane, after an interdiction pulse.</summary>
+    public sealed class LaneSite
+    {
+        public LaneHop Hop;
+        public DVec3 FromOffset, ToOffset;
+        public double Progress;
+
+        /// <summary>Offset of the fight from the lane line, km (the ambushers wait just outside it).</summary>
+        public DVec3 Side;
     }
 
     public sealed class Missile
@@ -69,6 +124,11 @@ namespace SolarSystem.Core
         public int Side;
         public bool Torpedo;
         public bool Gone;
+        public MissileKind Kind;
+
+        /// <summary>A pod's squad: who they fight for and how good they are.</summary>
+        public Faction Owner;
+        public double Marines;
     }
 
     public enum FxKind
@@ -83,6 +143,15 @@ namespace SolarSystem.Core
         MissileKill,
         UnitDestroyed,
         MissileLaunch,
+
+        /// <summary>A pod or breacher holes a hull: a burst of venting atmosphere.</summary>
+        Breach,
+        PodBounce,
+        Captured,
+        Latch,
+
+        /// <summary>An interdiction pulse: an expanding electromagnetic shell.</summary>
+        Pulse,
     }
 
     /// <summary>Something to draw: a beam, a hit, an explosion. A and B are battle-local km.</summary>
@@ -118,6 +187,13 @@ namespace SolarSystem.Core
         public double Seconds;
         public readonly List<BattleUnit> Units = new List<BattleUnit>();
         public readonly List<Missile> Missiles = new List<Missile>();
+        public readonly List<Embedded> Embedded = new List<Embedded>();
+
+        /// <summary>Set for an ambush beside a hyperlane; null for a battle at a body.</summary>
+        public LaneSite Site;
+
+        /// <summary>Raised when boarders take a unit (the world decides what they do with it).</summary>
+        public Action<Battle, BattleUnit, Faction> UnitCaptured;
         public readonly List<CombatFx> Fx = new List<CombatFx>();
         public readonly Faction[] SideLeaders = new Faction[2];
 
@@ -246,13 +322,16 @@ namespace SolarSystem.Core
                 if (u.Present) Fire(u, dt);
             }
             StepMissiles(dt);
+            StepBoarding(dt);
             foreach (var u in Units)
             {
                 if (!u.Present) continue;
                 var c = u.Combat;
-                if (Seconds - c.LastHitSeconds > 8 && c.HasShieldGenerator)
+                if (u.Stunned > 0) u.Stunned -= dt;
+                else if (Seconds - c.LastHitSeconds > 8 && c.HasShieldGenerator)
                     c.Shield = Math.Min(c.Spec.Shield, c.Shield + c.Spec.ShieldRegen * dt);
-                if (u.Kind == UnitKind.Ship && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
+                // No escape with boarders fighting aboard (or a breacher stuck in the hull).
+                if (u.Kind == UnitKind.Ship && u.Latched == null && !c.Disabled && !c.Interior.UnderBoarding && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
                     u.Fled = true;
             }
             if (Fx.Count > 600) Fx.RemoveRange(0, Fx.Count - 600);
@@ -269,21 +348,64 @@ namespace SolarSystem.Core
             bool any0 = false, any1 = false, fight0 = false, fight1 = false;
             foreach (var u in Units)
             {
-                if (!u.Present || u.Kind == UnitKind.Fighter) continue;
-                bool willing = !u.Fleeing && u.Combat.Armed;
+                if (!u.Present || u.Kind == UnitKind.Fighter || u.Captured) continue;
+                bool willing = !u.Fleeing && !u.Combat.Disabled && (u.Combat.Armed || CanBoard(u));
                 if (u.Side == 0) { any0 = true; fight0 |= willing; }
                 else { any1 = true; fight1 |= willing; }
             }
-            if (any0 && any1 && (fight0 || fight1) && Seconds < MaxSeconds) return;
+            bool fighting = any0 && any1 && (fight0 || fight1);
+            Mopping = !fighting;
+            if (Seconds < MaxSeconds && (fighting || Boarding || FightersAloft)) return;
             Over = true;
             Winner = fight0 && !fight1 ? 0 : fight1 && !fight0 ? 1 : any0 && !any1 ? 0 : any1 && !any0 ? 1 : -1;
+        }
+
+        /// <summary>A ship our side is boarding, or about to board: worth more taken than destroyed.</summary>
+        bool IsPrize(BattleUnit u, BattleUnit target)
+        {
+            if (target.Combat.Interior.Boarder == u.Faction) return true;
+            foreach (var o in Units)
+                if (o.Side == u.Side && o.Present && (o.BoardTarget == target || o.Latched == target)) return true;
+            return false;
+        }
+
+        /// <summary>A raider or warship with marines to spare is a combatant even with no guns (a breacher).</summary>
+        static bool CanBoard(BattleUnit u) =>
+            u.Kind == UnitKind.Ship && (u.Faction.IsPirate || u.Faction.IsMilitary) && u.Combat.MarinesAvailable >= 15;
+
+        /// <summary>The shooting is over; boarding parties and landing fighters are finishing up.</summary>
+        public bool Mopping { get; private set; }
+
+        /// <summary>A boarding fight or a boarding approach is under way somewhere in the battle.</summary>
+        bool Boarding
+        {
+            get
+            {
+                foreach (var u in Units)
+                {
+                    if (!u.Present) continue;
+                    if (u.Combat.Interior.UnderBoarding || u.BoardTarget != null || u.Latched != null) return true;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>Fighters still flying that have a carrier to land on.</summary>
+        bool FightersAloft
+        {
+            get
+            {
+                foreach (var u in Units)
+                    if (u.Kind == UnitKind.Fighter && u.Present && u.Fighter.Carrier.Present && !u.Fighter.Carrier.Captured) return true;
+                return false;
+            }
         }
 
         double NearestHostileDistance(BattleUnit u)
         {
             double best = double.MaxValue;
             foreach (var o in Units)
-                if (Hostile(u, o) && o.Kind != UnitKind.Fighter && o.Combat.Armed)
+                if (Hostile(u, o) && o.Kind != UnitKind.Fighter && !o.Captured && (o.Combat.Armed || CanBoard(o)))
                     best = Math.Min(best, (o.Pos - u.Pos).Length);
             return best;
         }
@@ -293,11 +415,14 @@ namespace SolarSystem.Core
         void Think(BattleUnit u, double dt)
         {
             var c = u.Combat;
+            if (u.Captured || u.Latched != null) return;
             if (u.Kind == UnitKind.Ship)
             {
                 bool merchant = u.Ship != null && !u.Ship.Spec.IsMilitary && !u.Faction.IsPirate;
-                if (!u.Fleeing && (merchant || c.HullFraction < 0.25 || !c.Armed || Routed(u.Side)))
+                if (c.Disabled) u.Fleeing = false;
+                else if (!u.Fleeing && (merchant || c.HullFraction < 0.25 || (!c.Armed && !CanBoard(u)) || Routed(u.Side)))
                     u.Fleeing = true;
+                ChooseBoarding(u);
             }
             u.RetargetIn -= dt;
             if (u.Target == null || !u.Target.Present || u.RetargetIn <= 0)
@@ -328,8 +453,10 @@ namespace SolarSystem.Core
             BattleUnit flagship = SideFlagship(u.Side);
             foreach (var o in Units)
             {
-                if (!Hostile(u, o)) continue;
+                if (!Hostile(u, o) || o.Captured) continue;
                 double score = (o.Pos - u.Pos).Length;
+                // A disabled hull is a prize, not a threat: shoot it only if nothing else is left.
+                if (o.Combat.Disabled) score += 40;
                 if (o.Kind == UnitKind.Fighter) score += u.Kind == UnitKind.Fighter ? 0 : 25;
                 else if (u.Kind == UnitKind.Fighter) score -= 4;
                 if (o.Ship != null && !o.Ship.Spec.IsMilitary) score += u.Faction.IsPirate ? -15 : 10;
@@ -357,6 +484,25 @@ namespace SolarSystem.Core
         void Move(BattleUnit u, double dt)
         {
             var c = u.Combat;
+            if (u.Latched != null)
+            {
+                // Fixed to the hull it is boarding.
+                u.Pos = u.Latched.PointLocal(u.LatchLocal);
+                u.Vel = u.Latched.Vel;
+                return;
+            }
+            if (c.Disabled || u.Captured || u.Stunned > 0)
+            {
+                // Adrift: no drive, slowly losing what way it had.
+                u.Vel *= Math.Max(0, 1 - 0.002 * dt);
+                u.Pos += u.Vel * dt;
+                return;
+            }
+            if (u.BoardTarget != null)
+            {
+                Approach(u, dt);
+                return;
+            }
             double maxSpeed = c.Spec.MaxSpeed * (0.25 + 0.75 * c.EngineFactor);
             if (maxSpeed <= 0)
             {
@@ -464,6 +610,7 @@ namespace SolarSystem.Core
         void Fire(BattleUnit u, double dt)
         {
             var c = u.Combat;
+            if (u.Captured) return;
             double accuracyScale = c.BridgeIntact ? 1 : 0.6;
             foreach (var s in c.Subsystems)
             {
@@ -471,6 +618,11 @@ namespace SolarSystem.Core
                 if (w == null || s.Destroyed) continue;
                 s.Cooldown -= dt;
                 if (s.Cooldown > 0 || s.Kind == SubsystemKind.Torpedo) continue;
+                if (s.Kind == SubsystemKind.BoardingPods)
+                {
+                    FirePods(u, s);
+                    continue;
+                }
                 var origin = u.PointOf(s.Def);
 
                 if (w.AntiSmall)
@@ -495,6 +647,8 @@ namespace SolarSystem.Core
                 }
 
                 var target = ChooseWeaponTarget(u, origin, w);
+                // Hold fire on a prize our own people are boarding or closing on.
+                if (target != null && IsPrize(u, target)) target = null;
                 // Fighter guns are fixed forward: only fire with the target in a narrow cone.
                 if (target != null && s.Kind == SubsystemKind.FighterGuns && DVec3.Dot(u.Forward, (target.Pos - origin).Normalized) < 0.97) target = null;
                 if (target == null)
@@ -708,10 +862,235 @@ namespace SolarSystem.Core
                 if (SegmentPointDistance(start, m.Pos, aim) < t.Radius * 0.6 + 0.05)
                 {
                     m.Gone = true;
-                    ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t), m.Damage, aim);
+                    if (m.Kind == MissileKind.Pod) PodHit(m, t, aim);
+                    else ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t), m.Damage, aim);
                 }
             }
             Missiles.RemoveAll(m => m.Gone);
+        }
+
+        // ---------------------------------------------------------------- boarding
+
+        /// <summary>
+        /// Pods go at hulls whose shields are down (they cannot get through a shield); each carries a
+        /// squad. A ship keeps a reserve of marines aboard to defend itself.
+        /// </summary>
+        void FirePods(BattleUnit u, Subsystem s)
+        {
+            if (s.Ammo <= 0 || u.Combat.MarinesAvailable < WeaponSpec.PodMarines * 2) return;
+            BattleUnit target = null;
+            double best = s.Def.Weapon.RangeKm;
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || o.Captured || o.Kind == UnitKind.Fighter) continue;
+                if (o.Combat.Shield > o.Combat.Spec.Shield * 0.05 && o.Combat.HasShieldGenerator) continue;
+                if (o.Combat.Interior.Boarder != null && o.Combat.Interior.Boarder != u.Faction) continue;
+                double d = (o.Pos - u.Pos).Length;
+                if (o.Combat.Disabled) d *= 0.5;
+                if (d < best)
+                {
+                    best = d;
+                    target = o;
+                }
+            }
+            if (target == null) return;
+            var origin = u.PointOf(s.Def);
+            s.Cooldown = s.Def.Weapon.Cooldown * (0.85 + rng.NextDouble() * 0.3);
+            for (int k = 0; k < s.Def.Weapon.Salvo && s.Ammo > 0; k++)
+            {
+                s.Ammo--;
+                RemoveMarines(u.Combat.Interior, WeaponSpec.PodMarines);
+                var spread = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, rng.NextDouble() - 0.5) * 0.3;
+                Missiles.Add(new Missile
+                {
+                    Pos = origin, Vel = ((target.Pos - origin).Normalized + spread).Normalized * 0.3 + u.Vel, Target = target, TargetSub = PickSubsystem(target),
+                    Damage = s.Def.Weapon.Damage, Speed = s.Def.Weapon.MissileSpeedKmS, Hp = 40, Life = 60, Side = u.Side, Kind = MissileKind.Pod,
+                    Owner = u.Faction, Marines = WeaponSpec.PodMarines,
+                });
+            }
+            Emit(FxKind.MissileLaunch, origin, origin + u.Forward, 0, u.Side, u, s.Index);
+        }
+
+        void PodHit(Missile m, BattleUnit t, DVec3 at)
+        {
+            var c = t.Combat;
+            if (c.Shield > 0 && c.HasShieldGenerator)
+            {
+                Emit(FxKind.PodBounce, at, at, t.LengthKm, t.Side, t, -1);
+                return;
+            }
+            // The drill tip punches in; the squad goes through the hole it made.
+            ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : null, m.Damage, at);
+            if (!t.Present) return;
+            Embed(t, at, m.Vel, m.Side, false);
+            var local = t.ToLocal(at);
+            var space = c.Interior.Nearest(local.Z, local.Y);
+            c.Interior.Board(m.Owner, m.Owner.MarineQuality, m.Marines, space, true, Seconds, rng);
+            Emit(FxKind.Breach, at, at - m.Vel.Normalized * 0.05, t.LengthKm * 0.1, m.Side, t, space.Index);
+        }
+
+        void Embed(BattleUnit t, DVec3 at, DVec3 travel, int side, bool breacher)
+        {
+            var inward = travel.LengthSquared > 0 ? travel.Normalized : (t.Pos - at).Normalized;
+            t.Basis(out var right, out var up);
+            Embedded.Add(new Embedded
+            {
+                Unit = t, Local = t.ToLocal(at), Side = side, Breacher = breacher,
+                Inward = new DVec3(DVec3.Dot(inward, right), DVec3.Dot(inward, up), DVec3.Dot(inward, t.Forward)),
+            });
+        }
+
+        static void RemoveMarines(Interior interior, double count)
+        {
+            foreach (var c in interior.Compartments)
+            {
+                double take = Math.Min(c.Marines, count);
+                c.Marines -= take;
+                count -= take;
+                if (count <= 0) return;
+            }
+        }
+
+        /// <summary>
+        /// A ship with marines to spare picks a disabled enemy to board, once no healthy enemy warship
+        /// is close enough to make it suicide. Breachers are less careful: any hull with its shields
+        /// down will do.
+        /// </summary>
+        void ChooseBoarding(BattleUnit u)
+        {
+            if (u.BoardTarget != null && (!u.BoardTarget.Present || u.BoardTarget.Captured)) u.BoardTarget = null;
+            if (u.BoardTarget != null || u.Fleeing || u.Combat.Disabled) return;
+            bool breacher = u.Ship != null && u.Ship.Spec.Class == ShipClass.Breacher;
+            bool boarder = breacher || u.Faction.IsPirate || u.Faction.IsMilitary;
+            if (!boarder || u.Combat.MarinesAvailable < 15) return;
+            BattleUnit best = null;
+            double bestD = double.MaxValue;
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || o.Captured || o.Kind != UnitKind.Ship) continue;
+                if (o.Combat.Interior.Boarder != null && o.Combat.Interior.Boarder != u.Faction) continue;
+                bool open = o.Combat.Disabled || o.Stunned > 10 || (breacher && (o.Combat.Shield <= o.Combat.Spec.Shield * 0.25 || !o.Combat.HasShieldGenerator));
+                if (!open) continue;
+                if (!breacher && ThreatNear(u, o.Pos, 6)) continue;
+                double d = (o.Pos - u.Pos).Length;
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = o;
+                }
+            }
+            u.BoardTarget = best;
+        }
+
+        bool ThreatNear(BattleUnit u, DVec3 at, double km)
+        {
+            foreach (var o in Units)
+                if (Hostile(u, o) && !o.Captured && o.Kind != UnitKind.Fighter && o.Combat.Armed && !o.Combat.Disabled && (o.Pos - at).Length < km)
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Closing to board. A boarding ship lines up alongside, matches the target's drift, latches
+        /// and after a while opens its airlock. A breacher rams nose first instead and its assault bay
+        /// opens straight into the hull.
+        /// </summary>
+        void Approach(BattleUnit u, double dt)
+        {
+            var t = u.BoardTarget;
+            var c = u.Combat;
+            bool breacher = u.Ship != null && u.Ship.Spec.Class == ShipClass.Breacher;
+            double maxSpeed = c.Spec.MaxSpeed * (0.25 + 0.75 * c.EngineFactor);
+            t.Basis(out var right, out _);
+            var dock = breacher ? t.Pos : t.Pos + right * (t.Radius * 0.35 + u.Radius + 0.06);
+            var to = dock - u.Pos;
+            double dist = to.Length;
+            // Arrive matched: slow down as it closes, holding the target's own drift.
+            double want = breacher ? maxSpeed : Math.Min(maxSpeed, dist * 0.05 + 0.002);
+            var desired = t.Vel + (dist > 1e-6 ? to / dist : DVec3.Zero) * want;
+            var dv = desired - u.Vel;
+            double step = c.Spec.Accel * (0.3 + 0.7 * c.EngineFactor) * dt * (breacher ? 1 : 1.5);
+            u.Vel += dv.Length > step ? dv.Normalized * step : dv;
+            u.Pos += u.Vel * dt;
+            TurnToward(u, breacher ? to : t.Forward, c.Spec.TurnRateDegS, dt);
+
+            if (breacher)
+            {
+                if (dist < t.Radius * 0.55 + u.Radius * 0.5)
+                {
+                    var contact = t.Pos + (u.Pos - t.Pos).Normalized * t.Radius * 0.3;
+                    u.Latched = t;
+                    u.LatchLocal = t.ToLocal(u.Pos);
+                    u.BoardTarget = null;
+                    ApplyDamage(t, PickSubsystem(t), 300, contact);
+                    if (!t.Present) return;
+                    Embed(t, contact, to, u.Side, true);
+                    var local = t.ToLocal(contact);
+                    var space = t.Combat.Interior.Nearest(local.Z, local.Y);
+                    double marines = c.MarinesAvailable * 0.9;
+                    RemoveMarines(c.Interior, marines);
+                    t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality * 1.15, marines, space, true, Seconds, rng);
+                    Emit(FxKind.Breach, contact, contact - to.Normalized * 0.1, t.LengthKm * 0.15, u.Side, t, space.Index);
+                }
+                return;
+            }
+
+            if (dist < 0.08 && (u.Vel - t.Vel).Length < 0.01)
+            {
+                u.LatchTimer += dt;
+                if (u.LatchTimer > 20)
+                {
+                    u.Latched = t;
+                    u.LatchLocal = t.ToLocal(u.Pos);
+                    u.BoardTarget = null;
+                    u.LatchTimer = 0;
+                    double marines = c.MarinesAvailable * 0.85;
+                    RemoveMarines(c.Interior, marines);
+                    var airlock = t.Combat.Interior.Of(CompartmentKind.Midships) ?? t.Combat.Interior.Nearest(0, 0);
+                    t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality, marines, airlock, false, Seconds, rng);
+                    Emit(FxKind.Latch, u.Pos, t.Pos, u.LengthKm, u.Side, t, airlock.Index);
+                }
+            }
+            else u.LatchTimer = 0;
+        }
+
+        /// <summary>Runs every fight aboard; releases boarding ships when it is decided.</summary>
+        void StepBoarding(double dt)
+        {
+            foreach (var u in Units)
+            {
+                if (!u.Present) continue;
+                var interior = u.Combat.Interior;
+                if (interior.Boarder == null) continue;
+                var boarder = interior.Boarder;
+                if (interior.Step(dt, Seconds, rng)) Capture(u, boarder);
+            }
+            foreach (var u in Units)
+            {
+                if (u.Latched == null) continue;
+                var t = u.Latched;
+                if (!t.Present || t.Captured || t.Combat.Interior.Boarder == null)
+                {
+                    // Done (taken, repelled or gone): cast off.
+                    u.Latched = null;
+                    u.Vel += (u.Pos - t.Pos).Normalized * 0.01;
+                }
+            }
+        }
+
+        void Capture(BattleUnit u, Faction captor)
+        {
+            int side = -1;
+            foreach (var o in Units)
+                if (o.Faction == captor && o.Side != u.Side) side = o.Side;
+            if (side < 0) side = 1 - u.Side;
+            u.Captured = true;
+            u.Side = side;
+            u.Fleeing = false;
+            u.Target = null;
+            u.Combat.Interior.Settle();
+            Emit(FxKind.Captured, u.Pos, u.Pos, u.LengthKm, side, u, -1);
+            UnitCaptured?.Invoke(this, u, captor);
         }
 
         static double SegmentPointDistance(DVec3 a, DVec3 b, DVec3 p)

@@ -92,6 +92,14 @@ namespace SolarSystem.Core
                 var helio = ephemeris.Helio(s.Orbit.Body) + s.Orbit.OffsetAt(jd);
                 return new ShipState(helio, s.Orbit.TangentAt(jd), s.Orbit.SpeedKmS, false, 0);
             }
+            if (s.Phase == ShipPhase.Lurk || s.Phase == ShipPhase.Adrift)
+            {
+                // Slide out of the lane over the first couple of hours rather than jump.
+                double ease = Astro.SmoothStep(0, 0.08, jd - s.PhaseStartJd);
+                var held = LanePoint(s, jd, s.LaneHold) + s.LaneHoldSide * ease;
+                var along = LanePoint(s, jd, Math.Min(1, s.LaneHold + 1e-4)) - LanePoint(s, jd, Math.Max(0, s.LaneHold - 1e-4));
+                return new ShipState(held, along.LengthSquared > 0 ? along.Normalized : DVec3.UnitX, 0, false, s.LaneHold);
+            }
             if (s.Phase == ShipPhase.Lane)
             {
                 double progress = LaneProgress(s, jd);
@@ -123,7 +131,7 @@ namespace SolarSystem.Core
 
         /// <summary>Distance fraction along the lane at a date (eased in and out).</summary>
         public static double LaneProgress(Ship s, double jd) =>
-            Hyperlanes.Progress((jd - s.PhaseStartJd) / Math.Max(s.PhaseEndJd - s.PhaseStartJd, 1e-9));
+            s.LaneStartProgress + (s.LaneEndProgress - s.LaneStartProgress) * Hyperlanes.Progress((jd - s.PhaseStartJd) / Math.Max(s.PhaseEndJd - s.PhaseStartJd, 1e-9));
 
         /// <summary>Heliocentric position on the ship's lane at a date and distance fraction.</summary>
         public DVec3 LanePoint(Ship s, double jd, double progress)
@@ -210,6 +218,7 @@ namespace SolarSystem.Core
                 else Depart(ship);
             }
             else if (ship.Phase == ShipPhase.Lane) EndLane(ship);
+            else if (ship.Phase == ShipPhase.Lurk || ship.Phase == ShipPhase.Adrift) ResumeLane(ship, ship.PhaseEndJd);
             else if (ship.Journey != null && ship.Orbit.Fixed) StartLane(ship, ship.PhaseEndJd);
             else Arrive(ship);
         }
@@ -265,8 +274,39 @@ namespace SolarSystem.Core
             ship.FrameBody = 0;
             ship.Path = null;
             ship.Phase = ShipPhase.Lane;
+            ship.LaneStartProgress = 0;
+            ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
             ship.PhaseStartJd = jd;
-            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm);
+            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm * ship.LaneEndProgress);
+        }
+
+        /// <summary>Back into the lane from where the ship stopped (a lurk over, or an ambush survived), and on to its end.</summary>
+        public void ResumeLane(Ship ship, double jd)
+        {
+            ship.Phase = ShipPhase.Lane;
+            ship.LaneStartProgress = ship.LaneHold;
+            ship.LaneEndProgress = 1;
+            ship.LaneHoldSide = DVec3.Zero;
+            ship.PhaseStartJd = jd;
+            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm * Math.Max(1e-3, 1 - ship.LaneHold));
+        }
+
+        /// <summary>Drops out of the lane where the ship is, a little to one side (an interdiction pulse).</summary>
+        public void PullOut(Ship ship, double jd, double progress, DVec3 side)
+        {
+            ship.Phase = ShipPhase.Adrift;
+            ship.LaneHold = Math.Max(0, Math.Min(1, progress));
+            ship.LaneHoldSide = side;
+            ship.PhaseStartJd = jd;
+            ship.PhaseEndJd = jd + 0.5;
+        }
+
+        /// <summary>A sideways offset (km, ecliptic) from a lane at a point, to wait just outside it.</summary>
+        public DVec3 OffLane(Ship s, double jd, double progress, double km, int sign)
+        {
+            var along = LanePoint(s, jd, Math.Min(1, progress + 1e-3)) - LanePoint(s, jd, Math.Max(0, progress - 1e-3));
+            var side = DVec3.Cross(along, DVec3.UnitZ);
+            return side.LengthSquared > 0 ? side.Normalized * (km * sign) : DVec3.UnitX * km;
         }
 
         /// <summary>Leaves the lane at the far ramp: on to the next lane's ramp, or the last burn home.</summary>
@@ -274,6 +314,17 @@ namespace SolarSystem.Core
         {
             double jd = ship.PhaseEndJd;
             var hop = ship.LaneLeg;
+            if (ship.LaneEndProgress < 1)
+            {
+                // Stop part-way and wait just off the lane.
+                ship.Phase = ShipPhase.Lurk;
+                ship.LaneHold = ship.LaneEndProgress;
+                ship.LaneHoldSide = OffLane(ship, jd, ship.LaneHold, 30000, ship.Id % 2 == 0 ? 1 : -1);
+                ship.PhaseStartJd = jd;
+                ship.PhaseEndJd = jd + ship.LurkDays;
+                ship.LurkLane = null;
+                return;
+            }
             ship.Orbit = FixedPoint(hop.To, ship.LaneToOffset);
             ship.JourneyIndex++;
             if (ship.JourneyIndex < ship.Journey.Count)
@@ -670,7 +721,7 @@ namespace SolarSystem.Core
                 Spec = ShipClassSpec.Of(c),
                 Faction = faction,
                 Role = role,
-                Combat = new ShipCombat(CombatSpec.Of(c)),
+                Combat = new ShipCombat(CombatSpec.Of(c), c),
             };
             ships.Add(ship);
             return ship;

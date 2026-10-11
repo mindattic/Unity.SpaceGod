@@ -6,6 +6,9 @@ namespace SolarSystem.Core
     public enum OrderKind
     {
         Patrol,
+
+        /// <summary>Lurk beside a hyperlane and pull passing ships out of it (pirates).</summary>
+        Ambush,
         Attack,
         Defend,
         Siege,
@@ -41,6 +44,12 @@ namespace SolarSystem.Core
         readonly Dictionary<Faction, int> losses = new Dictionary<Faction, int>();
         readonly Dictionary<int, int> battleCount = new Dictionary<int, int>();
         readonly Dictionary<Ship, double> retreating = new Dictionary<Ship, double>();
+        readonly Dictionary<Ship, double> laneSeen = new Dictionary<Ship, double>();
+        readonly Dictionary<Ship, double> pulseReady = new Dictionary<Ship, double>();
+        readonly Dictionary<BattleUnit, Faction> captures = new Dictionary<BattleUnit, Faction>();
+
+        /// <summary>An interdiction pulse pulls out every ship within this distance along the lane.</summary>
+        public const double PulseRadiusKm = 600000;
         readonly Dictionary<int, double> lastBattleEndJd = new Dictionary<int, double>();
         readonly Random rng;
 
@@ -95,11 +104,286 @@ namespace SolarSystem.Core
                 b.Advance(seconds);
                 if (b.Over) Resolve(b, jd);
             }
+            Interdictions(jd);
             while (jd >= nextDailyJd)
             {
                 Daily(nextDailyJd);
                 nextDailyJd += 1;
             }
+        }
+
+        // ---------------------------------------------------------------- lane ambushes
+
+        /// <summary>
+        /// Each lurking raider watches its lane. A ship that passes its station since the last look
+        /// (so a fast pass between frames still counts) sets off the pulse: every ship near that
+        /// point of the lane is thrown out of it, its drives and shields knocked out for a minute or
+        /// two, and the raiders close in.
+        /// </summary>
+        void Interdictions(double jd)
+        {
+            var lanes = Fleet.Lanes;
+            if (lanes == null) return;
+            var seen = new Dictionary<Ship, double>();
+            foreach (var v in Fleet.Ships)
+            {
+                if (v.Destroyed || v.IsEscort || v.Phase != ShipPhase.Lane || v.Battle != null) continue;
+                double p = Fleet.LaneProgress(v, jd);
+                seen[v] = v.LaneLeg.From == v.LaneLeg.Lane.A ? p : 1 - p;
+            }
+            foreach (var lurker in Fleet.Ships)
+            {
+                if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Phase != ShipPhase.Lurk || lurker.Battle != null) continue;
+                if (pulseReady.TryGetValue(lurker, out double ready) && jd < ready) continue;
+                var lane = lurker.LaneLeg.Lane;
+                double station = lurker.LaneLeg.From == lane.A ? lurker.LaneHold : 1 - lurker.LaneHold;
+                double window = PulseRadiusKm / Math.Max(lurker.LaneLengthKm, 1);
+                var victims = new List<Ship>();
+                foreach (var kv in seen)
+                {
+                    var v = kv.Key;
+                    if (v.LaneLeg.Lane != lane || v.Faction.IsPirate || v.Derelict) continue;
+                    double now = kv.Value;
+                    double before = laneSeen.TryGetValue(v, out double b) ? b : now;
+                    if ((before - station) * (now - station) <= 0 || Math.Abs(now - station) < window) victims.Add(v);
+                }
+                if (victims.Count > 0) Interdict(lurker, station, victims, jd);
+            }
+            laneSeen.Clear();
+            foreach (var kv in seen) laneSeen[kv.Key] = kv.Value;
+        }
+
+        void Interdict(Ship lurker, double station, List<Ship> victims, double jd)
+        {
+            var lane = lurker.LaneLeg.Lane;
+            foreach (var v in victims)
+            {
+                double at = v.LaneLeg.From == lane.A ? station : 1 - station;
+                var side = lurker.LaneHoldSide * (0.8 + rng.NextDouble() * 0.4);
+                Fleet.PullOut(v, jd, at, side);
+            }
+            var helio = Fleet.LanePoint(lurker, jd, lurker.LaneHold) + lurker.LaneHoldSide;
+            var b = new Battle(nextBattleId++, 0, "Ambush on the " + lane.Name + " lane", helio, jd, rng.Next())
+            {
+                Site = new LaneSite
+                {
+                    Hop = lurker.LaneLeg, FromOffset = lurker.LaneFromOffset, ToOffset = lurker.LaneToOffset, Progress = lurker.LaneHold, Side = lurker.LaneHoldSide,
+                },
+            };
+            Hook(b);
+            approach = DVec3.Cross(DVec3.UnitZ, lurker.LaneHoldSide);
+            approach = approach.LengthSquared > 0 ? approach.Normalized : DVec3.UnitX;
+            Join(b, lurker, 0, false);
+            foreach (var v in victims) Join(b, v, 1, false);
+            BattleUnit source = b.UnitOf(lurker);
+            foreach (var u in b.Units)
+            {
+                if (u.Side != 1) continue;
+                u.Stunned = 60 + rng.NextDouble() * 60;
+                u.Combat.Shield = 0;
+            }
+            if (source != null) b.Emit(FxKind.Pulse, source.Pos, source.Pos, 30, 0, source, -1);
+            Battles.Add(b);
+            pulseReady[lurker] = jd + 1;
+            lanes0().Danger.TryGetValue(lane, out double danger);
+            lanes0().Danger[lane] = danger + 3;
+            world.Log(jd, $"Black Banner raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
+            BumpDanger(lane.A, 1);
+            BumpDanger(lane.B, 1);
+            BattleStarted?.Invoke(b);
+        }
+
+        Hyperlanes lanes0() => Fleet.Lanes;
+
+        void Hook(Battle b)
+        {
+            b.UnitDestroyed = OnUnitDestroyed;
+            b.Launch = FighterAI.Launch;
+            b.FighterStep = FighterAI.Step;
+            b.UnitCaptured = (battle, u, captor) =>
+            {
+                captures[u] = captor;
+                if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
+                    $"{battle.Name}: {captor.Name} marines take the {u.Ship.Name}", WorldEventKind.Capture, battle.Body);
+            };
+        }
+
+        /// <summary>The lane with the most merchant traffic, preferring those that start at the raiders' own system.</summary>
+        Lane BusiestLane(int system)
+        {
+            var lanes = Fleet.Lanes;
+            Lane best = null;
+            double bestScore = 0;
+            foreach (var lane in lanes.Lanes)
+            {
+                double traffic = 0;
+                foreach (var s in Fleet.Ships)
+                {
+                    if (s.Destroyed || !world.IsTrader(s)) continue;
+                    if (s.Phase == ShipPhase.Lane && s.LaneLeg.Lane == lane) traffic += 1;
+                    if (s.Journey != null)
+                        foreach (var hop in s.Journey) if (hop.Lane == lane) traffic += 0.5;
+                }
+                double score = traffic * (lane.A == system || lane.B == system ? 2 : 1) * (0.7 + rng.NextDouble() * 0.6);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = lane;
+                }
+            }
+            return best;
+        }
+
+        // ---------------------------------------------------------------- prizes
+
+        /// <summary>
+        /// What boarders do with a ship they have taken. Pirates keep warships they can crew, strip
+        /// merchant holds and mostly leave the hull adrift (or sell it to the breakers at Blackwater,
+        /// or scuttle it); navies take serviceable enemy hulls as prizes and scuttle pirates.
+        /// </summary>
+        void DisposeOfPrize(Battle b, BattleUnit u, Faction captor, double jd)
+        {
+            var ship = u.Ship;
+            if (ship == null || ship.Destroyed)
+            {
+                if (u.Kind == UnitKind.Platform) u.Platform.Platforms.Remove(u.Combat);
+                return;
+            }
+            string how;
+            double hull = ship.Combat.HullFraction;
+            bool warship = ship.Spec.IsMilitary;
+            if (captor.IsPirate)
+            {
+                if (ship.HasCargo) Loot(ship);
+                double roll = rng.NextDouble();
+                if (warship && hull >= 0.3) how = Steal(ship, captor, b) ? "pressed into Black Banner service" : "scuttled";
+                else if (warship) { Scuttle(ship); how = "scuttled"; }
+                else if (roll < 0.55) { LeaveAdrift(ship, jd); how = "stripped and left adrift"; }
+                else if (roll < 0.85)
+                {
+                    world.Pirates.Treasury += Economy.HullPrice(ship.Spec.Class) * 0.25;
+                    ship.Destroyed = true;
+                    how = "taken to Blackwater and sold to the breakers";
+                }
+                else { Scuttle(ship); how = "scuttled"; }
+            }
+            else if (ship.Faction.IsPirate || hull < 0.3)
+            {
+                Scuttle(ship);
+                how = "scuttled";
+            }
+            else
+            {
+                if (ship.HasCargo)
+                {
+                    captor.Treasury += ship.CargoTonnes * GoodInfo.Of(ship.CargoGood).BasePrice * 0.8;
+                    Economy.Release(ship);
+                    ship.HasCargo = false;
+                    ship.CargoDestination = null;
+                    ship.Cargo = null;
+                }
+                how = Steal(ship, captor, b) ? "taken as a prize" : "scuttled";
+            }
+            world.Log(jd, $"The {ship.Name} is {how} by the {captor.Name}", WorldEventKind.Capture, b.Body);
+        }
+
+        void Loot(Ship ship)
+        {
+            Economy.Release(ship);
+            DeliverLoot(ship.CargoGood, ship.CargoTonnes);
+            world.Pirates.Treasury += ship.CargoTonnes * GoodInfo.Of(ship.CargoGood).BasePrice * 0.3;
+            ship.HasCargo = false;
+            ship.CargoDestination = null;
+            ship.Cargo = null;
+        }
+
+        void Scuttle(Ship ship)
+        {
+            if (ship.HasCargo) Economy.Release(ship);
+            ship.HasCargo = false;
+            ship.Destroyed = true;
+            losses.TryGetValue(ship.Faction, out int n);
+            losses[ship.Faction] = n + 1;
+        }
+
+        void LeaveAdrift(Ship ship, double jd)
+        {
+            Detach(ship);
+            ship.Derelict = true;
+            ship.DerelictSinceJd = jd;
+            ship.Cargo = "Derelict: boarded, stripped and abandoned";
+        }
+
+        /// <summary>The prize changes hands: a prize crew takes over and it joins the captor (a group of theirs in the fight, if there is room).</summary>
+        bool Steal(Ship ship, Faction captor, Battle b)
+        {
+            Detach(ship);
+            var old = ship.Faction;
+            losses.TryGetValue(old, out int n);
+            losses[old] = n + 1;
+            ship.Faction = captor;
+            if (captor.Prefix.Length > 0 && ship.Name.StartsWith(old.Prefix + " ")) ship.Name = captor.Prefix + ship.Name.Substring(old.Prefix.Length);
+            ship.Combat.Interior.HandOver(ship.Combat.Spec.Crew * 0.3);
+            Ship group = null;
+            foreach (var u in b.Units)
+            {
+                if (u.Ship == null || u.Dead || u.Ship == ship || u.Ship.Faction != captor) continue;
+                var leader = u.Ship.Controller;
+                if (!leader.Destroyed && leader.Faction == captor && !leader.IsEscort) group = leader;
+            }
+            if (ship.Spec.IsMilitary && group != null && ship.Phase == group.Phase && ship.Orbit?.Body == group.Orbit?.Body)
+            {
+                int index = 0;
+                foreach (var e in Fleet.Ships) if (e.Leader == group) index++;
+                if (index < 7)
+                {
+                    Fleet.AddEscort(group, ship, Fleet.SlotFor(index));
+                    return true;
+                }
+            }
+            if (ship.Spec.IsMilitary)
+            {
+                ship.Role = ShipRole.Patrol;
+                ship.Route = group?.Route ?? new[] { HavenBody() >= 0 ? HavenBody() : ship.Orbit.Body };
+            }
+            return true;
+        }
+
+        /// <summary>A ship leaves its group (taken, or abandoned): it keeps the group's motion as its own, and the group gets a new flagship if it was the old one.</summary>
+        void Detach(Ship ship)
+        {
+            if (!ship.IsEscort)
+            {
+                Succession(ship);
+                return;
+            }
+            var lead = ship.Leader;
+            ship.Leader = null;
+            ship.Phase = lead.Phase;
+            ship.Orbit = lead.Orbit;
+            ship.DepartureOrbit = lead.DepartureOrbit;
+            ship.DestinationBody = lead.DestinationBody;
+            ship.OriginBody = lead.OriginBody;
+            ship.PhaseStartJd = lead.PhaseStartJd;
+            ship.PhaseEndJd = lead.PhaseEndJd;
+            ship.FrameBody = lead.FrameBody;
+            ship.Path = lead.Path;
+            ship.PathCumulative = lead.PathCumulative;
+            ship.PathLength = lead.PathLength;
+            ship.AccelKmPerDay2 = lead.AccelKmPerDay2;
+            ship.DepartureVelocity = lead.DepartureVelocity;
+            ship.ArrivalVelocity = lead.ArrivalVelocity;
+            ship.Journey = lead.Journey;
+            ship.JourneyIndex = lead.JourneyIndex;
+            ship.FinalBody = lead.FinalBody;
+            ship.LaneLeg = lead.LaneLeg;
+            ship.LaneFromOffset = lead.LaneFromOffset;
+            ship.LaneToOffset = lead.LaneToOffset;
+            ship.LaneLengthKm = lead.LaneLengthKm;
+            ship.LaneStartProgress = lead.LaneStartProgress;
+            ship.LaneEndProgress = lead.LaneEndProgress;
+            ship.LaneHold = lead.LaneHold;
+            ship.LaneHoldSide = lead.LaneHoldSide;
         }
 
         // ---------------------------------------------------------------- meeting the enemy
@@ -216,9 +500,7 @@ namespace SolarSystem.Core
             battleCount[body] = n + 1;
             string name = (n == 0 ? "Battle of " : Ordinal(n + 1) + " Battle of ") + b0.Name;
             var b = new Battle(nextBattleId++, body, name, anchor, jd, rng.Next());
-            b.UnitDestroyed = OnUnitDestroyed;
-            b.Launch = FighterAI.Launch;
-            b.FighterStep = FighterAI.Step;
+            Hook(b);
             approach = DVec3.Cross(anchor.Normalized, DVec3.UnitZ);
             if (approach.LengthSquared < 1e-6) approach = DVec3.UnitX;
             approach = approach.Normalized;
@@ -307,12 +589,34 @@ namespace SolarSystem.Core
             }
             foreach (var u in b.Units)
                 if (u.Ship != null && u.Dead) Succession(u.Ship);
+            foreach (var u in b.Units)
+            {
+                if (!u.Captured || u.Dead || !captures.TryGetValue(u, out var captor)) continue;
+                captures.Remove(u);
+                DisposeOfPrize(b, u, captor, jd);
+            }
 
             // Survivors go back to their own schedules; those that ran, or lost, withdraw to refit.
             foreach (var u in b.Units)
             {
-                if (u.Ship == null || u.Dead || u.Ship.IsEscort) continue;
+                if (u.Ship == null || u.Dead || u.Ship.IsEscort || u.Ship.Destroyed || u.Ship.Derelict) continue;
                 bool beaten = u.Fled || (b.Winner >= 0 && u.Side != b.Winner);
+                // Pulled out of a lane: back in and on their way. Raiders who won take the loot home;
+                // beaten ones run.
+                if (u.Ship.Phase == ShipPhase.Adrift)
+                {
+                    Fleet.ResumeLane(u.Ship, jd);
+                    continue;
+                }
+                if (u.Ship.Phase == ShipPhase.Lurk)
+                {
+                    if (beaten || b.Winner == u.Side)
+                    {
+                        retreating[u.Ship] = jd + (beaten ? 6 : 4);
+                        Fleet.ResumeLane(u.Ship, jd);
+                    }
+                    continue;
+                }
                 if (beaten) retreating[u.Ship] = jd + 6;
                 // The beaten leave at once; everyone else keeps their plans unless the fight overran them.
                 if (beaten || u.Ship.PhaseEndJd <= jd || !(u.Ship.Spec.IsMilitary || u.Ship.Faction.IsPirate)) Fleet.ScheduleNext(u.Ship, jd);
@@ -377,6 +681,10 @@ namespace SolarSystem.Core
             heir.LaneFromOffset = dead.LaneFromOffset;
             heir.LaneToOffset = dead.LaneToOffset;
             heir.LaneLengthKm = dead.LaneLengthKm;
+            heir.LaneStartProgress = dead.LaneStartProgress;
+            heir.LaneEndProgress = dead.LaneEndProgress;
+            heir.LaneHold = dead.LaneHold;
+            heir.LaneHoldSide = dead.LaneHoldSide;
             foreach (var s in Fleet.Ships)
                 if (s.Leader == dead && s != heir) s.Leader = heir;
             if (Orders.TryGetValue(dead, out var o)) Orders[heir] = o;
@@ -418,7 +726,7 @@ namespace SolarSystem.Core
             bool withdrawing = retreating.TryGetValue(leader, out double until) && jd < until;
             if (f.IsPirate) return DecidePirate(leader, here, jd, withdrawing);
 
-            if (withdrawing || GroupDamage(leader) > 0.22 || MissilesLow(leader) || !leader.Combat.Armed)
+            if (withdrawing || GroupDamage(leader) > 0.22 || MissilesLow(leader) || !leader.Combat.Armed || HangarsLow(leader) || MarinesLow(leader))
             {
                 int yard = NearestYard(f, here, jd);
                 if (yard >= 0) return new GroupOrder { Kind = OrderKind.Repair, Body = yard };
@@ -480,6 +788,27 @@ namespace SolarSystem.Core
             int haven = HavenBody();
             if (withdrawing || GroupDamage(leader) > 0.3 || MissilesLow(leader) || !leader.Combat.Armed)
                 return new GroupOrder { Kind = OrderKind.Repair, Body = haven >= 0 ? haven : here };
+
+            // Lie in wait beside a busy hyperlane.
+            var lanes = Fleet.Lanes;
+            if (lanes != null && rng.NextDouble() < 0.55)
+            {
+                int system = lanes.SystemOf(here);
+                var lane = BusiestLane(system);
+                if (lane != null)
+                {
+                    if (lane.A == system || lane.B == system)
+                    {
+                        leader.LurkLane = lane;
+                        leader.LurkAt = 0.3 + rng.NextDouble() * 0.4;
+                        leader.LurkDays = 2.5 + rng.NextDouble() * 2;
+                        return new GroupOrder { Kind = OrderKind.Ambush, Body = lane.Other(system) };
+                    }
+                    double toA = (world.Ephemeris.HelioAt(lane.A, jd) - world.Ephemeris.HelioAt(here, jd)).Length;
+                    double toB = (world.Ephemeris.HelioAt(lane.B, jd) - world.Ephemeris.HelioAt(here, jd)).Length;
+                    return new GroupOrder { Kind = OrderKind.Ambush, Body = toA < toB ? lane.A : lane.B };
+                }
+            }
 
             // Stay on a hunting ground a while if it has traffic and no warships.
             if (Orders.TryGetValue(leader, out var o) && o.Kind == OrderKind.Raid && o.Body == here && jd - o.SinceJd < 4 && DefenceAt(here, leader.Faction) < GroupStrength(leader))
@@ -616,6 +945,32 @@ namespace SolarSystem.Core
             return sum / n;
         }
 
+        /// <summary>A carrier that has lost half its fighters goes back to base to replace them.</summary>
+        bool HangarsLow(Ship leader)
+        {
+            int have = 0, full = 0;
+            foreach (var s in Fleet.Ships)
+            {
+                if (s.Destroyed || (s != leader && s.Leader != leader)) continue;
+                have += s.Combat.Fighters;
+                full += s.Combat.Spec.Squadrons * 6;
+            }
+            return full > 0 && have < full * 0.5;
+        }
+
+        /// <summary>A group that has spent most of its marines on boarding goes back for more.</summary>
+        bool MarinesLow(Ship leader)
+        {
+            double have = 0, full = 0;
+            foreach (var s in Fleet.Ships)
+            {
+                if (s.Destroyed || (s != leader && s.Leader != leader)) continue;
+                have += s.Combat.Interior.Marines;
+                full += s.Combat.Spec.Marines;
+            }
+            return full > 0 && have < full * 0.35;
+        }
+
         bool MissilesLow(Ship leader)
         {
             int have = 0, full = 0;
@@ -635,6 +990,10 @@ namespace SolarSystem.Core
             foreach (var key in new List<int>(danger.Keys)) danger[key] *= Math.Exp(-1.0 / 20);
             foreach (var s in Economy.Settlements) Array.Clear(s.ExtraDemand, 0, s.ExtraDemand.Length);
 
+            foreach (var s in Fleet.Ships)
+                if (s.Derelict && !s.Destroyed && jd - s.DerelictSinceJd > 25) s.Destroyed = true;
+            if (Fleet.Lanes != null)
+                foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.Danger[lane] *= 0.85;
             MergeGroups();
             Refit(jd);
             Sieges(jd);
@@ -737,6 +1096,16 @@ namespace SolarSystem.Core
                         foreach (var sub in s.Combat.Subsystems)
                             if (sub.Def.Weapon != null && sub.Def.Weapon.Missile) sub.Ammo = sub.Def.Weapon.Ammo;
                     }
+                }
+                // Marines lost boarding are replaced; the wounded go to the yard's hospitals.
+                double marinesShort = s.Combat.Spec.Marines - s.Combat.Interior.Marines;
+                if (marinesShort > s.Combat.Spec.Marines * 0.1 && !s.Combat.Interior.UnderBoarding)
+                {
+                    double medical = marinesShort * 0.05;
+                    yard.ExtraDemand[(int)Good.MedicalSupplies] += medical;
+                    yard.Stock[(int)Good.MedicalSupplies] = Math.Max(0, yard.Stock[(int)Good.MedicalSupplies] - medical);
+                    s.Faction.Treasury -= marinesShort * 40000;
+                    s.Combat.Interior.Muster(s.Combat.Spec.Crew, s.Combat.Spec.Marines);
                 }
                 int fighters = s.Combat.Spec.Squadrons * 6 - s.Combat.Fighters;
                 if (fighters > 0 && yard.Stock[(int)Good.Electronics] > 30)
@@ -850,6 +1219,9 @@ namespace SolarSystem.Core
                 var e = Fleet.AddShip(Name(), ShipClass.Destroyer, pirates, ShipRole.Escort);
                 Fleet.AddEscort(leader, e, Fleet.SlotFor(i));
             }
+            // Every raider band keeps a breacher for taking prizes.
+            var breacher = Fleet.AddShip(Name(), ShipClass.Breacher, pirates, ShipRole.Escort);
+            Fleet.AddEscort(leader, breacher, Fleet.SlotFor(escorts));
             Fleet.Station(leader, body, jd);
             world.NotifyAdded(leader);
         }

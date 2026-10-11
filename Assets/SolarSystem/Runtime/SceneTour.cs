@@ -81,7 +81,9 @@ namespace SolarSystem
             {
                 // A real fleet action: at least two armed warships or platforms on each side.
                 bool Armed(BattleUnit u) => u.Kind == UnitKind.Platform || (u.Ship != null && (u.Ship.Spec.IsMilitary || u.Ship.Faction.IsPirate));
-                if (battle != null || b.Units.Count(u => u.Side == 0 && Armed(u)) < 2 || b.Units.Count(u => u.Side == 1 && Armed(u)) < 2) return;
+                bool fleetAction = b.Units.Count(u => u.Side == 0 && Armed(u)) >= 2 && b.Units.Count(u => u.Side == 1 && Armed(u)) >= 2;
+                // A lane ambush is worth watching too: the pulse, the stunned ships, the boarders going in.
+                if (battle != null || !(fleetAction || b.Site != null)) return;
                 battle = b;
                 app.Clock.SetWarp(0);
             }
