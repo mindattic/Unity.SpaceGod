@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SolarSystem.Core
 {
@@ -25,7 +26,12 @@ namespace SolarSystem.Core
     public enum ShipPhase
     {
         Parked,
+
+        /// <summary>A flip-and-burn under the ship's own drive (a local hop, or to and from a hyperlane ramp).</summary>
         Transit,
+
+        /// <summary>Riding a hyperlane between two planetary systems.</summary>
+        Lane,
     }
 
     public sealed class ShipClassSpec
@@ -68,6 +74,15 @@ namespace SolarSystem.Core
         public string Prefix { get; }
         public Rgb Color { get; }
 
+        /// <summary>Pirates trade only at their havens and are hostile to everyone.</summary>
+        public bool IsPirate { get; set; }
+
+        /// <summary>A navy that fights wars and builds warships (not the independents).</summary>
+        public bool IsMilitary { get; set; }
+
+        /// <summary>Credits from port taxes and its own ships' trade, spent on hulls, repairs and munitions.</summary>
+        public double Treasury;
+
         public Faction(string name, string prefix, Rgb color)
         {
             Name = name;
@@ -88,6 +103,12 @@ namespace SolarSystem.Core
         public double EpochJd;
         public double PhaseAtEpoch;
         public double RateRadPerDay;
+
+        /// <summary>
+        /// A fixed point rather than an orbit (a hyperlane ramp): it holds its offset from the body and
+        /// planning does not re-phase it to face the incoming ship.
+        /// </summary>
+        public bool Fixed;
 
         public double PhaseAt(double jd) => PhaseAtEpoch + RateRadPerDay * (jd - EpochJd);
 
@@ -158,8 +179,47 @@ namespace SolarSystem.Core
         public double PathLength;
         public double AccelKmPerDay2;
 
+        /// <summary>A one-line description of what is in the hold, for the HUD.</summary>
         public string Cargo;
         public int TripsCompleted;
+
+        /// <summary>
+        /// An interplanetary trip by hyperlane: the lanes still to ride (lane, from system, to system)
+        /// and the body the trip ends at. Null for a local trip.
+        /// </summary>
+        public List<LaneHop> Journey;
+        public int JourneyIndex;
+        public int FinalBody = -1;
+
+        /// <summary>While on a lane: which, and the fixed ramp offsets (km, ecliptic) from each end's planet.</summary>
+        public LaneHop LaneLeg;
+        public DVec3 LaneFromOffset, LaneToOffset;
+        public double LaneLengthKm;
+
+        /// <summary>Hold size in tonnes (0 for warships).</summary>
+        public double CapacityTonnes;
+        public bool HasCargo;
+        public Good CargoGood;
+        public double CargoTonnes;
+
+        /// <summary>What the cargo cost, and the settlement it was bought for.</summary>
+        public double CargoCost;
+        public Settlement CargoDestination;
+
+        /// <summary>A supply-contract bonus the destination's owner pays on delivery, credits.</summary>
+        public double CargoBonus;
+
+        /// <summary>Running trade profit, credits.</summary>
+        public double Credits;
+
+        /// <summary>Lost in battle: kept in the list (ids are indices) but no longer simulated or drawn.</summary>
+        public bool Destroyed;
+
+        /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
+        public ShipCombat Combat;
+
+        /// <summary>The battle this ship is fighting in, or null.</summary>
+        public Battle Battle;
 
         public bool IsEscort => Leader != null;
 

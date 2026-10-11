@@ -2,7 +2,7 @@
 
 Swim through the real solar system like Quake, select anything and press **F** to focus on it Homeworld 3 style, and flip the whole system between navigable **gameplay** proportions and true **realistic** scale while it keeps moving. Built in Unity 6 (URP).
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 87 passing](https://img.shields.io/badge/core%20tests-87%20passing-2ea44f) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 104 passing](https://img.shields.io/badge/core%20tests-104%20passing-2ea44f) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -14,7 +14,7 @@ A ground-up rebuild of [ExperimentSolarSystem](https://github.com/mindattic/Expe
 - **Homeworld 3 navigation.** Free swim with WASD and mouselook, then select something and press F: the camera flies to it, orbits it, and rides along as it moves. Any movement key drops you straight back into free swim from where you are.
 - **Gameplay and realistic scale, live.** Press G and everything eases between a compressed, playable layout and true proportions (1 unit = 1,000 km) over about 2.5 seconds. Whatever you are looking at stays framed.
 - **Billboards when things get small.** Anything under a few pixels, ships and planets alike, turns into a class-shaped icon in its faction colour, so you can always see where everything is, even at true scale where Earth is a speck.
-- **A living traffic layer.** Three navies run carrier and battleship groups on patrol routes, while freighters, ore haulers and couriers haul goods between eleven ports.
+- **A living system.** Eighteen settlements run a supply-and-demand economy that merchants trade on by themselves; three navies and a pirate band fight real battles with lasers, missiles and carrier fighters, losing ships and ports; and traffic between planetary systems rides X3-style hyperlanes. You watch it happen.
 
 ## Gameplay vs realistic
 
@@ -33,14 +33,14 @@ The same moment, focused on Earth, before and after pressing G. At gameplay scal
 - **Ephemeris.** The Sun, 8 planets, Ceres, Pluto, Eris and 14 moons. Earth is offset from the Earth-Moon barycentre by the Moon. The Moon has real nodal regression and apsidal precession. The other moons use JPL's satellite mean elements in their Laplace planes, fitted to JPL Horizons, so each sits within half a degree of its true place on its orbit across 2000-2050 (Phobos and Miranda within 2). Uranus's moons roll with it and Triton goes backwards.
 - **Rotation and orientation.** Real IAU poles (RA/Dec converted to the ecliptic) and sidereal rotation periods, with retrograde rotators handled.
 - **Scale model.** A radial mapping about each parent that sends every surface to its displayed surface at any blend, so orbits keep their true shape and direction in both modes and nothing in low orbit ends up inside a planet. Intermediate blends interpolate in log space.
-- **Fleet.** 50 ships across 4 factions. Ships park in circular orbits at the real Keplerian rate for the body's GM. They depart when their orbit faces the target, then fly a constant-thrust brachistochrone (accelerate, flip at the midpoint, brake), plus a steady push that takes them from their parking orbit's velocity to the destination's, so they leave and arrive moving with the world. A hop within one planet's system (Earth to the Moon, Io to Europa) is flown in that planet's frame. Each transit is planned once, as an intercept against where the destination will be on arrival, dog-legs around the Sun or planet at the centre of its frame, and is checked against running into the bodies at either end.
+- **Fleet.** Around a hundred ships across five factions, growing and shrinking as yards build and battles destroy. Ships park in circular orbits at the real Keplerian rate for the body's GM. They depart when their orbit faces the target, then fly a constant-thrust brachistochrone (accelerate, flip at the midpoint, brake), plus a steady push that takes them from their parking orbit's velocity to the destination's, so they leave and arrive moving with the world. A hop within one planet's system (Earth to the Moon, Io to Europa) is flown in that planet's frame. Each transit is planned once, as an intercept against where the destination will be on arrival, dog-legs around the Sun or planet at the centre of its frame, and is checked against running into the bodies at either end (and steered wide of the planet a moon orbits). Between planetary systems ships take the hyperlanes instead (see below).
 - **Sim clock.** Real time up to 1 year per second, starting at the current UTC date.
 
 ### Rendering (`Assets/SolarSystem/Runtime`)
 
 - **Floating origin.** The Unity camera never leaves the world origin. Positions are kept in doubles and every renderer is placed at scene position minus camera position, so a 600 m freighter renders cleanly 2.4 million km from Earth. Near and far planes adapt to the nearest surface.
 - **Custom URP shaders** lit by the Sun's camera-relative position rather than a range-limited light: day/night terminator, atmosphere rims, procedural surfaces for bodies with no honest colour map, a granulating Sun with corona, Saturn's rings (C, B, Cassini Division, A, Encke Gap) shadowed by the planet, engine plumes, and a starfield with the Milky Way along the real galactic plane.
-- **Ships.** Procedurally kit-bashed carriers (flight deck, island, hangar glow), battleships (turrets, superstructure), cruisers and destroyers in faction livery. Freighters, ore haulers and couriers use Kenney Space Kit models. Ships face their thrust vector, so you see them flip at the midpoint.
+- **Ships.** Procedurally kit-bashed carriers (flight deck, island, hangar glow), battleships (turrets, superstructure), cruisers and destroyers in faction livery. Warship guns, launchers, point defence, shield emitters, sensor masts and hangar bays are separate parts bolted on at the hardpoints the combat model uses. Freighters, ore haulers and couriers use Kenney Space Kit models. Ships face their thrust vector, so you see them flip at the midpoint.
 - **One-pixel orbit trails** that fade behind each body. Moon orbits fade in as you approach their planet.
 
 ### Real surfaces, moving weather and the asteroid belt
@@ -58,11 +58,23 @@ The same moment, focused on Earth, before and after pressing G. At gameplay scal
 | --- | --- | --- |
 | ![Mars with MOLA relief shading](docs/images/16-mars.jpg) | ![111,000 real asteroids around the inner system at gameplay scale](docs/images/17-asteroid-belt-gameplay.jpg) | ![The same belt at realistic scale](docs/images/18-asteroid-belt-realistic.jpg) |
 
+### The living system (game layer: `Assets/SolarSystem/Core/Economy`, `Core/Combat`, `Core/Hyperlanes.cs`)
+
+The orbits are real; everything below is fiction, placed on worlds that plausibly hold what they produce.
+
+- **Economy.** Sixteen goods: food, water and medical supplies; helium-3; nickel-iron, copper, zinc, platinum-group metals, rare earths and titanium; hydrocarbons and nitrogen; refined alloys, electronics, machinery and munitions. Eighteen settlements (Earth's orbital industry, Tycho City, Ares Prime, Ceres Hub, Ganymede Union, Kraken Port on Titan and so on) mine what their world has (ice moons sell water, Titan hydrocarbons, Io copper and zinc from its sulphide flows), turn it into goods through production chains (smelters, electronics fabs, machine works, pharmaceutical labs, munitions plants, shipyards), feed their people and price every good from their stock against what they use. Facilities grow when what they make sells dear and shrink when it is glutted; populations grow when fed and shrink when not.
+- **Trade.** Freighters, ore haulers and couriers each pick the cargo and destination that earn the most per day of travel, counting deliveries already on the way, so goods flow from surplus to shortage without a script. Owners post supply contracts for essentials their outposts are short of. Profits go to the ship's faction, ports tax the trade, and traders steer clear of where the fighting has been.
+- **War.** The Sol Federation and the Outer Reach Compact are at war (it cools to ceasefires and flares up again); the Belt Consortium trades with both and hunts pirates; the Black Banner raids busy ports from Blackwater on Deimos. Fleet groups take orders (patrol, attack a weak enemy port, defend one under attack, besiege, refit at a yard). A battle starts wherever hostile forces meet: groups, merchants or a settlement's orbital defence platforms. A port with no platforms left, held by a besieging group for 4 to 20 days, changes hands; refits and new hulls are paid for in alloys, electronics and munitions bought from the yard's market.
+- **Capital ship combat.** Battles run a tactical simulation in a local space tens of km across: ships manoeuvre to their weapons' range, every hardpoint picks its own target, lasers and missiles hit particular subsystems (guns first, then shields, engines and the bridge; a lost reactor takes the ship with it), point defence shoots missiles and fighters down, and damaged ships break off and run. Turrets traverse onto their targets, shot-away hardpoints leave burning scars, breaches open as the hull falls, and a destroyed ship breaks into bow and stern that tumble apart and burn out.
+- **Fighters.** Carriers launch their squadrons (two of interceptors to one of torpedo bombers) as they enter a battle. Each squadron flies attack runs on capital ships (approach from the side, dive in guns firing or torpedoes away, pass close, break off, swing round from a new side) or dogfights enemy fighters. Wingmen fly a loose vee: each pilot has their own wander, reaction lag and discipline, so formations breathe and stretch, and spread out on the run.
+- **Hyperlanes.** Twelve lanes link the planetary systems from Mercury to Pluto. Each system has a ramp per lane just outside its moons; a ship flips-and-burns to the ramp, rides the lane at up to 4% of light speed (easing in and out), and flips-and-burns from the far ramp to its destination. Earth to Mars takes a freighter about a day and a half instead of eleven. Lanes bow away from the Sun and route around it.
+
 ### Interface
 
 - A navigator tree of bodies and fleets: click to select, double-click to focus.
 - A details panel with live distance, light time, vis-viva orbital speed, period, eccentricity and gravity for bodies. For ships, it shows status, speed, ETA, cargo or patrol orders.
-- Selection brackets, hover highlight, an off-screen pointer to the selected target, and the flight path of the selected ship.
+- Selection brackets, hover highlight, an off-screen pointer to the selected target, and the flight path of the selected ship (lanes included).
+- Body panels show each settlement's exports, shortages and defences; ship panels show cargo and trade profit, or hull, shields, lost hardpoints, fighters aboard and orders. **M** opens a market board, **B** jumps to the biggest battle and drops to battle time (real time), and a ticker reports battles, captures, launches and ceasefires.
 
 | Carrier group in formation | Freighter mid-burn | Saturn |
 | --- | --- | --- |
@@ -82,7 +94,19 @@ Any scene works, because `Bootstrap` creates the app if the scene does not have 
 Unity.exe -batchmode -quit -projectPath . -executeMethod SolarSystem.EditorTools.ProjectSetup.SetupAndBuild
 ```
 
-`Builds/Windows/UnitySolarSystem.exe -capture <folder>` runs a scripted camera tour, saves screenshots and quits. That is how the images above were made.
+`-demo` plays the scripted camera tour live and on loop as an unattended showcase, ending each loop by fast-forwarding to the next real fleet action and watching it at battle time; touch any control to stop it and take over.
+
+Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Production builds leave it off; build a capture-enabled player with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/UnitySolarSystem.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`), then:
+
+| Command | Result |
+| --- | --- |
+| `UnitySolarSystem.exe -capture screen` | runs the tour once, saves a PNG at each stop and quits (how the images above were made) |
+| `UnitySolarSystem.exe -capture video screen` | the same, also filmed |
+| `UnitySolarSystem.exe -capture video` | films the session from start to exit at native resolution |
+| `UnitySolarSystem.exe -demo -capture screen 5` | the live showcase with a PNG every 5 seconds |
+| `UnitySolarSystem.exe -demo -capture video` | the live showcase, filmed (close the window to finish the video) |
+
+Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`, named by time (`2026-10-11T14.38.03.577.png`); each image's `.json` sidecar names the tour stop it shows (`\"tag\": \"03-carrier-group\"`). In the editor, **MindAttic > Capture** toggles the same for Play Mode.
 
 ## Controls
 
@@ -103,6 +127,9 @@ Unity.exe -batchmode -quit -projectPath . -executeMethod SolarSystem.EditorTools
 | Time warp slower / faster | , and . (or - and =) |
 | Pause / reset to now | P / T |
 | Orbits, labels, help, HUD | O, L, H, U |
+| Market board | M |
+| Watch the biggest battle (at battle time) | B |
+| Hyperlanes on / off | N |
 
 ## Project layout
 
@@ -114,7 +141,11 @@ Assets/SolarSystem/
     BodyCatalog.cs        physical and orbital data for 26 bodies, with sources
     Ephemeris.cs          positions at any Julian date, orbit sampling
     ScaleModel.cs         realistic / gameplay mapping and its inverse
-    Fleet.cs, Ships.cs    ship classes, factions, schedules, brachistochrone transits
+    Fleet.cs, Ships.cs    ship classes, factions, schedules, brachistochrone transits, lane journeys
+    Hyperlanes.cs         lane network, ramps, curves, routing
+    World.cs              factions, settlements, ships; advances fleet, markets and wars together
+    Economy/              goods, recipes, settlements and markets, trade planning
+    Combat/               hardpoint specs, battles, fighters, war strategy and diplomacy
     SimClock.cs           Julian-date clock and time warp
     BodyOrientation.cs    IAU prime meridians and parent-facing moons, so maps face the right way
     GasGiantWeather.cs    zonal wind profiles and the Great Red Spot's position
@@ -122,7 +153,7 @@ Assets/SolarSystem/
   Runtime/
     SolarSystemApp.cs     frame loop, floating origin, picking, ship placement
     Camera/SpaceCamera.cs free swim, focus orbit, fly-to, SOI reference frames
-    Views/                bodies, ships, line strips, starfield
+    Views/                bodies, ships (hardpoints, damage, wrecks), fighters, battle effects, hyperlanes, starfield
     Rendering/            procedural meshes and ship hulls, Kenney loader, shaders
     UI/                   HUD and procedural icon sprites
     Input/InputState.cs   every key binding in one place
@@ -138,7 +169,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-87 tests cover the following:
+104 tests cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -155,13 +186,17 @@ dotnet test
 - Body orientation: Greenwich against sidereal time, synchronous moons facing their planet, Pluto's 0° meridian on Charon, map-north conventions
 - Great Red Spot longitude against the JUPOS track, and wind profiles (anticyclonic shear around the spot, retrograde rotators)
 - Asteroid positions against JPL Horizons (Vesta, Pallas, Hektor), the GPU propagation path, Kirkwood gaps at 3:1, 5:2 and 7:3, both Trojan clouds, and the shader's scale mapping
+- Economy: every good produced in roughly the amount used, prices rising with scarcity, two years of trade with nobody going hungry and most traders in profit, traders only docking where welcome
+- Combat: the stronger group winning and hardpoints taking the damage, reactor and shield-generator losses, hardpoints sitting on the hull, coarse steps at high warp, and two years of war with battles, losses and a working economy
+- Fighters: launch, attack runs, guns and torpedoes, a loose formation that breathes, and lead succession
+- Hyperlanes: every system reachable, lanes clear of the Sun, trips taking a day or two instead of weeks, continuity across every leg change, and drawn lanes meeting the burns at the ramps
 
 ## Limitations
 
 - **Planet elements are a fit.** The JPL table is accurate to roughly arcminutes across 1800-2050, and drifts outside that window.
 - **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations.
 - **Gameplay scale bends paths.** Ships fly their true path at both scales, but gameplay scale draws it through the same compression as the planets, eased near each end so the ship stays outside the inflated worlds. In a crowded moon system an inflated neighbouring moon can still be drawn over a passing ship.
-- **Not a game yet.** There is no combat, economy or win condition.
+- **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought only at bodies: ships in transit or in a lane cannot be intercepted. There is no player control or win condition yet; you observe.
 - **Surfaces are wrapped on spheres.** Phobos, Deimos and the other small irregular moons are drawn round. Relief is shading only (exaggerated about 5×), never displacement, and lunar libration is not modelled.
 - **Weather is a model on a 2015 snapshot.** Jupiter's map is Hubble's of January 2015, turned so the Great Red Spot is where it is today; the other storms on it are 2015 weather. The flow map reproduces real band speeds and the spot's rotation, not real storm evolution. The Saturn, Uranus and Neptune maps are stylized (CC BY), so only their motion is data.
 - **Asteroids ignore Jupiter.** They fly two-body orbits from the 2026 osculating elements, drifting from their true places by roughly 0.01 AU a year. Only numbered objects brighter than H 15.5 (about 2 to 5 km) are included, and asteroids are labelled but not selectable.

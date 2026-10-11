@@ -5,7 +5,8 @@
         "SolarSystem.Core",
         "Unity.InputSystem",
         "Unity.RenderPipelines.Universal.Runtime",
-        "Unity.RenderPipelines.Core.Runtime"
+        "Unity.RenderPipelines.Core.Runtime",
+        "MindAttic.Capture.Unity"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

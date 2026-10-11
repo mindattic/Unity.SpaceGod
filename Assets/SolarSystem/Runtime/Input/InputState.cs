@@ -32,6 +32,9 @@ namespace SolarSystem.Input
         public bool ToggleLabels;
         public bool ToggleHelp;
         public bool ToggleHud;
+        public bool ToggleMarket;
+        public bool WatchBattle;
+        public bool ToggleLanes;
         public bool CycleShips;
         public bool CycleBackward;
         public bool Home;
@@ -101,6 +104,9 @@ namespace SolarSystem.Input
             ToggleLabels = kb.lKey.wasPressedThisFrame;
             ToggleHelp = kb.hKey.wasPressedThisFrame || kb.f1Key.wasPressedThisFrame;
             ToggleHud = kb.uKey.wasPressedThisFrame;
+            ToggleMarket = kb.mKey.wasPressedThisFrame;
+            WatchBattle = kb.bKey.wasPressedThisFrame;
+            ToggleLanes = kb.nKey.wasPressedThisFrame;
             CycleShips = kb.tabKey.wasPressedThisFrame;
             CycleBackward = CycleShips && Boost;
             Home = kb.homeKey.wasPressedThisFrame || kb.backspaceKey.wasPressedThisFrame;
@@ -119,7 +125,7 @@ namespace SolarSystem.Input
             Boost = Slow = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = CycleShips = CycleBackward = Home = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = WatchBattle = ToggleLanes = CycleShips = CycleBackward = Home = false;
             NumberKey = -1;
         }
 

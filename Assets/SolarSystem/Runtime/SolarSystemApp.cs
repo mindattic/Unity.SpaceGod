@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using SolarSystem.Cameras;
 using SolarSystem.Core;
 using SolarSystem.Input;
+using SolarSystem.Rendering;
 using SolarSystem.UI;
 using SolarSystem.Views;
 using UnityEngine;
@@ -24,7 +25,9 @@ namespace SolarSystem
         public Ephemeris Ephemeris { get; private set; }
         public SimClock Clock { get; private set; }
         public ScaleModel Scale { get; private set; }
-        public Fleet Fleet { get; private set; }
+        public World World { get; private set; }
+        public Fleet Fleet => World.Fleet;
+        public Economy Economy => World.Economy;
         public SpaceCamera SpaceCamera { get; private set; }
         public Camera UnityCamera { get; private set; }
 
@@ -39,6 +42,11 @@ namespace SolarSystem
         public bool ShowLabels { get; set; } = true;
         public bool ShowHelp { get; set; } = true;
         public bool ShowHud { get; set; } = true;
+        public bool ShowMarket { get; set; }
+        public bool ShowLanes { get; set; } = true;
+
+        /// <summary>Every body's scene position this frame.</summary>
+        public DVec3[] BodyScenes => bodyScene;
 
         /// <summary>1 = gameplay, 0 = realistic; the value the scale is animating toward.</summary>
         public double ScaleGoal { get; private set; } = 1;
@@ -64,6 +72,28 @@ namespace SolarSystem
         double[] shipLength;
         ShipState[] shipStates;
         bool[] shipRotationInitialised;
+
+        // Moving into and out of battle space is eased over a couple of seconds, from wherever the
+        // ship was drawn (kept relative to its body, which keeps moving).
+        DVec3[] shipBlendFrom;
+        float[] shipBlendT;
+        Battle[] shipLastBattle;
+
+        // Wrecks burn out where the ship died, in its battle's frame.
+        float[] wreckStart;
+        DVec3[] wreckLocal;
+        BattleFx battleFx;
+        FighterViews fighterViews;
+        LaneView laneView;
+        readonly Dictionary<ShipCombat, GameObject> platformViews = new Dictionary<ShipCombat, GameObject>();
+        Battle battleTimeFor;
+
+        /// <summary>Scene units per km inside a battle: the ship scale, so a fight reads at ship size in both views.</summary>
+        public double BattleKmScale => Scale.ShipLength(1.0);
+
+        /// <summary>Scene position of a point in a battle (km from its anchor).</summary>
+        public DVec3 BattleScene(Battle b, DVec3 localKm) =>
+            bodyScene[b.Body] + Scale.LocalOffset(Catalog[b.Body], b.Anchor) + localKm.SwapYZ * BattleKmScale;
         LineStrip pathLine;
         Vector3[] pathPoints = new Vector3[64];
 
@@ -87,7 +117,7 @@ namespace SolarSystem
             Clock = SimClock.StartingNow();
             Scale = new ScaleModel { Blend = 1 };
             Ephemeris.Update(Clock.Jd);
-            Fleet = Fleet.CreateDefault(Ephemeris, Clock.Jd);
+            World = World.CreateDefault(Ephemeris, Clock.Jd);
 
             SetupCamera();
             worldRoot = new GameObject("World").transform;
@@ -110,6 +140,10 @@ namespace SolarSystem
             pathLine.Visible = false;
 
             hud = new Hud(this);
+            battleFx = new BattleFx(this, worldRoot);
+            fighterViews = new FighterViews(this, worldRoot);
+            laneView = new LaneView(this, worldRoot);
+            SubscribeWorld();
             SpaceCamera = new SpaceCamera(this);
             AsteroidBelt = AsteroidBelt.Create(this);
 
@@ -120,6 +154,11 @@ namespace SolarSystem
             var look = (bodyScene[earth] - start).Normalized;
             SpaceCamera.PlaceFree(start, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
             Select(Target.OfBody(earth));
+        }
+
+        void SubscribeWorld()
+        {
+            World.War.BattleStarted += b => ShowToast(b.Name.ToUpperInvariant() + " has begun");
         }
 
         void SetupCamera()
@@ -142,6 +181,31 @@ namespace SolarSystem
             if (listener != null) listener.enabled = true;
         }
 
+        /// <summary>Adds views (and per-ship arrays) for hulls a yard has launched since the last frame.</summary>
+        void SyncShipViews()
+        {
+            var ships = Fleet.Ships;
+            int have = shipViews.Length;
+            if (ships.Count == have) return;
+            Array.Resize(ref shipViews, ships.Count);
+            Array.Resize(ref shipScene, ships.Count);
+            Array.Resize(ref shipRotation, ships.Count);
+            Array.Resize(ref shipLength, ships.Count);
+            Array.Resize(ref shipStates, ships.Count);
+            Array.Resize(ref shipRotationInitialised, ships.Count);
+            Array.Resize(ref shipBlendFrom, ships.Count);
+            Array.Resize(ref shipBlendT, ships.Count);
+            Array.Resize(ref shipLastBattle, ships.Count);
+            Array.Resize(ref wreckStart, ships.Count);
+            Array.Resize(ref wreckLocal, ships.Count);
+            for (int i = have; i < ships.Count; i++)
+            {
+                shipViews[i] = new ShipView(ships[i], worldRoot);
+                shipBlendT[i] = 1;
+                wreckStart[i] = -1;
+            }
+        }
+
         void BuildShipViews()
         {
             if (shipViews != null)
@@ -153,7 +217,17 @@ namespace SolarSystem
             shipLength = new double[ships.Count];
             shipStates = new ShipState[ships.Count];
             shipRotationInitialised = new bool[ships.Count];
-            for (int i = 0; i < ships.Count; i++) shipViews[i] = new ShipView(ships[i], worldRoot);
+            shipBlendFrom = new DVec3[ships.Count];
+            shipBlendT = new float[ships.Count];
+            shipLastBattle = new Battle[ships.Count];
+            wreckStart = new float[ships.Count];
+            wreckLocal = new DVec3[ships.Count];
+            for (int i = 0; i < ships.Count; i++)
+            {
+                shipViews[i] = new ShipView(ships[i], worldRoot);
+                shipBlendT[i] = 1;
+                wreckStart[i] = ships[i].Destroyed ? float.MaxValue : -1;
+            }
         }
 
         void Update()
@@ -165,13 +239,16 @@ namespace SolarSystem
 
             Clock.Advance(dt);
             Ephemeris.Update(Clock.Jd);
-            Fleet.Update(Clock.Jd);
+            World.Update(Clock.Jd);
+            SyncShipViews();
 
             AnimateScale(dt);
             Scale.Layout(Ephemeris, bodyScene);
             for (int i = 0; i < Catalog.Count; i++) bodyRadius[i] = Scale.DisplayRadius(Catalog[i]);
             UpdateShips(dt);
 
+            DropLostTargets();
+            BattleTime();
             SpaceCamera.Update(dt, Input);
             UpdateClipPlanes();
             UpdateViews(dt);
@@ -181,6 +258,66 @@ namespace SolarSystem
             ToastAge += dt;
             Cursor.lockState = Input.LookHeld ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !Input.LookHeld;
+        }
+
+        /// <summary>A ship destroyed while selected or followed: let go of it.</summary>
+        void DropLostTargets()
+        {
+            if (Selected.IsShip && Selected.Ship.Destroyed) Select(Target.None);
+            if (Hovered.IsShip && Hovered.Ship.Destroyed) Hovered = Target.None;
+            if (SpaceCamera.FocusTarget.IsShip && SpaceCamera.FocusTarget.Ship.Destroyed) SpaceCamera.ExitFocus();
+        }
+
+        /// <summary>Following a ship into battle slows the clock to battle time once, so the fight can be watched.</summary>
+        void BattleTime()
+        {
+            var t = SpaceCamera.FocusTarget;
+            var battle = t.IsShip ? t.Ship.Battle : null;
+            if (battle == null || battle == battleTimeFor) return;
+            EnterBattleTime(battle);
+        }
+
+        /// <summary>Real time, so a capital ship engagement plays out at the pace it is fought.</summary>
+        public void EnterBattleTime(Battle battle)
+        {
+            battleTimeFor = battle;
+            if (Clock.WarpIndex > 0)
+            {
+                Clock.SetWarp(0);
+                ShowToast("BATTLE TIME: " + battle.Name + ", " + Clock.Warp.Label + "  (. to speed up)");
+            }
+        }
+
+        /// <summary>The largest battle under way, or null.</summary>
+        public Battle BiggestBattle()
+        {
+            Battle best = null;
+            int bestCount = 0;
+            foreach (var b in World.War.Battles)
+            {
+                int n = 0;
+                foreach (var u in b.Units)
+                    if (u.Present) n++;
+                if (n > bestCount)
+                {
+                    bestCount = n;
+                    best = b;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Flies the camera to a battle's flagship and drops to battle time.</summary>
+        public void WatchBattle(Battle battle)
+        {
+            Ship flag = null;
+            foreach (var u in battle.Units)
+                if (u.Ship != null && u.Present && (flag == null || u.Combat.Spec.Hull > flag.Combat.Spec.Hull)) flag = u.Ship;
+            if (flag == null) return;
+            var t = Target.OfShip(flag);
+            Select(t);
+            SpaceCamera.FocusOn(t, 30, 25f);
+            EnterBattleTime(battle);
         }
 
         void OnGUI()
@@ -213,6 +350,14 @@ namespace SolarSystem
             if (i.ToggleLabels) ShowLabels = !ShowLabels;
             if (i.ToggleHelp) ShowHelp = !ShowHelp;
             if (i.ToggleHud) ShowHud = !ShowHud;
+            if (i.ToggleMarket) ShowMarket = !ShowMarket;
+            if (i.ToggleLanes) ShowLanes = !ShowLanes;
+            if (i.WatchBattle)
+            {
+                var b = BiggestBattle();
+                if (b != null) WatchBattle(b);
+                else ShowToast("No battles under way");
+            }
             if (i.Home) FocusSystemOverview();
             if (i.Focus) FocusSelected();
             if (i.Escape)
@@ -240,7 +385,7 @@ namespace SolarSystem
         {
             var candidates = new List<Ship>();
             foreach (var s in Fleet.Ships)
-                if (!s.IsEscort) candidates.Add(s);
+                if (!s.IsEscort && !s.Destroyed) candidates.Add(s);
             if (candidates.Count == 0) return;
             int current = Selected.IsShip ? candidates.IndexOf(Selected.Ship.Controller) : -1;
             int next = ((current + direction) % candidates.Count + candidates.Count) % candidates.Count;
@@ -314,7 +459,8 @@ namespace SolarSystem
             {
                 // Schedules only run forward; rebuild the fleet at the new date.
                 Ephemeris.Update(now);
-                Fleet = Fleet.CreateDefault(Ephemeris, now);
+                World = World.CreateDefault(Ephemeris, now);
+                SubscribeWorld();
                 if (Selected.IsShip) Select(Target.None);
                 if (SpaceCamera.FocusTarget.IsShip) SpaceCamera.ExitFocus();
                 BuildShipViews();
@@ -343,7 +489,9 @@ namespace SolarSystem
                     if (ship.IsEscort)
                     {
                         int leader = ship.Leader.Id;
-                        var slot = ship.FormationSlot;
+                        // Human pilots: each escort wanders slowly about its slot instead of sitting welded to it.
+                        float t = Time.unscaledTime * 0.25f + ship.Id * 1.7f;
+                        var slot = ship.FormationSlot + new DVec3(Mathf.Sin(t * 1.3f) * 0.12f, Mathf.Sin(t * 0.9f + 1.1f) * 0.08f, Mathf.Sin(t * 0.7f + 2.3f) * 0.15f);
                         var offset = shipRotation[leader] * new Vector3((float)slot.X, (float)slot.Y, (float)slot.Z) * (float)shipLength[leader];
                         shipScene[i] = shipScene[leader] + new DVec3(offset.x, offset.y, offset.z);
                         shipRotation[i] = shipRotation[leader];
@@ -357,6 +505,11 @@ namespace SolarSystem
                         var orbit = ship.Orbit;
                         shipScene[i] = bodyScene[orbit.Body] + Scale.LocalOffset(Catalog[orbit.Body], orbit.OffsetAt(jd));
                         facing = st.Facing.SwapYZ;
+                    }
+                    else if (ship.Phase == ShipPhase.Lane)
+                    {
+                        shipScene[i] = Scale.LaneScene(Ephemeris, bodyScene, ship, st.Progress, out var travel);
+                        facing = travel;
                     }
                     else
                     {
@@ -372,7 +525,54 @@ namespace SolarSystem
                     shipRotationInitialised[i] = true;
                 }
             }
+            PlaceInBattles(dt);
         }
+
+        /// <summary>
+        /// Ships fighting are drawn where the battle has them; ships entering or leaving a fight ease
+        /// between that and their orbit over two seconds.
+        /// </summary>
+        void PlaceInBattles(float dt)
+        {
+            var ships = Fleet.Ships;
+            if (lastBattleScene.Length != ships.Count) Array.Resize(ref lastBattleScene, ships.Count);
+            for (int i = 0; i < ships.Count; i++)
+            {
+                var ship = ships[i];
+                if (ship.Destroyed) continue;
+                var battle = ship.Battle;
+                int body = battle != null ? battle.Body : ship.Controller.Orbit.Body;
+                if (battle != shipLastBattle[i])
+                {
+                    var current = shipBlendT[i] < 1 || shipLastBattle[i] != null ? DrawnScene(i) : shipScene[i];
+                    shipBlendFrom[i] = current - bodyScene[body];
+                    shipBlendT[i] = 0;
+                    shipLastBattle[i] = battle;
+                }
+                if (battle != null)
+                {
+                    var u = battle.UnitOf(ship);
+                    if (u != null)
+                    {
+                        shipScene[i] = BattleScene(battle, u.Pos);
+                        var f = u.Forward.SwapYZ;
+                        var fv = new Vector3((float)f.X, (float)f.Y, (float)f.Z);
+                        if (fv.sqrMagnitude > 1e-12f) shipRotation[i] = Quaternion.LookRotation(fv, Mathf.Abs(fv.normalized.y) > 0.98f ? Vector3.right : Vector3.up);
+                        lastBattleScene[i] = shipScene[i];
+                    }
+                }
+                if (shipBlendT[i] < 1)
+                {
+                    shipBlendT[i] = Mathf.Min(1, shipBlendT[i] + dt / 2f);
+                    float e = shipBlendT[i] * shipBlendT[i] * (3 - 2 * shipBlendT[i]);
+                    shipScene[i] = DVec3.Lerp(bodyScene[body] + shipBlendFrom[i], shipScene[i], e);
+                }
+            }
+        }
+
+        DVec3[] lastBattleScene = new DVec3[0];
+
+        DVec3 DrawnScene(int i) => lastBattleScene.Length > i && shipLastBattle[i] != null ? lastBattleScene[i] : shipScene[i];
 
         /// <summary>Scene position of a transiting ship at a fraction of its path (see <see cref="ScaleModel.TransitScene"/>).</summary>
         public DVec3 TransitScene(Ship ship, double progress, out DVec3 travelDirection) =>
@@ -450,19 +650,93 @@ namespace SolarSystem
 
             for (int i = 0; i < shipViews.Length; i++)
             {
+                var ship = Fleet.Ships[i];
+                if (ship.Destroyed)
+                {
+                    DrawWreck(i, ship);
+                    continue;
+                }
                 var rel = Relative(shipScene[i]);
                 double px = shipLength[i] / Math.Max(rel.magnitude, 1e-9) * pixelsPerUnit;
                 // Too small to read: hide the model, the HUD draws a billboard icon instead.
                 bool visible = px >= 5;
                 shipViews[i].SetVisible(visible);
                 if (!visible) continue;
-                var target = Target.OfShip(Fleet.Ships[i]);
+                var target = Target.OfShip(ship);
+                var unit = ship.Battle?.UnitOf(ship);
+                bool thrusting = shipStates[i].Burning || (unit != null && unit.Vel.LengthSquared > 1e-4);
                 shipViews[i].Apply(rel, shipRotation[i], (float)shipLength[i], shipStates[i].Burning,
                     target == Selected || target == Hovered);
+                shipViews[i].ApplyCombat(ship.Combat, ship.Battle != null, thrusting, Time.unscaledTime, dt);
             }
 
+            UpdatePlatforms();
+            laneView.Update(ShowLanes);
+            fighterViews.Update();
+            battleFx.Update();
             UpdateOrbitLines(dt);
             UpdatePathLine();
+        }
+
+        /// <summary>A ship lost in battle breaks up and burns out where it died.</summary>
+        void DrawWreck(int i, Ship ship)
+        {
+            var battle = shipLastBattle[i];
+            if (wreckStart[i] < 0)
+            {
+                var unit = battle?.UnitOf(ship);
+                if (unit == null)
+                {
+                    wreckStart[i] = float.MaxValue;
+                    shipViews[i].SetVisible(false);
+                    return;
+                }
+                wreckStart[i] = Time.unscaledTime;
+                wreckLocal[i] = unit.Pos;
+            }
+            if (wreckStart[i] == float.MaxValue || battle == null)
+            {
+                shipViews[i].SetVisible(false);
+                return;
+            }
+            var scene = BattleScene(battle, wreckLocal[i]);
+            if (!shipViews[i].Wreck(Relative(scene), shipRotation[i], (float)Scale.ShipLength(ship.Spec.LengthKm), Time.unscaledTime - wreckStart[i], Time.unscaledTime))
+                wreckStart[i] = float.MaxValue;
+        }
+
+        /// <summary>Defence platforms are drawn while they fight.</summary>
+        void UpdatePlatforms()
+        {
+            var live = new HashSet<ShipCombat>();
+            foreach (var b in World.War.Battles)
+            {
+                foreach (var u in b.Units)
+                {
+                    if (u.Kind != UnitKind.Platform || !u.Present) continue;
+                    live.Add(u.Combat);
+                    if (!platformViews.TryGetValue(u.Combat, out var go))
+                    {
+                        go = new GameObject(u.Name);
+                        go.transform.SetParent(worldRoot, false);
+                        go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetPlatform(u.Faction);
+                        var mr = go.AddComponent<MeshRenderer>();
+                        mr.sharedMaterial = ShipModels.ProceduralMaterial;
+                        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                        platformViews[u.Combat] = go;
+                    }
+                    go.transform.localPosition = Relative(BattleScene(b, u.Pos));
+                    go.transform.localRotation = Quaternion.Euler(20, (float)(b.Seconds * 0.5 % 360), 0);
+                    go.transform.localScale = Vector3.one * (float)Scale.ShipLength(CombatSpec.PlatformLengthKm);
+                }
+            }
+            var gone = new List<ShipCombat>();
+            foreach (var kv in platformViews)
+                if (!live.Contains(kv.Key))
+                {
+                    Destroy(kv.Value);
+                    gone.Add(kv.Key);
+                }
+            foreach (var k in gone) platformViews.Remove(k);
         }
 
         void UpdateOrbitLines(float dt)
@@ -519,7 +793,7 @@ namespace SolarSystem
         {
             var t = Selected.IsShip ? Selected : Hovered.IsShip ? Hovered : Target.None;
             var ship = t.IsShip ? t.Ship.Controller : null;
-            if (ship == null || ship.Phase != ShipPhase.Transit)
+            if (ship == null || ship.Destroyed || ship.Phase == ShipPhase.Parked)
             {
                 pathLine.Visible = false;
                 return;
@@ -528,7 +802,7 @@ namespace SolarSystem
             for (int k = 0; k < pathPoints.Length; k++)
             {
                 double u = progress + (1 - progress) * k / (pathPoints.Length - 1);
-                pathPoints[k] = Relative(TransitScene(ship, u, out _));
+                pathPoints[k] = Relative(ship.Phase == ShipPhase.Lane ? Scale.LaneScene(Ephemeris, bodyScene, ship, u, out _) : TransitScene(ship, u, out _));
             }
             var c = ship.Faction.Color;
             pathLine.SetPoints(pathPoints, pathPoints.Length, new Color(c.R, c.G, c.B, 0.9f), 1f, 0.35f);
@@ -617,6 +891,7 @@ namespace SolarSystem
             var ships = Fleet.Ships;
             for (int i = 0; i < ships.Count; i++)
             {
+                if (ships[i].Destroyed) continue;
                 if (!ToGui(shipScene[i], out var p, out var depth)) continue;
                 double px = shipLength[i] / depth * ppu;
                 double pickRadius = Math.Max(px * 0.5, Icons.PixelSize(ships[i].Spec.Class) * 0.5 + 4);

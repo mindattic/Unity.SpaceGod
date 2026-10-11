@@ -37,16 +37,51 @@ namespace SolarSystem.Core
 
         // ---------------------------------------------------------------- simulation
 
-        /// <summary>Advances every ship's schedule up to <paramref name="jd"/>.</summary>
+        /// <summary>The hyperlane network; null for the classic all-brachistochrone fleet.</summary>
+        public Hyperlanes Lanes;
+
+        /// <summary>Called with each event's date before it is processed, so the world can catch up to it.</summary>
+        public Action<double> BeforeEvent;
+
+        /// <summary>Called when a ship reaches its destination's parking orbit, before it picks the next one.</summary>
+        public Action<Ship, double> Arrived;
+
+        /// <summary>Picks a ship's next destination body (never the one it is at), or returns -1 for the built-in choice.</summary>
+        public Func<Ship, int, double, int> ChooseNext;
+
+        /// <summary>Overrides how long a ship lingers in port, given the default; null keeps the default.</summary>
+        public Func<Ship, double, double> Dwell;
+
+        /// <summary>Ships that run their own schedule (not escorts, not destroyed, not held by something else).</summary>
+        public Func<Ship, bool> IsHeld;
+
+        /// <summary>
+        /// Advances every ship's schedule up to <paramref name="jd"/>, processing departures and
+        /// arrivals in date order across the whole fleet so that what one ship does (buying out a
+        /// market, say) is seen by the next.
+        /// </summary>
         public void Update(double jd)
         {
-            foreach (var ship in ships)
+            for (int guard = 0; guard < 100000; guard++)
             {
-                if (ship.IsEscort) continue;
-                for (int guard = 0; guard < 4096 && jd >= ship.PhaseEndJd; guard++)
-                    AdvancePhase(ship);
+                Ship next = null;
+                double when = jd;
+                foreach (var ship in ships)
+                {
+                    if (!RunsSchedule(ship)) continue;
+                    if (ship.PhaseEndJd <= when)
+                    {
+                        when = ship.PhaseEndJd;
+                        next = ship;
+                    }
+                }
+                if (next == null) return;
+                BeforeEvent?.Invoke(when);
+                AdvancePhase(next);
             }
         }
+
+        bool RunsSchedule(Ship ship) => !ship.IsEscort && !ship.Destroyed && (IsHeld == null || !IsHeld(ship));
 
         /// <summary>State at <paramref name="jd"/>; parked ships use the ephemeris' current frame, which must be at the same date.</summary>
         public ShipState StateOf(Ship ship, double jd)
@@ -56,6 +91,17 @@ namespace SolarSystem.Core
             {
                 var helio = ephemeris.Helio(s.Orbit.Body) + s.Orbit.OffsetAt(jd);
                 return new ShipState(helio, s.Orbit.TangentAt(jd), s.Orbit.SpeedKmS, false, 0);
+            }
+            if (s.Phase == ShipPhase.Lane)
+            {
+                double progress = LaneProgress(s, jd);
+                var here = LanePoint(s, jd, progress);
+                const double h = 1e-3;
+                var ahead = LanePoint(s, jd + h, LaneProgress(s, jd + h));
+                var behind = LanePoint(s, jd - h, LaneProgress(s, jd - h));
+                var v = (ahead - behind) / (2 * h);
+                var facing = v.LengthSquared > 0 ? v.Normalized : (ahead - here).Normalized;
+                return new ShipState(here, facing, v.Length / Astro.SecondsPerDay, true, progress);
             }
 
             double total = s.PhaseEndJd - s.PhaseStartJd;
@@ -73,6 +119,18 @@ namespace SolarSystem.Core
             var at = ephemeris.HelioAt(s.FrameBody, jd) + pos + Drift(s, tau);
             return new ShipState(at, thrust.Normalized, velocity.Length / Astro.SecondsPerDay, true,
                 s.PathLength > 0 ? dist / s.PathLength : 1);
+        }
+
+        /// <summary>Distance fraction along the lane at a date (eased in and out).</summary>
+        public static double LaneProgress(Ship s, double jd) =>
+            Hyperlanes.Progress((jd - s.PhaseStartJd) / Math.Max(s.PhaseEndJd - s.PhaseStartJd, 1e-9));
+
+        /// <summary>Heliocentric position on the ship's lane at a date and distance fraction.</summary>
+        public DVec3 LanePoint(Ship s, double jd, double progress)
+        {
+            var a = ephemeris.HelioAt(s.LaneLeg.From, jd) + s.LaneFromOffset;
+            var b = ephemeris.HelioAt(s.LaneLeg.To, jd) + s.LaneToOffset;
+            return Hyperlanes.Curve(a, b, s.LaneLeg.Lane.Bend, Hyperlanes.SunKeepOutKm, progress, DVec3.UnitZ);
         }
 
         /// <summary>
@@ -145,26 +203,110 @@ namespace SolarSystem.Core
 
         void AdvancePhase(Ship ship)
         {
-            if (ship.Phase == ShipPhase.Parked) Depart(ship);
+            if (ship.Phase == ShipPhase.Parked)
+            {
+                // Holding position (a siege, a refit, an ambush): decide again rather than fly to itself.
+                if (ship.DestinationBody == ship.Orbit.Body) ScheduleNext(ship, ship.PhaseEndJd);
+                else Depart(ship);
+            }
+            else if (ship.Phase == ShipPhase.Lane) EndLane(ship);
+            else if (ship.Journey != null && ship.Orbit.Fixed) StartLane(ship, ship.PhaseEndJd);
             else Arrive(ship);
         }
 
+        /// <summary>
+        /// Leaves port. A trip to another planetary system goes by hyperlane when there is one: first
+        /// a burn to the first lane's ramp; otherwise (or locally) one burn straight to the destination.
+        /// </summary>
         void Depart(Ship ship)
         {
             double departJd = ship.PhaseEndJd;
             int from = ship.Orbit.Body;
             int to = ship.DestinationBody;
+            ship.FinalBody = to;
+            ship.Journey = null;
+            ship.JourneyIndex = 0;
+            if (Lanes != null)
+            {
+                int fromSystem = Lanes.SystemOf(from), toSystem = Lanes.SystemOf(to);
+                if (fromSystem != toSystem) ship.Journey = Lanes.Route(fromSystem, toSystem, departJd);
+            }
+            if (ship.Journey != null)
+            {
+                var hop = ship.Journey[0];
+                Burn(ship, departJd, hop.From, () => RampOrbit(hop, hop.From, departJd));
+            }
+            else Burn(ship, departJd, to, () => NewParkingOrbit(to, ship));
+        }
+
+        /// <summary>A hyperlane ramp as a fixed point attached to its planet.</summary>
+        ParkingOrbit RampOrbit(LaneHop hop, int system, double jd) => FixedPoint(system, Lanes.RampOffset(hop.Lane, system, jd + 0.4));
+
+        static ParkingOrbit FixedPoint(int body, DVec3 offset)
+        {
+            var u = offset.Normalized;
+            var v = DVec3.Cross(Math.Abs(u.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, u).Normalized;
+            return new ParkingOrbit { Body = body, RadiusKm = offset.Length, U = u, V = v, RateRadPerDay = 0, Fixed = true };
+        }
+
+        /// <summary>Joins the lane at its ramp (where the burn has just brought the ship).</summary>
+        void StartLane(Ship ship, double jd)
+        {
+            var hop = ship.Journey[ship.JourneyIndex];
+            ship.LaneLeg = hop;
+            ship.LaneFromOffset = ship.Orbit.OffsetAt(jd);
+            var a = ephemeris.HelioAt(hop.From, jd) + ship.LaneFromOffset;
+            var estimate = Hyperlanes.RideDays(Lanes.LaneLengthKm(hop.Lane, jd));
+            ship.LaneToOffset = Lanes.RampOffset(hop.Lane, hop.To, jd + estimate);
+            var b = ephemeris.HelioAt(hop.To, jd) + ship.LaneToOffset;
+            ship.LaneLengthKm = Hyperlanes.CurveLength(a, b, hop.Lane.Bend, Hyperlanes.SunKeepOutKm, DVec3.UnitZ);
+            ship.DepartureOrbit = ship.Orbit;
+            ship.OriginBody = hop.From;
+            ship.FrameBody = 0;
+            ship.Path = null;
+            ship.Phase = ShipPhase.Lane;
+            ship.PhaseStartJd = jd;
+            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm);
+        }
+
+        /// <summary>Leaves the lane at the far ramp: on to the next lane's ramp, or the last burn home.</summary>
+        void EndLane(Ship ship)
+        {
+            double jd = ship.PhaseEndJd;
+            var hop = ship.LaneLeg;
+            ship.Orbit = FixedPoint(hop.To, ship.LaneToOffset);
+            ship.JourneyIndex++;
+            if (ship.JourneyIndex < ship.Journey.Count)
+            {
+                var next = ship.Journey[ship.JourneyIndex];
+                Burn(ship, jd, next.From, () => RampOrbit(next, next.From, jd));
+            }
+            else
+            {
+                int to = ship.FinalBody;
+                Burn(ship, jd, to, () => NewParkingOrbit(to, ship));
+            }
+        }
+
+        /// <summary>A flip-and-burn from the ship's current orbit (or ramp) to <paramref name="to"/>, arriving in the orbit the factory gives.</summary>
+        void Burn(Ship ship, double departJd, int to, Func<ParkingOrbit> arrivalOrbit)
+        {
+            int from = ship.Orbit.Body;
             int frame = CommonFrame(from, to);
             double keepOut = frame == 0 ? SunKeepOutKm : catalog[frame].RadiusKm * PlanetKeepOutRadii;
             var start = RelativeTo(frame, from, departJd) + ship.Orbit.OffsetAt(departJd);
             var startVelocity = VelocityRelativeTo(frame, from, departJd) + ship.Orbit.VelocityAt(departJd);
-            var arrival = NewParkingOrbit(to, ship);
-
             // Match velocities at both ends unless that path runs into something the rest-to-rest
-            // one in the frame avoids.
-            if (!Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true)
-                && !Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, false))
-                Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true);
+            // one in the frame avoids; if both are blocked, try another parking orbit plane.
+            ParkingOrbit arrival = null;
+            bool clear = false;
+            for (int attempt = 0; attempt < 6 && !clear; attempt++)
+            {
+                arrival = arrivalOrbit();
+                clear = Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true)
+                        || Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, false);
+            }
+            if (!clear) Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true);
 
             ship.DepartureOrbit = ship.Orbit;
             ship.Orbit = arrival;
@@ -193,11 +335,12 @@ namespace SolarSystem.Core
                 double arriveJd = departJd + flightDays;
                 var target = RelativeTo(frame, to, arriveJd);
                 arrival.EpochJd = arriveJd;
-                arrival.PhaseAtEpoch = arrival.PhaseFacing((start - target).Normalized);
+                if (!arrival.Fixed) arrival.PhaseAtEpoch = arrival.PhaseFacing((start - target).Normalized);
                 v1 = matchVelocity ? VelocityRelativeTo(frame, to, arriveJd) + arrival.VelocityAt(arriveJd) : DVec3.Zero;
                 // The drift covers (v0 + v1)·T / 2 of the way; the flip-and-burn covers the rest.
-                var end = target + arrival.OffsetAt(arriveJd) - (v0 + v1) * (flightDays * 0.5);
-                path = BuildPath(start, end, keepOut);
+                var shift = (v0 + v1) * (flightDays * 0.5);
+                var end = target + arrival.OffsetAt(arriveJd) - shift;
+                path = BuildPath(start, end, keepOut, Avoidances(frame, from, to, departJd, arriveJd, shift));
                 return 2 * Math.Sqrt(PolylineLength(path) / accel) - flightDays;
             }
 
@@ -237,19 +380,39 @@ namespace SolarSystem.Core
                 for (int b = end; b >= 0 && b != frame; b = catalog[b].ParentIndex)
                     if (!obstacles.Contains(b)) obstacles.Add(b);
 
-            const int samples = 256;
+            // Bodies sit at the ends, where the ship is slow but a planet is passed in minutes: sample
+            // the first and last few percent densely, and test each segment, not just its ends.
+            const int samples = 384;
             double total = ship.PhaseEndJd - ship.PhaseStartJd;
-            for (int k = 1; k < samples; k++)
+            var previous = new DVec3[obstacles.Count];
+            for (int k = 0; k <= samples; k++)
             {
-                double tau = total * k / samples;
+                double u = (double)k / samples;
+                double tau = total * (u < 0.25 ? 0.12 * u / 0.25 * (u / 0.25) : u > 0.75 ? 1 - 0.12 * ((1 - u) / 0.25) * ((1 - u) / 0.25) : 0.12 + (u - 0.25) / 0.5 * 0.76);
                 var offset = TransitOffsetAt(ship, tau);
-                if (offset.Length < keepOut * 0.8) return false;
+                if (k > 0 && k < samples && offset.Length < keepOut * 0.8) return false;
                 double jd = ship.PhaseStartJd + tau;
                 var helio = ephemeris.HelioAt(frame, jd) + offset;
-                foreach (int b in obstacles)
-                    if ((helio - ephemeris.HelioAt(b, jd)).Length < catalog[b].RadiusKm * 1.5) return false;
+                for (int i = 0; i < obstacles.Count; i++)
+                {
+                    int b = obstacles[i];
+                    var rel = helio - ephemeris.HelioAt(b, jd);
+                    double limit = catalog[b].RadiusKm * 1.5;
+                    if (k > 0 && k < samples && rel.Length < limit) return false;
+                    if (k > 0 && SegmentDistance(previous[i], rel) < limit) return false;
+                    previous[i] = rel;
+                }
             }
             return true;
+        }
+
+        /// <summary>Closest approach to the origin of the segment from <paramref name="a"/> to <paramref name="b"/>.</summary>
+        static double SegmentDistance(DVec3 a, DVec3 b)
+        {
+            var d = b - a;
+            double len2 = d.LengthSquared;
+            double t = len2 > 0 ? Math.Max(0, Math.Min(1, -DVec3.Dot(a, d) / len2)) : 0;
+            return (a + d * t).Length;
         }
 
         void Arrive(Ship ship)
@@ -258,21 +421,32 @@ namespace SolarSystem.Core
             ship.Phase = ShipPhase.Parked;
             ship.TripsCompleted++;
             ship.Path = null;
+            ship.Journey = null;
+            ship.JourneyIndex = 0;
             ship.PhaseStartJd = arriveJd;
+            Arrived?.Invoke(ship, arriveJd);
+            if (ship.Destroyed || (IsHeld != null && IsHeld(ship))) return;
             ScheduleNext(ship, arriveJd);
         }
 
         /// <summary>Picks the next destination and the departure time: dwell, then wait for the parking orbit to face the target.</summary>
-        void ScheduleNext(Ship ship, double nowJd)
+        public void ScheduleNext(Ship ship, double nowJd)
         {
             int here = ship.Orbit.Body;
-            int next = ChooseDestination(ship, here, nowJd);
+            int chosen = ChooseNext != null ? ChooseNext(ship, here, nowJd) : -1;
+            double dwell = Dwell != null ? Dwell(ship, DwellDays(ship)) : DwellDays(ship);
+            if (chosen == here)
+            {
+                ship.DestinationBody = here;
+                ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.05);
+                return;
+            }
+            int next = chosen >= 0 ? chosen : ChooseDestination(ship, here, nowJd);
             ship.DestinationBody = next;
-            ship.Cargo = CargoFor(ship, here);
+            if (ChooseNext == null) ship.Cargo = CargoFor(ship, here);
 
-            double dwell = DwellDays(ship);
             double windowJd = nowJd + dwell;
-            var toTarget = (ephemeris.HelioAt(next, windowJd) - ephemeris.HelioAt(here, windowJd)).Normalized;
+            var toTarget = (FirstLegTarget(here, next, windowJd) - ephemeris.HelioAt(here, windowJd)).Normalized;
             double want = ship.Orbit.PhaseFacing(toTarget);
             double have = ship.Orbit.PhaseAt(windowJd);
             double delta = (want - have) % Astro.TwoPi;
@@ -374,17 +548,68 @@ namespace SolarSystem.Core
             return (RelativeTo(frame, body, jd + h) - RelativeTo(frame, body, jd - h)) / (2 * h);
         }
 
-        /// <summary>Straight line, or a dog-leg around the frame's centre when the line would pass within <paramref name="keepOutKm"/>.</summary>
-        static DVec3[] BuildPath(DVec3 start, DVec3 end, double keepOutKm)
+        /// <summary>
+        /// The planets that the ends' moons orbit, as spheres to steer around, in path coordinates
+        /// (the arrival side is shifted like the path's end, since drift is added on top of the path).
+        /// </summary>
+        List<(DVec3 center, double radius)> Avoidances(int frame, int from, int to, double departJd, double arriveJd, DVec3 shift)
         {
+            var list = new List<(DVec3, double)>();
+            for (int b = catalog[from].ParentIndex, moon = from; b > 0 && b != frame; moon = b, b = catalog[b].ParentIndex)
+                list.Add((RelativeTo(frame, b, departJd), Berth(b, moon, departJd)));
+            for (int b = catalog[to].ParentIndex, moon = to; b > 0 && b != frame; moon = b, b = catalog[b].ParentIndex)
+                list.Add((RelativeTo(frame, b, arriveJd) - shift, Berth(b, moon, arriveJd)));
+            return list;
+        }
+
+        /// <summary>
+        /// How wide a ship leaving or joining a moon gives its planet: a good part of the moon system,
+        /// so it never skims the world, but inside the moon's own orbit so the moon stays reachable.
+        /// </summary>
+        double Berth(int planet, int moon, double jd)
+        {
+            var p = catalog[planet];
+            double wide = Math.Max(p.RadiusKm * 2.5, p.MoonReachKm * 0.3);
+            double moonDistance = (ephemeris.HelioAt(moon, jd) - ephemeris.HelioAt(planet, jd)).Length;
+            return Math.Max(p.RadiusKm * 2.5, Math.Min(wide, moonDistance * 0.75));
+        }
+
+        /// <summary>
+        /// Straight line, or a dog-leg around the frame's centre when the line would pass within
+        /// <paramref name="keepOutKm"/>, then detours around any of <paramref name="avoid"/> a leg runs through.
+        /// </summary>
+        static DVec3[] BuildPath(DVec3 start, DVec3 end, double keepOutKm, List<(DVec3 center, double radius)> avoid = null)
+        {
+            var points = new List<DVec3> { start, end };
             var d = end - start;
             double t = d.LengthSquared > 0 ? Math.Max(0, Math.Min(1, -DVec3.Dot(start, d) / d.LengthSquared)) : 0;
             var closest = start + d * t;
-            if (closest.Length >= keepOutKm || t <= 0 || t >= 1)
-                return new[] { start, end };
+            if (closest.Length < keepOutKm && t > 0 && t < 1)
+            {
+                var away = closest.LengthSquared > 1 ? closest.Normalized : DVec3.Cross(d, DVec3.UnitZ).Normalized;
+                points.Insert(1, away * (keepOutKm * 1.4));
+            }
 
-            var away = closest.LengthSquared > 1 ? closest.Normalized : DVec3.Cross(d, DVec3.UnitZ).Normalized;
-            return new[] { start, away * (keepOutKm * 1.4), end };
+            if (avoid != null)
+            {
+                foreach (var (center, radius) in avoid)
+                {
+                    for (int i = 0; i + 1 < points.Count; i++)
+                    {
+                        var a = points[i] - center;
+                        var seg = points[i + 1] - points[i];
+                        double len2 = seg.LengthSquared;
+                        double u = len2 > 0 ? -DVec3.Dot(a, seg) / len2 : 0;
+                        if (u <= 0 || u >= 1) continue;
+                        var near = a + seg * u;
+                        if (near.Length >= radius) continue;
+                        var out1 = near.LengthSquared > 1 ? near.Normalized : DVec3.Cross(seg, DVec3.UnitZ).Normalized;
+                        points.Insert(i + 1, center + out1 * (radius * 1.4));
+                        break;
+                    }
+                }
+            }
+            return points.ToArray();
         }
 
         static double PolylineLength(DVec3[] p)
@@ -445,6 +670,7 @@ namespace SolarSystem.Core
                 Spec = ShipClassSpec.Of(c),
                 Faction = faction,
                 Role = role,
+                Combat = new ShipCombat(CombatSpec.Of(c)),
             };
             ships.Add(ship);
             return ship;
@@ -544,6 +770,8 @@ namespace SolarSystem.Core
             return fleet;
         }
 
+        public static DVec3 SlotFor(int index) => EscortSlots[index % EscortSlots.Length] * (1 + index / EscortSlots.Length * 0.6);
+
         static readonly DVec3[] EscortSlots =
         {
             new DVec3(0, 0.45, -1.7),
@@ -553,7 +781,49 @@ namespace SolarSystem.Core
             new DVec3(2.6, -0.25, 1.3),
         };
 
-        void Group(Faction faction, double jd, ShipClass leaderClass, string leaderName, string[] route,
+        /// <summary>
+        /// Rough flight time between two bodies for planning: the brachistochrone over their current
+        /// separation, plus a day of manoeuvring.
+        /// </summary>
+        public double EstimateTravelDays(Ship ship, int from, int to, double jd)
+        {
+            double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
+            double Burn(double km) => 2 * Math.Sqrt(Math.Max(km, 1) / accel);
+            if (Lanes != null)
+            {
+                int a = Lanes.SystemOf(from), b = Lanes.SystemOf(to);
+                var route = a != b ? Lanes.Route(a, b, jd) : null;
+                if (route != null)
+                {
+                    double days = Burn((Lanes.RampHelio(route[0].Lane, a, jd) - ephemeris.HelioAt(from, jd)).Length);
+                    for (int i = 0; i < route.Count; i++)
+                    {
+                        days += Hyperlanes.RideDays(Lanes.LaneLengthKm(route[i].Lane, jd));
+                        if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5);
+                    }
+                    days += Burn((Lanes.RampHelio(route[route.Count - 1].Lane, b, jd) - ephemeris.HelioAt(to, jd)).Length);
+                    return days + 0.3;
+                }
+            }
+            double d = (ephemeris.HelioAt(to, jd) - ephemeris.HelioAt(from, jd)).Length;
+            return Burn(d) + 1.0;
+        }
+
+        /// <summary>Where the first leg of a trip heads: the first lane's ramp, or the destination itself.</summary>
+        DVec3 FirstLegTarget(int here, int next, double jd)
+        {
+            if (Lanes != null)
+            {
+                int a = Lanes.SystemOf(here), b = Lanes.SystemOf(next);
+                var route = a != b ? Lanes.Route(a, b, jd) : null;
+                if (route != null) return Lanes.RampHelio(route[0].Lane, a, jd);
+            }
+            return ephemeris.HelioAt(next, jd);
+        }
+
+        public Random Rng => rng;
+
+        public Ship Group(Faction faction, double jd, ShipClass leaderClass, string leaderName, string[] route,
             params (ShipClass cls, string name)[] escorts)
         {
             var leader = AddShip(leaderName, leaderClass, faction, ShipRole.Patrol);
@@ -565,6 +835,7 @@ namespace SolarSystem.Core
                 AddEscort(leader, escort, EscortSlots[i % EscortSlots.Length]);
             }
             Station(leader, leader.Route[0], jd);
+            return leader;
         }
     }
 }

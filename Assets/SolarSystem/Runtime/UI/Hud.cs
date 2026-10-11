@@ -37,9 +37,11 @@ namespace SolarSystem.UI
             DrawWorldOverlay();
             if (!app.ShowHud) return;
             DrawTopBar();
+            DrawTicker();
             DrawNavigator();
             DrawSelection();
             DrawStatus();
+            if (app.ShowMarket) DrawMarket();
             if (app.ShowHelp) DrawHelp();
             DrawToast();
         }
@@ -80,6 +82,7 @@ namespace SolarSystem.UI
             for (int i = 0; i < ships.Count; i++)
             {
                 var ship = ships[i];
+                if (ship.Destroyed) continue;
                 var scene = app.ShipScene(ship);
                 if (!app.ToGui(scene, out var p, out var depth)) continue;
                 float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
@@ -97,6 +100,7 @@ namespace SolarSystem.UI
             {
                 foreach (var ship in ships)
                 {
+                    if (ship.Destroyed) continue;
                     var t = Target.OfShip(ship);
                     bool named = t == app.Hovered || t == app.Selected || app.SpaceCamera.FocusTarget == t;
                     if (!named && !ship.IsEscort && ship.Spec.IsMilitary)
@@ -265,18 +269,29 @@ namespace SolarSystem.UI
 
             var catalog = app.Catalog;
             var rows = new List<(string text, Target target, int indent, Color color)>();
+            var war = app.World.War;
+            if (war.Battles.Count > 0)
+            {
+                rows.Add(("BATTLES", Target.None, 0, new Color(1f, 0.5f, 0.4f)));
+                foreach (var b in war.Battles)
+                {
+                    var flag = Flagship(b);
+                    rows.Add((b.Name + "  " + BattleScore(b), flag != null ? Target.OfShip(flag) : Target.OfBody(b.Body), 1, new Color(1f, 0.72f, 0.6f)));
+                }
+                rows.Add(("", Target.None, 0, Color.clear));
+            }
             AddBody(rows, 0, 0);
             foreach (var faction in app.Fleet.Factions)
             {
                 rows.Add(("", Target.None, 0, Color.clear));
                 var fc = new Color(faction.Color.R, faction.Color.G, faction.Color.B);
-                rows.Add((faction.Name.ToUpperInvariant(), Target.None, 0, fc));
+                rows.Add((faction.Name.ToUpperInvariant() + "   " + Credits(faction.Treasury), Target.None, 0, fc));
                 foreach (var ship in app.Fleet.Ships)
                 {
-                    if (ship.Faction != faction || ship.IsEscort) continue;
+                    if (ship.Faction != faction || ship.IsEscort || ship.Destroyed) continue;
                     rows.Add((ship.Name + "  " + ShortStatus(ship), Target.OfShip(ship), 1, fc));
                     foreach (var escort in app.Fleet.Ships)
-                        if (escort.Leader == ship) rows.Add((escort.Name + "  · " + escort.Spec.DisplayName, Target.OfShip(escort), 2, Color.Lerp(fc, Color.gray, 0.35f)));
+                        if (escort.Leader == ship && !escort.Destroyed) rows.Add((escort.Name + "  · " + escort.Spec.DisplayName, Target.OfShip(escort), 2, Color.Lerp(fc, Color.gray, 0.35f)));
                 }
             }
 
@@ -321,10 +336,33 @@ namespace SolarSystem.UI
             foreach (int child in app.Catalog.ChildrenOf(index)) AddBody(rows, child, Math.Min(indent + 1, 2));
         }
 
+        static Ship Flagship(Battle b)
+        {
+            Ship best = null;
+            foreach (var u in b.Units)
+                if (u.Ship != null && u.Present && (best == null || u.Ship.Combat.Spec.Hull > best.Combat.Spec.Hull)) best = u.Ship;
+            return best;
+        }
+
+        static string BattleScore(Battle b)
+        {
+            int a = 0, d = 0;
+            foreach (var u in b.Units)
+            {
+                if (!u.Present || u.Kind == UnitKind.Fighter) continue;
+                if (u.Side == 0) a++;
+                else d++;
+            }
+            return a + " v " + d;
+        }
+
         string ShortStatus(Ship ship)
         {
+            if (ship.Battle != null) return "IN BATTLE  " + ship.Battle.Name;
             var c = ship.Controller;
-            return c.Phase == ShipPhase.Transit ? "-> " + app.Catalog[c.Orbit.Body].Name : "@ " + app.Catalog[c.Orbit.Body].Name;
+            if (c.Phase == ShipPhase.Parked) return "@ " + app.Catalog[c.Orbit.Body].Name;
+            int dest = c.Journey != null ? c.FinalBody : c.Orbit.Body;
+            return (c.Phase == ShipPhase.Lane ? "=> " : "-> ") + app.Catalog[dest].Name;
         }
 
         void DrawSelection()
@@ -358,6 +396,9 @@ namespace SolarSystem.UI
                     lines.Add(("Day (sidereal)", (Math.Abs(b.RotationHours) < 48 ? Math.Abs(b.RotationHours).ToString("0.00", CultureInfo.InvariantCulture) + " h" : Duration(Math.Abs(b.RotationHours) / 24)) + (b.RotationHours < 0 ? " retro" : "")));
                 lines.Add(("Surface gravity", (b.Gm / (b.RadiusKm * b.RadiusKm) * 1000 / 9.80665).ToString("0.000", CultureInfo.InvariantCulture) + " g"));
                 if (!string.IsNullOrEmpty(b.Summary)) lines.Add(("", b.Summary));
+                foreach (var s in app.Economy.At(t.Body)) AddSettlementLines(lines, s);
+                var battleHere = app.World.War.BattleAt(t.Body);
+                if (battleHere != null) lines.Add(("Battle", battleHere.Name + ", " + BattleScore(battleHere) + ", " + Duration(battleHere.Seconds / Astro.SecondsPerDay)));
             }
             else
             {
@@ -368,11 +409,20 @@ namespace SolarSystem.UI
                 sub = ship.Faction.Name + " " + ship.Spec.DisplayName.ToLowerInvariant();
                 headingColor = new Color(ship.Faction.Color.R, ship.Faction.Color.G, ship.Faction.Color.B);
                 lines.Add(("Length", Km(ship.Spec.LengthKm)));
-                lines.Add(("Drive", ship.Spec.AccelG.ToString("0.##", CultureInfo.InvariantCulture) + " g brachistochrone"));
+                lines.Add(("Drive", ship.Spec.AccelG.ToString("0.##", CultureInfo.InvariantCulture) + " g, flip-and-burn; hyperlanes between systems"));
                 if (ship.IsEscort) lines.Add(("Escorting", ship.Leader.Name));
-                if (c.Phase == ShipPhase.Transit)
+                if (c.Phase == ShipPhase.Lane)
                 {
-                    lines.Add(("Status", (st.Progress < 0.5 ? "Burning toward " : "Braking for ") + app.Catalog[c.Orbit.Body].Name));
+                    lines.Add(("Status", "In the " + c.LaneLeg.Lane.Name + " hyperlane, bound for " + app.Catalog[c.FinalBody].Name));
+                    lines.Add(("Speed", SpeedText(st.SpeedKmS)));
+                    lines.Add(("Remaining", Km(c.LaneLengthKm * (1 - st.Progress))));
+                    lines.Add(("Lane exit", Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
+                }
+                else if (c.Phase == ShipPhase.Transit)
+                {
+                    string where = c.Orbit.Fixed ? app.Catalog[c.Orbit.Body].Name + " hyperlane ramp" : app.Catalog[c.Orbit.Body].Name;
+                    lines.Add(("Status", (st.Progress < 0.5 ? "Burning toward " : "Braking for ") + where));
+                    if (c.Journey != null) lines.Add(("Bound for", app.Catalog[c.FinalBody].Name + " by " + JourneyText(c)));
                     lines.Add(("From", app.Catalog[c.OriginBody].Name));
                     lines.Add(("Speed", st.SpeedKmS.ToString("N0", CultureInfo.InvariantCulture) + " km/s"));
                     lines.Add(("Remaining", Km(c.PathLength * (1 - st.Progress))));
@@ -381,17 +431,34 @@ namespace SolarSystem.UI
                 else
                 {
                     var body = app.Catalog[c.Orbit.Body];
-                    lines.Add(("Status", "Holding orbit at " + body.Name));
+                    lines.Add(("Status", ship.Battle != null ? "Fighting in the " + ship.Battle.Name : "Holding orbit at " + body.Name));
                     lines.Add(("Altitude", Km(c.Orbit.RadiusKm - body.RadiusKm)));
                     lines.Add(("Orbital speed", c.Orbit.SpeedKmS.ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
                     lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
                 }
-                if (!string.IsNullOrEmpty(c.Cargo)) lines.Add(("Cargo", c.Cargo));
-                else if (ship.Spec.IsMilitary) lines.Add(("Orders", "Patrol " + RouteText(c)));
+                var combat = ship.Combat;
+                lines.Add(("Hull", Percent(combat.HullFraction) + "   Shields " + Percent(combat.Spec.Shield > 0 ? combat.Shield / combat.Spec.Shield : 0)));
+                int lost = 0;
+                foreach (var hp in combat.Subsystems) if (hp.Destroyed) lost++;
+                if (lost > 0) lines.Add(("Damage", lost + " of " + combat.Subsystems.Count + " hardpoints destroyed"));
+                if (combat.Spec.Squadrons > 0) lines.Add(("Fighters", combat.Fighters + " of " + combat.Spec.Squadrons * 6 + " aboard"));
+                if (ship.Battle != null) lines.Add(("In battle", ship.Battle.Name + ", " + BattleScore(ship.Battle)));
+                if (ship.Spec.IsMilitary || ship.Faction.IsPirate)
+                {
+                    var order = app.World.War.OrderOf(c);
+                    lines.Add(("Orders", order != null ? OrderText(order) : "Patrol " + RouteText(c)));
+                }
+                else
+                {
+                    lines.Add(("Cargo", string.IsNullOrEmpty(c.Cargo) ? "Empty" : c.Cargo));
+                    lines.Add(("Hold", Tonnes(c.CapacityTonnes)));
+                    if (c.HasCargo) lines.Add(("Paid", Credits(c.CargoCost) + (c.CargoBonus > 0 ? "  (+" + Credits(c.CargoBonus) + " contract)" : "")));
+                    lines.Add(("Trade profit", Credits(c.Credits)));
+                }
                 lines.Add(("Trips", c.TripsCompleted.ToString(CultureInfo.InvariantCulture)));
             }
 
-            float w = 340;
+            float w = 410;
             float h = 64 + lines.Count * 19 + 30;
             var r = Panel(new Rect(Screen.width - w - 10, Screen.height - h - 10, w, h));
             var old = GUI.contentColor;
@@ -421,6 +488,155 @@ namespace SolarSystem.UI
             bool focused = app.SpaceCamera.FocusTarget == t && app.SpaceCamera.Mode != SpaceCamera.CameraMode.Free;
             if (GUI.Button(new Rect(r.x + 14, r.yMax - 32, 150, 24), focused ? "Re-frame  [F]" : "Focus  [F]", buttonActive)) app.FocusSelected();
             if (GUI.Button(new Rect(r.x + 172, r.yMax - 32, 150, 24), "Deselect  [Esc]", button)) app.Select(Target.None);
+        }
+
+        void AddSettlementLines(List<(string key, string value)> lines, Settlement s)
+        {
+            lines.Add(("", ""));
+            lines.Add((s.Name, s.Owner.Name + " " + KindName(s.Kind) + ", pop " + People(s.Population)));
+            var exports = new List<(double value, string name)>();
+            var shortages = new List<(double ratio, string name)>();
+            for (int g = 0; g < GoodInfo.Count; g++)
+            {
+                var info = GoodInfo.Of((Good)g);
+                double net = s.Supply[g] - s.Demand[g];
+                if (net > 0) exports.Add((net * info.BasePrice, info.Name));
+                double ratio = s.Price[g] / info.BasePrice;
+                if (s.Demand[g] > 0 && ratio > 1.4) shortages.Add((ratio, info.Name + " x" + ratio.ToString("0.0", CultureInfo.InvariantCulture)));
+            }
+            exports.Sort((a, b) => b.value.CompareTo(a.value));
+            shortages.Sort((a, b) => b.ratio.CompareTo(a.ratio));
+            if (exports.Count > 0) lines.Add(("Exports", string.Join(", ", exports.GetRange(0, Math.Min(3, exports.Count)).ConvertAll(e => e.name))));
+            lines.Add(("Short of", shortages.Count > 0 ? string.Join(", ", shortages.GetRange(0, Math.Min(3, shortages.Count)).ConvertAll(e => e.name)) : "nothing"));
+            double siege = app.World.War.SiegeDays(s);
+            lines.Add(("Defences", s.Platforms.Count + " of " + s.MaxPlatforms + " platforms" +
+                (siege > 0 ? "  ·  under siege " + siege.ToString("0", CultureInfo.InvariantCulture) + " of " + War.SiegeNeeded(s).ToString("0", CultureInfo.InvariantCulture) + " days" : "")));
+        }
+
+        static string KindName(SettlementKind k)
+        {
+            switch (k)
+            {
+                case SettlementKind.Station: return "station";
+                case SettlementKind.MiningOutpost: return "mining outpost";
+                case SettlementKind.Haven: return "pirate haven";
+                default: return "colony";
+            }
+        }
+
+        // ---------------------------------------------------------------- market board
+
+        void DrawMarket()
+        {
+            Settlement market = null;
+            var t = app.Selected;
+            if (t.IsBody) foreach (var s in app.Economy.At(t.Body)) { market = s; break; }
+            if (t.IsShip && t.Ship.Controller.CargoDestination != null) market = t.Ship.Controller.CargoDestination;
+
+            const float rowH = 17;
+            float w = 430;
+            float h = 62 + GoodInfo.Count * rowH;
+            var r = Panel(new Rect(Screen.width - w - 10, 72, w, h));
+            var old = GUI.contentColor;
+            string heading = market != null ? "MARKET  ·  " + market.Name : "MARKET  ·  system average";
+            GUI.Label(new Rect(r.x + 12, r.y + 8, w - 24, 22), heading, title);
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 12, r.y + 30, w, 18), market != null
+                ? market.Owner.Name + "   (select a body or a trader to change, M to close)"
+                : "Select a port to see its market.   M to close", small);
+            float y = r.y + 50;
+            GUI.Label(new Rect(r.x + 12, y, 150, rowH), "Good", small);
+            GUI.Label(new Rect(r.x + 170, y, 80, rowH), market != null ? "Stock" : "", small);
+            GUI.Label(new Rect(r.x + 250, y, 80, rowH), "Price", small);
+            GUI.Label(new Rect(r.x + 340, y, 80, rowH), market != null ? "Flow/day" : "vs base", small);
+            y += rowH;
+            for (int g = 0; g < GoodInfo.Count; g++)
+            {
+                var info = GoodInfo.Of((Good)g);
+                double ratio = market != null ? market.Price[g] / info.BasePrice : app.Economy.PriceIndex((Good)g);
+                GUI.contentColor = Color.white;
+                GUI.Label(new Rect(r.x + 12, y, 160, rowH), info.Name, small);
+                if (market != null)
+                {
+                    GUI.Label(new Rect(r.x + 170, y, 80, rowH), Tonnes(market.Stock[g]), small);
+                    double net = market.Supply[g] - market.Demand[g];
+                    GUI.contentColor = net > 0 ? new Color(0.55f, 0.9f, 0.6f) : net < 0 ? new Color(1f, 0.7f, 0.45f) : Dim;
+                    GUI.Label(new Rect(r.x + 340, y, 90, rowH), (net > 0 ? "+" : "") + Tonnes(net), small);
+                }
+                GUI.contentColor = ratio > 1.5 ? new Color(1f, 0.55f, 0.45f) : ratio < 0.6 ? new Color(0.55f, 0.85f, 1f) : Color.white;
+                string price = (market != null ? market.Price[g] : info.BasePrice * ratio).ToString("N0", CultureInfo.InvariantCulture);
+                GUI.Label(new Rect(r.x + 250, y, 90, rowH), price, small);
+                if (market == null) GUI.Label(new Rect(r.x + 340, y, 90, rowH), "x" + ratio.ToString("0.00", CultureInfo.InvariantCulture), small);
+                y += rowH;
+            }
+            GUI.contentColor = old;
+        }
+
+        static string Tonnes(double t)
+        {
+            double a = Math.Abs(t);
+            if (a >= 1e6) return (t / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " Mt";
+            if (a >= 1e4) return (t / 1e3).ToString("0", CultureInfo.InvariantCulture) + " kt";
+            return t.ToString("N0", CultureInfo.InvariantCulture) + " t";
+        }
+
+        static string Credits(double c)
+        {
+            double a = Math.Abs(c);
+            if (a >= 1e9) return (c / 1e9).ToString("0.00", CultureInfo.InvariantCulture) + " B cr";
+            if (a >= 1e6) return (c / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " M cr";
+            if (a >= 1e3) return (c / 1e3).ToString("0", CultureInfo.InvariantCulture) + " k cr";
+            return c.ToString("0", CultureInfo.InvariantCulture) + " cr";
+        }
+
+        static string People(double p) =>
+            p >= 1e6 ? (p / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " M" : (p / 1e3).ToString("0", CultureInfo.InvariantCulture) + " k";
+
+        string OrderText(GroupOrder o)
+        {
+            string where = o.Body >= 0 ? app.Catalog[o.Body].Name : "";
+            switch (o.Kind)
+            {
+                case OrderKind.Attack: return "Attack " + where;
+                case OrderKind.Defend: return "Defend " + where;
+                case OrderKind.Siege: return "Besiege " + where;
+                case OrderKind.Repair: return "Refit at " + where;
+                case OrderKind.Raid: return "Raid shipping at " + where;
+                case OrderKind.Hunt: return "Hunt pirates at " + where;
+                default: return "Patrol, next " + where;
+            }
+        }
+
+        GUIStyle tickerStyle;
+
+        static string Percent(double f) => (Math.Max(0, f) * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
+
+        void DrawTicker()
+        {
+            var events = app.World.Events;
+            int n = Math.Min(4, events.Count);
+            if (n == 0) return;
+            float w = 640, rowH = 17;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, 70, w, 10 + n * rowH));
+            var old = GUI.contentColor;
+            for (int i = 0; i < n; i++)
+            {
+                var e = events[events.Count - n + i];
+                GUI.contentColor = e.Kind == WorldEventKind.Battle ? new Color(1f, 0.7f, 0.6f) : e.Kind == WorldEventKind.Capture ? new Color(1f, 0.85f, 0.4f)
+                    : e.Kind == WorldEventKind.Diplomacy ? new Color(0.7f, 0.9f, 1f) : Dim;
+                tickerStyle ??= new GUIStyle(small) { wordWrap = false, clipping = TextClipping.Clip };
+                GUI.Label(new Rect(r.x + 10, r.y + 5 + i * rowH, w - 20, rowH), app.Clock.Utc.Year == Astro.ToDateTime(e.Jd).Year
+                    ? Astro.ToDateTime(e.Jd).ToString("MMM dd", CultureInfo.InvariantCulture) + "   " + e.Text
+                    : Astro.ToDateTime(e.Jd).ToString("yyyy MMM dd", CultureInfo.InvariantCulture) + "   " + e.Text, tickerStyle);
+            }
+            GUI.contentColor = old;
+        }
+
+        static string JourneyText(Ship s)
+        {
+            var names = new List<string>();
+            foreach (var hop in s.Journey) names.Add(hop.Lane.Name);
+            return string.Join(", ", names);
         }
 
         string RouteText(Ship s)
@@ -475,10 +691,10 @@ namespace SolarSystem.UI
                 "Right-drag   look / orbit                Left-click   select    (double: focus)",
                 "F   focus selection     Esc   leave focus / deselect     Home   system view",
                 "G  or  `   toggle GAMEPLAY / REALISTIC scale",
-                "1-9, 0   planets (twice to focus)    Tab   cycle ships",
+                "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
                 ",  .   time warp     P   pause     T   now     O  orbits   L  labels   H  help   U  HUD",
             };
-            float w = 470, h = 22 + help.Length * 17;
+            float w = 610, h = 22 + help.Length * 17;
             var r = Panel(new Rect(10, Screen.height - h - 10, w, h));
             for (int i = 0; i < help.Length; i++)
                 GUI.Label(new Rect(r.x + 12, r.y + 10 + i * 17, w - 20, 17), help[i], small);
@@ -492,7 +708,7 @@ namespace SolarSystem.UI
             float w = toast.CalcSize(content).x + 40;
             var old = GUI.color;
             GUI.color = new Color(1, 1, 1, a);
-            var r = new Rect((Screen.width - w) * 0.5f, 72, w, 34);
+            var r = new Rect((Screen.width - w) * 0.5f, 150, w, 34);
             GUI.Box(r, GUIContent.none, panel);
             GUI.Label(new Rect(r.x + 20, r.y + 7, w, 22), content, toast);
             GUI.color = old;

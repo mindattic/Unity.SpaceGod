@@ -229,9 +229,11 @@ namespace SolarSystem.Core
             var originLast = new List<int>();
             AddChain(catalog, ship.Orbit.Body, originLast);
             AddChain(catalog, ship.OriginBody, originLast);
+            MoveLast(originLast, ship.OriginBody);
             var destinationLast = new List<int>();
             AddChain(catalog, ship.OriginBody, destinationLast);
             AddChain(catalog, ship.Orbit.Body, destinationLast);
+            MoveLast(destinationLast, ship.Orbit.Body);
 
             DVec3 At(double u)
             {
@@ -247,6 +249,33 @@ namespace SolarSystem.Core
             travelDirection = ahead.LengthSquared > 0 ? ahead.Normalized : DVec3.UnitX;
             return here;
         }
+
+        /// <summary>The end body's correction must be applied last, even when it is an ancestor of the other end's.</summary>
+        static void MoveLast(List<int> chain, int body)
+        {
+            if (body <= 0 || !chain.Remove(body)) return;
+            chain.Add(body);
+        }
+
+        /// <summary>
+        /// Scene position of a ship riding a hyperlane: the lane's curve drawn between its two ramps as
+        /// the scale model places them (each in its planet's neighbourhood), so the ship meets the
+        /// burns at either end exactly. The Sun keep-out and bow are scaled into scene units.
+        /// </summary>
+        public DVec3 LaneScene(Ephemeris ephemeris, DVec3[] scene, Ship ship, double progress, out DVec3 travelDirection)
+        {
+            var hop = ship.LaneLeg;
+            var a = MapNear(ephemeris, scene, hop.From, ephemeris.Helio(hop.From) + ship.LaneFromOffset);
+            var b = MapNear(ephemeris, scene, hop.To, ephemeris.Helio(hop.To) + ship.LaneToOffset);
+            double keepOut = LocalDistance(ephemeris.Catalog.Sun, Hyperlanes.SunKeepOutKm);
+            var up = DVec3.UnitY;
+            travelDirection = Hyperlanes.CurveTangent(a, b, hop.Lane.Bend, keepOut, progress, up);
+            return Hyperlanes.Curve(a, b, hop.Lane.Bend, keepOut, progress, up);
+        }
+
+        /// <summary>Scene position of a hyperlane ramp (for drawing the network).</summary>
+        public DVec3 RampScene(Ephemeris ephemeris, DVec3[] scene, Hyperlanes lanes, Lane lane, int system) =>
+            MapNear(ephemeris, scene, system, ephemeris.Helio(system) + lanes.RampOffset(lane, system, ephemeris.Jd));
 
         /// <summary>Scene radius of a body's sphere of influence, used for camera reference frames.</summary>
         public double SceneSoi(BodyDefinition body) =>

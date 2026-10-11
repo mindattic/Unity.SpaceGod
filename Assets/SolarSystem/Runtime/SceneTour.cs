@@ -1,0 +1,291 @@
+using System;
+using System.Collections;
+using System.Linq;
+using SolarSystem.Core;
+using UnityEngine;
+
+namespace SolarSystem
+{
+    /// <summary>
+    /// The scripted camera tour through the system: inner planets, a carrier group, a battleship,
+    /// a freighter mid-burn, Saturn, Earth at both scales, Jupiter, then real surfaces, weather and
+    /// the asteroid belt. Shared by <see cref="CaptureRunner"/>, which stops at each shot to save a
+    /// screenshot, and <see cref="DemoRunner"/>, which just plays it live.
+    /// </summary>
+    public static class SceneTour
+    {
+        /// <summary>Runs one pass of the tour, calling <paramref name="stop"/> by name at each framed shot.</summary>
+        public static IEnumerator Run(SolarSystemApp app, Func<string, IEnumerator> stop)
+        {
+            yield return Wait(1.5f);
+            yield return stop("01-earth-gameplay");
+
+            app.FocusSystemOverview();
+            yield return Wait(2.6f);
+            yield return stop("02-inner-system-gameplay");
+
+            var carrier = app.Fleet.Ships.First(s => s.Spec.Class == ShipClass.Carrier);
+            Focus(app, Target.OfShip(carrier), 7);
+            yield return Wait(2.6f);
+            yield return stop("03-carrier-group");
+
+            var battleship = app.Fleet.Ships.First(s => s.Spec.Class == ShipClass.Battleship && !s.IsEscort);
+            Focus(app, Target.OfShip(battleship), 4);
+            yield return Wait(2.6f);
+            yield return stop("04-battleship");
+
+            var freighter = app.Fleet.Ships.First(s => s.Spec.Class == ShipClass.Freighter);
+            Focus(app, Target.OfShip(freighter), 3.5);
+            yield return Wait(2.6f);
+            yield return stop("05-freighter");
+
+            Focus(app, Target.OfBody(app.Catalog["Saturn"].Index), 3.2);
+            yield return Wait(2.6f);
+            yield return stop("06-saturn");
+
+            Focus(app, Target.OfBody(app.Catalog["Earth"].Index), 9);
+            yield return Wait(2.6f);
+            yield return stop("07-earth-system-gameplay");
+
+            app.ToggleScale();
+            yield return Wait(3.2f);
+            yield return stop("08-earth-system-realistic");
+
+            app.FocusSystemOverview();
+            yield return Wait(2.8f);
+            yield return stop("09-inner-system-realistic");
+
+            app.ToggleScale();
+            yield return Wait(3.2f);
+            Focus(app, Target.OfBody(app.Catalog["Jupiter"].Index), 14);
+            yield return Wait(2.8f);
+            yield return stop("10-jupiter-system");
+
+            yield return SurfaceTour(app, stop);
+            yield return BattleTour(app, stop);
+        }
+
+        // ---------------------------------------------------------------- the war
+
+        /// <summary>
+        /// Runs the clock fast until a real battle breaks out somewhere (nothing is staged), then
+        /// slows to battle time and frames it: the whole engagement, then a capital ship up close.
+        /// </summary>
+        static IEnumerator BattleTour(SolarSystemApp app, Func<string, IEnumerator> stop)
+        {
+            app.Clock.Paused = false;
+            app.Clock.SetWarp(6);
+            Battle battle = null;
+            // Catch it the moment it starts (it does not run in its first frame) and drop to battle time.
+            void Started(Battle b)
+            {
+                // A real fleet action: at least two armed warships or platforms on each side.
+                bool Armed(BattleUnit u) => u.Kind == UnitKind.Platform || (u.Ship != null && (u.Ship.Spec.IsMilitary || u.Ship.Faction.IsPirate));
+                if (battle != null || b.Units.Count(u => u.Side == 0 && Armed(u)) < 2 || b.Units.Count(u => u.Side == 1 && Armed(u)) < 2) return;
+                battle = b;
+                app.Clock.SetWarp(0);
+            }
+            app.World.War.BattleStarted += Started;
+            app.FocusSystemOverview();
+            float deadline = Time.unscaledTime + 240f;
+            while (battle == null && Time.unscaledTime < deadline) yield return null;
+            app.World.War.BattleStarted -= Started;
+            if (battle == null)
+            {
+                app.Clock.SetWarp(SimClock.DefaultWarpIndex);
+                yield break;
+            }
+            app.EnterBattleTime(battle);
+            var flagship = battle.Units.Where(u => u.Ship != null && u.Present).OrderByDescending(u => u.Combat.Spec.Hull).First().Ship;
+            var t = Target.OfShip(flagship);
+            app.Select(t);
+            app.SpaceCamera.FocusOn(t, 30, 25f);
+            yield return Wait(6f);
+            yield return stop("20-battle");
+            if (!flagship.Destroyed && flagship.Battle != null)
+            {
+                app.SpaceCamera.FocusOn(t, 5, 12f);
+                yield return Wait(4f);
+                yield return stop("21-battle-capital-ship");
+            }
+            // Ride it out, cutting between the two flagships and any carrier with fighters out.
+            for (int k = 0; k < 6 && !battle.Over; k++)
+            {
+                var subject = Subject(battle, k);
+                if (subject != null)
+                {
+                    var st = Target.OfShip(subject);
+                    app.Select(st);
+                    app.SpaceCamera.FocusOn(st, k % 3 == 2 ? 9 : 16, k % 2 == 0 ? 30f : 12f);
+                }
+                yield return Wait(8f);
+                yield return stop("22-battle-" + (k + 1));
+            }
+            app.Clock.SetWarp(SimClock.DefaultWarpIndex);
+        }
+
+        // ---------------------------------------------------------------- surfaces, weather, asteroids
+
+        static IEnumerator SurfaceTour(SolarSystemApp app, Func<string, IEnumerator> stop)
+        {
+            int moon = app.Catalog["Moon"].Index;
+            int earth = app.Catalog["Earth"].Index;
+            // Between the Earth-facing and sunlit directions: the near side, partly lit.
+            View(app, moon, Blend(Dir(app, moon, earth), Dir(app, moon, 0), 0.5), 3.2);
+            yield return Wait(3f);
+            yield return stop("11-moon-near-side");
+            // Low sun across the surface: LOLA relief along the terminator.
+            View(app, moon, Blend(Dir(app, moon, 0), Side(Dir(app, moon, 0)), 0.75), 2.4);
+            yield return Wait(3f);
+            yield return stop("12-moon-terminator");
+
+            foreach (var name in new[] { "Io", "Europa", "Ganymede" })
+            {
+                int i = app.Catalog[name].Index;
+                View(app, i, Blend(Dir(app, i, 0), Side(Dir(app, i, 0)), 0.3), 3.0);
+                yield return Wait(3f);
+                yield return stop("13-" + name.ToLowerInvariant());
+            }
+
+            // Jupiter with the Great Red Spot turned toward the Sun, seen from just off the subsolar point.
+            int jupiter = app.Catalog["Jupiter"].Index;
+            app.Clock.Paused = true; // Jupiter turns 110 degrees in 3 s at the default warp
+            app.Clock.SetJd(NextGrsNoon(app, jupiter));
+            yield return null;
+            var grs = GrsDirection(app, jupiter);
+            View(app, jupiter, Blend(grs, Dir(app, jupiter, 0), 0.2), 2.1);
+            yield return Wait(3f);
+            yield return stop("14-jupiter-great-red-spot");
+            View(app, jupiter, GrsDirection(app, jupiter), 1.35);
+            yield return Wait(3f);
+            yield return stop("15-jupiter-grs-close");
+            // One System III rotation (9 h 55.5 m) later the spot is back at noon: the bands have moved
+            // with their winds and the oval has turned counter-clockwise.
+            app.Clock.SetJd(app.Clock.Jd + 360.0 / 870.536);
+            yield return null;
+            View(app, jupiter, GrsDirection(app, jupiter), 1.35);
+            yield return Wait(3f);
+            yield return stop("15b-jupiter-grs-close-one-rotation-later");
+            app.Clock.Paused = false;
+
+            foreach (var name in new[] { "Mars", "Titan", "Pluto", "Venus" })
+            {
+                int i = app.Catalog[name].Index;
+                View(app, i, Blend(Dir(app, i, 0), Side(Dir(app, i, 0)), 0.35), name == "Titan" ? 3.0 : 2.6);
+                yield return Wait(3.2f);
+                yield return stop("16-" + name.ToLowerInvariant());
+            }
+
+            // The belt from above at gameplay scale, then at true scale.
+            var sun = Target.OfBody(0);
+            app.Select(sun);
+            double span = app.Scale.LocalDistance(app.Catalog.Sun, 4.0 * Astro.AuKm);
+            app.SpaceCamera.FocusOn(sun, span * 1.9 / app.BodyDisplayRadius(0), 62f);
+            yield return Wait(3f);
+            yield return stop("17-asteroid-belt-gameplay");
+            yield return Wait(3f);
+            app.ToggleScale();
+            yield return Wait(3.2f);
+            app.SpaceCamera.FocusOn(sun, app.Scale.LocalDistance(app.Catalog.Sun, 4.0 * Astro.AuKm) * 1.9 / app.BodyDisplayRadius(0), 62f);
+            yield return Wait(3f);
+            yield return stop("18-asteroid-belt-realistic");
+            app.ToggleScale();
+            yield return Wait(3.2f);
+
+            // Inside the belt near Vesta, looking along the orbit.
+            var belt = app.AsteroidBelt;
+            if (belt != null)
+            {
+                int vesta = belt.Field.IndexOfNumber(4);
+                var v = belt.SceneOf(vesta, app.Clock.Jd);
+                var outward = v.Normalized;
+                var along = DVec3.Cross(new DVec3(0, 1, 0), outward).Normalized;
+                // Just above the belt plane behind Vesta, looking ahead along its orbit and slightly down.
+                var eye = v - along * 1500 + new DVec3(0, 1200, 0);
+                var look = (v + along * 9000 - outward * 1500 - eye).Normalized;
+                app.Select(Target.None);
+                app.SpaceCamera.PlaceFree(eye, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
+                yield return Wait(1.5f);
+                yield return stop("19-inside-the-belt");
+            }
+        }
+
+        /// <summary>Who to watch next: a carrier with fighters out, else alternately each side's biggest ship.</summary>
+        static Ship Subject(Battle battle, int shot)
+        {
+            Ship Biggest(int side) => battle.Units.Where(u => u.Ship != null && u.Present && u.Side == side)
+                .OrderByDescending(u => u.Combat.Spec.Hull).Select(u => u.Ship).FirstOrDefault();
+            if (shot % 3 == 2)
+            {
+                var carrier = battle.Units.FirstOrDefault(u => u.Ship != null && u.Present && u.Combat.Spec.Squadrons > 0);
+                if (carrier != null && battle.Units.Any(u => u.Kind == UnitKind.Fighter && u.Present)) return carrier.Ship;
+            }
+            return Biggest(shot % 2) ?? Biggest(1 - shot % 2);
+        }
+
+        /// <summary>Frames body <paramref name="body"/> from scene direction <paramref name="dir"/> (unit, from the body).</summary>
+        static void View(SolarSystemApp app, int body, DVec3 dir, double radii)
+        {
+            var t = Target.OfBody(body);
+            app.Select(t);
+            double r = app.BodyDisplayRadius(body);
+            var eye = app.BodyScene(body) + dir * (r * radii * 1.3);
+            var look = -dir;
+            app.SpaceCamera.PlaceFree(eye, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
+            app.SpaceCamera.FocusOn(t, radii, (float)(Math.Asin(Math.Max(-1, Math.Min(1, dir.Y))) * Mathf.Rad2Deg));
+        }
+
+        static DVec3 Dir(SolarSystemApp app, int from, int to) => (app.BodyScene(to) - app.BodyScene(from)).Normalized;
+        static DVec3 Blend(DVec3 a, DVec3 b, double t) => DVec3.Lerp(a, b, t).Normalized;
+        static DVec3 Side(DVec3 d) => DVec3.Cross(new DVec3(0, 1, 0), d).Normalized;
+
+        /// <summary>Scene direction (Unity axes) from Jupiter's centre to the Great Red Spot.</summary>
+        static DVec3 GrsDirection(SolarSystemApp app, int jupiter)
+        {
+            var body = app.Catalog[jupiter];
+            double jd = app.Clock.Jd;
+            BodyOrientation.Frame(body, jd, DVec3.Zero, out var north, out var meridian);
+            var east = DVec3.Cross(north, meridian);
+            double lon = GasGiantWeather.GreatRedSpot.EastLongitudeDeg(jd) * Astro.Deg2Rad;
+            double lat = GasGiantWeather.GreatRedSpot.LatitudeDeg * Astro.Deg2Rad;
+            var d = (meridian * Math.Cos(lon) + east * Math.Sin(lon)) * Math.Cos(lat) + north * Math.Sin(lat);
+            return d.SwapYZ.Normalized;
+        }
+
+        /// <summary>The next time within one Jovian day that the spot is closest to local noon.</summary>
+        static double NextGrsNoon(SolarSystemApp app, int jupiter)
+        {
+            var body = app.Catalog[jupiter];
+            double jd0 = app.Clock.Jd, best = jd0, bestDot = -2;
+            var toSun = (-app.Ephemeris.Helio(jupiter)).Normalized;
+            for (int k = 0; k < 400; k++)
+            {
+                double jd = jd0 + k * (10.0 / 24.0) / 400;
+                BodyOrientation.Frame(body, jd, DVec3.Zero, out var north, out var meridian);
+                var east = DVec3.Cross(north, meridian);
+                double lon = GasGiantWeather.GreatRedSpot.EastLongitudeDeg(jd) * Astro.Deg2Rad;
+                double lat = GasGiantWeather.GreatRedSpot.LatitudeDeg * Astro.Deg2Rad;
+                var d = (meridian * Math.Cos(lon) + east * Math.Sin(lon)) * Math.Cos(lat) + north * Math.Sin(lat);
+                double dot = DVec3.Dot(d, toSun);
+                if (dot > bestDot)
+                {
+                    bestDot = dot;
+                    best = jd;
+                }
+            }
+            return best;
+        }
+
+        static void Focus(SolarSystemApp app, Target t, double radii)
+        {
+            app.Select(t);
+            app.SpaceCamera.FocusOn(t, radii);
+        }
+
+        public static IEnumerator Wait(float seconds)
+        {
+            float end = Time.unscaledTime + seconds;
+            while (Time.unscaledTime < end) yield return null;
+        }
+    }
+}

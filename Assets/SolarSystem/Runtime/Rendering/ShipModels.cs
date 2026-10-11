@@ -17,32 +17,72 @@ namespace SolarSystem.Rendering
         static readonly Dictionary<string, GameObject> Prototypes = new Dictionary<string, GameObject>();
         static readonly Dictionary<(string, Faction), Material[]> MaterialCache = new Dictionary<(string, Faction), Material[]>();
         static Material proceduralMaterial;
+
+        /// <summary>The vertex-coloured, Sun-lit material every procedural hull uses.</summary>
+        public static Material ProceduralMaterial
+        {
+            get
+            {
+                if (proceduralMaterial == null)
+                {
+                    proceduralMaterial = Materials.Create(Materials.Ship, "ShipProcedural");
+                    proceduralMaterial.SetFloat("_UseVertexColor", 1);
+                }
+                return proceduralMaterial;
+            }
+        }
         static Transform prototypeRoot;
 
-        public static GameObject Build(Ship ship, Transform parent, out List<Renderer> renderers)
+        /// <summary>
+        /// Builds the hull under <paramref name="parent"/>. Warships come as two sections (stern and
+        /// bow) that can break apart; anything else is one piece, returned as the stern with no bow.
+        /// </summary>
+        public static void Build(Ship ship, Transform parent, List<Renderer> renderers, out Transform stern, out Transform bow)
         {
-            renderers = new List<Renderer>();
+            bow = null;
             string kenney = KenneyModelFor(ship);
             if (kenney != null)
             {
                 var model = InstantiateKenney(kenney, ship.Faction, parent, renderers);
-                if (model != null) return model;
+                if (model != null)
+                {
+                    stern = model.transform;
+                    return;
+                }
             }
-
-            var go = new GameObject("Hull");
-            go.transform.SetParent(parent, false);
-            go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.Get(ship.Spec.Class, ship.Faction);
-            var mr = go.AddComponent<MeshRenderer>();
-            if (proceduralMaterial == null)
+            if (ShipMeshFactory.IsWarship(ship.Spec.Class))
             {
-                proceduralMaterial = Materials.Create(Materials.Ship, "ShipProcedural");
-                proceduralMaterial.SetFloat("_UseVertexColor", 1);
+                stern = Section(ship, parent, renderers, ShipMeshFactory.Stern, "Stern");
+                bow = Section(ship, parent, renderers, ShipMeshFactory.Bow, "Bow");
+                return;
             }
-            mr.sharedMaterial = proceduralMaterial;
+            stern = Section(ship, parent, renderers, ShipMeshFactory.WholeHull, "Hull");
+        }
+
+        static Transform Section(Ship ship, Transform parent, List<Renderer> renderers, int section, string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetSection(ship.Spec.Class, ship.Faction, section);
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = ProceduralMaterial;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
             renderers.Add(mr);
-            return go;
+            return go.transform;
+        }
+
+        /// <summary>A hardpoint part (or scar) under a hull section, using the procedural material.</summary>
+        public static MeshRenderer Part(Transform parent, Mesh mesh, string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = ProceduralMaterial;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return mr;
         }
 
         static string KenneyModelFor(Ship ship)

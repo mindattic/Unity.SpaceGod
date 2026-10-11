@@ -1,12 +1,14 @@
 using System;
+using MindAttic.Capture.Unity;
 using UnityEngine;
 
 namespace SolarSystem
 {
     /// <summary>
     /// Makes any scene playable: if no <see cref="SolarSystemApp"/> exists after load, one is
-    /// created. Passing <c>-capture &lt;folder&gt;</c> on the player command line also attaches the
-    /// scripted screenshot tour.
+    /// created. In a capture-enabled player (or the editor), <c>-capture screen</c> attaches the
+    /// scripted screenshot tour (<see cref="CaptureRunner"/>); <c>-demo</c> attaches the live,
+    /// looping showcase instead. <c>-capture</c> is parsed by MindAttic.Capture.
     /// </summary>
     public static class Bootstrap
     {
@@ -16,17 +18,35 @@ namespace SolarSystem
             var app = UnityEngine.Object.FindAnyObjectByType<SolarSystemApp>();
             if (app == null) app = new GameObject("Solar System").AddComponent<SolarSystemApp>();
 
-            string capture = CommandLineValue("-capture");
-            if (capture != null && app.GetComponent<CaptureRunner>() == null)
-                app.gameObject.AddComponent<CaptureRunner>().OutputFolder = capture;
+            if (WantsTour() && app.GetComponent<CaptureRunner>() == null)
+            {
+                // The tour decides when to shoot, so turn off MindAttic.Capture's own every-N-seconds timer.
+                // It starts on the first frame, after this runs.
+                CaptureUnity.Options.ScreenshotInterval = null;
+                app.gameObject.AddComponent<CaptureRunner>();
+            }
+            else if (HasCommandLineFlag("-demo") && app.GetComponent<DemoRunner>() == null)
+            {
+                app.gameObject.AddComponent<DemoRunner>();
+            }
         }
 
-        public static string CommandLineValue(string flag)
+        /// <summary>
+        /// "-capture screen" with no interval. "-capture screen 5" keeps MindAttic.Capture's plain
+        /// timed screenshots instead (with or without -demo).
+        /// </summary>
+        static bool WantsTour()
+        {
+            var args = CaptureUnity.Args;
+            return args != null && CaptureUnity.Options != null && args.ScreenInterval != null && !args.ScreenIntervalSpecified;
+        }
+
+        public static bool HasCommandLineFlag(string flag)
         {
             var args = Environment.GetCommandLineArgs();
-            for (int i = 0; i < args.Length - 1; i++)
-                if (string.Equals(args[i], flag, StringComparison.OrdinalIgnoreCase)) return args[i + 1];
-            return null;
+            foreach (var a in args)
+                if (string.Equals(a, flag, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
     }
 }

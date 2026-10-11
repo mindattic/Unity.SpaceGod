@@ -1,0 +1,266 @@
+using System.Collections.Generic;
+using SolarSystem.Core;
+using SolarSystem.Rendering;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace SolarSystem.Views
+{
+    /// <summary>
+    /// Draws every battle's weapons fire as one dynamic mesh of camera-facing quads: laser beams and
+    /// tracers, point-defence streams, missiles with their trails, impacts, shield flashes and
+    /// explosions. Effects are timed in real seconds (so they read at any time warp) and kept a few
+    /// pixels wide at any distance, so a battle is visible from across a planetary system.
+    /// </summary>
+    public sealed class BattleFx
+    {
+        enum Shape
+        {
+            Radial = 0,
+            Beam = 1,
+            Ring = 2,
+        }
+
+        struct Effect
+        {
+            public Battle Battle;
+            public FxKind Kind;
+            public DVec3 A, B;
+            public double Size;
+            public Color Color;
+            public float Born, Life;
+            public BattleUnit Unit;
+        }
+
+        readonly SolarSystemApp app;
+        readonly Mesh mesh;
+        readonly List<Effect> effects = new List<Effect>();
+        readonly Dictionary<Battle, int> seen = new Dictionary<Battle, int>();
+        readonly List<Vector3> vertices = new List<Vector3>();
+        readonly List<Color> colors = new List<Color>();
+        readonly List<Vector3> uvs = new List<Vector3>();
+        readonly List<int> indices = new List<int>();
+
+        const int MaxEffects = 4000;
+        const int MaxNewPerBattlePerFrame = 160;
+
+        public BattleFx(SolarSystemApp app, Transform parent)
+        {
+            this.app = app;
+            var go = new GameObject("Battle FX");
+            go.transform.SetParent(parent, false);
+            mesh = new Mesh { name = "Battle FX", indexFormat = IndexFormat.UInt32 };
+            mesh.MarkDynamic();
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = Materials.Create(Materials.Fx, "BattleFx");
+            mr.shadowCastingMode = ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+        }
+
+        public void Update()
+        {
+            float now = Time.unscaledTime;
+            var war = app.World.War;
+            foreach (var b in war.Battles) Collect(b, now);
+            foreach (var b in war.Ended) Collect(b, now);
+
+            effects.RemoveAll(e => now - e.Born > e.Life);
+            if (effects.Count > MaxEffects) effects.RemoveRange(0, effects.Count - MaxEffects);
+
+            vertices.Clear();
+            colors.Clear();
+            uvs.Clear();
+            indices.Clear();
+            foreach (var e in effects) Draw(e, now);
+            foreach (var b in war.Battles) DrawMissiles(b);
+
+            mesh.Clear();
+            mesh.SetVertices(vertices);
+            mesh.SetColors(colors);
+            mesh.SetUVs(0, uvs);
+            mesh.SetIndices(indices, MeshTopology.Triangles, 0, false);
+            mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1e9f);
+        }
+
+        void Collect(Battle b, float now)
+        {
+            seen.TryGetValue(b, out int last);
+            if (b.FxSeq == last) return;
+            // Only the newest events are worth drawing; at high warp thousands arrive per frame.
+            int start = b.Fx.Count;
+            int taken = 0;
+            while (start > 0 && b.Fx[start - 1].Seq > last && taken < MaxNewPerBattlePerFrame)
+            {
+                start--;
+                taken++;
+            }
+            for (int i = start; i < b.Fx.Count; i++) Spawn(b, b.Fx[i], now);
+            seen[b] = b.FxSeq;
+            if (seen.Count > 64) seen.Clear();
+        }
+
+        void Spawn(Battle b, CombatFx fx, float now)
+        {
+            var side = fx.Side >= 0 && fx.Side < 2 ? b.SideLeaders[fx.Side] : null;
+            var faction = side != null ? new Color(side.Color.R, side.Color.G, side.Color.B) : Color.white;
+            var e = new Effect { Battle = b, Kind = fx.Kind, A = fx.A, B = fx.B, Size = fx.Size, Born = now, Unit = fx.Unit };
+            switch (fx.Kind)
+            {
+                case FxKind.Beam:
+                case FxKind.BeamMiss:
+                    e.Color = Color.Lerp(faction, Color.white, 0.45f) * (fx.Size > 100 ? 1.6f : 1.1f);
+                    e.Life = fx.Size > 100 ? 0.35f : 0.22f;
+                    break;
+                case FxKind.PointDefense:
+                    e.Color = new Color(1f, 0.85f, 0.5f) * 0.8f;
+                    e.Life = 0.08f;
+                    break;
+                case FxKind.Guns:
+                    e.Color = Color.Lerp(faction, new Color(1f, 0.9f, 0.6f), 0.5f);
+                    e.Life = 0.1f;
+                    break;
+                case FxKind.ShieldHit:
+                    e.Color = new Color(0.35f, 0.7f, 1f) * 0.55f;
+                    e.Life = 0.3f;
+                    break;
+                case FxKind.Impact:
+                    e.Color = new Color(1f, 0.7f, 0.35f);
+                    e.Life = 0.45f;
+                    break;
+                case FxKind.SubsystemDestroyed:
+                    e.Color = new Color(1f, 0.6f, 0.25f) * 1.5f;
+                    e.Life = 1.4f;
+                    break;
+                case FxKind.MissileKill:
+                    e.Color = new Color(1f, 0.75f, 0.4f);
+                    e.Life = 0.35f;
+                    break;
+                case FxKind.UnitDestroyed:
+                    e.Color = new Color(1f, 0.8f, 0.5f) * 2f;
+                    e.Life = 3.2f;
+                    break;
+                default:
+                    return;
+            }
+            effects.Add(e);
+        }
+
+        void Draw(Effect e, float now)
+        {
+            float age = now - e.Born;
+            float t = age / e.Life;
+            float fade = 1 - t;
+            switch (e.Kind)
+            {
+                case FxKind.Beam:
+                case FxKind.BeamMiss:
+                case FxKind.PointDefense:
+                case FxKind.Guns:
+                {
+                    var a = Point(e.Battle, e.A);
+                    var b = Point(e.Battle, e.B);
+                    float px = e.Kind == FxKind.PointDefense || e.Kind == FxKind.Guns ? 1.6f : e.Size > 100 ? 4f : 2.6f;
+                    Ribbon(a, b, px, e.Color * fade);
+                    break;
+                }
+                case FxKind.ShieldHit:
+                {
+                    var c = e.Unit != null && e.Unit.Present ? Point(e.Battle, e.Unit.Pos) : Point(e.Battle, e.B);
+                    float r = (float)(e.Size * 0.75 * app.BattleKmScale);
+                    Sprite(c, Mathf.Max(r, PixelSize(c, 10)), e.Color * fade, Shape.Ring);
+                    break;
+                }
+                case FxKind.UnitDestroyed:
+                {
+                    var c = Point(e.Battle, e.A);
+                    float r = (float)(e.Size * app.BattleKmScale) * (0.6f + 2.2f * Mathf.Sqrt(t));
+                    Sprite(c, Mathf.Max(r, PixelSize(c, 24 * (0.5f + t))), e.Color * fade * fade, Shape.Radial);
+                    if (age < 0.25f) Sprite(c, Mathf.Max(r * 3, PixelSize(c, 60)), Color.white * (1 - age / 0.25f), Shape.Radial);
+                    break;
+                }
+                default:
+                {
+                    var c = Point(e.Battle, e.A);
+                    float r = (float)(Mathf.Max(0.05f, (float)e.Size * (e.Kind == FxKind.Impact ? 0.002f : 1f)) * app.BattleKmScale) * (0.5f + t);
+                    float minPx = e.Kind == FxKind.SubsystemDestroyed ? 14 : e.Kind == FxKind.Impact ? 5 : 6;
+                    Sprite(c, Mathf.Max(r, PixelSize(c, minPx)), e.Color * fade, Shape.Radial);
+                    break;
+                }
+            }
+        }
+
+        void DrawMissiles(Battle b)
+        {
+            foreach (var m in b.Missiles)
+            {
+                if (m.Gone) continue;
+                var p = Point(b, m.Pos);
+                var side = m.Side >= 0 && m.Side < 2 ? b.SideLeaders[m.Side] : null;
+                var c = side != null ? Color.Lerp(new Color(side.Color.R, side.Color.G, side.Color.B), Color.white, 0.6f) : Color.white;
+                Sprite(p, PixelSize(p, m.Torpedo ? 7 : 5), c * 1.4f, Shape.Radial);
+                var tail = Point(b, m.Pos - m.Vel * (m.Torpedo ? 3.0 : 2.0));
+                Ribbon(tail, p, 1.4f, c * 0.5f);
+            }
+        }
+
+        Vector3 Point(Battle b, DVec3 local) => app.Relative(app.BattleScene(b, local));
+
+        float PixelSize(Vector3 p, float pixels) => pixels * Mathf.Max(p.magnitude, 1e-6f) / (float)app.PixelsPerUnitAtUnitDistance();
+
+        void Sprite(Vector3 c, float radius, Color color, Shape shape)
+        {
+            var cam = app.UnityCamera.transform;
+            var right = cam.right * radius;
+            var up = cam.up * radius;
+            Quad(c - right - up, c + right - up, c + right + up, c - right + up, color, shape);
+        }
+
+        void Ribbon(Vector3 a, Vector3 b, float pixels, Color color)
+        {
+            var mid = (a + b) * 0.5f;
+            var along = b - a;
+            if (along.sqrMagnitude < 1e-12f) return;
+            var side = Vector3.Cross(along, mid).normalized;
+            float wa = PixelSize(a, pixels) * 0.5f, wb = PixelSize(b, pixels) * 0.5f;
+            int i = vertices.Count;
+            vertices.Add(a - side * wa);
+            vertices.Add(b - side * wb);
+            vertices.Add(b + side * wb);
+            vertices.Add(a + side * wa);
+            AddCorners(color, Shape.Beam);
+            Indices(i);
+        }
+
+        void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color, Shape shape)
+        {
+            int i = vertices.Count;
+            vertices.Add(a);
+            vertices.Add(b);
+            vertices.Add(c);
+            vertices.Add(d);
+            AddCorners(color, shape);
+            Indices(i);
+        }
+
+        void AddCorners(Color color, Shape shape)
+        {
+            float z = (float)shape;
+            for (int k = 0; k < 4; k++) colors.Add(color);
+            uvs.Add(new Vector3(0, 0, z));
+            uvs.Add(new Vector3(1, 0, z));
+            uvs.Add(new Vector3(1, 1, z));
+            uvs.Add(new Vector3(0, 1, z));
+        }
+
+        void Indices(int i)
+        {
+            indices.Add(i);
+            indices.Add(i + 1);
+            indices.Add(i + 2);
+            indices.Add(i);
+            indices.Add(i + 2);
+            indices.Add(i + 3);
+        }
+    }
+}
