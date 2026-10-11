@@ -108,6 +108,33 @@ namespace SolarSystem.Core.Tests
             Assert.Equal(prograde, sense > 0);
         }
 
+        // JPL Horizons, 2026-10-11 00:00 TDB (JD 2461324.5): moon relative to its parent's centre,
+        // km, ecliptic J2000. Phobos and Miranda get a looser bound (see BodyCatalog notes).
+        [Theory]
+        [InlineData("Phobos", 6805.860, 5566.134, -2893.088, 2.5)]
+        [InlineData("Deimos", -10864.930, 19858.946, 6120.097, 0.5)]
+        [InlineData("Io", 312960.209, -281217.598, -5691.267, 0.5)]
+        [InlineData("Europa", -646550.487, 158099.391, -8278.278, 0.5)]
+        [InlineData("Ganymede", -1072964.415, -17907.116, -16372.860, 0.5)]
+        [InlineData("Callisto", 510004.941, 1804866.535, 63394.103, 0.5)]
+        [InlineData("Enceladus", 222712.926, 60762.699, -53386.313, 0.5)]
+        [InlineData("Titan", -485791.432, -982253.753, 554801.302, 0.5)]
+        [InlineData("Miranda", 74985.184, -37264.615, -99478.646, 2.0)]
+        [InlineData("Titania", -351233.081, 109719.265, 234883.094, 0.5)]
+        [InlineData("Oberon", 348855.606, -9719.491, 466435.960, 0.5)]
+        [InlineData("Triton", -76691.585, 222948.357, 265017.955, 0.5)]
+        [InlineData("Charon", -13128.476, -14545.454, -435.856, 0.5)]
+        public void MoonsMatchJplHorizons(string name, double x, double y, double z, double toleranceDeg)
+        {
+            var eph = new Ephemeris(Catalog);
+            eph.Update(2461324.5);
+            var rel = eph.Relative(Catalog[name].Index);
+            var truth = new DVec3(x, y, z);
+            double deg = Math.Acos(Math.Min(1, DVec3.Dot(rel.Normalized, truth.Normalized))) * Astro.Rad2Deg;
+            Assert.True(deg < toleranceDeg, $"{name} is {deg:0.00} degrees off");
+            Assert.InRange(rel.Length / truth.Length, 0.97, 1.03);
+        }
+
         [Fact]
         public void HelioAtMatchesCachedFrame()
         {

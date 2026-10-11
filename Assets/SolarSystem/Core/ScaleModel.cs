@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SolarSystem.Core
 {
@@ -142,6 +143,109 @@ namespace SolarSystem.Core
                 }
                 scenePositions[i] = scenePositions[b.ParentIndex] + LocalOffset(catalog[b.ParentIndex], ephemeris.Relative(i));
             }
+        }
+
+        /// <summary>
+        /// Out to this many body radii, a point is placed with the body's own local mapping, exactly
+        /// as parked ships are. Parking orbits go out to 7 radii.
+        /// </summary>
+        public const double NeighbourhoodRadii = 8.0;
+
+        /// <summary>A planet's neighbourhood also reaches this far past its outermost moon, which is laid out locally.</summary>
+        public const double NeighbourhoodMoonMargin = 1.25;
+
+        /// <summary>How far (km) from a body points are placed with its own local mapping.</summary>
+        public static double NeighbourhoodKm(BodyDefinition body) =>
+            Math.Max(body.RadiusKm * NeighbourhoodRadii, body.MoonReachKm * NeighbourhoodMoonMargin);
+
+        /// <summary>
+        /// Scene position (Unity axes) of a true heliocentric point (km), seen from the neighbourhood
+        /// of <paramref name="body"/>: the Sun's mapping, corrected by each body from the top of
+        /// <paramref name="body"/>'s chain down (see <see cref="MapThrough"/>).
+        /// </summary>
+        /// <param name="scene">Body scene positions from <see cref="Layout"/>, for the ephemeris' current date.</param>
+        public DVec3 MapNear(Ephemeris ephemeris, DVec3[] scene, int body, DVec3 helioKm)
+        {
+            var chain = new List<int>();
+            AddChain(ephemeris.Catalog, body, chain);
+            return MapThrough(ephemeris, scene, chain, chain.Count, helioKm);
+        }
+
+        /// <summary>
+        /// The Sun's mapping of a true heliocentric point, then each body's neighbourhood correction in
+        /// order. Within a body's neighbourhood (<see cref="NeighbourhoodKm"/>) its correction is its
+        /// own local mapping, exactly as parked ships and its moons are placed; beyond, it eases back
+        /// into the mapping so far, staying at least as far out as the neighbourhood edge so a point
+        /// never dips into the drawn body. The last body in the list wins near it. At realistic scale
+        /// every mapping is the same linear one, so this is just km / KmPerUnit.
+        /// </summary>
+        DVec3 MapThrough(Ephemeris ephemeris, DVec3[] scene, List<int> bodies, int count, DVec3 helioKm)
+        {
+            if (count == 0) return scene[0] + LocalOffset(ephemeris.Catalog.Sun, helioKm - ephemeris.Helio(0));
+
+            int body = bodies[count - 1];
+            var b = ephemeris.Catalog[body];
+            var r = helioKm - ephemeris.Helio(body);
+            double distance = r.Length;
+            double edgeKm = NeighbourhoodKm(b);
+            if (distance <= edgeKm) return scene[body] + LocalOffset(b, r);
+
+            // Local and outer mappings disagree by c at the edge; the gap closes as the outer-map
+            // separation s grows by 2|c| past the edge, at half rate, so distance never turns back.
+            var toOuter = MapThrough(ephemeris, scene, bodies, count - 1, helioKm) - scene[body];
+            double s = toOuter.Length;
+            var edge = ephemeris.Helio(body) + r * (edgeKm / distance);
+            double s1 = (MapThrough(ephemeris, scene, bodies, count - 1, edge) - scene[body]).Length;
+            double l1 = LocalDistance(b, edgeKm);
+            double c = l1 - s1;
+            if (Math.Abs(c) < 1e-9 * Math.Max(1, l1)) return scene[body] + toOuter;
+
+            double k = Math.Max(0, Math.Min(1, 1 - (s - s1) / (2 * Math.Abs(c))));
+            if (k <= 0) return scene[body] + toOuter;
+            double d = Math.Max(s + c * k, l1);
+            var dir = DVec3.Lerp(toOuter / Math.Max(s, 1e-12), r.SwapYZ / distance, k).Normalized;
+            return scene[body] + dir * d;
+        }
+
+        /// <summary>Appends <paramref name="body"/> and its ancestors below the Sun, outermost first, skipping any already listed.</summary>
+        static void AddChain(BodyCatalog catalog, int body, List<int> into)
+        {
+            if (body <= 0) return;
+            AddChain(catalog, catalog[body].ParentIndex, into);
+            if (!into.Contains(body)) into.Add(body);
+        }
+
+        /// <summary>
+        /// Scene position of a transiting ship at a fraction of its path: its true position, mapped
+        /// with the neighbourhood corrections of both ends and the planets they orbit. The origin's
+        /// correction is applied last at departure and the destination's by arrival, crossfading
+        /// between, so the ship leaves and joins its parking slots exactly and stays out of both
+        /// drawn bodies. In open space every correction has eased out, so between worlds the ship
+        /// flies its true path as the scale model draws it.
+        /// </summary>
+        public DVec3 TransitScene(Ephemeris ephemeris, DVec3[] scene, Ship ship, double progress, out DVec3 travelDirection)
+        {
+            var catalog = ephemeris.Catalog;
+            var originLast = new List<int>();
+            AddChain(catalog, ship.Orbit.Body, originLast);
+            AddChain(catalog, ship.OriginBody, originLast);
+            var destinationLast = new List<int>();
+            AddChain(catalog, ship.OriginBody, destinationLast);
+            AddChain(catalog, ship.Orbit.Body, destinationLast);
+
+            DVec3 At(double u)
+            {
+                var helio = ephemeris.Helio(ship.FrameBody) + Fleet.TransitOffset(ship, u);
+                var leaving = MapThrough(ephemeris, scene, originLast, originLast.Count, helio);
+                var arriving = MapThrough(ephemeris, scene, destinationLast, destinationLast.Count, helio);
+                return DVec3.Lerp(leaving, arriving, Astro.SmoothStep(0, 1, u));
+            }
+
+            var here = At(progress);
+            const double step = 1e-4;
+            var ahead = progress + step <= 1 ? At(progress + step) - here : here - At(progress - step);
+            travelDirection = ahead.LengthSquared > 0 ? ahead.Normalized : DVec3.UnitX;
+            return here;
         }
 
         /// <summary>Scene radius of a body's sphere of influence, used for camera reference frames.</summary>

@@ -370,49 +370,9 @@ namespace SolarSystem
             }
         }
 
-        /// <summary>
-        /// Scene position of a transiting ship at a fraction of its path. Realistic scale uses the
-        /// true inertial straight line; gameplay scale runs between the departure and arrival
-        /// parking slots around where those bodies are drawn now (the true line would cut through
-        /// the compressed, inflated planets). In between, the two are blended by the scale.
-        /// </summary>
-        public DVec3 TransitScene(Ship ship, double progress, out DVec3 travelDirection)
-        {
-            Fleet.PointAtDistance(ship, progress * ship.PathLength, out var truePos, out var trueDir);
-            var realistic = truePos.SwapYZ / ScaleModel.KmPerUnit;
-            double blend = Scale.Blend;
-
-            var origin = Catalog[ship.OriginBody];
-            var destination = Catalog[ship.Orbit.Body];
-            var s0 = bodyScene[origin.Index] + Scale.LocalOffset(origin, ship.DepartureOrbit.OffsetAt(ship.PhaseStartJd));
-            var s1 = bodyScene[destination.Index] + Scale.LocalOffset(destination, ship.Orbit.OffsetAt(ship.PhaseEndJd));
-
-            DVec3 anchor, anchorDir;
-            var path = ship.Path;
-            if (path.Length == 3)
-            {
-                var w = Scale.LocalOffset(Catalog.Sun, path[1]);
-                double split = ship.PathCumulative[1] / ship.PathLength;
-                if (progress < split)
-                {
-                    anchor = DVec3.Lerp(s0, w, progress / split);
-                    anchorDir = (w - s0).Normalized;
-                }
-                else
-                {
-                    anchor = DVec3.Lerp(w, s1, (progress - split) / (1 - split));
-                    anchorDir = (s1 - w).Normalized;
-                }
-            }
-            else
-            {
-                anchor = DVec3.Lerp(s0, s1, progress);
-                anchorDir = (s1 - s0).Normalized;
-            }
-
-            travelDirection = DVec3.Lerp(trueDir.SwapYZ, anchorDir, blend).Normalized;
-            return DVec3.Lerp(realistic, anchor, blend);
-        }
+        /// <summary>Scene position of a transiting ship at a fraction of its path (see <see cref="ScaleModel.TransitScene"/>).</summary>
+        public DVec3 TransitScene(Ship ship, double progress, out DVec3 travelDirection) =>
+            Scale.TransitScene(Ephemeris, bodyScene, ship, progress, out travelDirection);
 
         public DVec3 ShipScene(Ship ship) => shipScene[ship.Id];
         public double ShipDisplayLength(Ship ship) => shipLength[ship.Id];

@@ -357,7 +357,6 @@ namespace SolarSystem.UI
                 if (b.RotationHours != 0)
                     lines.Add(("Day (sidereal)", (Math.Abs(b.RotationHours) < 48 ? Math.Abs(b.RotationHours).ToString("0.00", CultureInfo.InvariantCulture) + " h" : Duration(Math.Abs(b.RotationHours) / 24)) + (b.RotationHours < 0 ? " retro" : "")));
                 lines.Add(("Surface gravity", (b.Gm / (b.RadiusKm * b.RadiusKm) * 1000 / 9.80665).ToString("0.000", CultureInfo.InvariantCulture) + " g"));
-                if (b.PhaseIsApproximate) lines.Add(("Note", "orbit phase approximate"));
                 if (!string.IsNullOrEmpty(b.Summary)) lines.Add(("", b.Summary));
             }
             else

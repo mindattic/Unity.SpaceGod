@@ -103,6 +103,9 @@ namespace SolarSystem.Core
             return -U * Math.Sin(p) + V * Math.Cos(p);
         }
 
+        /// <summary>Orbital velocity relative to the body, km/day.</summary>
+        public DVec3 VelocityAt(double jd) => TangentAt(jd) * (RateRadPerDay * RadiusKm);
+
         /// <summary>The phase at which the orbit position points most nearly along <paramref name="direction"/>.</summary>
         public double PhaseFacing(DVec3 direction) => Math.Atan2(DVec3.Dot(direction, V), DVec3.Dot(direction, U));
 
@@ -136,6 +139,20 @@ namespace SolarSystem.Core
         public double PhaseStartJd;
         public double PhaseEndJd;
 
+        /// <summary>
+        /// The transit is flown in this body's frame: the Sun between planets, the common parent for
+        /// a hop within one planet's system (Earth to the Moon, Io to Europa).
+        /// </summary>
+        public int FrameBody;
+
+        /// <summary>
+        /// Velocity (km/day, relative to the frame) the ship leaves with and arrives at: those of its
+        /// departure and arrival parking orbits. The drift they imply is added to the path.
+        /// </summary>
+        public DVec3 DepartureVelocity;
+        public DVec3 ArrivalVelocity;
+
+        /// <summary>The flip-and-burn path, relative to the frame body before drift is added.</summary>
         public DVec3[] Path;
         public double[] PathCumulative;
         public double PathLength;

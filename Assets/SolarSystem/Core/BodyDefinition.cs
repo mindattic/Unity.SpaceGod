@@ -16,7 +16,10 @@ namespace SolarSystem.Core
         /// <summary>J2000 ecliptic (planets, the Moon, minor planets).</summary>
         Ecliptic,
 
-        /// <summary>The parent's equator (close-in regular satellites, which sit near their Laplace plane).</summary>
+        /// <summary>
+        /// The parent's equator, or the moon's Laplace plane when its pole is set (regular satellites).
+        /// The node is measured from the plane's ascending node on the ecliptic.
+        /// </summary>
         ParentEquator,
     }
 
@@ -67,8 +70,9 @@ namespace SolarSystem.Core
         public double RingInnerKm;
         public double RingOuterKm;
 
-        /// <summary>True when the orbital phase is a placeholder rather than ephemeris data (see catalog notes).</summary>
-        public bool PhaseIsApproximate;
+        /// <summary>Pole of a moon's Laplace plane, equatorial J2000. NaN = the parent's equator.</summary>
+        public double LaplacePoleRaDeg = double.NaN;
+        public double LaplacePoleDecDeg = double.NaN;
 
         public string Summary;
 
@@ -85,6 +89,9 @@ namespace SolarSystem.Core
 
         /// <summary>Sphere of influence radius (km), Laplace's a·(m/M)^0.4, floored at a few body radii.</summary>
         public double SoiKm { get; internal set; } = double.PositiveInfinity;
+
+        /// <summary>Farthest apoapsis of the body's moons (km); zero when it has none.</summary>
+        public double MoonReachKm { get; internal set; }
 
         public bool HasRings => RingOuterKm > 0;
         public bool IsStar => Kind == BodyKind.Star;

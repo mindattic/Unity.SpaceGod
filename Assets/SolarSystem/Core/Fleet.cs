@@ -8,7 +8,8 @@ namespace SolarSystem.Core
     /// orbit (real Keplerian rate for the body's GM) and brachistochrone transits: constant thrust
     /// toward the destination, flip at the midpoint, constant braking. Each transit is planned
     /// once at departure as an intercept against where the destination will be on arrival, so the
-    /// whole schedule is deterministic and can be evaluated at any time.
+    /// whole schedule is deterministic and can be evaluated at any time. A hop within one planet's
+    /// system is flown in that planet's frame, which carries the ship along the planet's orbit.
     /// </summary>
     public sealed class Fleet
     {
@@ -23,6 +24,9 @@ namespace SolarSystem.Core
 
         /// <summary>Transits are routed around the Sun at this distance.</summary>
         public const double SunKeepOutKm = 0.15 * Astro.AuKm;
+
+        /// <summary>Hops within a planet's system are routed around the planet at this many radii.</summary>
+        public const double PlanetKeepOutRadii = 2.0;
 
         public Fleet(Ephemeris ephemeris, int seed)
         {
@@ -60,14 +64,63 @@ namespace SolarSystem.Core
             double dist = tau < half
                 ? 0.5 * s.AccelKmPerDay2 * tau * tau
                 : s.PathLength - 0.5 * s.AccelKmPerDay2 * (total - tau) * (total - tau);
-            double speed = s.AccelKmPerDay2 * Math.Min(tau, total - tau) / Astro.SecondsPerDay;
 
             PointAtDistance(s, dist, out var pos, out var dir);
-            var facing = tau < half ? dir : -dir;
-            return new ShipState(pos, facing, speed, true, s.PathLength > 0 ? dist / s.PathLength : 1);
+            var burn = dir * (s.AccelKmPerDay2 * Math.Min(tau, total - tau));
+            var velocity = burn + DriftVelocity(s, tau);
+            // The drive points along the thrust: the flip-and-burn plus the steady velocity-matching push.
+            var thrust = (tau < half ? dir : -dir) * s.AccelKmPerDay2 + DriftAcceleration(s);
+            var at = ephemeris.HelioAt(s.FrameBody, jd) + pos + Drift(s, tau);
+            return new ShipState(at, thrust.Normalized, velocity.Length / Astro.SecondsPerDay, true,
+                s.PathLength > 0 ? dist / s.PathLength : 1);
         }
 
-        /// <summary>Position and travel direction at a distance along a transiting ship's path.</summary>
+        /// <summary>
+        /// Position relative to the ship's <see cref="Ship.FrameBody"/> at a fraction of its transit
+        /// (by distance along the path, like <see cref="ShipState.Progress"/>).
+        /// </summary>
+        public static DVec3 TransitOffset(Ship s, double progress)
+        {
+            double dist = Math.Max(0, Math.Min(1, progress)) * s.PathLength;
+            PointAtDistance(s, dist, out var pos, out _);
+            double total = s.PhaseEndJd - s.PhaseStartJd;
+            double tau = s.AccelKmPerDay2 <= 0 ? progress * total
+                : dist < s.PathLength * 0.5
+                    ? Math.Sqrt(2 * dist / s.AccelKmPerDay2)
+                    : total - Math.Sqrt(Math.Max(0, 2 * (s.PathLength - dist) / s.AccelKmPerDay2));
+            return pos + Drift(s, tau);
+        }
+
+        /// <summary>Position relative to the ship's <see cref="Ship.FrameBody"/> a time into its transit (days).</summary>
+        public static DVec3 TransitOffsetAt(Ship s, double tau)
+        {
+            double total = s.PhaseEndJd - s.PhaseStartJd;
+            tau = Math.Max(0, Math.Min(total, tau));
+            double dist = tau < total * 0.5
+                ? 0.5 * s.AccelKmPerDay2 * tau * tau
+                : s.PathLength - 0.5 * s.AccelKmPerDay2 * (total - tau) * (total - tau);
+            PointAtDistance(s, dist, out var pos, out _);
+            return pos + Drift(s, tau);
+        }
+
+        // A steady acceleration (v1 - v0) / T on top of the flip-and-burn takes the ship from its
+        // departure velocity to its arrival velocity; its displacement is v0·t + (v1 - v0)·t² / 2T.
+        static DVec3 Drift(Ship s, double tau)
+        {
+            double total = s.PhaseEndJd - s.PhaseStartJd;
+            return s.DepartureVelocity * tau + (s.ArrivalVelocity - s.DepartureVelocity) * (tau * tau / (2 * total));
+        }
+
+        static DVec3 DriftVelocity(Ship s, double tau) =>
+            DVec3.Lerp(s.DepartureVelocity, s.ArrivalVelocity, tau / (s.PhaseEndJd - s.PhaseStartJd));
+
+        static DVec3 DriftAcceleration(Ship s) =>
+            (s.ArrivalVelocity - s.DepartureVelocity) / (s.PhaseEndJd - s.PhaseStartJd);
+
+        /// <summary>
+        /// Position (relative to the ship's <see cref="Ship.FrameBody"/>, before drift) and travel
+        /// direction at a distance along a transiting ship's flip-and-burn path.
+        /// </summary>
         public static void PointAtDistance(Ship s, double dist, out DVec3 pos, out DVec3 dir)
         {
             var path = s.Path;
@@ -101,39 +154,102 @@ namespace SolarSystem.Core
             double departJd = ship.PhaseEndJd;
             int from = ship.Orbit.Body;
             int to = ship.DestinationBody;
-            var start = ephemeris.HelioAt(from, departJd) + ship.Orbit.OffsetAt(departJd);
+            int frame = CommonFrame(from, to);
+            double keepOut = frame == 0 ? SunKeepOutKm : catalog[frame].RadiusKm * PlanetKeepOutRadii;
+            var start = RelativeTo(frame, from, departJd) + ship.Orbit.OffsetAt(departJd);
+            var startVelocity = VelocityRelativeTo(frame, from, departJd) + ship.Orbit.VelocityAt(departJd);
             var arrival = NewParkingOrbit(to, ship);
-            double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
 
-            // Intercept: iterate the flight time against where the target will be on arrival.
-            double flight = 2 * Math.Sqrt((ephemeris.HelioAt(to, departJd) - start).Length / accel);
-            DVec3[] path = null;
-            double planned = flight;
-            for (int iter = 0; iter < 8; iter++)
-            {
-                planned = Math.Max(flight, 1e-4);
-                double arriveJd = departJd + planned;
-                var target = ephemeris.HelioAt(to, arriveJd);
-                arrival.EpochJd = arriveJd;
-                arrival.PhaseAtEpoch = arrival.PhaseFacing((start - target).Normalized);
-                path = BuildPath(start, target + arrival.OffsetAt(arriveJd));
-                flight = 2 * Math.Sqrt(PolylineLength(path) / accel);
-            }
-            flight = planned;
-            // The path was built for exactly this arrival time; trim the drive (by a hair, once
-            // converged) so the brachistochrone lands on it then.
-            accel = 4 * PolylineLength(path) / (flight * flight);
+            // Match velocities at both ends unless that path runs into something the rest-to-rest
+            // one in the frame avoids.
+            if (!Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true)
+                && !Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, false))
+                Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true);
 
             ship.DepartureOrbit = ship.Orbit;
             ship.Orbit = arrival;
             ship.OriginBody = from;
             ship.Phase = ShipPhase.Transit;
+            ship.FrameBody = frame;
+            ship.PhaseStartJd = departJd;
+        }
+
+        /// <summary>
+        /// Plans the transit onto <paramref name="ship"/>. Returns false if the path would pass inside
+        /// the keep-out around the frame's centre, or through either end's body or the planets they orbit.
+        /// </summary>
+        bool Plan(Ship ship, int frame, int from, int to, double departJd, DVec3 start, DVec3 startVelocity,
+            ParkingOrbit arrival, double keepOut, bool matchVelocity)
+        {
+            double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
+            var v0 = matchVelocity ? startVelocity : DVec3.Zero;
+            var v1 = DVec3.Zero;
+            DVec3[] path = null;
+
+            // For a flight time T, the path to where the target will be then, and how much longer
+            // (positive) or shorter the drive needs to fly it than T.
+            double Shortfall(double flightDays)
+            {
+                double arriveJd = departJd + flightDays;
+                var target = RelativeTo(frame, to, arriveJd);
+                arrival.EpochJd = arriveJd;
+                arrival.PhaseAtEpoch = arrival.PhaseFacing((start - target).Normalized);
+                v1 = matchVelocity ? VelocityRelativeTo(frame, to, arriveJd) + arrival.VelocityAt(arriveJd) : DVec3.Zero;
+                // The drift covers (v0 + v1)·T / 2 of the way; the flip-and-burn covers the rest.
+                var end = target + arrival.OffsetAt(arriveJd) - (v0 + v1) * (flightDays * 0.5);
+                path = BuildPath(start, end, keepOut);
+                return 2 * Math.Sqrt(PolylineLength(path) / accel) - flightDays;
+            }
+
+            // Intercept: bracket the flight time, then bisect. The drive can always outrun the
+            // target eventually, so the shortfall turns negative for a long enough flight.
+            double lo = 1e-4;
+            double hi = Math.Max(2 * Math.Sqrt((RelativeTo(frame, to, departJd) - start).Length / accel), 2 * lo);
+            for (int i = 0; i < 60 && Shortfall(hi) > 0; i++) hi *= 2;
+            for (int i = 0; i < 60 && hi - lo > 1e-9 * hi; i++)
+            {
+                double mid = 0.5 * (lo + hi);
+                if (Shortfall(mid) > 0) lo = mid;
+                else hi = mid;
+            }
+            double flight = hi;
+            Shortfall(flight);
+
+            ship.DepartureVelocity = v0;
+            ship.ArrivalVelocity = v1;
             ship.Path = path;
             ship.PathCumulative = Cumulative(path);
             ship.PathLength = ship.PathCumulative[path.Length - 1];
-            ship.AccelKmPerDay2 = accel;
+            // The path was built for exactly this arrival time; trim the drive (by a hair, once
+            // converged) so the brachistochrone lands on it then.
+            ship.AccelKmPerDay2 = 4 * ship.PathLength / (flight * flight);
             ship.PhaseStartJd = departJd;
             ship.PhaseEndJd = departJd + flight;
+
+            return Clear(ship, frame, from, to, keepOut);
+        }
+
+        /// <summary>Samples a planned transit against the frame's keep-out and the bodies near its ends.</summary>
+        bool Clear(Ship ship, int frame, int from, int to, double keepOut)
+        {
+            var obstacles = new List<int>();
+            foreach (int end in new[] { from, to })
+                for (int b = end; b >= 0 && b != frame; b = catalog[b].ParentIndex)
+                    if (!obstacles.Contains(b)) obstacles.Add(b);
+
+            const int samples = 256;
+            double total = ship.PhaseEndJd - ship.PhaseStartJd;
+            for (int k = 1; k < samples; k++)
+            {
+                double tau = total * k / samples;
+                var offset = TransitOffsetAt(ship, tau);
+                if (offset.Length < keepOut * 0.8) return false;
+                double jd = ship.PhaseStartJd + tau;
+                var helio = ephemeris.HelioAt(frame, jd) + offset;
+                foreach (int b in obstacles)
+                    if ((helio - ephemeris.HelioAt(b, jd)).Length < catalog[b].RadiusKm * 1.5) return false;
+            }
+            return true;
         }
 
         void Arrive(Ship ship)
@@ -236,17 +352,39 @@ namespace SolarSystem.Core
 
         double Jitter(double amount) => (rng.NextDouble() * 2 - 1) * amount;
 
-        /// <summary>Straight line, or a dog-leg around the Sun when the line would pass too close.</summary>
-        static DVec3[] BuildPath(DVec3 start, DVec3 end)
+        /// <summary>
+        /// The frame a transit is flown in: the lowest body that both ends orbit within (or are), so
+        /// Earth for Earth to the Moon, Jupiter for Io to Europa, the Sun between planetary systems.
+        /// </summary>
+        int CommonFrame(int a, int b)
+        {
+            for (int x = a; x >= 0; x = catalog[x].ParentIndex)
+                for (int y = b; y >= 0; y = catalog[y].ParentIndex)
+                    if (x == y) return x;
+            return 0;
+        }
+
+        DVec3 RelativeTo(int frame, int body, double jd) =>
+            frame == body ? DVec3.Zero : ephemeris.HelioAt(body, jd) - ephemeris.HelioAt(frame, jd);
+
+        /// <summary>Velocity of <paramref name="body"/> relative to <paramref name="frame"/>, km/day (central difference).</summary>
+        DVec3 VelocityRelativeTo(int frame, int body, double jd)
+        {
+            const double h = 1e-3;
+            return (RelativeTo(frame, body, jd + h) - RelativeTo(frame, body, jd - h)) / (2 * h);
+        }
+
+        /// <summary>Straight line, or a dog-leg around the frame's centre when the line would pass within <paramref name="keepOutKm"/>.</summary>
+        static DVec3[] BuildPath(DVec3 start, DVec3 end, double keepOutKm)
         {
             var d = end - start;
             double t = d.LengthSquared > 0 ? Math.Max(0, Math.Min(1, -DVec3.Dot(start, d) / d.LengthSquared)) : 0;
             var closest = start + d * t;
-            if (closest.Length >= SunKeepOutKm || t <= 0 || t >= 1)
+            if (closest.Length >= keepOutKm || t <= 0 || t >= 1)
                 return new[] { start, end };
 
             var away = closest.LengthSquared > 1 ? closest.Normalized : DVec3.Cross(d, DVec3.UnitZ).Normalized;
-            return new[] { start, away * (SunKeepOutKm * 1.4), end };
+            return new[] { start, away * (keepOutKm * 1.4), end };
         }
 
         static double PolylineLength(DVec3[] p)

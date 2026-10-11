@@ -30,10 +30,10 @@ The same moment, focused on Earth, before and after pressing G. At gameplay scal
 
 ### Simulation (`Assets/SolarSystem/Core`, no UnityEngine dependency)
 
-- **Ephemeris.** The Sun, 8 planets, Ceres, Pluto, Eris and 14 moons. Earth is offset from the Earth-Moon barycentre by the Moon. The Moon has real nodal regression and apsidal precession. Regular moons orbit in their parent's equatorial plane and spin sense, so Uranus's moons roll with it and Triton goes backwards.
+- **Ephemeris.** The Sun, 8 planets, Ceres, Pluto, Eris and 14 moons. Earth is offset from the Earth-Moon barycentre by the Moon. The Moon has real nodal regression and apsidal precession. The other moons use JPL's satellite mean elements in their Laplace planes, fitted to JPL Horizons, so each sits within half a degree of its true place on its orbit across 2000-2050 (Phobos and Miranda within 2). Uranus's moons roll with it and Triton goes backwards.
 - **Rotation and orientation.** Real IAU poles (RA/Dec converted to the ecliptic) and sidereal rotation periods, with retrograde rotators handled.
 - **Scale model.** A radial mapping about each parent that sends every surface to its displayed surface at any blend, so orbits keep their true shape and direction in both modes and nothing in low orbit ends up inside a planet. Intermediate blends interpolate in log space.
-- **Fleet.** 50 ships across 4 factions. Ships park in circular orbits at the real Keplerian rate for the body's GM. They depart when their orbit faces the target, then fly a constant-thrust brachistochrone (accelerate, flip at the midpoint, brake). Each transit is planned once, as an intercept against where the destination will be on arrival, and dog-legs around the Sun if the straight line would pass too close.
+- **Fleet.** 50 ships across 4 factions. Ships park in circular orbits at the real Keplerian rate for the body's GM. They depart when their orbit faces the target, then fly a constant-thrust brachistochrone (accelerate, flip at the midpoint, brake), plus a steady push that takes them from their parking orbit's velocity to the destination's, so they leave and arrive moving with the world. A hop within one planet's system (Earth to the Moon, Io to Europa) is flown in that planet's frame. Each transit is planned once, as an intercept against where the destination will be on arrival, dog-legs around the Sun or planet at the centre of its frame, and is checked against running into the bodies at either end.
 - **Sim clock.** Real time up to 1 year per second, starting at the current UTC date.
 
 ### Rendering (`Assets/SolarSystem/Runtime`)
@@ -126,18 +126,20 @@ dotnet test
 - Earth's distance and heliocentric longitude at J2000
 - Planet periods
 - Lunar perigee and apogee, and the Earth-barycentre offset
+- Every moon's position against JPL Horizons
 - Moon spin sense
 - Scale-model monotonicity, invertibility and surface continuity
 - No overlapping gameplay orbits
 - Fleet continuity across every departure and arrival
 - Brachistochrone timing, and intercepts meeting the moving target
+- Velocity matching at departure and arrival
+- Transits at gameplay scale leaving and joining parking slots exactly, never jumping, and staying out of the bodies at their ends
 
 ## Limitations
 
-- **Moon phases are approximate.** Apart from Earth's Moon, the moons' semi-major axis, eccentricity, inclination and period are real, but their position along the orbit is a fixed placeholder (flagged in the details panel).
 - **Planet elements are a fit.** The JPL table is accurate to roughly arcminutes across 1800-2050, and drifts outside that window.
 - **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations.
-- **Gameplay-scale paths are drawn, not flown.** At gameplay scale, transiting ships follow a path drawn between the bodies' compressed positions. The true inertial line is used at realistic scale.
+- **Gameplay scale bends paths.** Ships fly their true path at both scales, but gameplay scale draws it through the same compression as the planets, eased near each end so the ship stays outside the inflated worlds. In a crowded moon system an inflated neighbouring moon can still be drawn over a passing ship.
 - **Not a game yet.** There is no combat, economy or win condition.
 
 ## Credits and licences

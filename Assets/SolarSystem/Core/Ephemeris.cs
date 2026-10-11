@@ -35,9 +35,12 @@ namespace SolarSystem.Core
             for (int i = 0; i < catalog.Count; i++)
             {
                 var b = catalog[i];
-                frames[i] = b.Plane == OrbitPlane.ParentEquator && b.ParentIndex >= 0
-                    ? FrameBasis.FromPole(catalog[b.ParentIndex].SpinAxis)
-                    : FrameBasis.Ecliptic;
+                if (b.Plane != OrbitPlane.ParentEquator || b.ParentIndex < 0)
+                    frames[i] = FrameBasis.Ecliptic;
+                else if (!double.IsNaN(b.LaplacePoleRaDeg))
+                    frames[i] = FrameBasis.FromPole(Astro.PoleFromRaDec(b.LaplacePoleRaDeg, b.LaplacePoleDecDeg));
+                else
+                    frames[i] = FrameBasis.FromPole(catalog[b.ParentIndex].SpinAxis);
             }
 
             if (catalog.TryGet("Earth", out var earth) && catalog.TryGet("Moon", out var moon) && moon.ParentIndex == earth.Index)

@@ -82,7 +82,36 @@ namespace SolarSystem.Core.Tests
             eph.Update(mid);
             var st = fleet.StateOf(ship, mid);
             Assert.InRange(st.Progress, 0.499, 0.501);
-            Assert.Equal(ship.AccelKmPerDay2 * t / 2 / Astro.SecondsPerDay, st.SpeedKmS, 3);
+
+            // Reported speed is relative to the transit frame, and matches the motion.
+            const double h = 1e-5;
+            DVec3 Rel(double jd) => fleet.StateOf(ship, jd).HelioKm - eph.HelioAt(ship.FrameBody, jd);
+            double numeric = (Rel(mid + h) - Rel(mid - h)).Length / (2 * h) / Astro.SecondsPerDay;
+            Assert.True(Math.Abs(numeric - st.SpeedKmS) < 1e-4 * st.SpeedKmS, $"reported {st.SpeedKmS:0.000} km/s, moving at {numeric:0.000}");
+        }
+
+        [Fact]
+        public void TransitsLeaveAndArriveAtTheirParkingOrbitsVelocity()
+        {
+            var (fleet, eph) = Create();
+            int matched = 0;
+            foreach (var ship in fleet.Ships.Where(s => !s.IsEscort && s.Phase == ShipPhase.Transit))
+            {
+                if (ship.DepartureVelocity.LengthSquared == 0) continue;
+                matched++;
+                const double h = 1e-7;
+                var origin = ship.OriginBody;
+                var destination = ship.Orbit.Body;
+                double t0 = ship.PhaseStartJd, t1 = ship.PhaseEndJd;
+                DVec3 Rel(double jd, int body) => fleet.StateOf(ship, jd).HelioKm - eph.HelioAt(body, jd);
+                var leave = (Rel(t0 + h, origin) - Rel(t0, origin)) / h;
+                var parked = ship.DepartureOrbit.VelocityAt(t0);
+                Assert.True((leave - parked).Length < 0.02 * parked.Length + 50, $"{ship.Name} leaves at {(leave - parked).Length:0} km/day off");
+                var arrive = (Rel(t1, destination) - Rel(t1 - h, destination)) / h;
+                var orbit = ship.Orbit.VelocityAt(t1);
+                Assert.True((arrive - orbit).Length < 0.02 * orbit.Length + 50, $"{ship.Name} arrives at {(arrive - orbit).Length:0} km/day off");
+            }
+            Assert.True(matched > 5);
         }
 
         [Fact]
@@ -101,7 +130,7 @@ namespace SolarSystem.Core.Tests
             var (fleet, eph) = Create();
             var ship = fleet.Ships.First(s => !s.IsEscort && s.Phase == ShipPhase.Transit);
             double arrive = ship.PhaseEndJd;
-            var end = ship.Path[ship.Path.Length - 1];
+            var end = eph.HelioAt(ship.FrameBody, arrive) + Fleet.TransitOffset(ship, 1);
             var target = eph.HelioAt(ship.DestinationBody, arrive) + ship.Orbit.OffsetAt(arrive);
             Assert.True((end - target).Length < 1.0);
         }
