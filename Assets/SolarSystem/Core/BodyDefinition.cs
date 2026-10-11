@@ -63,6 +63,45 @@ namespace SolarSystem.Core
 
         /// <summary>Fraction of the map's height at each pole with no data (stretched over from the last valid row).</summary>
         public float TexturePoleMargin;
+
+        /// <summary>
+        /// The colour map is a single-band (greyscale) mosaic, so it is multiplied by <see cref="Color"/>
+        /// (the body's documented average colour). False for genuine colour maps.
+        /// </summary>
+        public bool TintTexture;
+
+        /// <summary>Tangent-space relief map derived from real elevation data (Resources/Textures), or null.</summary>
+        public string NormalMap;
+
+        /// <summary>Drawn with the banded, wind-driven gas giant shader instead of the solid-surface one.</summary>
+        public bool GasGiant;
+
+        /// <summary>
+        /// How much of the surface an opaque atmosphere hides in visible light (0 = none, 1 = all),
+        /// drawn as a layer of <see cref="AtmosphereColor"/> over the map (Titan's haze, Venus's clouds).
+        /// </summary>
+        public float SurfaceHaze;
+
+        // ---- Orientation (see BodyOrientation)
+
+        /// <summary>IAU prime meridian angle W at J2000 (deg). NaN = unknown, the meridian starts at the equator's node.</summary>
+        public double PrimeMeridianDeg = double.NaN;
+
+        /// <summary>IAU dW/dt (deg/day) about the map's north pole. NaN = derived from <see cref="RotationHours"/>.</summary>
+        public double PrimeMeridianRateDegPerDay = double.NaN;
+
+        /// <summary>
+        /// Synchronous rotator whose 0° meridian faces its parent (the IAU convention for the Moon and
+        /// the regular satellites). The meridian is pointed at the parent each frame; libration is not modelled.
+        /// </summary>
+        public bool FacesParent;
+
+        /// <summary>
+        /// The map's north is the opposite of <see cref="Pole"/>. Pluto's maps use the IAU positive
+        /// (right-hand) pole, and the Uranian satellites' maps use Uranus's IAU north, which is the
+        /// opposite of the spin axis their catalogue pole follows.
+        /// </summary>
+        public bool MapNorthFlipped;
         public Rgb AtmosphereColor;
         public float AtmosphereStrength;
 

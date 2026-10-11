@@ -87,6 +87,7 @@ namespace SolarSystem.Core
             {
                 Name = "Sun", Kind = BodyKind.Star, RadiusKm = 695700, Gm = 1.32712440018e11,
                 PoleRaDeg = 286.13, PoleDecDeg = 63.87, RotationHours = 609.12,
+                PrimeMeridianDeg = 84.176, PrimeMeridianRateDegPerDay = 14.1844,
                 Color = new Rgb(1f, 0.86f, 0.6f),
                 Summary = "G2V main-sequence star. 99.86% of the system's mass.",
             };
@@ -96,7 +97,8 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593,
                     0.00000037, 0.00001906, -0.00594749, 149472.67411175, 0.16047689, -0.12534081),
                 PoleRaDeg = 281.01, PoleDecDeg = 61.42, RotationHours = 1407.6,
-                Color = new Rgb(0.6f, 0.58f, 0.55f), Texture = "mercury_color", TexturePoleMargin = 0.035f,
+                PrimeMeridianDeg = 329.5988, PrimeMeridianRateDegPerDay = 6.1385108,
+                Color = new Rgb(0.6f, 0.58f, 0.55f), Texture = "mercury_color", TexturePoleMargin = 0.035f, NormalMap = "mercury_normal",
                 Summary = "Smallest planet; a 3:2 spin-orbit resonance gives it a 176-day solar day.",
             };
             yield return new BodyDefinition
@@ -105,9 +107,12 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255,
                     0.00000390, -0.00004107, -0.00078890, 58517.81538729, 0.00268329, -0.27769418),
                 PoleRaDeg = 272.76, PoleDecDeg = 67.16, RotationHours = -5832.6,
-                Color = new Rgb(0.93f, 0.84f, 0.62f),
+                PrimeMeridianDeg = 160.20, PrimeMeridianRateDegPerDay = -1.4813688,
+                // Visible light never reaches the surface: what an eye sees is the nearly featureless
+                // cloud deck, drawn procedurally (see Planet.shader).
+                Color = new Rgb(0.93f, 0.86f, 0.68f), SurfaceHaze = 1f,
                 AtmosphereColor = new Rgb(1f, 0.88f, 0.6f), AtmosphereStrength = 0.7f,
-                Summary = "Spins backwards under a 92-bar CO2 atmosphere. No true-colour surface map exists.",
+                Summary = "Spins backwards under a 92-bar CO2 atmosphere. Its clouds hide the surface from every visible-light camera.",
             };
             yield return new BodyDefinition
             {
@@ -115,6 +120,7 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0.0,
                     0.00000562, -0.00004392, -0.01294668, 35999.37244981, 0.32327364, 0.0),
                 PoleRaDeg = 0, PoleDecDeg = 90, RotationHours = 23.9344696,
+                PrimeMeridianDeg = 190.147, PrimeMeridianRateDegPerDay = 360.9856235,
                 Color = new Rgb(0.3f, 0.45f, 0.7f), Texture = "earth_color",
                 AtmosphereColor = new Rgb(0.4f, 0.65f, 1f), AtmosphereStrength = 0.65f,
                 Summary = "Home. Elements are for the Earth-Moon barycentre; Earth is offset from it by the Moon.",
@@ -125,8 +131,8 @@ namespace SolarSystem.Core
                 // Mean elements at J2000: L = 218.3165, perigee longitude 83.3532, node 125.0445.
                 Elements = OrbitalElements.FromClassical(Astro.J2000, 384400, 0.0549, 5.145, 125.0445, 83.3532 - 125.0445,
                     218.3165 - 83.3532, 27.321661, -360.0 / 6798.38, 360.0 / 3232.6),
-                PoleRaDeg = 269.99, PoleDecDeg = 66.54, RotationHours = 655.72,
-                Color = new Rgb(0.62f, 0.61f, 0.6f),
+                PoleRaDeg = 269.99, PoleDecDeg = 66.54, RotationHours = 655.72, FacesParent = true,
+                Color = new Rgb(0.62f, 0.61f, 0.6f), Texture = "moon_color", NormalMap = "moon_normal",
                 Summary = "Tidally locked. Slowly receding from Earth at 3.8 cm a year.",
             };
             yield return new BodyDefinition
@@ -135,12 +141,13 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891,
                     0.00001847, 0.00007882, -0.00813131, 19140.30268499, 0.44441088, -0.29257343),
                 PoleRaDeg = 317.68, PoleDecDeg = 52.89, RotationHours = 24.6229,
-                Color = new Rgb(0.75f, 0.45f, 0.3f), Texture = "mars_color",
+                PrimeMeridianDeg = 176.630, PrimeMeridianRateDegPerDay = 350.89198226,
+                Color = new Rgb(0.75f, 0.45f, 0.3f), Texture = "mars_color", NormalMap = "mars_normal",
                 AtmosphereColor = new Rgb(0.95f, 0.6f, 0.4f), AtmosphereStrength = 0.2f,
                 Summary = "Home of Olympus Mons and Valles Marineris.",
             };
-            yield return Moon("Phobos", "Mars", 11.27, 7.087e-4, 9375, 0.0254, 0.0127, 317.7107, 295.9267, 283.5863, 0.3189101, 0.428156, -0.464914, 317.7, 52.9, new Rgb(0.42f, 0.38f, 0.35f));
-            yield return Moon("Deimos", "Mars", 6.2, 9.6e-5, 23457, 0.0, 1.7878, 13.753, 352.1363, 212.2813, 1.26244093, -0.018163, -0.036847, 316.6, 53.5, new Rgb(0.55f, 0.5f, 0.45f));
+            yield return WithMap(Moon("Phobos", "Mars", 11.27, 7.087e-4, 9375, 0.0254, 0.0127, 317.7107, 295.9267, 283.5863, 0.3189101, 0.428156, -0.464914, 317.7, 52.9, new Rgb(0.42f, 0.38f, 0.35f)), "phobos_color", true);
+            yield return WithMap(Moon("Deimos", "Mars", 6.2, 9.6e-5, 23457, 0.0, 1.7878, 13.753, 352.1363, 212.2813, 1.26244093, -0.018163, -0.036847, 316.6, 53.5, new Rgb(0.55f, 0.5f, 0.45f)), "deimos_color", true);
 
             yield return new BodyDefinition
             {
@@ -148,7 +155,8 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromClassical(sbdbEpoch, 2.769165 * Astro.AuKm, 0.07600902, 10.59407, 80.30553, 73.59764,
                     77.37209589, OrbitalElements.PeriodFromGm(2.769165 * Astro.AuKm, 1.32712440018e11)),
                 PoleRaDeg = 291.42, PoleDecDeg = 66.76, RotationHours = 9.074,
-                Color = new Rgb(0.5f, 0.49f, 0.47f),
+                PrimeMeridianDeg = 170.650, PrimeMeridianRateDegPerDay = 952.1532,
+                Color = new Rgb(0.5f, 0.49f, 0.47f), Texture = "ceres_color", TintTexture = true,
                 Summary = "Largest object in the asteroid belt. Bright salt deposits in Occator crater.",
             };
 
@@ -158,14 +166,16 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909,
                     -0.00011607, -0.00013253, -0.00183714, 3034.74612775, 0.21252668, 0.20469106),
                 PoleRaDeg = 268.06, PoleDecDeg = 64.50, RotationHours = 9.925,
+                PrimeMeridianDeg = 284.95, PrimeMeridianRateDegPerDay = 870.536, // System III
                 Color = new Rgb(0.8f, 0.7f, 0.58f), Texture = "jupiter_color", TexturePoleMargin = 0.06f, // Hubble map ends near ±80°
+                GasGiant = true,
                 AtmosphereColor = new Rgb(0.9f, 0.8f, 0.65f), AtmosphereStrength = 0.3f,
                 Summary = "Two and a half times the mass of every other planet combined.",
             };
-            yield return Moon("Io", "Jupiter", 1821.6, 5959.9, 421800, 0.00413, 0.0, 20.0402, 49.0252, 330.8831, 1.76913776, 0, -0.73951, 268.1, 64.5, new Rgb(0.93f, 0.83f, 0.45f));
-            yield return Moon("Europa", "Jupiter", 1560.8, 3202.7, 671100, 0.00928, 0.4643, 204.4438, 44.6561, 345.4036, 3.55118104, -0.032732, -0.739518, 268.1, 64.5, new Rgb(0.86f, 0.8f, 0.72f));
-            yield return Moon("Ganymede", "Jupiter", 2634.1, 9887.8, 1070400, 0.00194, 0.2299, 59.8522, 246.3051, 295.4604, 7.15455318, -0.005846, 0.005568, 268.2, 64.6, new Rgb(0.6f, 0.57f, 0.52f));
-            yield return Moon("Callisto", "Jupiter", 2410.3, 7179.3, 1882700, 0.00727, 0.2197, 314.8165, 55.8575, 86.0337, 16.68901692, -0.001697, 0.001773, 268.7, 64.8, new Rgb(0.42f, 0.39f, 0.35f));
+            yield return WithMap(Moon("Io", "Jupiter", 1821.6, 5959.9, 421800, 0.00413, 0.0, 20.0402, 49.0252, 330.8831, 1.76913776, 0, -0.73951, 268.1, 64.5, new Rgb(0.93f, 0.83f, 0.45f)), "io_color", false);
+            yield return WithMap(Moon("Europa", "Jupiter", 1560.8, 3202.7, 671100, 0.00928, 0.4643, 204.4438, 44.6561, 345.4036, 3.55118104, -0.032732, -0.739518, 268.1, 64.5, new Rgb(0.86f, 0.8f, 0.72f)), "europa_color", true);
+            yield return WithMap(Moon("Ganymede", "Jupiter", 2634.1, 9887.8, 1070400, 0.00194, 0.2299, 59.8522, 246.3051, 295.4604, 7.15455318, -0.005846, 0.005568, 268.2, 64.6, new Rgb(0.6f, 0.57f, 0.52f)), "ganymede_color", false);
+            yield return WithMap(Moon("Callisto", "Jupiter", 2410.3, 7179.3, 1882700, 0.00727, 0.2197, 314.8165, 55.8575, 86.0337, 16.68901692, -0.001697, 0.001773, 268.7, 64.8, new Rgb(0.42f, 0.39f, 0.35f)), "callisto_color", true);
 
             yield return new BodyDefinition
             {
@@ -173,16 +183,20 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448,
                     -0.00125060, -0.00050991, 0.00193609, 1222.49362201, -0.41897216, -0.28867794),
                 PoleRaDeg = 40.59, PoleDecDeg = 83.54, RotationHours = 10.656,
-                Color = new Rgb(0.85f, 0.77f, 0.6f), Texture = "saturn_color",
+                PrimeMeridianDeg = 38.90, PrimeMeridianRateDegPerDay = 810.7939024,
+                Color = new Rgb(0.85f, 0.77f, 0.6f), Texture = "saturn_color", GasGiant = true,
                 AtmosphereColor = new Rgb(0.95f, 0.85f, 0.6f), AtmosphereStrength = 0.3f,
                 // C ring inner edge to A ring outer edge.
                 RingInnerKm = 74658, RingOuterKm = 136775,
                 Summary = "Less dense than water. Its main rings are ~10 m thick and 270,000 km across.",
             };
-            yield return Moon("Enceladus", "Saturn", 252.1, 7.21, 238400, 0.00476, 0.0, 320.0881, 171.4837, 10.7909, 1.3702181, 0, 0.337987, 40.6, 83.5, new Rgb(0.95f, 0.95f, 0.97f));
+            yield return WithMap(Moon("Enceladus", "Saturn", 252.1, 7.21, 238400, 0.00476, 0.0, 320.0881, 171.4837, 10.7909, 1.3702181, 0, 0.337987, 40.6, 83.5, new Rgb(0.95f, 0.95f, 0.97f)), "enceladus_color", true);
             var titan = Moon("Titan", "Saturn", 2574.7, 8978.1, 1221900, 0.02869, 0.3472, 339.0229, 185.0478, 163.5777, 15.9454481, -0.001294, 0.001419, 36.4, 84.0, new Rgb(0.85f, 0.62f, 0.32f));
             titan.AtmosphereColor = new Rgb(0.9f, 0.65f, 0.3f);
             titan.AtmosphereStrength = 0.9f;
+            // Cassini ISS 938 nm surface map, under the haze that hides it in visible light.
+            WithMap(titan, "titan_surface", false);
+            titan.SurfaceHaze = 0.82f;
             titan.Summary = "Only moon with a thick atmosphere; methane lakes at its poles.";
             yield return titan;
 
@@ -192,13 +206,14 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503,
                     -0.00196176, -0.00004397, -0.00242939, 428.48202785, 0.40805281, 0.04240589),
                 PoleRaDeg = 257.31, PoleDecDeg = -15.18, RotationHours = -17.24,
-                Color = new Rgb(0.65f, 0.85f, 0.9f), Texture = "uranus_color",
+                PrimeMeridianDeg = 203.81, PrimeMeridianRateDegPerDay = -501.1600928,
+                Color = new Rgb(0.65f, 0.85f, 0.9f), Texture = "uranus_color", GasGiant = true,
                 AtmosphereColor = new Rgb(0.6f, 0.9f, 0.95f), AtmosphereStrength = 0.4f,
                 Summary = "Rolls around the Sun on its side, axial tilt 98 degrees.",
             };
-            yield return Moon("Miranda", "Uranus", 235.8, 4.4, 129846, 0.00129, 4.427, 95.7866, 151.4373, 76.6609, 1.41347955, -0.055411, 0.055218, new Rgb(0.7f, 0.7f, 0.72f));
-            yield return Moon("Titania", "Uranus", 788.4, 228.2, 436298, 0.00158, 0.0645, 331.0516, 249.1247, 56.3287, 8.70586893, 0.00373, 0.003818, new Rgb(0.68f, 0.63f, 0.6f));
-            yield return Moon("Oberon", "Uranus", 761.4, 205.3, 583511, 0.00153, 0.2035, 33.7756, 134.2823, 179.436, 13.46323712, -0.001675, 0.002236, new Rgb(0.6f, 0.55f, 0.53f));
+            yield return WithMap(Moon("Miranda", "Uranus", 235.8, 4.4, 129846, 0.00129, 4.427, 95.7866, 151.4373, 76.6609, 1.41347955, -0.055411, 0.055218, new Rgb(0.7f, 0.7f, 0.72f)), "miranda_color", true, mapNorthFlipped: true);
+            yield return WithMap(Moon("Titania", "Uranus", 788.4, 228.2, 436298, 0.00158, 0.0645, 331.0516, 249.1247, 56.3287, 8.70586893, 0.00373, 0.003818, new Rgb(0.68f, 0.63f, 0.6f)), "titania_color", true, mapNorthFlipped: true);
+            yield return WithMap(Moon("Oberon", "Uranus", 761.4, 205.3, 583511, 0.00153, 0.2035, 33.7756, 134.2823, 179.436, 13.46323712, -0.001675, 0.002236, new Rgb(0.6f, 0.55f, 0.53f)), "oberon_color", true, mapNorthFlipped: true);
 
             yield return new BodyDefinition
             {
@@ -206,13 +221,15 @@ namespace SolarSystem.Core
                 Elements = OrbitalElements.FromJpl(30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574,
                     0.00026291, 0.00005105, 0.00035372, 218.45945325, -0.32241464, -0.00508664),
                 PoleRaDeg = 299.36, PoleDecDeg = 43.46, RotationHours = 16.11,
-                Color = new Rgb(0.35f, 0.5f, 0.9f), Texture = "neptune_color",
+                PrimeMeridianDeg = 249.978, PrimeMeridianRateDegPerDay = 541.1397757,
+                Color = new Rgb(0.35f, 0.5f, 0.9f), Texture = "neptune_color", GasGiant = true,
                 AtmosphereColor = new Rgb(0.4f, 0.6f, 1f), AtmosphereStrength = 0.4f,
                 Summary = "Fastest winds in the system, over 2,000 km/h.",
             };
             var triton = Moon("Triton", "Neptune", 1353.4, 1427.6, 354800, 0.00013, 157.2335, 152.2806, 76.2454, 341.4831, 5.87657447, 0.001458, 0.004035, 299.8, 43.1, new Rgb(0.85f, 0.8f, 0.78f));
             triton.RotationHours = -triton.RotationHours;
             triton.Summary = "Orbits backwards: a captured Kuiper belt object.";
+            WithMap(triton, "triton_color", true);
             yield return triton;
 
             yield return new BodyDefinition
@@ -223,10 +240,12 @@ namespace SolarSystem.Core
                 // IAU gives Pluto's positive (right-hand) pole, RA 132.99 Dec -6.16. Its antipode is the
                 // north pole in the planets' convention, about which Pluto, like Uranus, spins backwards.
                 PoleRaDeg = 312.99, PoleDecDeg = 6.16, RotationHours = -153.2935,
-                Color = new Rgb(0.8f, 0.68f, 0.55f),
+                // New Horizons maps use the positive pole as north, with W = 302.695 + 56.3625225 d about it.
+                MapNorthFlipped = true, PrimeMeridianDeg = 302.695, PrimeMeridianRateDegPerDay = 56.3625225,
+                Color = new Rgb(0.8f, 0.68f, 0.55f), Texture = "pluto_color", TintTexture = true,
                 Summary = "Its eccentric orbit dips inside Neptune's for 20 years of every 248.",
             };
-            yield return Moon("Charon", "Pluto", 606, 105.88, 19600, 0.0, 0.0, 17.1127, 0.0, 304.1195, 6.38722208, 0, 0, new Rgb(0.6f, 0.58f, 0.56f));
+            yield return WithMap(Moon("Charon", "Pluto", 606, 105.88, 19600, 0.0, 0.0, 17.1127, 0.0, 304.1195, 6.38722208, 0, 0, new Rgb(0.6f, 0.58f, 0.56f)), "charon_color", true);
 
             yield return new BodyDefinition
             {
@@ -257,8 +276,21 @@ namespace SolarSystem.Core
                 LaplacePoleRaDeg = laplaceRaDeg,
                 LaplacePoleDecDeg = laplaceDecDeg,
                 RotationHours = periodDays * 24.0,
+                FacesParent = true,
                 Color = color,
             };
+        }
+
+        /// <summary>
+        /// Attaches a colour map (Resources/Textures; sources in SOURCES.md). Single-band mosaics are
+        /// tinted with the body's catalogue colour.
+        /// </summary>
+        static BodyDefinition WithMap(BodyDefinition body, string texture, bool tint, bool mapNorthFlipped = false)
+        {
+            body.Texture = texture;
+            body.TintTexture = tint;
+            body.MapNorthFlipped = mapNorthFlipped;
+            return body;
         }
 
         static BodyDefinition Moon(string name, string parent, double radiusKm, double gm, double aKm, double e, double iDeg,

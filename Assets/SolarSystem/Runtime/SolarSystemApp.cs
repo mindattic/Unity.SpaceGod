@@ -27,6 +27,9 @@ namespace SolarSystem
         public Fleet Fleet { get; private set; }
         public SpaceCamera SpaceCamera { get; private set; }
         public Camera UnityCamera { get; private set; }
+
+        /// <summary>The real main belt and Jupiter Trojans (JPL SBDB), drawn on the GPU.</summary>
+        public AsteroidBelt AsteroidBelt { get; private set; }
         public InputState Input { get; } = new InputState();
 
         public Target Selected { get; private set; } = Target.None;
@@ -108,6 +111,7 @@ namespace SolarSystem
 
             hud = new Hud(this);
             SpaceCamera = new SpaceCamera(this);
+            AsteroidBelt = AsteroidBelt.Create(this);
 
             Scale.Layout(Ephemeris, bodyScene);
             var earth = Catalog["Earth"].Index;
@@ -427,18 +431,22 @@ namespace SolarSystem
         void UpdateViews(float dt)
         {
             Shader.SetGlobalVector("_SunPositionWS", Relative(bodyScene[0]));
-            double daysSinceJ2000 = Clock.Jd - Astro.J2000;
             var forward = SpaceCamera.Rotation * Vector3.forward;
             double pixelsPerUnit = PixelsPerUnitAtUnitDistance();
+            double warp = Clock.Paused ? 0 : Clock.Warp.SimSecondsPerSecond;
 
             for (int i = 0; i < Catalog.Count; i++)
             {
-                var body = Catalog[i];
-                double spin = body.RotationHours != 0 ? 360.0 * daysSinceJ2000 * 24.0 / body.RotationHours : 0;
+                // Body-fixed frame: IAU prime meridians, or 0° toward the parent for synchronous moons.
+                var rel = Ephemeris.Relative(i);
+                var orbitNormal = DVec3.Cross(rel, Ephemeris.RelativeVelocityKmS(i));
+                BodyOrientation.Frame(Catalog[i], Clock.Jd, -rel, orbitNormal, out var north, out var meridian);
                 var target = Target.OfBody(i);
-                bodyViews[i].Apply(Relative(bodyScene[i]), (float)bodyRadius[i], (float)(spin % 360.0),
+                bodyViews[i].Apply(Relative(bodyScene[i]), (float)bodyRadius[i], north, meridian,
                     target == Selected || target == Hovered, forward);
+                bodyViews[i].UpdateWeather(Clock.Jd, warp);
             }
+            AsteroidBelt?.Render(Clock.Jd, Scale, Relative(bodyScene[0]));
 
             for (int i = 0; i < shipViews.Length; i++)
             {

@@ -12,6 +12,8 @@ namespace SolarSystem.Rendering
         public static Shader Ship => Load("Ship");
         public static Shader Line => Load("Line");
         public static Shader Stars => Load("Stars");
+        public static Shader GasGiant => Load("GasGiant");
+        public static Shader Asteroids => Load("Asteroids");
 
         static Shader Load(string name)
         {
