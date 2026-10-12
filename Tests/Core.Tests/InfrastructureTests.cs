@@ -121,8 +121,12 @@ namespace SolarSystem.Core.Tests
             Assert.Contains(w.Infrastructure.Structures, s => s.Kind == StructureKind.Habitat && s.Settlement.Name == "Earth Orbital");
             Assert.Contains(w.Infrastructure.Structures, s => s.Kind == StructureKind.Factory && s.Industry == IndustryKind.ElectronicsFab);
             Assert.Contains(w.Infrastructure.Structures, s => s.Name == "ISS" && s.Real);
-            var launched = new List<Ship>();
-            w.ShipAdded += s => launched.Add(s);
+            // Where each new hull is the moment it is launched (it soon leaves for its first port).
+            var launched = new List<(Ship ship, int body, double radius)>();
+            w.ShipAdded += s =>
+            {
+                if (!s.IsEscort && !s.Faction.IsPirate) launched.Add((s, s.Orbit.Body, s.Orbit.RadiusKm));
+            };
             double maxProgress = 0;
             for (double jd = StartJd; jd < StartJd + 240 && launched.Count < 4; jd += 0.1)
             {
@@ -136,10 +140,10 @@ namespace SolarSystem.Core.Tests
             }
             output.WriteLine($"{launched.Count} launches, slips reached {maxProgress:P0}");
             Assert.NotEmpty(launched);
-            foreach (var ship in launched.Where(s => !s.Faction.IsPirate))
+            foreach (var (ship, body, radius) in launched)
             {
-                var yards = w.Infrastructure.Structures.Where(s => s.Kind == StructureKind.Shipyard && s.Body == ship.Orbit.Body).ToList();
-                Assert.Contains(yards, y => Math.Abs(y.Orbit.RadiusKm - ship.Orbit.RadiusKm) < 1e-6);
+                var yards = w.Infrastructure.Structures.Where(s => s.Kind == StructureKind.Shipyard && s.Body == body).ToList();
+                Assert.Contains(yards, y => Math.Abs(y.Orbit.RadiusKm - radius) < 1e-6);
             }
         }
 
@@ -186,6 +190,24 @@ namespace SolarSystem.Core.Tests
             {
                 sys.Update(jd);
                 landed = Math.Max(landed, sys.World.Fleet.Ships.Count(s => s.Phase == ShipPhase.Landed && s.Ring?.Body == b.Index));
+                // Ships on the ground, or on the way down or up, are out of any fight.
+                Assert.DoesNotContain(sys.World.Fleet.Ships, s => s.Planetside && s.Battle != null);
+                if (Math.Abs(jd - (StartJd + 30)) < 0.01)
+                {
+                    // The gates stay over the terminator: 90° from the point facing Proxima, give or take
+                    // the swing of its slightly eccentric orbit.
+                    var toStar = -sys.Ephemeris.Relative(b.Index);
+                    var north = BodyOrientation.MapNorth(b);
+                    var subStellar = (toStar - north * DVec3.Dot(toStar, north)).Normalized;
+                    foreach (var g in gates)
+                    {
+                        var up = g.Up(jd);
+                        var flat = (up - north * DVec3.Dot(up, north)).Normalized;
+                        double angle = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(flat, subStellar)))) * Astro.Rad2Deg;
+                        output.WriteLine($"{g.Name}: {angle:0.0}° from the sub-stellar point");
+                        Assert.InRange(angle, 85, 95);
+                    }
+                }
             }
             Assert.True(landed > 0, "nobody landed at New Kentaurus");
         }

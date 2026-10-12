@@ -218,7 +218,13 @@ namespace SolarSystem
         /// </summary>
         public void Activate(StarSystem system)
         {
-            if (systemRoot != null) Destroy(systemRoot.gameObject);
+            // Let go of anything in the old system first: its ships, structures and indices are about to go.
+            SpaceCamera.ExitFocus();
+            if (systemRoot != null)
+            {
+                Materials.DestroyOwned(systemRoot);
+                Destroy(systemRoot.gameObject);
+            }
             ActiveSystem = system;
             systemRoot = new GameObject(system.Name).transform;
             systemRoot.SetParent(worldRoot, false);
@@ -634,6 +640,8 @@ namespace SolarSystem
         {
             double now = Astro.JulianDate(DateTime.UtcNow);
             bool backwards = now < Clock.Jd;
+            // Rebuilding the systems mid-trip would leave the trip pointing at the old ones: land first.
+            if (backwards && Travel.Active) Travel.Finish();
             Clock.SetJd(now);
             Clock.SetWarp(SimClock.DefaultWarpIndex);
             if (backwards)
@@ -643,6 +651,7 @@ namespace SolarSystem
                 var cameraAt = SpaceCamera.ScenePosition;
                 var cameraRotation = SpaceCamera.Rotation;
                 Galaxy = Galaxy.CreateDefault(now);
+                Materials.DestroyOwned(Interstellar.Root.transform);
                 Destroy(Interstellar.Root);
                 Interstellar = new InterstellarView(Galaxy, worldRoot);
                 SubscribeWorlds();

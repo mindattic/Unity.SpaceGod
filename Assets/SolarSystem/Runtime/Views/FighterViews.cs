@@ -38,7 +38,7 @@ namespace SolarSystem.Views
             quad ??= MeshFactory.Quad();
             if (glowMaterial == null)
             {
-                glowMaterial = Materials.Create(Materials.Glow, "FighterGlow");
+                glowMaterial = Materials.MarkShared(Materials.Create(Materials.Glow, "FighterGlow"));
                 glowMaterial.SetColor("_Color", new Color(0.55f, 0.8f, 1f));
                 glowMaterial.SetFloat("_Intensity", 1.6f);
                 glowMaterial.SetFloat("_Falloff", 2f);

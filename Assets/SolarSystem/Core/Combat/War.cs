@@ -391,7 +391,8 @@ namespace SolarSystem.Core
         /// <summary>A ship has arrived at a body: fight if anyone there is hostile, or join a fight already on.</summary>
         public void OnArrived(Ship ship, double jd)
         {
-            if (ship.Destroyed || ship.Battle != null) return;
+            // On the ground (or on the way down or up) a ship is out of the fight.
+            if (ship.Destroyed || ship.Battle != null || ship.Planetside) return;
             int body = ship.Orbit.Body;
             var existing = BattleAt(body);
             if (existing != null)

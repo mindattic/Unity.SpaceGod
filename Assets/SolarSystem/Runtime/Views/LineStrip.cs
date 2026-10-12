@@ -29,7 +29,7 @@ namespace SolarSystem.Views
             mesh.MarkDynamic();
             Root.AddComponent<MeshFilter>().sharedMesh = mesh;
             renderer = Root.AddComponent<MeshRenderer>();
-            if (sharedMaterial == null) sharedMaterial = Materials.Create(Materials.Line, "Line");
+            if (sharedMaterial == null) sharedMaterial = Materials.MarkShared(Materials.Create(Materials.Line, "Line"));
             renderer.sharedMaterial = sharedMaterial;
             renderer.shadowCastingMode = ShadowCastingMode.Off;
             renderer.receiveShadows = false;

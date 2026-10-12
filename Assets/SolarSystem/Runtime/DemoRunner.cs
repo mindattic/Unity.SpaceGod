@@ -31,7 +31,8 @@ namespace SolarSystem
         {
             if (TookOver())
             {
-                app.Clock.Paused = false;
+                // A pause pressed to take over is kept (the clock is easing to a stop); otherwise run on.
+                if (!app.Input.TogglePause) app.Clock.Paused = false;
                 StopAllCoroutines();
                 Destroy(this);
             }
@@ -41,7 +42,8 @@ namespace SolarSystem
         {
             var i = app.Input;
             return i.Move.sqrMagnitude > 0.0001f || i.LookHeld || i.Scroll != 0 || i.SelectClicked
-                || i.Focus || i.Escape || i.Home || i.CycleShips || i.NumberKey >= 0;
+                || i.Focus || i.Escape || i.Home || i.CycleShips || i.NumberKey >= 0
+                || i.TogglePause || i.LevelView || i.ToggleScale || i.WatchBattle;
         }
 
         static IEnumerator NoShot(string name)

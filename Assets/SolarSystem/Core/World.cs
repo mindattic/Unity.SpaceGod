@@ -134,7 +134,7 @@ namespace SolarSystem.Core
             economy.Initialise();
             War = new War(this, startJd, seed + 2);
             var war = War;
-            Infrastructure = new Infrastructure(Catalog);
+            Infrastructure = new Infrastructure(Catalog, Ephemeris);
             Infrastructure.AddSettlementStructures(economy, seed + 3);
             // Merchants and couriers go down to the surface through the rings; warships and pirates hold orbit.
             fleet.Lands = IsTrader;
@@ -153,6 +153,7 @@ namespace SolarSystem.Core
                 if (IsTrader(ship)) economy.OnArrive(ship, ship.Orbit.Body, when);
                 war.OnArrived(ship, when);
             };
+            fleet.ReachedRing = war.OnArrived;
             fleet.ChooseNext = (ship, here, when) =>
             {
                 if (!IsTrader(ship)) return war.ChooseNext(ship, here, when);

@@ -49,6 +49,9 @@ namespace SolarSystem.Core
         /// <summary>Called when a ship reaches its destination's parking orbit, before it picks the next one.</summary>
         public Action<Ship, double> Arrived;
 
+        /// <summary>Called when a lander reaches a ring's queue: it is now in orbit there and can be fought (it trades on landing).</summary>
+        public Action<Ship, double> ReachedRing;
+
         /// <summary>Picks a ship's next destination body (never the one it is at), or returns -1 for the built-in choice.</summary>
         public Func<Ship, int, double, int> ChooseNext;
 
@@ -325,6 +328,7 @@ namespace SolarSystem.Core
             ship.Path = null;
             ship.PhaseStartJd = jd;
             ship.PhaseEndJd = entry;
+            ReachedRing?.Invoke(ship, jd);
         }
 
         void BeginDescent(Ship ship)
@@ -639,8 +643,13 @@ namespace SolarSystem.Core
             {
                 ship.HoldPoint = FixedHold(ship, nowJd);
                 ship.Orbit = ship.HoldPoint;
-                double entry = Math.Max(nowJd + MinQueueDays, ship.Ring.NextEntryJd);
-                ship.Ring.NextEntryJd = entry + ship.Ring.EntryIntervalDays;
+                double entry = ship.PhaseEndJd;
+                if (entry < nowJd + MinQueueDays)
+                {
+                    // Its turn went by while it was fighting: take the next free one.
+                    entry = Math.Max(nowJd + MinQueueDays, ship.Ring.NextEntryJd);
+                    ship.Ring.NextEntryJd = entry + ship.Ring.EntryIntervalDays;
+                }
                 ship.PhaseStartJd = nowJd;
                 ship.PhaseEndJd = entry;
                 return;

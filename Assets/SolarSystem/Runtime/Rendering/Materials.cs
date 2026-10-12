@@ -32,5 +32,27 @@ namespace SolarSystem.Rendering
         {
             return new Material(shader) { name = name, hideFlags = HideFlags.DontSave };
         }
+
+        static readonly System.Collections.Generic.HashSet<Material> Shared = new System.Collections.Generic.HashSet<Material>();
+
+        /// <summary>A material cached for every view to share (it outlives any one star system's views).</summary>
+        public static Material MarkShared(Material m)
+        {
+            if (m != null) Shared.Add(m);
+            return m;
+        }
+
+        /// <summary>
+        /// Destroys the materials used under <paramref name="root"/> that belong only to those views
+        /// (DontSave materials outlive their GameObjects otherwise), leaving the shared caches alone.
+        /// </summary>
+        public static void DestroyOwned(Transform root)
+        {
+            var owned = new System.Collections.Generic.HashSet<Material>();
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                foreach (var mat in r.sharedMaterials)
+                    if (mat != null && !Shared.Contains(mat)) owned.Add(mat);
+            foreach (var mat in owned) Object.Destroy(mat);
+        }
     }
 }

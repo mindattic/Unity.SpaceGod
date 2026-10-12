@@ -25,7 +25,7 @@ namespace SolarSystem.Rendering
             {
                 if (proceduralMaterial == null)
                 {
-                    proceduralMaterial = Materials.Create(Materials.Ship, "ShipProcedural");
+                    proceduralMaterial = Materials.MarkShared(Materials.Create(Materials.Ship, "ShipProcedural"));
                     proceduralMaterial.SetFloat("_UseVertexColor", 1);
                     Plate(proceduralMaterial, 10f);
                 }
@@ -203,7 +203,7 @@ namespace SolarSystem.Rendering
             {
                 foreach (var source in r.sharedMaterials)
                 {
-                    var m = Materials.Create(Materials.Ship, "Ship_" + modelName);
+                    var m = Materials.MarkShared(Materials.Create(Materials.Ship, "Ship_" + modelName));
                     m.SetFloat("_UseVertexColor", 0);
                     var color = Color.gray;
                     if (source != null)
@@ -219,7 +219,7 @@ namespace SolarSystem.Rendering
                     list.Add(m);
                 }
             }
-            cached = list.Count > 0 ? list.ToArray() : new[] { Materials.Create(Materials.Ship, "Ship_" + modelName) };
+            cached = list.Count > 0 ? list.ToArray() : new[] { Materials.MarkShared(Materials.Create(Materials.Ship, "Ship_" + modelName)) };
             MaterialCache[(modelName, faction)] = cached;
             return cached;
         }

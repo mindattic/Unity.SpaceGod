@@ -109,7 +109,7 @@ namespace SolarSystem.Views
 
         static Material GlowMaterial(string name, Color c, float intensity, float falloff)
         {
-            var m = Materials.Create(Materials.Glow, name);
+            var m = Materials.MarkShared(Materials.Create(Materials.Glow, name));
             m.SetColor("_Color", c);
             m.SetFloat("_Intensity", intensity);
             m.SetFloat("_Falloff", falloff);

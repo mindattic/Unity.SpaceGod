@@ -180,6 +180,11 @@ namespace SolarSystem.Core
 
         readonly BodyDefinition body;
 
+        /// <summary>For a world that keeps one face to its parent: the ephemeris, to find that face.</summary>
+        public Ephemeris Ephemeris;
+
+        double lockedEpoch = double.NaN, lockedW0, lockedRate;
+
         public DockingRing(BodyDefinition body)
         {
             this.body = body;
@@ -199,6 +204,27 @@ namespace SolarSystem.Core
             var east = DVec3.Cross(north, node);
             double lat = LatDeg * Astro.Deg2Rad;
             double w0 = double.IsNaN(body.PrimeMeridianDeg) ? 0 : body.PrimeMeridianDeg;
+            double epoch = Astro.J2000;
+            double rate = BodyOrientation.RateDegPerDay(body) * Astro.Deg2Rad;
+            if (body.FacesParent && Ephemeris != null && body.ParentIndex >= 0)
+            {
+                // Longitude 0 faces the parent (as the surface is drawn). Its direction is taken once
+                // and carried on at the mean orbital rate, so the point is the same whenever it is asked
+                // for (a ship planned days ahead meets it exactly); the orbit's slight eccentricity swings
+                // the true sub-parent point a degree or two either side.
+                if (double.IsNaN(lockedEpoch))
+                {
+                    lockedEpoch = Ephemeris.Jd;
+                    var toParent = -Ephemeris.Relative(body.Index);
+                    var p = toParent - north * DVec3.Dot(toParent, north);
+                    lockedW0 = Math.Atan2(DVec3.Dot(p, east), DVec3.Dot(p, node)) * Astro.Rad2Deg;
+                    double sense = DVec3.Dot(DVec3.Cross(Ephemeris.Relative(body.Index), Ephemeris.RelativeVelocityKmS(body.Index)), north) >= 0 ? 1 : -1;
+                    lockedRate = sense * Math.Abs(body.Elements.At(lockedEpoch).MeanMotion);
+                }
+                epoch = lockedEpoch;
+                w0 = lockedW0;
+                rate = lockedRate;
+            }
             return new ParkingOrbit
             {
                 Body = Body,
@@ -206,9 +232,9 @@ namespace SolarSystem.Core
                 RadiusKm = radiusKm * Math.Cos(lat),
                 U = node,
                 V = east,
-                EpochJd = Astro.J2000,
+                EpochJd = epoch,
                 PhaseAtEpoch = (w0 + LonDeg + lonOffsetDeg) * Astro.Deg2Rad,
-                RateRadPerDay = BodyOrientation.RateDegPerDay(body) * Astro.Deg2Rad,
+                RateRadPerDay = rate,
                 Fixed = true,
             };
         }
@@ -233,8 +259,13 @@ namespace SolarSystem.Core
         public readonly List<DockingRing> Rings = new List<DockingRing>();
 
         readonly BodyCatalog catalog;
+        readonly Ephemeris ephemeris;
 
-        public Infrastructure(BodyCatalog catalog) => this.catalog = catalog;
+        public Infrastructure(BodyCatalog catalog, Ephemeris ephemeris = null)
+        {
+            this.catalog = catalog;
+            this.ephemeris = ephemeris;
+        }
 
         public OrbitalStructure YardOf(Settlement s)
         {
@@ -409,6 +440,7 @@ namespace SolarSystem.Core
                 if (owner == null || s.Population > owner.Population) owner = s;
             var ring = new DockingRing(b)
             {
+                Ephemeris = ephemeris,
                 Id = Rings.Count, Name = name, City = city, LatDeg = latDeg, LonDeg = lonDeg,
                 RadiusKm = RingRadiusKm(b), EntryInterfaceKm = EntryInterface(body), Settlement = owner, Owner = owner?.Owner,
             };
