@@ -6,14 +6,13 @@ namespace SolarSystem.Rendering
 {
     /// <summary>
     /// Builds the model under a ship's root: a Kenney Space Kit craft (CC0) for small civilian
-    /// classes, or a procedural hull for warships (and as a fallback). Models are normalised to one
-    /// unit long, centred, nose on +Z, and re-materialed with the Sun-lit ship shader.
+    /// classes, or a procedural hull for warships (and as a fallback), re-materialed with the Sun-lit
+    /// ship shader. The Kenney craft themselves are pre-normalised offline (one unit long on Z, centred,
+    /// nose on +Z, yaw already baked into the mesh data) by MindAttic.AssetForge's mesh pipeline, not at
+    /// runtime here — see github.com/mindattic/AssetForge and Resources/Ships/*.glb.
     /// </summary>
     public static class ShipModels
     {
-        // Kenney's craft face -Z; yaw 180 puts the nose on +Z.
-        const float KenneyYaw = 180f;
-
         static readonly Dictionary<string, GameObject> Prototypes = new Dictionary<string, GameObject>();
         static readonly Dictionary<(string, Faction), Material[]> MaterialCache = new Dictionary<(string, Faction), Material[]>();
         static Material proceduralMaterial;
@@ -124,7 +123,9 @@ namespace SolarSystem.Rendering
             return instance;
         }
 
-        /// <summary>Wraps the imported model so it is one unit long, centred, nose +Z. Kept inactive as a template.</summary>
+        /// <summary>Wraps the imported model, kept inactive as a template. The model's own geometry is
+        /// already one unit long on Z, centred, and nose +Z — baked in offline by AssetForge, not fixed
+        /// up here (the pack's own GLTF root transform comes in as identity for the same reason).</summary>
         static GameObject Normalise(GameObject source, string modelName)
         {
             if (prototypeRoot == null)
@@ -137,37 +138,9 @@ namespace SolarSystem.Rendering
             var wrapper = new GameObject(modelName);
             wrapper.transform.SetParent(prototypeRoot, false);
             var model = Object.Instantiate(source, wrapper.transform, false);
-            // Kenney roots carry a layout offset from the kit's sample scene; drop it before centring.
-            model.transform.localPosition = Vector3.zero;
-            model.transform.localRotation = Quaternion.Euler(0, KenneyYaw, 0);
 
             var renderers = model.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0) return null;
-            var bounds = new Bounds();
-            bool first = true;
-            foreach (var r in renderers)
-            {
-                var mf = r.GetComponent<MeshFilter>();
-                if (mf == null || mf.sharedMesh == null) continue;
-                var mb = mf.sharedMesh.bounds;
-                var m = wrapper.transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
-                for (int c = 0; c < 8; c++)
-                {
-                    var corner = mb.center + Vector3.Scale(mb.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1));
-                    var p = m.MultiplyPoint3x4(corner);
-                    if (first)
-                    {
-                        bounds = new Bounds(p, Vector3.zero);
-                        first = false;
-                    }
-                    else bounds.Encapsulate(p);
-                }
-            }
-
-            float length = Mathf.Max(bounds.size.z, 1e-4f);
-            float s = 1f / length;
-            model.transform.localScale *= s;
-            model.transform.localPosition = -bounds.center * s;
             return wrapper;
         }
 
