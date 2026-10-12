@@ -161,18 +161,6 @@ namespace SolarSystem.Rendering
             if (MaterialCache.TryGetValue((modelName, faction), out var cached)) return cached;
             var list = new List<Material>();
             var accent = new Color(faction.Color.R, faction.Color.G, faction.Color.B);
-            // Plate the model about seven panels along its length, whatever units it was built in.
-            var bounds = new Bounds();
-            bool any = false;
-            foreach (var mf in prototype.GetComponentsInChildren<MeshFilter>(true))
-            {
-                if (mf.sharedMesh == null) continue;
-                var b = mf.sharedMesh.bounds;
-                if (!any) bounds = b;
-                else bounds.Encapsulate(b);
-                any = true;
-            }
-            float length = any ? Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)) : 1f;
             foreach (var r in prototype.GetComponentsInChildren<Renderer>(true))
             {
                 foreach (var source in r.sharedMaterials)
@@ -189,7 +177,16 @@ namespace SolarSystem.Rendering
                         else color = Color.Lerp(color, color * accent * 1.6f, 0.35f);
                     }
                     m.SetColor("_Color", color);
-                    Plate(m, 10f / Mathf.Max(length, 1e-3f));
+                    // Ship.shader's plating is triplanar-projected in OBJECT SPACE specifically because
+                    // procedural hulls have no UVs (see its own header comment) -- it was never meant for
+                    // these Kenney craft, which do have real UVs and their own baked-in surface detail.
+                    // Confirmed by isolating it: with _PlatingStrength at its 0.6 default, these low-poly,
+                    // many-small-flat-faces hulls render as a checkerboard-like mess, because triplanar
+                    // blending snaps between the three axis projections face-to-face on boxy, multi-angled
+                    // low-poly geometry (each facet picking a different slice of the repeating plating
+                    // texture) -- a procedural hull's simpler, more uniformly-oriented panels don't expose
+                    // this. Leaving plating off entirely for Kenney models renders them correctly.
+                    m.SetFloat("_PlatingStrength", 0f);
                     list.Add(m);
                 }
             }
