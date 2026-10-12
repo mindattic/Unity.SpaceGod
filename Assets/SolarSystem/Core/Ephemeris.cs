@@ -74,9 +74,20 @@ namespace SolarSystem.Core
                 velocity[i] = frames[i].ToEcliptic(Kepler.Velocity(k)) * b.OrbitScale;
             }
 
+            // The Moon follows a lunar theory, not an ellipse (see LunarTheory).
+            if (moonIndex >= 0)
+            {
+                relative[moonIndex] = LunarTheory.Position(jd);
+                const double h = 1e-3;
+                velocity[moonIndex] = (LunarTheory.Position(jd + h) - LunarTheory.Position(jd - h)) / (2 * h);
+            }
+
             // JPL's "Earth" elements are the Earth-Moon barycentre; Earth sits 4,670 km from it.
             if (earthIndex >= 0)
+            {
                 relative[earthIndex] -= relative[moonIndex] * moonMassFraction;
+                velocity[earthIndex] -= velocity[moonIndex] * moonMassFraction;
+            }
 
             for (int i = 0; i < Catalog.Count; i++)
             {
@@ -90,14 +101,14 @@ namespace SolarSystem.Core
         {
             var b = Catalog[body];
             if (b.Elements == null) return DVec3.Zero;
-            var rel = frames[body].ToEcliptic(Kepler.Position(b.Elements.At(jd))) * b.OrbitScale;
+            var rel = body == moonIndex ? LunarTheory.Position(jd) : frames[body].ToEcliptic(Kepler.Position(b.Elements.At(jd))) * b.OrbitScale;
             if (body == earthIndex)
                 rel -= RelativeAt(moonIndex, jd) * moonMassFraction;
             return HelioAt(b.ParentIndex, jd) + rel;
         }
 
         DVec3 RelativeAt(int body, double jd) =>
-            frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd))) * Catalog[body].OrbitScale;
+            body == moonIndex ? LunarTheory.Position(jd) : frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd))) * Catalog[body].OrbitScale;
 
         /// <summary>Samples one full orbit (relative to the parent) with the elements at <paramref name="jd"/>.</summary>
         public void SampleOrbit(int body, double jd, DVec3[] output)

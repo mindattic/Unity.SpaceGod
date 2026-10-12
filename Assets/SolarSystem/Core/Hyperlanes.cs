@@ -54,6 +54,13 @@ namespace SolarSystem.Core
         /// route, so traffic shifts to safer lanes until it fades.
         /// </summary>
         public readonly Dictionary<Lane, double> Danger = new Dictionary<Lane, double>();
+
+        /// <summary>Sets a lane's danger; planners see the change at once (cached routes are dropped).</summary>
+        public void SetDanger(Lane lane, double value)
+        {
+            Danger[lane] = value;
+            routeCache.Clear();
+        }
         readonly BodyCatalog catalog;
         readonly Ephemeris ephemeris;
 
@@ -163,17 +170,34 @@ namespace SolarSystem.Core
             return best;
         }
 
-        /// <summary>A point on a lane in true km, between ramp points <paramref name="a"/> and <paramref name="b"/> (heliocentric).</summary>
-        public DVec3 CurveKm(Lane lane, DVec3 a, DVec3 b, double s, double jd)
+        /// <summary>
+        /// A point on a lane in true km, between ramp points <paramref name="a"/> and <paramref name="b"/>
+        /// (heliocentric). A ship riding it passes the star and shape fixed when it joined
+        /// (<paramref name="star"/>, <paramref name="shape"/>), so its curve cannot flip mid-ride
+        /// as the ramps move; -1 decides them now.
+        /// </summary>
+        public DVec3 CurveKm(Lane lane, DVec3 a, DVec3 b, double s, double jd, int star = -1, int shape = -1)
         {
-            int star = KeepOutStar(a, b, jd);
-            return Curve(a, b, lane.Bend, ephemeris.HelioAt(lane.Hub, jd), ephemeris.HelioAt(star, jd), KeepOutKm(star), s, DVec3.UnitZ);
+            if (star < 0) star = KeepOutStar(a, b, jd);
+            return Curve(a, b, lane.Bend, ephemeris.HelioAt(lane.Hub, jd), ephemeris.HelioAt(star, jd), KeepOutKm(star), s, DVec3.UnitZ, shape);
         }
 
-        public double CurveLengthKm(Lane lane, DVec3 a, DVec3 b, double jd)
+        public double CurveLengthKm(Lane lane, DVec3 a, DVec3 b, double jd, int star = -1, int shape = -1)
         {
-            int star = KeepOutStar(a, b, jd);
-            return CurveLength(a, b, lane.Bend, ephemeris.HelioAt(lane.Hub, jd), ephemeris.HelioAt(star, jd), KeepOutKm(star), DVec3.UnitZ);
+            if (star < 0) star = KeepOutStar(a, b, jd);
+            return CurveLength(a, b, lane.Bend, ephemeris.HelioAt(lane.Hub, jd), ephemeris.HelioAt(star, jd), KeepOutKm(star), DVec3.UnitZ, shape);
+        }
+
+        /// <summary>Which shape the curve takes between these points now: 0 bowed, 1 swung round the star.</summary>
+        public int ShapeOf(Lane lane, DVec3 a, DVec3 b, int star, double jd) =>
+            Detours(a, b, ephemeris.HelioAt(star, jd), KeepOutKm(star)) ? 1 : 0;
+
+        static bool Detours(DVec3 a, DVec3 b, DVec3 keepOutCentre, double keepOut)
+        {
+            var chord = b - a;
+            var ac = a - keepOutCentre;
+            double t0 = Math.Max(0, Math.Min(1, -DVec3.Dot(ac, chord) / Math.Max(chord.LengthSquared, 1e-12)));
+            return !((ac + chord * t0).Length > keepOut * 1.5 || t0 <= 0 || t0 >= 1);
         }
 
         public bool HasLanes(int system)
@@ -212,7 +236,7 @@ namespace SolarSystem.Core
         /// lane belongs to), and swung round <paramref name="keepOutCentre"/> (the star the line passes
         /// nearest) at <paramref name="keepOut"/>. In Sol both are the Sun at the origin.
         /// </summary>
-        public static DVec3 Curve(DVec3 a, DVec3 b, double bend, DVec3 hub, DVec3 keepOutCentre, double keepOut, double s, DVec3 up)
+        public static DVec3 Curve(DVec3 a, DVec3 b, double bend, DVec3 hub, DVec3 keepOutCentre, double keepOut, double s, DVec3 up, int shape = -1)
         {
             var chord = b - a;
             double length = chord.Length;
@@ -227,7 +251,8 @@ namespace SolarSystem.Core
             var ac = a - keepOutCentre;
             double t0 = Math.Max(0, Math.Min(1, -DVec3.Dot(ac, chord) / Math.Max(length * length, 1e-12)));
             var nearest = ac + chord * t0;
-            if (nearest.Length > keepOut * 1.5 || t0 <= 0 || t0 >= 1)
+            bool detour = shape >= 0 ? shape == 1 : !(nearest.Length > keepOut * 1.5 || t0 <= 0 || t0 >= 1);
+            if (!detour)
             {
                 var apex = mid + side * (Math.Abs(bend) * length);
                 // The control point that puts the curve's middle at the apex.
@@ -258,24 +283,24 @@ namespace SolarSystem.Core
         public static DVec3 CurveTangent(DVec3 a, DVec3 b, double bend, double keepOut, double s, DVec3 up) =>
             CurveTangent(a, b, bend, DVec3.Zero, DVec3.Zero, keepOut, s, up);
 
-        public static DVec3 CurveTangent(DVec3 a, DVec3 b, double bend, DVec3 hub, DVec3 keepOutCentre, double keepOut, double s, DVec3 up)
+        public static DVec3 CurveTangent(DVec3 a, DVec3 b, double bend, DVec3 hub, DVec3 keepOutCentre, double keepOut, double s, DVec3 up, int shape = -1)
         {
             const double h = 1e-4;
             double s0 = Math.Max(0, s - h), s1 = Math.Min(1, s + h);
-            var d = Curve(a, b, bend, hub, keepOutCentre, keepOut, s1, up) - Curve(a, b, bend, hub, keepOutCentre, keepOut, s0, up);
+            var d = Curve(a, b, bend, hub, keepOutCentre, keepOut, s1, up, shape) - Curve(a, b, bend, hub, keepOutCentre, keepOut, s0, up, shape);
             return d.LengthSquared > 0 ? d.Normalized : (b - a).Normalized;
         }
 
         public static double CurveLength(DVec3 a, DVec3 b, double bend, double keepOut, DVec3 up) =>
             CurveLength(a, b, bend, DVec3.Zero, DVec3.Zero, keepOut, up);
 
-        public static double CurveLength(DVec3 a, DVec3 b, double bend, DVec3 hub, DVec3 keepOutCentre, double keepOut, DVec3 up)
+        public static double CurveLength(DVec3 a, DVec3 b, double bend, DVec3 hub, DVec3 keepOutCentre, double keepOut, DVec3 up, int shape = -1)
         {
             double len = 0;
             var prev = a;
             for (int i = 1; i <= 32; i++)
             {
-                var p = Curve(a, b, bend, hub, keepOutCentre, keepOut, i / 32.0, up);
+                var p = Curve(a, b, bend, hub, keepOutCentre, keepOut, i / 32.0, up, shape);
                 len += (p - prev).Length;
                 prev = p;
             }

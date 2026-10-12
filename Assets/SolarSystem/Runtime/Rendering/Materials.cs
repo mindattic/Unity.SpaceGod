@@ -34,6 +34,22 @@ namespace SolarSystem.Rendering
         }
 
         static readonly System.Collections.Generic.HashSet<Material> Shared = new System.Collections.Generic.HashSet<Material>();
+        static readonly System.Collections.Generic.HashSet<Mesh> OwnedMeshes = new System.Collections.Generic.HashSet<Mesh>();
+
+        /// <summary>A mesh built for one view alone (a line, an effects mesh): destroyed with that view's system.</summary>
+        public static Mesh Own(Mesh mesh)
+        {
+            if (mesh != null) OwnedMeshes.Add(mesh);
+            return mesh;
+        }
+
+        /// <summary>Destroys one view-owned mesh now (a fighter's trail when it dies).</summary>
+        public static void DestroyMesh(Mesh mesh)
+        {
+            if (mesh == null) return;
+            OwnedMeshes.Remove(mesh);
+            Object.Destroy(mesh);
+        }
 
         /// <summary>A material cached for every view to share (it outlives any one star system's views).</summary>
         public static Material MarkShared(Material m)
@@ -53,6 +69,11 @@ namespace SolarSystem.Rendering
                 foreach (var mat in r.sharedMaterials)
                     if (mat != null && !Shared.Contains(mat)) owned.Add(mat);
             foreach (var mat in owned) Object.Destroy(mat);
+            // Meshes too, but only those built for these views (cached hull meshes and imported models stay).
+            var meshes = new System.Collections.Generic.HashSet<Mesh>();
+            foreach (var mf in root.GetComponentsInChildren<MeshFilter>(true))
+                if (mf.sharedMesh != null && OwnedMeshes.Contains(mf.sharedMesh)) meshes.Add(mf.sharedMesh);
+            foreach (var mesh in meshes) DestroyMesh(mesh);
         }
     }
 }

@@ -184,6 +184,7 @@ namespace SolarSystem.Rendering
 
         static Material[] MaterialsFor(string modelName, Faction faction, GameObject prototype)
         {
+            faction = ShipMeshFactory.Canon(faction);
             if (MaterialCache.TryGetValue((modelName, faction), out var cached)) return cached;
             var list = new List<Material>();
             var accent = new Color(faction.Color.R, faction.Color.G, faction.Color.B);

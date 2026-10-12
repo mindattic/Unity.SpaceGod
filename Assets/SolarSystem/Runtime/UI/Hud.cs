@@ -503,7 +503,8 @@ namespace SolarSystem.UI
             if (ship.Derelict) return "DERELICT";
             if (c.Phase == ShipPhase.Lurk) return "lurking on " + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Adrift) return "adrift by " + c.LaneLeg.Lane.Name;
-            if (c.Phase == ShipPhase.Parked) return "@ " + app.Catalog[c.Orbit.Body].Name;
+            if (c.Phase == ShipPhase.Parked) return (c.Role == ShipRole.Free ? "drifting @ " : "@ ") + app.Catalog[c.Orbit.Body].Name;
+            if (c.Phase == ShipPhase.Transit && c.Wander) return "free flight near " + app.Catalog[c.Orbit.Body].Name;
             if (c.Phase == ShipPhase.Queued) return "queued @ " + c.Ring.Name;
             if (c.Phase == ShipPhase.Descent) return "descending to " + c.Ring.City;
             if (c.Phase == ShipPhase.Landed) return "landed @ " + c.Ring.City;
@@ -616,6 +617,11 @@ namespace SolarSystem.UI
                     lines.Add(("Orbital speed", c.Orbit.SpeedKmS.ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
                     lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
                 }
+                var giving = app.Fleet.EvadingFrom(ship);
+                var off = app.Fleet.EvasionOf(ship);
+                if (giving != null || off.Length > 0.5)
+                    lines.Add(("Manoeuvring", (giving != null ? "giving way to " + giving.Name + ", " : "easing back onto course, ") + Km(off.Length) + " off its path"));
+                if (c.Role == ShipRole.Free) lines.Add(("Pilot", "Independent: goes where it pleases" + (c.Wander ? " (a hop out to open space)" : "")));
                 var combat = ship.Combat;
                 lines.Add(("Hull", Percent(combat.HullFraction) + "   Shields " + Percent(combat.Spec.Shield > 0 ? combat.Shield / combat.Spec.Shield : 0)));
                 int lost = 0;

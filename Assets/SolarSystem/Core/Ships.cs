@@ -24,6 +24,12 @@ namespace SolarSystem.Core
         Courier,
         Patrol,
         Escort,
+
+        /// <summary>
+        /// An independent pilot (a yacht, a survey ship, a prospector) going where it pleases: out to
+        /// open space near a world to drift a while, over to a neighbouring world, now and then further.
+        /// </summary>
+        Free,
     }
 
     public enum ShipPhase
@@ -227,6 +233,9 @@ namespace SolarSystem.Core
         public DVec3 LaneFromOffset, LaneToOffset;
         public double LaneLengthKm;
 
+        /// <summary>The star this ride swings clear of and its curve's shape, fixed when it joined the lane.</summary>
+        public int LaneStar = -1, LaneShape = -1;
+
         /// <summary>Where along the lane this leg starts and stops (part-way, for a lurk or a resumed ride).</summary>
         public double LaneStartProgress, LaneEndProgress = 1;
 
@@ -266,6 +275,9 @@ namespace SolarSystem.Core
 
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;
+
+        /// <summary>A free ship's next trip is a hop out to open space near the world it is at, not to another world.</summary>
+        public bool Wander;
 
         /// <summary>The docking ring a merchant is landing through (or has landed through), and where it waits to be cleared.</summary>
         public DockingRing Ring;

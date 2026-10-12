@@ -67,6 +67,25 @@ namespace SolarSystem.Core
         /// <summary>Which ships go down to the surface at ringed worlds (merchants); null for none.</summary>
         public Func<Ship, bool> Lands;
 
+        /// <summary>Ships see each other coming and sidestep (see <see cref="StepAvoidance"/>).</summary>
+        public bool AvoidCollisions = true;
+
+        /// <summary>How far ahead (days) ships look for a close pass: about an hour and a quarter.</summary>
+        public const double AvoidanceHorizonDays = 0.05;
+
+        readonly Dictionary<Ship, (DVec3 offset, DVec3 velocity)> evasion = new Dictionary<Ship, (DVec3, DVec3)>();
+        readonly Dictionary<Ship, Ship> evadingFrom = new Dictionary<Ship, Ship>();
+        double lastAvoidanceJd = double.NaN;
+
+        /// <summary>How far (km) a ship has stepped aside from its planned path to keep clear of another.</summary>
+        public DVec3 EvasionOf(Ship ship) => evasion.TryGetValue(ship.Controller, out var e) ? e.offset : DVec3.Zero;
+
+        /// <summary>The ship it is giving way to right now, or null.</summary>
+        public Ship EvadingFrom(Ship ship) => evadingFrom.TryGetValue(ship.Controller, out var s) ? s : null;
+
+        /// <summary>The closest two ships may pass (km): a margin plus a few hull lengths each.</summary>
+        public static double SafeDistanceKm(Ship a, Ship b) => 3 + 4 * (a.Spec.LengthKm + b.Spec.LengthKm);
+
         /// <summary>A ship at a body and able to fight there: holding orbit, or waiting at its ring.</summary>
         public static bool IsAt(Ship ship, int body) =>
             (ship.Phase == ShipPhase.Parked || ship.Phase == ShipPhase.Queued) && ship.Orbit != null && ship.Orbit.Body == body;
@@ -91,16 +110,142 @@ namespace SolarSystem.Core
                         next = ship;
                     }
                 }
-                if (next == null) return;
+                if (next == null) break;
                 BeforeEvent?.Invoke(when);
                 AdvancePhase(next);
             }
+            StepAvoidance(jd);
+        }
+
+        /// <summary>Flying under the ship's own drive (in orbit, burning between worlds, holding off a lane or a ring): it can sidestep.</summary>
+        static bool Manoeuvrable(Ship s) =>
+            !s.IsEscort && !s.Destroyed && !s.Derelict && s.Battle == null &&
+            (s.Phase == ShipPhase.Parked || s.Phase == ShipPhase.Transit || s.Phase == ShipPhase.Queued || s.Phase == ShipPhase.Lurk || s.Phase == ShipPhase.Adrift);
+
+        /// <summary>
+        /// Collision avoidance. Each ship projects every other one's course an hour or so ahead (from
+        /// where both are and how they are moving); if they would pass closer than
+        /// <see cref="SafeDistanceKm"/>, both turn aside, away from each other along the line of the
+        /// near miss, the smaller ship giving way more, and drift back onto their planned paths once
+        /// clear. The schedule is untouched: this is the pilots flying round each other.
+        /// </summary>
+        void StepAvoidance(double jd)
+        {
+            double dt = double.IsNaN(lastAvoidanceJd) ? 0 : jd - lastAvoidanceJd;
+            lastAvoidanceJd = jd;
+            if (!AvoidCollisions || dt <= 0) return;
+            var list = new List<Ship>();
+            foreach (var s in ships) if (Manoeuvrable(s)) list.Add(s);
+            int n = list.Count;
+            var pos = new DVec3[n];
+            var vel = new DVec3[n];
+            var target = new DVec3[n];
+            var threatened = new bool[n];
+            var near = new bool[n];
+            const double h = 1e-4;
+            for (int i = 0; i < n; i++)
+            {
+                var s = list[i];
+                evasion.TryGetValue(s, out var e);
+                pos[i] = BaseStateOf(s, jd).HelioKm + e.offset;
+                vel[i] = (BaseStateOf(s, jd + h).HelioKm - BaseStateOf(s, jd - h).HelioKm) / (2 * h) + e.velocity;
+            }
+            evadingFrom.Clear();
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = i + 1; j < n; j++)
+                {
+                    var a = list[i];
+                    var b = list[j];
+                    // Aim for a little more than the minimum, so they hold clear rather than see-saw at the edge.
+                    double safe = SafeDistanceKm(a, b) * 1.25;
+                    var r = pos[j] - pos[i];
+                    // Far apart and not closing fast enough to meet within the horizon: skip.
+                    var dv = vel[j] - vel[i];
+                    double reach = safe + dv.Length * AvoidanceHorizonDays;
+                    if (r.LengthSquared > reach * reach) continue;
+                    double v2 = dv.LengthSquared;
+                    double tca = v2 > 1e-12 ? Math.Max(0, Math.Min(AvoidanceHorizonDays, -DVec3.Dot(r, dv) / v2)) : 0;
+                    var miss = r + dv * tca;
+                    double dmin = miss.Length;
+                    if (dmin >= safe)
+                    {
+                        // Clear, but only just: hold the sidestep rather than drift straight back into it.
+                        if (dmin < safe * 1.6) near[i] = near[j] = true;
+                        continue;
+                    }
+                    DVec3 away;
+                    if (dmin > 1e-6) away = miss / dmin;
+                    else
+                    {
+                        // Dead on: break to one side, the same way for the same pair.
+                        var side = DVec3.Cross(dv.LengthSquared > 0 ? dv : DVec3.UnitX, DVec3.UnitZ);
+                        away = side.LengthSquared > 1e-12 ? side.Normalized : DVec3.UnitY;
+                    }
+                    // The nearer the pass in time, the harder they turn.
+                    double push = (safe - dmin) * (1 - 0.5 * tca / AvoidanceHorizonDays);
+                    double la = a.Spec.LengthKm, lb = b.Spec.LengthKm;
+                    target[i] -= away * (push * lb / (la + lb));
+                    target[j] += away * (push * la / (la + lb));
+                    threatened[i] = threatened[j] = true;
+                    evadingFrom[a] = b;
+                    evadingFrom[b] = a;
+                }
+            }
+            // Ease each ship toward its sidestep (or back to its path): a critically damped turn that
+            // settles in about a quarter of an hour, never harder than its drive can push.
+            const double omega = 4 / 0.0104;
+            for (int i = 0; i < n; i++)
+            {
+                var s = list[i];
+                evasion.TryGetValue(s, out var e);
+                // Threatened: step further aside from where it already is. Clear: drift back onto the path.
+                target[i] = threatened[i] ? e.offset + target[i] : near[i] ? e.offset : DVec3.Zero;
+                if (!threatened[i] && !near[i] && e.offset.LengthSquared < 1e-8 && e.velocity.LengthSquared < 1e-8)
+                {
+                    evasion.Remove(s);
+                    continue;
+                }
+                double step = Math.Min(dt, 0.002);
+                var off = e.offset;
+                var v = e.velocity;
+                for (double done = 0; done < dt - 1e-12; done += step)
+                {
+                    double d = Math.Min(step, dt - done);
+                    if (omega * d > 1)
+                    {
+                        // A long frame (high time warp): just settle part way, without overshoot.
+                        off = DVec3.Lerp(off, target[i], Math.Min(1, omega * d * 0.5));
+                        v = DVec3.Zero;
+                        continue;
+                    }
+                    var acc = (target[i] - off) * (omega * omega) - v * (2 * omega);
+                    double maxAcc = s.Spec.AccelG * Astro.GravityKmPerDay2;
+                    if (acc.Length > maxAcc) acc = acc.Normalized * maxAcc;
+                    v += acc * d;
+                    off += v * d;
+                }
+                evasion[s] = (off, v);
+            }
+            // Ships no longer flying free (landed, fighting, lost) let go of their sidestep.
+            var stale = new List<Ship>();
+            foreach (var kv in evasion) if (!Manoeuvrable(kv.Key)) stale.Add(kv.Key);
+            foreach (var s in stale) evasion.Remove(s);
         }
 
         bool RunsSchedule(Ship ship) => !ship.IsEscort && !ship.Destroyed && (IsHeld == null || !IsHeld(ship));
 
-        /// <summary>State at <paramref name="jd"/>; parked ships use the ephemeris' current frame, which must be at the same date.</summary>
+        /// <summary>State at <paramref name="jd"/>, including any sidestep to keep clear of other ships; parked ships use the ephemeris' current frame, which must be at the same date.</summary>
         public ShipState StateOf(Ship ship, double jd)
+        {
+            var st = BaseStateOf(ship, jd);
+            var off = EvasionOf(ship);
+            if (off.LengthSquared <= 0) return st;
+            return new ShipState(st.HelioKm + off, st.Facing, st.SpeedKmS, st.Burning, st.Progress, st.Heat);
+        }
+
+        /// <summary>Where the ship's schedule puts it, before any sidestep.</summary>
+        ShipState BaseStateOf(Ship ship, double jd)
         {
             var s = ship.Controller;
             if (s.Phase == ShipPhase.Parked)
@@ -120,10 +265,10 @@ namespace SolarSystem.Core
             if (s.Phase == ShipPhase.Lane)
             {
                 double progress = LaneProgress(s, jd);
-                var here = LanePoint(s, jd, progress);
+                var here = RidePoint(s, jd, progress);
                 const double h = 1e-3;
-                var ahead = LanePoint(s, jd + h, LaneProgress(s, jd + h));
-                var behind = LanePoint(s, jd - h, LaneProgress(s, jd - h));
+                var ahead = RidePoint(s, jd + h, LaneProgress(s, jd + h));
+                var behind = RidePoint(s, jd - h, LaneProgress(s, jd - h));
                 var v = (ahead - behind) / (2 * h);
                 var facing = v.LengthSquared > 0 ? v.Normalized : (ahead - here).Normalized;
                 return new ShipState(here, facing, v.Length / Astro.SecondsPerDay, true, progress);
@@ -159,11 +304,9 @@ namespace SolarSystem.Core
             double u = Math.Max(0, Math.Min(1, (jd - s.PhaseStartJd) / total));
             if (s.Phase == ShipPhase.Queued)
             {
-                double e = Astro.SmoothStep(0, 1, u);
-                var from = s.HoldPoint.OffsetAt(jd);
-                var to = ring.RingPoint.OffsetAt(jd);
-                var p = DVec3.Lerp(from, to, e);
-                var drift = (to - from).Length * 6 * u * (1 - u) / (total * Astro.SecondsPerDay);
+                var p = QueuePosition(s, jd);
+                const double h = 1e-4;
+                var drift = (QueuePosition(s, jd + h) - QueuePosition(s, jd - h)).Length / (2 * h * Astro.SecondsPerDay);
                 return new ShipState(centre + p, (centre - (centre + p)).Normalized, drift, false, 0);
             }
             var up = ring.Up(jd);
@@ -183,6 +326,26 @@ namespace SolarSystem.Core
             return new ShipState(centre + up * r, facing, Math.Abs(rate), s.Phase != ShipPhase.Landed, u, heat);
         }
 
+        /// <summary>Spacing of the queue up a ring's approach line, km per ship (one per clearance interval).</summary>
+        public const double QueueSpacingKm = 25;
+
+        /// <summary>
+        /// Where a queued ship waits (relative to the ringed body): in line up the approach path above
+        /// the ring, one <see cref="QueueSpacingKm"/> per ship ahead of it, creeping down as each is
+        /// cleared and reaching the ring as its own turn comes. It joins the line from wherever it
+        /// arrived over the first quarter-hour.
+        /// </summary>
+        DVec3 QueuePosition(Ship s, double jd)
+        {
+            var ring = s.Ring;
+            double ahead = Math.Max(0, s.PhaseEndJd - jd) / Math.Max(ring.EntryIntervalDays, 1e-9);
+            double along = Math.Min(ring.HoldKm, QueueSpacingKm * ahead);
+            var slot = ring.Point(ring.RadiusKm + along).OffsetAt(jd);
+            double total = Math.Max(s.PhaseEndJd - s.PhaseStartJd, 1e-9);
+            double join = Astro.SmoothStep(0, Math.Min(total, 0.01), jd - s.PhaseStartJd);
+            return DVec3.Lerp(s.HoldPoint.OffsetAt(jd), slot, join);
+        }
+
         /// <summary>Distance from the ringed body's centre during a descent or climb at fraction u.</summary>
         static double RingRadiusAt(Ship s, double u)
         {
@@ -198,12 +361,23 @@ namespace SolarSystem.Core
         public static double LaneProgress(Ship s, double jd) =>
             s.LaneStartProgress + (s.LaneEndProgress - s.LaneStartProgress) * Hyperlanes.Progress((jd - s.PhaseStartJd) / Math.Max(s.PhaseEndJd - s.PhaseStartJd, 1e-9));
 
+        /// <summary>
+        /// Where a riding ship is: on its lane, plus whatever is left of a sideways offset it is easing
+        /// back in from (after a lurk or an interdiction).
+        /// </summary>
+        DVec3 RidePoint(Ship s, double jd, double progress) =>
+            LanePoint(s, jd, progress) + s.LaneHoldSide * LaneRejoin(s, jd);
+
+        /// <summary>How much of its sideways hold a ship rejoining a lane still has (1 → 0 over the first couple of hours).</summary>
+        public static double LaneRejoin(Ship s, double jd) =>
+            s.LaneHoldSide.LengthSquared > 0 ? 1 - Astro.SmoothStep(0, 0.08, jd - s.PhaseStartJd) : 0;
+
         /// <summary>Heliocentric position on the ship's lane at a date and distance fraction.</summary>
         public DVec3 LanePoint(Ship s, double jd, double progress)
         {
             var a = ephemeris.HelioAt(s.LaneLeg.From, jd) + s.LaneFromOffset;
             var b = ephemeris.HelioAt(s.LaneLeg.To, jd) + s.LaneToOffset;
-            return Lanes.CurveKm(s.LaneLeg.Lane, a, b, progress, jd);
+            return Lanes.CurveKm(s.LaneLeg.Lane, a, b, progress, jd, s.LaneStar, s.LaneShape);
         }
 
         /// <summary>
@@ -279,7 +453,8 @@ namespace SolarSystem.Core
             if (ship.Phase == ShipPhase.Parked)
             {
                 // Holding position (a siege, a refit, an ambush): decide again rather than fly to itself.
-                if (ship.DestinationBody == ship.Orbit.Body) ScheduleNext(ship, ship.PhaseEndJd);
+                // A free ship's hop out to open space near the same world is a real trip, though.
+                if (ship.DestinationBody == ship.Orbit.Body && !ship.Wander) ScheduleNext(ship, ship.PhaseEndJd);
                 else Depart(ship);
             }
             else if (ship.Phase == ShipPhase.Lane) EndLane(ship);
@@ -380,7 +555,30 @@ namespace SolarSystem.Core
                 var hop = ship.Journey[0];
                 Burn(ship, departJd, hop.From, () => RampOrbit(hop, hop.From, departJd));
             }
+            else if (ship.Wander) Burn(ship, departJd, to, () => WanderOrbit(to, ship));
             else Burn(ship, departJd, to, () => ArrivalFor(ship, to));
+        }
+
+        /// <summary>
+        /// A spot out in open space near a world for a free ship to drift in: a slow orbit at any tilt,
+        /// anywhere from three radii out to well past its moons (but inside the world's neighbourhood).
+        /// </summary>
+        ParkingOrbit WanderOrbit(int body, Ship ship)
+        {
+            var b = catalog[body];
+            double inner = b.RadiusKm * 3;
+            double outer = Math.Max(inner * 1.5, Math.Min(ScaleModel.NeighbourhoodKm(b) * 0.6, Math.Max(b.RadiusKm * 12, b.MoonReachKm * 0.9)));
+            double r = inner + (outer - inner) * rng.NextDouble();
+            var normal = new DVec3(Jitter(1), Jitter(1), Jitter(1));
+            if (normal.LengthSquared < 1e-6) normal = DVec3.UnitZ;
+            normal = normal.Normalized;
+            var reference = Math.Abs(normal.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX;
+            var u = DVec3.Cross(reference, normal).Normalized;
+            return new ParkingOrbit
+            {
+                Body = body, RadiusKm = r, U = u, V = DVec3.Cross(normal, u),
+                RateRadPerDay = Kepler.CircularRate(Math.Max(b.Gm, 1e-12), r),
+            };
         }
 
         /// <summary>A hyperlane ramp as a fixed point attached to its planet.</summary>
@@ -403,7 +601,10 @@ namespace SolarSystem.Core
             var estimate = Hyperlanes.RideDays(Lanes.LaneLengthKm(hop.Lane, jd));
             ship.LaneToOffset = Lanes.RampOffset(hop.Lane, hop.To, jd + estimate);
             var b = ephemeris.HelioAt(hop.To, jd) + ship.LaneToOffset;
-            ship.LaneLengthKm = Lanes.CurveLengthKm(hop.Lane, a, b, jd);
+            ship.LaneStar = Lanes.KeepOutStar(a, b, jd);
+            ship.LaneShape = Lanes.ShapeOf(hop.Lane, a, b, ship.LaneStar, jd);
+            ship.LaneHoldSide = DVec3.Zero;
+            ship.LaneLengthKm = Lanes.CurveLengthKm(hop.Lane, a, b, jd, ship.LaneStar, ship.LaneShape);
             ship.DepartureOrbit = ship.Orbit;
             ship.OriginBody = hop.From;
             ship.FrameBody = 0;
@@ -421,7 +622,7 @@ namespace SolarSystem.Core
             ship.Phase = ShipPhase.Lane;
             ship.LaneStartProgress = ship.LaneHold;
             ship.LaneEndProgress = 1;
-            ship.LaneHoldSide = DVec3.Zero;
+            // LaneHoldSide is kept: the ship eases back in from beside the lane over the first hours.
             ship.PhaseStartJd = jd;
             ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm) * Math.Max(1e-3, 1 - ship.LaneHold);
         }
@@ -474,25 +675,55 @@ namespace SolarSystem.Core
             }
         }
 
+        /// <summary>
+        /// Changes course mid-flight: from wherever the ship is now, still moving as it is, a new
+        /// flip-and-burn to <paramref name="to"/>. For a burn between worlds (not a hyperlane ride).
+        /// Returns false if the ship is not on such a burn.
+        /// </summary>
+        public bool Divert(Ship ship, int to, double jd)
+        {
+            if (ship.IsEscort || ship.Destroyed || ship.Battle != null || ship.Phase != ShipPhase.Transit || ship.Path == null) return false;
+            if (ship.Journey != null && ship.JourneyIndex < ship.Journey.Count) return false;
+            if (jd >= ship.PhaseEndJd - 1e-4) return false;
+            int frame = ship.FrameBody;
+            const double h = 1e-4;
+            var here = BaseStateOf(ship, jd).HelioKm;
+            var velocity = (BaseStateOf(ship, jd + h).HelioKm - BaseStateOf(ship, jd - h).HelioKm) / (2 * h)
+                           - (ephemeris.HelioAt(frame, jd + h) - ephemeris.HelioAt(frame, jd - h)) / (2 * h);
+            ship.Orbit = FixedPoint(frame, here - ephemeris.HelioAt(frame, jd));
+            ship.Journey = null;
+            ship.JourneyIndex = 0;
+            ship.FinalBody = to;
+            ship.DestinationBody = to;
+            ship.Wander = false;
+            Burn(ship, jd, to, () => ArrivalFor(ship, to), velocity);
+            return true;
+        }
+
         /// <summary>A flip-and-burn from the ship's current orbit (or ramp) to <paramref name="to"/>, arriving in the orbit the factory gives.</summary>
-        void Burn(Ship ship, double departJd, int to, Func<ParkingOrbit> arrivalOrbit)
+        void Burn(Ship ship, double departJd, int to, Func<ParkingOrbit> arrivalOrbit, DVec3? initialVelocity = null)
         {
             int from = ship.Orbit.Body;
             int frame = CommonFrame(from, to);
             double keepOut = FrameKeepOutKm(frame);
             var start = RelativeTo(frame, from, departJd) + ship.Orbit.OffsetAt(departJd);
-            var startVelocity = VelocityRelativeTo(frame, from, departJd) + ship.Orbit.VelocityAt(departJd);
+            // Leaving an orbit it moves with the orbit; changing course mid-flight it keeps its own velocity.
+            var startVelocity = VelocityRelativeTo(frame, from, departJd) + (initialVelocity ?? ship.Orbit.VelocityAt(departJd));
             // Match velocities at both ends unless that path runs into something the rest-to-rest
             // one in the frame avoids; if both are blocked, try another parking orbit plane.
             ParkingOrbit arrival = null;
             bool clear = false;
+            // A ship already under way cannot stop dead to start from rest: it keeps its momentum.
+            bool underWay = initialVelocity != null;
             for (int attempt = 0; attempt < 6 && !clear; attempt++)
             {
                 arrival = arrivalOrbit();
                 clear = Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true)
-                        || Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, false);
+                        || (!underWay && Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, false));
             }
-            if (!clear) Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, true);
+            // Nothing cleared: fly rest to rest, with no drift, so the ship keeps exactly to its path
+            // (which goes round the frame's centre) rather than drifting through it.
+            if (!clear) Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, underWay);
 
             ship.DepartureOrbit = ship.Orbit;
             ship.Orbit = arrival;
@@ -583,6 +814,9 @@ namespace SolarSystem.Core
             foreach (int end in new[] { from, to })
                 for (int b = end; b >= 0 && b != frame; b = catalog[b].ParentIndex)
                     if (!obstacles.Contains(b)) obstacles.Add(b);
+            // Every other world orbiting the frame is something to miss as well.
+            foreach (int other in catalog.ChildrenOf(frame))
+                if (!obstacles.Contains(other) && catalog[other].IsVisible && !catalog[other].IsStar) obstacles.Add(other);
 
             // Bodies sit at the ends, where the ship is slow but a planet is passed in minutes: sample
             // the first and last few percent densely, and test each segment, not just its ends.
@@ -623,6 +857,7 @@ namespace SolarSystem.Core
         {
             double arriveJd = ship.PhaseEndJd;
             ship.Phase = landed ? ShipPhase.Landed : ShipPhase.Parked;
+            ship.Wander = false;
             ship.TripsCompleted++;
             ship.Path = null;
             ship.Journey = null;
@@ -639,17 +874,25 @@ namespace SolarSystem.Core
             // Mid-descent or mid-climb the schedule is fixed; a queued ship (after a fight, say) just
             // takes its turn again.
             if (ship.Phase == ShipPhase.Descent || ship.Phase == ShipPhase.Ascent) return;
+            if (ship.Phase == ShipPhase.Queued && ship.Ring == null)
+            {
+                // Lost track of its ring (it changed hands mid-queue): hold where it is, as in orbit.
+                ship.Orbit = ship.HoldPoint ?? ship.Orbit;
+                ship.Phase = ShipPhase.Parked;
+            }
             if (ship.Phase == ShipPhase.Queued)
             {
-                ship.HoldPoint = FixedHold(ship, nowJd);
-                ship.Orbit = ship.HoldPoint;
                 double entry = ship.PhaseEndJd;
                 if (entry < nowJd + MinQueueDays)
                 {
-                    // Its turn went by while it was fighting: take the next free one.
+                    // Its turn went by while it was fighting: back to its spot off the top of the line,
+                    // for the next free turn (it is drawn in the battle until then, so nothing jumps).
                     entry = Math.Max(nowJd + MinQueueDays, ship.Ring.NextEntryJd);
                     ship.Ring.NextEntryJd = entry + ship.Ring.EntryIntervalDays;
+                    ship.HoldPoint = ship.Ring.HoldPoint(ship);
                 }
+                else ship.HoldPoint = FixedHold(ship, nowJd);
+                ship.Orbit = ship.HoldPoint;
                 ship.PhaseStartJd = nowJd;
                 ship.PhaseEndJd = entry;
                 return;
@@ -657,6 +900,15 @@ namespace SolarSystem.Core
             int here = ship.Orbit.Body;
             int chosen = ChooseNext != null ? ChooseNext(ship, here, nowJd) : -1;
             double dwell = Dwell != null ? Dwell(ship, DwellDays(ship)) : DwellDays(ship);
+            if (ship.Role == ShipRole.Free && chosen < 0 && rng.NextDouble() < 0.55)
+            {
+                // A free ship's whim: out to somewhere new nearby rather than to another world.
+                ship.Wander = true;
+                ship.DestinationBody = here;
+                ship.Cargo = null;
+                ship.PhaseEndJd = nowJd + dwell;
+                return;
+            }
             if (chosen == here)
             {
                 ship.DestinationBody = here;
@@ -708,6 +960,29 @@ namespace SolarSystem.Core
                     if (here != ship.Ports[0]) return ship.Ports[0];
                     return ship.Ports[1 + rng.Next(ship.Ports.Length - 1)];
 
+                case ShipRole.Free:
+                {
+                    // Somewhere it fancies, mostly close: weight 1 / (0.05 AU + distance)², so neighbouring
+                    // moons and planets come up far more often than the far side of the system.
+                    var herePos = ephemeris.HelioAt(here, jd);
+                    double total = 0;
+                    var weights = new double[ship.Ports.Length];
+                    for (int i = 0; i < ship.Ports.Length; i++)
+                    {
+                        if (ship.Ports[i] == here) continue;
+                        double au = (ephemeris.HelioAt(ship.Ports[i], jd) - herePos).Length / Astro.AuKm;
+                        weights[i] = 1.0 / ((0.05 + au) * (0.05 + au));
+                        total += weights[i];
+                    }
+                    double pick = rng.NextDouble() * total;
+                    for (int i = 0; i < weights.Length; i++)
+                    {
+                        pick -= weights[i];
+                        if (weights[i] > 0 && pick <= 0) return ship.Ports[i];
+                    }
+                    return ship.Ports[0] == here ? ship.Ports[Math.Min(1, ship.Ports.Length - 1)] : ship.Ports[0];
+                }
+
                 default:
                 {
                     // Prefer nearby ports: weight 1 / (0.3 AU + distance).
@@ -738,6 +1013,7 @@ namespace SolarSystem.Core
             {
                 case ShipRole.Patrol: return 1.0 + rng.NextDouble() * 3.0;
                 case ShipRole.Courier: return 0.1 + rng.NextDouble() * 0.4;
+                case ShipRole.Free: return 0.1 + rng.NextDouble() * 0.6;
                 case ShipRole.Miner: return 1.0 + rng.NextDouble() * 2.0;
                 default: return 0.5 + rng.NextDouble() * 1.5;
             }
@@ -748,7 +1024,8 @@ namespace SolarSystem.Core
             var b = catalog[body];
             // Military ships hold high orbits; civilian traffic sits lower and more varied.
             double radii = ship.Spec.IsMilitary ? 4.0 + rng.NextDouble() * 3.0 : 2.5 + rng.NextDouble() * 4.5;
-            double r = b.RadiusKm * radii;
+            // Round a tiny moon or a station, a few radii is a crowded few tens of km: spread out to room for a fleet.
+            double r = Math.Max(b.RadiusKm * radii, b.RadiusKm + 60 + rng.NextDouble() * 140);
 
             var normal = (b.SpinAxis + new DVec3(Jitter(0.12), Jitter(0.12), Jitter(0.12))).Normalized;
             var reference = Math.Abs(normal.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX;
@@ -795,6 +1072,13 @@ namespace SolarSystem.Core
         List<(DVec3 center, double radius)> Avoidances(int frame, int from, int to, double departJd, double arriveJd, DVec3 shift)
         {
             var list = new List<(DVec3, double)>();
+            // Other worlds orbiting the frame (Io when flying Ganymede to Europa): give them a berth too.
+            double mid = 0.5 * (departJd + arriveJd);
+            foreach (int other in catalog.ChildrenOf(frame))
+            {
+                if (OnChain(other, from) || OnChain(other, to) || !catalog[other].IsVisible || catalog[other].IsStar) continue;
+                list.Add((RelativeTo(frame, other, mid) - shift * 0.5, catalog[other].RadiusKm * 3));
+            }
             if (catalog[frame].Kind == BodyKind.Barycentre)
                 foreach (int star in catalog.ChildrenOf(frame))
                     if (catalog[star].IsStar)
@@ -804,6 +1088,14 @@ namespace SolarSystem.Core
             for (int b = catalog[to].ParentIndex, moon = to; b > 0 && b != frame; moon = b, b = catalog[b].ParentIndex)
                 list.Add((RelativeTo(frame, b, arriveJd) - shift, Berth(b, moon, arriveJd)));
             return list;
+        }
+
+        /// <summary>True if <paramref name="body"/> is <paramref name="end"/> or one of the bodies it orbits.</summary>
+        bool OnChain(int body, int end)
+        {
+            for (int b = end; b >= 0; b = catalog[b].ParentIndex)
+                if (b == body) return true;
+            return false;
         }
 
         /// <summary>
@@ -825,13 +1117,23 @@ namespace SolarSystem.Core
         static DVec3[] BuildPath(DVec3 start, DVec3 end, double keepOutKm, List<(DVec3 center, double radius)> avoid = null)
         {
             var points = new List<DVec3> { start, end };
-            var d = end - start;
-            double t = d.LengthSquared > 0 ? Math.Max(0, Math.Min(1, -DVec3.Dot(start, d) / d.LengthSquared)) : 0;
-            var closest = start + d * t;
-            if (closest.Length < keepOutKm && t > 0 && t < 1)
+            // Swing round the frame's centre: keep adding waypoints out past the keep-out until no leg
+            // cuts inside it (one is not always enough when the ends are nearly opposite each other).
+            for (int pass = 0; pass < 8; pass++)
             {
-                var away = closest.LengthSquared > 1 ? closest.Normalized : DVec3.Cross(d, DVec3.UnitZ).Normalized;
-                points.Insert(1, away * (keepOutKm * 1.4));
+                bool inserted = false;
+                for (int i = 0; i + 1 < points.Count && !inserted; i++)
+                {
+                    var a = points[i];
+                    var d = points[i + 1] - a;
+                    double t = d.LengthSquared > 0 ? Math.Max(0, Math.Min(1, -DVec3.Dot(a, d) / d.LengthSquared)) : 0;
+                    var closest = a + d * t;
+                    if (closest.Length >= keepOutKm * 0.999 || t <= 0 || t >= 1) continue;
+                    var away = closest.LengthSquared > 1 ? closest.Normalized : DVec3.Cross(d, DVec3.UnitZ).Normalized;
+                    points.Insert(i + 1, away * (keepOutKm * 1.4));
+                    inserted = true;
+                }
+                if (!inserted) break;
             }
 
             if (avoid != null)

@@ -142,7 +142,8 @@ namespace SolarSystem.Core
                 foreach (var kv in seen)
                 {
                     var v = kv.Key;
-                    if (v.LaneLeg.Lane != lane || v.Faction.IsPirate || v.Derelict) continue;
+                    // Already caught by another lurker's pulse this pass: it is fighting there.
+                    if (v.LaneLeg.Lane != lane || v.Faction.IsPirate || v.Derelict || v.Battle != null) continue;
                     double now = kv.Value;
                     double before = laneSeen.TryGetValue(v, out double b) ? b : now;
                     if ((before - station) * (now - station) <= 0 || Math.Abs(now - station) < window) victims.Add(v);
@@ -186,7 +187,7 @@ namespace SolarSystem.Core
             Battles.Add(b);
             pulseReady[lurker] = jd + 1;
             lanes0().Danger.TryGetValue(lane, out double danger);
-            lanes0().Danger[lane] = danger + 3;
+            lanes0().SetDanger(lane, danger + 3);
             world.Log(jd, $"{world.Pirates.Name} raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
             BumpDanger(lane.A, 1);
             BumpDanger(lane.B, 1);
@@ -262,6 +263,7 @@ namespace SolarSystem.Core
                 else if (roll < 0.85)
                 {
                     world.Pirates.Treasury += Economy.HullPrice(ship.Spec.Class) * 0.25;
+                    Detach(ship);
                     ship.Destroyed = true;
                     how = $"taken to {HavenName()} and sold to the breakers";
                 }
@@ -299,6 +301,8 @@ namespace SolarSystem.Core
 
         void Scuttle(Ship ship)
         {
+            // Its group (if it led one) gets a new flagship, so the escorts are not left frozen on a wreck.
+            Detach(ship);
             if (ship.HasCargo) Economy.Release(ship);
             ship.HasCargo = false;
             ship.Destroyed = true;
@@ -344,9 +348,18 @@ namespace SolarSystem.Core
             if (ship.Spec.IsMilitary)
             {
                 ship.Role = ShipRole.Patrol;
-                ship.Route = group?.Route ?? new[] { HavenBody() >= 0 ? HavenBody() : ship.Orbit.Body };
+                ship.Route = group?.Route ?? (captor.IsPirate && HavenBody() >= 0 ? new[] { HavenBody() } : OwnPorts(captor, ship.Orbit.Body));
             }
             return true;
+        }
+
+        /// <summary>A faction's own settlement bodies (a navy's prize patrols those), or the given body if it has none.</summary>
+        int[] OwnPorts(Faction f, int fallback)
+        {
+            var own = new List<int>();
+            foreach (var s in Economy.Settlements)
+                if (s.Owner == f && !own.Contains(s.Body)) own.Add(s.Body);
+            return own.Count > 0 ? own.ToArray() : new[] { fallback };
         }
 
         /// <summary>A ship leaves its group (taken, or abandoned): it keeps the group's motion as its own, and the group gets a new flagship if it was the old one.</summary>
@@ -360,7 +373,7 @@ namespace SolarSystem.Core
             var lead = ship.Leader;
             ship.Leader = null;
             ship.Phase = lead.Phase;
-            ship.Orbit = lead.Orbit;
+            ship.Orbit = OwnSpot(lead.Orbit, ship, lead);
             ship.DepartureOrbit = lead.DepartureOrbit;
             ship.DestinationBody = lead.DestinationBody;
             ship.OriginBody = lead.OriginBody;
@@ -384,6 +397,31 @@ namespace SolarSystem.Core
             ship.LaneEndProgress = lead.LaneEndProgress;
             ship.LaneHold = lead.LaneHold;
             ship.LaneHoldSide = lead.LaneHoldSide;
+            CopyRest(lead, ship);
+        }
+
+        /// <summary>
+        /// A ship leaving its group keeps the group's orbit, but a little way along it (where it was
+        /// flying in formation), not on top of its old flagship.
+        /// </summary>
+        static ParkingOrbit OwnSpot(ParkingOrbit orbit, Ship ship, Ship lead)
+        {
+            if (orbit == null || orbit.Fixed || orbit.RadiusKm <= 0) return orbit;
+            double gap = Fleet.SafeDistanceKm(ship, lead) * 1.5;
+            return new ParkingOrbit
+            {
+                Body = orbit.Body, RadiusKm = orbit.RadiusKm, U = orbit.U, V = orbit.V, Center = orbit.Center,
+                EpochJd = orbit.EpochJd, PhaseAtEpoch = orbit.PhaseAtEpoch - gap / orbit.RadiusKm, RateRadPerDay = orbit.RateRadPerDay,
+            };
+        }
+
+        /// <summary>The rest of a ship's motion state that a group's escorts and heirs take over with it (lane shape, ring).</summary>
+        static void CopyRest(Ship from, Ship to)
+        {
+            to.LaneStar = from.LaneStar;
+            to.LaneShape = from.LaneShape;
+            to.Ring = from.Ring;
+            to.HoldPoint = from.HoldPoint;
         }
 
         // ---------------------------------------------------------------- meeting the enemy
@@ -397,8 +435,10 @@ namespace SolarSystem.Core
             var existing = BattleAt(body);
             if (existing != null)
             {
-                int side = Diplomacy.Hostile(ship.Faction, existing.SideLeaders[0]) ? 1
-                    : Diplomacy.Hostile(ship.Faction, existing.SideLeaders[1]) ? 0 : -1;
+                // Join the side it can fight beside: against one side's leader and not the other's.
+                bool h0 = Diplomacy.Hostile(ship.Faction, existing.SideLeaders[0]);
+                bool h1 = Diplomacy.Hostile(ship.Faction, existing.SideLeaders[1]);
+                int side = h0 && !h1 ? 1 : h1 && !h0 ? 0 : -1;
                 if (side >= 0) Join(existing, ship, side, true);
                 return;
             }
@@ -483,7 +523,8 @@ namespace SolarSystem.Core
             {
                 if (s.Destroyed || s.Battle != null) continue;
                 var c = s.Controller;
-                if (c.Destroyed || !Fleet.IsAt(c, body)) continue;
+                // A stripped, abandoned hulk is not a fighting group.
+                if (c.Destroyed || s.Derelict || c.Derelict || !Fleet.IsAt(c, body)) continue;
                 list.Add(s);
             }
             return list;
@@ -592,8 +633,9 @@ namespace SolarSystem.Core
                 if (u.Ship != null && u.Dead) Succession(u.Ship);
             foreach (var u in b.Units)
             {
-                if (!u.Captured || u.Dead || !captures.TryGetValue(u, out var captor)) continue;
+                if (!captures.TryGetValue(u, out var captor)) continue;
                 captures.Remove(u);
+                if (!u.Captured || u.Dead) continue;
                 DisposeOfPrize(b, u, captor, jd);
             }
 
@@ -686,6 +728,7 @@ namespace SolarSystem.Core
             heir.LaneEndProgress = dead.LaneEndProgress;
             heir.LaneHold = dead.LaneHold;
             heir.LaneHoldSide = dead.LaneHoldSide;
+            CopyRest(dead, heir);
             foreach (var s in Fleet.Ships)
                 if (s.Leader == dead && s != heir) s.Leader = heir;
             if (Orders.TryGetValue(dead, out var o)) Orders[heir] = o;
@@ -1001,7 +1044,7 @@ namespace SolarSystem.Core
             foreach (var s in Fleet.Ships)
                 if (s.Derelict && !s.Destroyed && jd - s.DerelictSinceJd > 25) s.Destroyed = true;
             if (Fleet.Lanes != null)
-                foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.Danger[lane] *= 0.85;
+                foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.SetDanger(lane, Fleet.Lanes.Danger[lane] * 0.85);
             MergeGroups();
             Refit(jd);
             Sieges(jd);

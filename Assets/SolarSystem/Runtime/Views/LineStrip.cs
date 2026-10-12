@@ -25,7 +25,7 @@ namespace SolarSystem.Views
         {
             Root = new GameObject(name);
             Root.transform.SetParent(parent, false);
-            mesh = new Mesh { name = name };
+            mesh = Materials.Own(new Mesh { name = name });
             mesh.MarkDynamic();
             Root.AddComponent<MeshFilter>().sharedMesh = mesh;
             renderer = Root.AddComponent<MeshRenderer>();
@@ -36,6 +36,13 @@ namespace SolarSystem.Views
         }
 
         public int Capacity => vertices?.Length ?? 0;
+
+        /// <summary>Destroys the line and its mesh.</summary>
+        public void Dispose()
+        {
+            Materials.DestroyMesh(mesh);
+            Object.Destroy(Root);
+        }
 
         /// <summary>Sets points (local to Root) with a per-point alpha ramp from <paramref name="alphaStart"/> to <paramref name="alphaEnd"/>.</summary>
         public void SetPoints(Vector3[] points, int count, Color color, float alphaStart = 1f, float alphaEnd = 1f)

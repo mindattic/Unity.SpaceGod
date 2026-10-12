@@ -131,7 +131,14 @@ namespace SolarSystem.Cameras
             var forward = ToLocal(Rotation * Vector3.forward);
             yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
             pitch = Mathf.Clamp(-Mathf.Asin(Mathf.Clamp(forward.y, -1, 1)) * Mathf.Rad2Deg, -89f, 89f);
-            if (Mode != CameraMode.Free && !FocusTarget.IsNone)
+            if (Mode == CameraMode.Travel)
+            {
+                // Mid-flight: re-express where the flight ends, not where the camera happens to be.
+                var look = -ToLocal(ToVector(travelEndDirection));
+                orbitYaw = Mathf.Atan2(look.x, look.z) * Mathf.Rad2Deg;
+                orbitPitch = Mathf.Clamp(-Mathf.Asin(Mathf.Clamp(look.y, -1, 1)) * Mathf.Rad2Deg, -88f, 88f);
+            }
+            else if (Mode == CameraMode.Focus && !FocusTarget.IsNone)
             {
                 var offset = ScenePosition - world.TargetScene(FocusTarget);
                 if (offset.LengthSquared > 0)

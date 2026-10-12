@@ -109,9 +109,9 @@ namespace SolarSystem.Core.Tests
         }
 
         // JPL Horizons, 2026-10-11 00:00 TDB (JD 2461324.5): moon relative to its parent's centre,
-        // km, ecliptic J2000. Phobos and Miranda get a looser bound (see BodyCatalog notes).
+        // km, ecliptic J2000. Miranda gets a looser bound (see BodyCatalog notes).
         [Theory]
-        [InlineData("Phobos", 6805.860, 5566.134, -2893.088, 2.5)]
+        [InlineData("Phobos", 6805.860, 5566.134, -2893.088, 0.2)]
         [InlineData("Deimos", -10864.930, 19858.946, 6120.097, 0.5)]
         [InlineData("Io", 312960.209, -281217.598, -5691.267, 0.5)]
         [InlineData("Europa", -646550.487, 158099.391, -8278.278, 0.5)]
@@ -133,6 +133,48 @@ namespace SolarSystem.Core.Tests
             double deg = Math.Acos(Math.Min(1, DVec3.Dot(rel.Normalized, truth.Normalized))) * Astro.Rad2Deg;
             Assert.True(deg < toleranceDeg, $"{name} is {deg:0.00} degrees off");
             Assert.InRange(rel.Length / truth.Length, 0.97, 1.03);
+        }
+
+        // JPL Horizons across 2000-2050 (00:00 TDB, km, ecliptic J2000): the Moon (lunar theory),
+        // Phobos (with its tidal decay), Charon and Ceres (refitted mean elements) relative to their
+        // parents, and Earth (offset from the Earth-Moon barycentre) relative to the Sun.
+        [Theory]
+        [InlineData("Moon", 2451544.5, -317650.241, -241883.176, 36555.823, 0.03, false)]
+        [InlineData("Moon", 2456104.5, -371661.576, 65540.317, -33248.061, 0.03, false)]
+        [InlineData("Moon", 2460674.5, -19328.367, -387317.199, -33836.462, 0.03, false)]
+        [InlineData("Moon", 2465244.5, 400340.940, 38345.190, -34161.464, 0.03, false)]
+        [InlineData("Moon", 2469804.5, 332683.345, -148912.113, 32792.178, 0.03, false)]
+        [InlineData("Phobos", 2451544.5, 5117.835, 7379.943, -2165.367, 0.15, false)]
+        [InlineData("Phobos", 2456104.5, 4773.303, -7372.110, -3032.423, 0.15, false)]
+        [InlineData("Phobos", 2460674.5, 6873.392, -5356.867, -3619.920, 0.15, false)]
+        [InlineData("Phobos", 2465244.5, 8185.336, -1586.928, -4226.086, 0.15, false)]
+        [InlineData("Phobos", 2469804.5, -4011.797, -8445.124, 1655.631, 0.15, false)]
+        [InlineData("Charon", 2451544.5, -40.849, -10402.847, -16608.304, 0.02, false)]
+        [InlineData("Charon", 2456104.5, 6470.619, -4199.366, -18013.838, 0.02, false)]
+        [InlineData("Charon", 2460674.5, -7194.002, 3351.604, 17916.635, 0.02, false)]
+        [InlineData("Charon", 2465244.5, 7878.700, -2512.509, -17765.178, 0.02, false)]
+        [InlineData("Charon", 2469804.5, 12475.396, 4586.106, -14396.705, 0.02, false)]
+        [InlineData("Ceres", 2451544.5, -355673469.309, 119794569.466, 69239521.440, 0.6, true)]
+        [InlineData("Ceres", 2456104.5, 274750752.315, 314595523.610, -40768706.267, 0.6, true)]
+        [InlineData("Ceres", 2460664.5, 313816028.064, -308005538.158, -67560074.267, 0.6, true)]
+        [InlineData("Ceres", 2465224.5, -313671134.688, -239529611.734, 49949543.108, 0.6, true)]
+        [InlineData("Ceres", 2469784.5, -56786741.453, 388683211.654, 23233828.581, 0.6, true)]
+        [InlineData("Earth", 2451544.5, -25210928.559, 144927919.584, -616.417, 0.02, true)]
+        [InlineData("Earth", 2456104.5, 12278188.983, -151573991.820, 4933.524, 0.02, true)]
+        [InlineData("Earth", 2460664.5, 4515457.361, 147108059.018, -8574.767, 0.02, true)]
+        [InlineData("Earth", 2465224.5, -16566426.690, -151045153.194, 13079.422, 0.02, true)]
+        [InlineData("Earth", 2469784.5, 34051721.122, 143364821.819, -16519.417, 0.02, true)]
+        public void BodiesStayOnHorizonsAcrossTheCentury(string name, double jd, double x, double y, double z, double toleranceDeg, bool helio)
+        {
+            var eph = new Ephemeris(Catalog);
+            eph.Update(jd);
+            int i = Catalog[name].Index;
+            var model = helio ? eph.Helio(i) : eph.Relative(i);
+            var truth = new DVec3(x, y, z);
+            double deg = Math.Acos(Math.Min(1, DVec3.Dot(model.Normalized, truth.Normalized))) * Astro.Rad2Deg;
+            Assert.True(deg < toleranceDeg, $"{name} is {deg:0.000} degrees off at JD {jd}");
+            Assert.InRange(model.Length / truth.Length, 0.995, 1.005);
+            Assert.True((eph.HelioAt(i, jd) - eph.Helio(i)).Length < 1e-3, "look-ahead position disagrees with the frame");
         }
 
         [Fact]

@@ -49,7 +49,7 @@ namespace SolarSystem.Views
             this.app = app;
             var go = new GameObject("Battle FX");
             go.transform.SetParent(parent, false);
-            mesh = new Mesh { name = "Battle FX", indexFormat = IndexFormat.UInt32 };
+            mesh = Materials.Own(new Mesh { name = "Battle FX", indexFormat = IndexFormat.UInt32 });
             mesh.MarkDynamic();
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();

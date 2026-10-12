@@ -232,9 +232,16 @@ namespace SolarSystem
             app.Clock.Paused = false;
             app.Clock.SetWarp(6);
             Battle battle = null;
+            var war = app.World.War;
             // Catch it the moment it starts (it does not run in its first frame) and drop to battle time.
             void Started(Battle b)
             {
+                // The tour was stopped (the player took over the demo): stop watching.
+                if (app.GetComponent<DemoRunner>() == null && app.GetComponent<CaptureRunner>() == null)
+                {
+                    war.BattleStarted -= Started;
+                    return;
+                }
                 // A real fleet action: at least two armed warships or platforms on each side.
                 bool Armed(BattleUnit u) => u.Kind == UnitKind.Platform || (u.Ship != null && (u.Ship.Spec.IsMilitary || u.Ship.Faction.IsPirate));
                 bool fleetAction = b.Units.Count(u => u.Side == 0 && Armed(u)) >= 2 && b.Units.Count(u => u.Side == 1 && Armed(u)) >= 2;
@@ -243,11 +250,11 @@ namespace SolarSystem
                 battle = b;
                 app.Clock.SetWarp(0);
             }
-            app.World.War.BattleStarted += Started;
+            war.BattleStarted += Started;
             app.FocusSystemOverview();
             float deadline = Time.unscaledTime + 240f;
             while (battle == null && Time.unscaledTime < deadline) yield return null;
-            app.World.War.BattleStarted -= Started;
+            war.BattleStarted -= Started;
             if (battle == null)
             {
                 app.Clock.SetWarp(SimClock.DefaultWarpIndex);

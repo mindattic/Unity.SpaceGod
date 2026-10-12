@@ -289,7 +289,16 @@ namespace SolarSystem.Core
 
             foreach (var c in Compartments)
             {
-                if (c.Boarders <= 0.01) continue;
+                if (c.Boarders <= 0.01)
+                {
+                    // Defenders who have fought their way back in hold it again.
+                    if (c.Taken && c.Crew + c.Marines > 0.01)
+                    {
+                        c.Taken = false;
+                        Note(seconds, c.Index, $"The crew retake {c.Name}");
+                    }
+                    continue;
+                }
                 double defenders = c.Crew + c.Marines;
                 if (defenders <= 0.01)
                 {
@@ -308,7 +317,7 @@ namespace SolarSystem.Core
                 double defenderLosses = Math.Min(defenders, attack * Lethality * dt);
                 double boarderLosses = Math.Min(c.Boarders, defence * Lethality * dt);
                 // Marines stand in front; crew take what the marines cannot.
-                double fromMarines = Math.Min(c.Marines, defenderLosses * (c.Marines / defenders + 0.3));
+                double fromMarines = Math.Min(c.Marines, Math.Min(defenderLosses, defenderLosses * (c.Marines / defenders + 0.3)));
                 double fromCrew = Math.Min(c.Crew, defenderLosses - fromMarines);
                 c.Marines -= fromMarines;
                 c.Crew -= fromCrew;

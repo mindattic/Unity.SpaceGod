@@ -118,6 +118,8 @@ namespace SolarSystem.Core
             w.BuildMilitary(startJd);
             w.BuildMerchants(startJd, FreighterNames, MinerNames, CourierNames, new[] { w.Independents, w.Independents, w.Sol, w.Belt, w.Reach, w.Independents },
                 i => i % 3 == 2 ? w.Reach : w.Belt);
+            w.AddFreeShips(startJd, new[] { "Kestrel's Folly", "Wanderlust", "Far Horizon", "Stargazer", "Solitaire", "Driftwood", "Errant", "Idle Hours" },
+                new[] { "Prospector Nine", "Lucky Strike" });
             int haven = w.Catalog["Deimos"].Index;
             war.RaisePirateGroup(startJd, haven);
             war.RaisePirateGroup(startJd, haven);
@@ -154,8 +156,12 @@ namespace SolarSystem.Core
                 war.OnArrived(ship, when);
             };
             fleet.ReachedRing = war.OnArrived;
+            // Merchants heading into a fight that has just broken out turn aside for somewhere safe.
+            war.BattleStarted += b => DivertAround(b, b.StartJd);
             fleet.ChooseNext = (ship, here, when) =>
             {
+                // Free ships follow their own whims (the fleet's built-in choice), not orders or markets.
+                if (ship.Role == ShipRole.Free) return -1;
                 if (!IsTrader(ship)) return war.ChooseNext(ship, here, when);
                 int next = economy.PlanTrade(ship, here, when);
                 if (next < 0 && !ship.HasCargo) ship.Cargo = "Empty, looking for work";
@@ -229,6 +235,7 @@ namespace SolarSystem.Core
             w.BuildMerchants(startJd, freighters, haulers, couriers,
                 new[] { w.Independents, w.Independents, combine, w.Independents, accord }, i => combine);
 
+            w.AddFreeShips(startJd, new[] { "First Light", "Long Look", "Terminator Dawn" }, new[] { "Red Dust" });
             int haven = w.Catalog["Blackhollow"].Index;
             war.RaisePirateGroup(startJd, haven);
 
@@ -517,6 +524,60 @@ namespace SolarSystem.Core
         {
             var slip = Infrastructure?.YardOf(yard);
             Fleet.Station(ship, yard.Body, jd, slip?.Orbit);
+        }
+
+        /// <summary>
+        /// A battle has broken out at a body: merchants still on their way there change course for the
+        /// nearest other port they can reach without a hyperlane (often turning back where they came from).
+        /// </summary>
+        void DivertAround(Battle b, double jd)
+        {
+            if (b.Site != null) return;
+            var lanes = Fleet.Lanes;
+            foreach (var s in Fleet.Ships)
+            {
+                if (!IsTrader(s) || s.Destroyed || s.Phase != ShipPhase.Transit || s.Orbit == null || s.Orbit.Body != b.Body) continue;
+                if (s.Journey != null && s.JourneyIndex < s.Journey.Count) continue;
+                if (s.PhaseEndJd - jd < 0.05 || s.Ports == null) continue;
+                var here = Fleet.StateOf(s, jd).HelioKm;
+                int best = -1;
+                double bestKm = double.MaxValue;
+                foreach (int p in s.Ports)
+                {
+                    if (p == b.Body || War.BattleAt(p) != null) continue;
+                    bool reachable = lanes == null || lanes.SystemOf(p) == lanes.SystemOf(b.Body) || lanes.SystemOf(p) == lanes.SystemOf(s.OriginBody);
+                    if (!reachable) continue;
+                    double km = (Ephemeris.HelioAt(p, jd) - here).Length;
+                    if (km < bestKm)
+                    {
+                        bestKm = km;
+                        best = p;
+                    }
+                }
+                if (best < 0 || !Fleet.Divert(s, best, jd)) continue;
+                s.Cargo = s.HasCargo ? s.Cargo : "Empty, diverted";
+                Log(jd, $"{s.Name} turns aside for {Catalog[best].Name}: fighting at {Catalog[b.Body].Name}", WorldEventKind.Info, best);
+            }
+        }
+
+        /// <summary>
+        /// Independent pilots who go where they please: yachts and survey ships (fast courier hulls) and
+        /// prospectors (ore haulers), roaming every world in the system, not just its ports.
+        /// </summary>
+        void AddFreeShips(double jd, string[] yachts, string[] prospectors)
+        {
+            var anywhere = new List<int>();
+            foreach (var b in Catalog.Bodies)
+                if (b.IsVisible && !b.IsStar) anywhere.Add(b.Index);
+            var places = anywhere.ToArray();
+            void Add(string name, ShipClass cls)
+            {
+                var ship = Fleet.AddShip(name, cls, Independents, ShipRole.Free);
+                ship.Ports = places;
+                Fleet.Station(ship, places[Fleet.Rng.Next(places.Length)], jd);
+            }
+            foreach (var n in yachts) Add(n, ShipClass.Courier);
+            foreach (var n in prospectors) Add(n, ShipClass.Miner);
         }
 
         Ship AddMerchant(string name, ShipClass cls, Faction owner, ShipRole role, int[] ports, double jd, int at = -1, Settlement yard = null)

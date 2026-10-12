@@ -99,7 +99,7 @@ namespace SolarSystem.Views
                 var v = views[u];
                 Object.Destroy(v.Hull);
                 Object.Destroy(v.Glow.gameObject);
-                Object.Destroy(v.Trail.Root);
+                v.Trail.Dispose();
                 views.Remove(u);
             }
         }

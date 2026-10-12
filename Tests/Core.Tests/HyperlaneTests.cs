@@ -145,5 +145,45 @@ namespace SolarSystem.Core.Tests
             }
             Assert.True(checkedRamps > 5);
         }
+            /// <summary>A raider leaving its lurk, or a ship climbing back in after an interdiction, eases back onto the lane.</summary>
+        [Fact]
+        public void ShipsRejoinTheLaneWithoutJumping()
+        {
+            var w = Create(out var eph);
+            var fleet = w.Fleet;
+            int resumed = 0;
+            for (double jd = StartJd; jd < StartJd + 120 && resumed < 3; jd += 0.05)
+            {
+                eph.Update(jd);
+                w.Update(jd);
+                foreach (var s in fleet.Ships)
+                {
+                    if (s.Destroyed || s.IsEscort || s.Battle != null || s.Phase != ShipPhase.Lurk) continue;
+                    if (jd - s.PhaseStartJd < 0.2) continue;
+                    var before = fleet.StateOf(s, jd).HelioKm;
+                    fleet.ResumeLane(s, jd);
+                    var after = fleet.StateOf(s, jd).HelioKm;
+                    Assert.True((after - before).Length < 1, $"{s.Name} jumped {(after - before).Length:N0} km rejoining the lane");
+                    resumed++;
+                }
+            }
+            output.WriteLine($"{resumed} lurkers sent back into their lanes");
+            Assert.True(resumed > 0, "nobody lurked");
+        }
+
+        /// <summary>An ambushed lane looks dangerous to the very next planner, not just after the route cache expires.</summary>
+        [Fact]
+        public void DangerReroutesTrafficAtOnce()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var lanes = Hyperlanes.CreateDefault(eph);
+            int earth = eph.Catalog["Earth"].Index, ceres = eph.Catalog["Ceres"].Index;
+            var direct = lanes.Route(earth, ceres, StartJd);
+            Assert.Single(direct);
+            lanes.SetDanger(direct[0].Lane, 100);
+            var around = lanes.Route(earth, ceres, StartJd);
+            Assert.DoesNotContain(around, hop => hop.Lane == direct[0].Lane);
+        }
     }
 }

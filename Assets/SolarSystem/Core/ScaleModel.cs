@@ -267,7 +267,7 @@ namespace SolarSystem.Core
             var hop = ship.LaneLeg;
             var aKm = ephemeris.Helio(hop.From) + ship.LaneFromOffset;
             var bKm = ephemeris.Helio(hop.To) + ship.LaneToOffset;
-            return LaneCurveScene(ephemeris, scene, lanes, hop.Lane, hop.From, aKm, hop.To, bKm, progress, out travelDirection);
+            return LaneCurveScene(ephemeris, scene, lanes, hop.Lane, hop.From, aKm, hop.To, bKm, progress, out travelDirection, ship.LaneStar, ship.LaneShape);
         }
 
         /// <summary>
@@ -276,15 +276,16 @@ namespace SolarSystem.Core
         /// true-km curve, with the keep-out scaled into scene units by that star's own mapping.
         /// </summary>
         public DVec3 LaneCurveScene(Ephemeris ephemeris, DVec3[] scene, Hyperlanes lanes, Lane lane, int from, DVec3 aKm, int to, DVec3 bKm,
-            double progress, out DVec3 travelDirection)
+            double progress, out DVec3 travelDirection, int star = -1, int shape = -1)
         {
             var a = MapNear(ephemeris, scene, from, aKm);
             var b = MapNear(ephemeris, scene, to, bKm);
-            int star = lanes.KeepOutStar(aKm, bKm, ephemeris.Jd);
+            if (star < 0) star = lanes.KeepOutStar(aKm, bKm, ephemeris.Jd);
+            if (shape < 0) shape = lanes.ShapeOf(lane, aKm, bKm, star, ephemeris.Jd);
             double keepOut = LocalDistance(ephemeris.Catalog[star], lanes.KeepOutKm(star));
             var up = DVec3.UnitY;
-            travelDirection = Hyperlanes.CurveTangent(a, b, lane.Bend, scene[lane.Hub], scene[star], keepOut, progress, up);
-            return Hyperlanes.Curve(a, b, lane.Bend, scene[lane.Hub], scene[star], keepOut, progress, up);
+            travelDirection = Hyperlanes.CurveTangent(a, b, lane.Bend, scene[lane.Hub], scene[star], keepOut, progress, up, shape);
+            return Hyperlanes.Curve(a, b, lane.Bend, scene[lane.Hub], scene[star], keepOut, progress, up, shape);
         }
 
         /// <summary>Scene position of a hyperlane ramp (for drawing the network).</summary>

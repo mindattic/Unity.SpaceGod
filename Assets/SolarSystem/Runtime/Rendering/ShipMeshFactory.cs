@@ -26,6 +26,20 @@ namespace SolarSystem.Rendering
         /// <summary>Where warship hulls break in two (ship lengths along the keel).</summary>
         public const float SplitZ = -0.06f;
 
+        static readonly Dictionary<string, Faction> Canonical = new Dictionary<string, Faction>();
+
+        /// <summary>
+        /// The first faction seen with this name: caches key on it, so rebuilding the worlds (time
+        /// reset) with new but identical faction objects reuses the meshes instead of piling up copies.
+        /// </summary>
+        public static Faction Canon(Faction f)
+        {
+            if (f == null) return null;
+            if (Canonical.TryGetValue(f.Name, out var c)) return c;
+            Canonical[f.Name] = f;
+            return f;
+        }
+
         public static bool IsWarship(ShipClass c) => c == ShipClass.Carrier || c == ShipClass.Battleship || c == ShipClass.Cruiser || c == ShipClass.Destroyer;
 
         /// <summary>The whole hull (both sections).</summary>
@@ -34,6 +48,7 @@ namespace SolarSystem.Rendering
         /// <summary>One section of a hull: <see cref="Bow"/>, <see cref="Stern"/> or <see cref="WholeHull"/>.</summary>
         public static Mesh GetSection(ShipClass shipClass, Faction faction, int section)
         {
+            faction = Canon(faction);
             if (Cache.TryGetValue((shipClass, faction, section), out var mesh)) return mesh;
             var b = new Builder(faction, section);
             switch (shipClass)
@@ -55,6 +70,7 @@ namespace SolarSystem.Rendering
         /// <summary>An orbital defence platform: a gun core inside a ring (its guns are parts too).</summary>
         public static Mesh GetPlatform(Faction faction)
         {
+            faction = Canon(faction);
             if (PlatformCache.TryGetValue(faction, out var mesh)) return mesh;
             var b = new Builder(faction, WholeHull);
             b.Box(new Vector3(0, 0, 0), new Vector3(0.16f, 0.32f, 0.16f), b.Hull);
@@ -80,6 +96,7 @@ namespace SolarSystem.Rendering
         /// </summary>
         public static Mesh GetPart(SubsystemKind kind, Faction faction, bool barrels)
         {
+            faction = Canon(faction);
             if (PartCache.TryGetValue((kind, faction, barrels), out var mesh)) return mesh;
             var b = new Builder(faction, WholeHull);
             switch (kind)
@@ -144,6 +161,7 @@ namespace SolarSystem.Rendering
         /// </summary>
         public static Mesh GetPod(Faction faction)
         {
+            faction = Canon(faction);
             if (PodCache.TryGetValue(faction, out var mesh)) return mesh;
             var b = new Builder(faction, WholeHull);
             b.Cylinder(new Vector3(0, 0, -0.1f), 0.16f, 0.6f, b.Dark, segments: 10);
@@ -163,6 +181,7 @@ namespace SolarSystem.Rendering
         /// <summary>A carrier fighter (swept wings, twin guns) or bomber (heavier, torpedo slung under).</summary>
         public static Mesh GetFighter(Faction faction, bool bomber)
         {
+            faction = Canon(faction);
             if (FighterCache.TryGetValue((faction, bomber), out var mesh)) return mesh;
             var b = new Builder(faction, WholeHull);
             if (bomber)
@@ -207,6 +226,7 @@ namespace SolarSystem.Rendering
 
         static Mesh Cached(string key, Faction faction, System.Action<Builder> build)
         {
+            faction = Canon(faction);
             if (StructureCache.TryGetValue((key, faction), out var mesh)) return mesh;
             var b = new Builder(faction, WholeHull);
             build(b);

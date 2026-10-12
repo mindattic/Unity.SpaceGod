@@ -24,6 +24,12 @@ namespace SolarSystem.Core
         public double NodeDeg { get; private set; }
         public double NodeDot { get; private set; }
 
+        /// <summary>
+        /// Secular acceleration of the mean longitude: the coefficient of t² (degrees per century²).
+        /// Zero except for Phobos, whose orbit is decaying under Mars's tides.
+        /// </summary>
+        public double LDotDotDegPerCentury2 { get; private set; }
+
         OrbitalElements() { }
 
         /// <summary>JPL planet table entry (J2000 epoch, a in AU, rates per Julian century).</summary>
@@ -56,11 +62,12 @@ namespace SolarSystem.Core
         public static OrbitalElements FromClassical(
             double epochJd, double aKm, double e, double iDeg, double nodeDeg, double argPeriDeg,
             double meanAnomalyDeg, double periodDays,
-            double nodeRateDegPerDay = 0, double varpiRateDegPerDay = 0)
+            double nodeRateDegPerDay = 0, double varpiRateDegPerDay = 0, double meanLongitudeAccelDegPerYear2 = 0)
         {
             double varpi = nodeDeg + argPeriDeg;
             return new OrbitalElements
             {
+                LDotDotDegPerCentury2 = meanLongitudeAccelDegPerYear2 * 1e4,
                 EpochJd = epochJd,
                 AKm = aKm,
                 E = e,
@@ -127,11 +134,11 @@ namespace SolarSystem.Core
             double a = AKm + ADotKmPerCentury * t;
             double e = Math.Max(0, Math.Min(0.99, E + EDot * t));
             double i = (IDeg + IDot * t) * Astro.Deg2Rad;
-            double l = LDeg + LDotDegPerCentury * t;
+            double l = LDeg + LDotDegPerCentury * t + LDotDotDegPerCentury2 * t * t;
             double varpi = VarpiDeg + VarpiDot * t;
             double node = NodeDeg + NodeDot * t;
             double m = Astro.WrapRadians((l - varpi) * Astro.Deg2Rad);
-            double n = LDotDegPerCentury / Astro.DaysPerCentury * Astro.Deg2Rad;
+            double n = (LDotDegPerCentury + 2 * LDotDotDegPerCentury2 * t) / Astro.DaysPerCentury * Astro.Deg2Rad;
             return new KeplerState(a, e, i, node * Astro.Deg2Rad, (varpi - node) * Astro.Deg2Rad, m, n);
         }
     }

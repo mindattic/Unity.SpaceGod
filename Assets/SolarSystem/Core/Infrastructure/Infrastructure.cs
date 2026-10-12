@@ -242,8 +242,16 @@ namespace SolarSystem.Core
         /// <summary>The ring itself.</summary>
         public ParkingOrbit RingPoint => Point(RadiusKm);
 
-        /// <summary>Where a ship waits to be cleared (spread a little east or west by ship).</summary>
-        public ParkingOrbit HoldPoint(Ship ship) => Point(RadiusKm + HoldKm, ((ship.Id * 7919) % 9 - 4) * 0.12);
+        /// <summary>
+        /// Where a ship arrives to wait its turn: off the top of the line, spread east or west and up or
+        /// down by ship (golden-ratio steps, so no two ships share a spot).
+        /// </summary>
+        public ParkingOrbit HoldPoint(Ship ship)
+        {
+            double f = ship.Id * 0.6180339887498949 % 1;
+            double g = ship.Id * 0.7548776662466927 % 1;
+            return Point(RadiusKm + HoldKm * (0.85 + 0.3 * g), (f - 0.5) * 1.2);
+        }
 
         /// <summary>Unit vector from the body's centre up through the ring at a date.</summary>
         public DVec3 Up(double jd) => Point(1).OffsetAt(jd);

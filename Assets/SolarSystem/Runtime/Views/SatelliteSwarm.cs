@@ -37,7 +37,7 @@ namespace SolarSystem.Views
                 int n = c.Count;
                 var go = new GameObject(c.Name);
                 go.transform.SetParent(parent, false);
-                var mesh = new Mesh { name = c.Name, indexFormat = IndexFormat.UInt32 };
+                var mesh = Materials.Own(new Mesh { name = c.Name, indexFormat = IndexFormat.UInt32 });
                 mesh.MarkDynamic();
                 var vertices = new Vector3[n];
                 var colors = new Color[n];

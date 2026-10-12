@@ -144,7 +144,7 @@ namespace SolarSystem.Views
                 ringGo.transform.SetParent(Root.transform, false);
                 float inner = (float)(body.RingInnerKm / body.RadiusKm);
                 float outer = (float)(body.RingOuterKm / body.RadiusKm);
-                ringGo.AddComponent<MeshFilter>().sharedMesh = MeshFactory.Annulus(inner, outer);
+                ringGo.AddComponent<MeshFilter>().sharedMesh = Materials.Own(MeshFactory.Annulus(inner, outer));
                 var rr = ringGo.AddComponent<MeshRenderer>();
                 ringMaterial = Materials.Create(Materials.Ring, body.Name + " Rings");
                 ringMaterial.SetFloat("_InnerKm", (float)body.RingInnerKm);

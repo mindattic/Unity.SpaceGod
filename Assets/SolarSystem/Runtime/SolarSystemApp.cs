@@ -260,6 +260,7 @@ namespace SolarSystem
             Hovered = Target.None;
             Scale.Layout(Ephemeris, bodyScene);
             UpdateRadii();
+            UpdateShips(0);
             Structures.Layout();
             // A new system starts level with the ecliptic again (R levels to its own plane).
             SpaceCamera.SetUpFrame(Quaternion.identity);
@@ -708,7 +709,8 @@ namespace SolarSystem
                     }
                     else if (ship.Phase == ShipPhase.Lane)
                     {
-                        shipScene[i] = Scale.LaneScene(Ephemeris, bodyScene, Fleet.Lanes, ship, st.Progress, out var travel);
+                        shipScene[i] = Scale.LaneScene(Ephemeris, bodyScene, Fleet.Lanes, ship, st.Progress, out var travel)
+                            + SideScene(Fleet.LanePoint(ship, jd, st.Progress), ship.LaneHoldSide) * Fleet.LaneRejoin(ship, jd);
                         facing = travel;
                     }
                     else if (ship.Phase == ShipPhase.Lurk || ship.Phase == ShipPhase.Adrift)
@@ -722,6 +724,10 @@ namespace SolarSystem
                         facing = st.Progress < 0.5 ? travel : -travel;
                     }
 
+                    // Stepping aside to keep clear of another ship: the sidestep (true km) in scene units here.
+                    var evasion = Fleet.EvasionOf(ship);
+                    if (evasion.LengthSquared > 0) shipScene[i] += evasion.SwapYZ * KmToSceneNear(ship, st.HelioKm);
+
                     var f = new Vector3((float)facing.X, (float)facing.Y, (float)facing.Z);
                     if (f.sqrMagnitude < 1e-12f) f = Vector3.forward;
                     var up = Mathf.Abs(Vector3.Dot(f.normalized, Vector3.up)) > 0.98f ? Vector3.right : Vector3.up;
@@ -731,6 +737,22 @@ namespace SolarSystem
                 }
             }
             PlaceInBattles(dt);
+        }
+
+        /// <summary>Scene units per km around a ship (sideways), from the mapping of the world it is nearest, or the star's out in open space.</summary>
+        double KmToSceneNear(Ship ship, DVec3 helio)
+        {
+            var c = ship.Controller;
+            int b = c.Ring != null && (c.Phase == ShipPhase.Queued || c.Planetside) ? c.Ring.Body : c.Orbit?.Body ?? 0;
+            double d = (helio - Ephemeris.Helio(b)).Length;
+            var body = Catalog[b];
+            if (d > ScaleModel.NeighbourhoodKm(body))
+            {
+                body = Catalog.Root;
+                d = (helio - Ephemeris.Helio(0)).Length;
+            }
+            d = Math.Max(d, Math.Max(body.RadiusKm, 1));
+            return Scale.LocalDistance(body, d) / d;
         }
 
         /// <summary>

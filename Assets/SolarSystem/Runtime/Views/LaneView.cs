@@ -31,7 +31,7 @@ namespace SolarSystem.Views
             this.app = app;
             var go = new GameObject("Hyperlanes");
             go.transform.SetParent(parent, false);
-            mesh = new Mesh { name = "Hyperlanes", indexFormat = IndexFormat.UInt32 };
+            mesh = Materials.Own(new Mesh { name = "Hyperlanes", indexFormat = IndexFormat.UInt32 });
             mesh.MarkDynamic();
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             renderer = go.AddComponent<MeshRenderer>();

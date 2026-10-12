@@ -9,13 +9,16 @@ namespace SolarSystem.Core
     /// Sources:
     ///  - Planets: JPL "Keplerian Elements for Approximate Positions of the Major Planets", table 1
     ///    (valid 1800-2050), E. M. Standish. Earth's entry is the Earth-Moon barycentre.
-    ///  - Ceres, Eris: JPL Small-Body Database osculating elements, epoch JD 2459000.5.
-    ///  - The Moon: mean elements at J2000 with nodal regression (18.6 yr) and apsidal precession (8.85 yr).
+    ///  - Eris: JPL Small-Body Database osculating elements, epoch JD 2459000.5.
+    ///  - Ceres: mean elements least-squares fitted to JPL Horizons positions every 30 days over 2000-2050.
+    ///  - The Moon: principal ELP-2000/82 terms (Meeus ch. 47), see LunarTheory; its catalogue elements
+    ///    are the mean orbit, used only to draw its path.
     ///  - Other moons: JPL satellite mean elements (ssd.jpl.nasa.gov/sats/elem, epoch J2000), in each
     ///    moon's Laplace plane or its parent's equator, refined by a least-squares fit to JPL Horizons
     ///    positions sampled every 73 days over 2000-2050. Across that span every moon stays within
-    ///    0.5 degrees of Horizons along its orbit, except Miranda (1.7) and Phobos (2; its tidal
-    ///    decay is not modelled). Nodes are measured from the reference plane's ascending node on
+    ///    0.5 degrees of Horizons along its orbit, except Miranda (1.7, strongly perturbed by its
+    ///    neighbours). Phobos was refitted 2026-10 with its tidal decay (a quadratic mean-longitude term):
+    ///    within 0.07 degrees. Nodes are measured from the reference plane's ascending node on
     ///    the ecliptic, not on the ICRF equator as in JPL's table.
     ///  - Radii, GM, poles and rotation: IAU WGCCRE report and NASA planetary fact sheets.
     /// </summary>
@@ -162,14 +165,21 @@ namespace SolarSystem.Core
                 AtmosphereColor = new Rgb(0.95f, 0.6f, 0.4f), AtmosphereStrength = 0.2f,
                 Summary = "Home of Olympus Mons and Valles Marineris.",
             };
-            yield return WithMap(Moon("Phobos", "Mars", 11.27, 7.087e-4, 9375, 0.0254, 0.0127, 317.7107, 295.9267, 283.5863, 0.3189101, 0.428156, -0.464914, 317.7, 52.9, new Rgb(0.42f, 0.38f, 0.35f)), "phobos_color", true);
+            // Phobos spirals in under Mars's tides: its mean longitude gains 1.26e-3 deg/yr² (fitted, matching
+            // the published secular acceleration). The node regresses and periapsis advances with Mars's J2.
+            var phobos = Moon("Phobos", "Mars", 11.27, 7.087e-4, 9374.92, 0.015125, 1.07438, 128.2222, 216.4756, 189.5918, 0.3189101053, -0.4357808, 0.4351860, 317.7, 52.9, new Rgb(0.42f, 0.38f, 0.35f));
+            phobos.Elements = OrbitalElements.FromClassical(Astro.J2000, 9374.92, 0.015125, 1.07438, 128.2222, 216.4756, 189.5918, 0.3189101053,
+                -0.4357808, 0.4351860, 1.2614e-3);
+            yield return WithMap(phobos, "phobos_color", true);
             yield return WithMap(Moon("Deimos", "Mars", 6.2, 9.6e-5, 23457, 0.0, 1.7878, 13.753, 352.1363, 212.2813, 1.26244093, -0.018163, -0.036847, 316.6, 53.5, new Rgb(0.55f, 0.5f, 0.45f)), "deimos_color", true);
 
             yield return new BodyDefinition
             {
                 Name = "Ceres", Kind = BodyKind.DwarfPlanet, ParentName = "Sun", RadiusKm = 469.7, Gm = 62.6284,
-                Elements = OrbitalElements.FromClassical(sbdbEpoch, 2.769165 * Astro.AuKm, 0.07600902, 10.59407, 80.30553, 73.59764,
-                    77.37209589, OrbitalElements.PeriodFromGm(2.769165 * Astro.AuKm, 1.32712440018e11)),
+                // Mean elements fitted to JPL Horizons over 2000-2050 (within 0.5° along its orbit; Jupiter
+                // perturbs it). The SBDB osculating set once used here had the wrong mean anomaly for its epoch.
+                Elements = OrbitalElements.FromClassical(Astro.J2000, 413958905.2, 0.0777927, 10.589118, 80.537317, 72.967047,
+                    7.312862, 1681.58004, -3.7765e-5, 1.0614e-5),
                 PoleRaDeg = 291.42, PoleDecDeg = 66.76, RotationHours = 9.074,
                 PrimeMeridianDeg = 170.650, PrimeMeridianRateDegPerDay = 952.1532,
                 Color = new Rgb(0.5f, 0.49f, 0.47f), Texture = "ceres_color", TintTexture = true,
@@ -261,7 +271,7 @@ namespace SolarSystem.Core
                 Color = new Rgb(0.8f, 0.68f, 0.55f), Texture = "pluto_color", TintTexture = true,
                 Summary = "Its eccentric orbit dips inside Neptune's for 20 years of every 248.",
             };
-            yield return WithMap(Moon("Charon", "Pluto", 606, 105.88, 19600, 0.0, 0.0, 17.1127, 0.0, 304.1195, 6.38722208, 0, 0, new Rgb(0.6f, 0.58f, 0.56f)), "charon_color", true);
+            yield return WithMap(Moon("Charon", "Pluto", 606, 105.88, 19595.8, 0.00016, 0.0861, 28.2176, 144.2491, 148.7655, 6.387222074, 0.000156, 0.000002, new Rgb(0.6f, 0.58f, 0.56f)), "charon_color", true);
 
             yield return new BodyDefinition
             {
