@@ -61,8 +61,164 @@ namespace SolarSystem
             yield return Wait(2.8f);
             yield return stop("10-jupiter-system");
 
+            yield return InfrastructureTour(app, stop);
+            yield return CentauriTour(app, stop);
             yield return SurfaceTour(app, stop);
             yield return BattleTour(app, stop);
+        }
+
+        // ---------------------------------------------------------------- what is in orbit
+
+        /// <summary>
+        /// Earth's docking rings and satellite clouds, a ring up close, a merchant coming down through
+        /// the atmosphere under it, a yard with a hull on its slip, and the ISS.
+        /// </summary>
+        static IEnumerator InfrastructureTour(SolarSystemApp app, Func<string, IEnumerator> stop)
+        {
+            var infra = app.World.Infrastructure;
+            if (infra == null) yield break;
+            int earth = app.Catalog["Earth"].Index;
+            View(app, earth, Blend(Dir(app, earth, 0), Side(Dir(app, earth, 0)), 0.45), 7.5);
+            yield return Wait(3f);
+            yield return stop("11a-earth-rings-and-satellites");
+
+            var ny = infra.Rings.First(r => r.City == "New York");
+            var rt = Target.OfRing(ny);
+            app.Select(rt);
+            app.SpaceCamera.FocusOn(rt, 9, 20f);
+            yield return Wait(3f);
+            yield return stop("11b-new-york-ring");
+
+            // A merchant coming down: hurry the clock until one starts down to Earth, then watch it.
+            bool Fresh(Ship s) => !s.Destroyed && s.Phase == ShipPhase.Descent && s.Ring != null && s.Ring.Body == earth
+                                  && app.Clock.Jd - s.PhaseStartJd < s.Ring.DescentDays * 0.25;
+            app.Clock.Paused = false;
+            app.Clock.SetWarp(5);
+            Ship lander = null;
+            float deadline = Time.unscaledTime + 30f;
+            while (lander == null && Time.unscaledTime < deadline)
+            {
+                lander = app.Fleet.Ships.FirstOrDefault(Fresh);
+                yield return null;
+            }
+            if (lander != null)
+            {
+                app.Clock.SetWarp(3);
+                var lt = Target.OfShip(lander);
+                // From the side and a little above, so the ground it is heading for fills the background.
+                var up = (app.ShipScene(lander) - app.BodyScene(earth)).Normalized;
+                ViewShip(app, lander, Blend(Side(up), up, 0.3), 16);
+                yield return Wait(3f);
+                yield return stop("11c-descent-from-the-ring");
+                // Slow down for the last of it, through the entry interface.
+                deadline = Time.unscaledTime + 40f;
+                while (lander.Phase == ShipPhase.Descent && Time.unscaledTime < deadline && (app.Clock.Jd - lander.PhaseStartJd) / lander.Ring.DescentDays < 0.9)
+                    yield return null;
+                app.Clock.SetWarp(2);
+                var low = (app.ShipScene(lander) - app.BodyScene(earth)).Normalized;
+                ViewShip(app, lander, Blend(Side(low), low, 0.2), 10);
+                deadline = Time.unscaledTime + 25f;
+                while (lander.Phase == ShipPhase.Descent && app.ShipStateOf(lander).Heat < 0.5f && Time.unscaledTime < deadline) yield return null;
+                if (lander.Phase == ShipPhase.Descent)
+                {
+                    yield return Wait(1.2f);
+                    yield return stop("11d-entry-plasma");
+                }
+            }
+            app.Clock.SetWarp(SimClock.DefaultWarpIndex);
+
+            var queued = app.Fleet.Ships.FirstOrDefault(s => !s.Destroyed && s.Phase == ShipPhase.Queued);
+            if (queued != null)
+            {
+                var qt = Target.OfShip(queued);
+                app.Select(qt);
+                app.SpaceCamera.FocusOn(qt, 10, 18f);
+                yield return Wait(3f);
+                yield return stop("11e-queued-at-" + queued.Ring.Name.ToLowerInvariant().Replace(' ', '-'));
+            }
+
+            var yard = infra.Structures.FirstOrDefault(s => s.Kind == StructureKind.Shipyard && s.SlipProgress > 0.3)
+                       ?? infra.Structures.First(s => s.Kind == StructureKind.Shipyard);
+            var yt = Target.OfStructure(yard);
+            app.Select(yt);
+            app.SpaceCamera.FocusOn(yt, 3.2, 24f);
+            yield return Wait(3.2f);
+            yield return stop("11f-orbital-shipyard");
+
+            var iss = infra.Structures.FirstOrDefault(s => s.Name == "ISS");
+            if (iss != null)
+            {
+                var it = Target.OfStructure(iss);
+                app.Select(it);
+                app.SpaceCamera.FocusOn(it, 4, 15f);
+                yield return Wait(3f);
+                yield return stop("11g-iss");
+            }
+        }
+
+        // ---------------------------------------------------------------- Alpha Centauri
+
+        /// <summary>Out to Alpha Centauri through the interstellar view, round its stars, worlds and gates, and home.</summary>
+        static IEnumerator CentauriTour(SolarSystemApp app, Func<string, IEnumerator> stop)
+        {
+            var sol = app.ActiveSystem;
+            var ac = app.Galaxy.Find("Alpha Centauri");
+            if (ac == null) yield break;
+            app.Clock.Paused = false;
+            app.Clock.SetWarp(SimClock.DefaultWarpIndex);
+            app.TravelTo(ac);
+            while (app.Travel.Active && app.Travel.Stage != Cameras.StarTravel.Leg.Cross) yield return null;
+            yield return Wait(1.9f);
+            yield return stop("30-between-the-stars");
+            while (app.Travel.Active) yield return null;
+            yield return Wait(2.2f);
+            yield return stop("31-alpha-centauri");
+            // The A-B orbit is tilted 70-odd degrees to the ecliptic: level the view to it.
+            app.LevelView();
+            yield return Wait(2.2f);
+            yield return stop("31b-alpha-centauri-levelled");
+
+            int a = app.Catalog["Alpha Centauri A"].Index;
+            int b = app.Catalog["Alpha Centauri B"].Index;
+            View(app, a, Blend(Dir(app, a, b), new DVec3(0, 1, 0), 0.35), 5);
+            yield return Wait(3f);
+            yield return stop("32-alpha-centauri-a-and-b");
+
+            Focus(app, Target.OfBody(app.Catalog["Rigil Gate"].Index), 7);
+            yield return Wait(3f);
+            yield return stop("33-rigil-gate");
+
+            int giant = app.Catalog["Alpha Centauri Ab"].Index;
+            View(app, giant, Blend(Dir(app, giant, a), Side(Dir(app, giant, a)), 0.4), 3);
+            yield return Wait(3f);
+            yield return stop("34-candidate-giant-s1");
+
+            int proxima = app.Catalog["Proxima Centauri"].Index;
+            int pb = app.Catalog["Proxima b"].Index;
+            var pt = Target.OfBody(proxima);
+            app.Select(pt);
+            app.SpaceCamera.FocusOn(pt, app.Scale.LocalDistance(app.Catalog[proxima], 0.06 * Astro.AuKm) * 1.8 / app.BodyDisplayRadius(proxima), 40f);
+            yield return Wait(3.4f);
+            yield return stop("35-proxima-system");
+
+            View(app, pb, Blend(Dir(app, pb, proxima), Side(Dir(app, pb, proxima)), 0.8), 3.2);
+            yield return Wait(3f);
+            yield return stop("36-proxima-b");
+
+            var gate = app.World.Infrastructure.Rings.FirstOrDefault();
+            if (gate != null)
+            {
+                var gt = Target.OfRing(gate);
+                app.Select(gt);
+                app.SpaceCamera.FocusOn(gt, 10, 20f);
+                yield return Wait(3f);
+                yield return stop("37-" + gate.Name.ToLowerInvariant().Replace(' ', '-'));
+            }
+
+            app.TravelTo(sol);
+            while (app.Travel.Active) yield return null;
+            yield return Wait(1.5f);
+            yield return stop("38-home-again");
         }
 
         // ---------------------------------------------------------------- the war
@@ -181,14 +337,14 @@ namespace SolarSystem
             // The belt from above at gameplay scale, then at true scale.
             var sun = Target.OfBody(0);
             app.Select(sun);
-            double span = app.Scale.LocalDistance(app.Catalog.Sun, 4.0 * Astro.AuKm);
+            double span = app.Scale.LocalDistance(app.Catalog.Root, 4.0 * Astro.AuKm);
             app.SpaceCamera.FocusOn(sun, span * 1.9 / app.BodyDisplayRadius(0), 62f);
             yield return Wait(3f);
             yield return stop("17-asteroid-belt-gameplay");
             yield return Wait(3f);
             app.ToggleScale();
             yield return Wait(3.2f);
-            app.SpaceCamera.FocusOn(sun, app.Scale.LocalDistance(app.Catalog.Sun, 4.0 * Astro.AuKm) * 1.9 / app.BodyDisplayRadius(0), 62f);
+            app.SpaceCamera.FocusOn(sun, app.Scale.LocalDistance(app.Catalog.Root, 4.0 * Astro.AuKm) * 1.9 / app.BodyDisplayRadius(0), 62f);
             yield return Wait(3f);
             yield return stop("18-asteroid-belt-realistic");
             app.ToggleScale();
@@ -232,6 +388,17 @@ namespace SolarSystem
             app.Select(t);
             double r = app.BodyDisplayRadius(body);
             var eye = app.BodyScene(body) + dir * (r * radii * 1.3);
+            var look = -dir;
+            app.SpaceCamera.PlaceFree(eye, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
+            app.SpaceCamera.FocusOn(t, radii, (float)(Math.Asin(Math.Max(-1, Math.Min(1, dir.Y))) * Mathf.Rad2Deg));
+        }
+
+        /// <summary>Frames a ship from scene direction <paramref name="dir"/> (unit, from the ship).</summary>
+        static void ViewShip(SolarSystemApp app, Ship ship, DVec3 dir, double radii)
+        {
+            var t = Target.OfShip(ship);
+            app.Select(t);
+            var eye = app.ShipScene(ship) + dir * (app.ShipDisplayLength(ship) * 0.5 * radii * 1.3);
             var look = -dir;
             app.SpaceCamera.PlaceFree(eye, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
             app.SpaceCamera.FocusOn(t, radii, (float)(Math.Asin(Math.Max(-1, Math.Min(1, dir.Y))) * Mathf.Rad2Deg));

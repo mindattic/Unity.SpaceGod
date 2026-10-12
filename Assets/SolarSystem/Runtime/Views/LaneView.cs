@@ -52,14 +52,13 @@ namespace SolarSystem.Views
             var eph = app.Ephemeris;
             var scale = app.Scale;
             var scene = app.BodyScenes;
-            double keepOut = scale.LocalDistance(app.Catalog.Sun, Hyperlanes.SunKeepOutKm);
             float now = Time.unscaledTime;
             foreach (var lane in lanes.Lanes)
             {
-                var a = scale.RampScene(eph, scene, lanes, lane, lane.A);
-                var b = scale.RampScene(eph, scene, lanes, lane, lane.B);
+                var aKm = lanes.RampHelio(lane, lane.A, eph.Jd);
+                var bKm = lanes.RampHelio(lane, lane.B, eph.Jd);
                 for (int i = 0; i <= Samples; i++)
-                    curve[i] = app.Relative(Hyperlanes.Curve(a, b, lane.Bend, keepOut, (double)i / Samples, DVec3.UnitY));
+                    curve[i] = app.Relative(scale.LaneCurveScene(eph, scene, lanes, lane, lane.A, aKm, lane.B, bKm, (double)i / Samples, out _));
                 for (int i = 0; i < Samples; i++)
                 {
                     Ribbon(curve[i], curve[i + 1], 6f, LaneColor * 0.16f);

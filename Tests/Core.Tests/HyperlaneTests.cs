@@ -134,10 +134,10 @@ namespace SolarSystem.Core.Tests
                     double t0 = s.PhaseStartJd;
                     eph.Update(t0);
                     scale.Layout(eph, scene);
-                    var laneStart = scale.LaneScene(eph, scene, s, 0, out _);
+                    var laneStart = scale.LaneScene(eph, scene, w.Fleet.Lanes, s, 0, out _);
                     var ramp = scale.MapNear(eph, scene, s.LaneLeg.From, eph.Helio(s.LaneLeg.From) + s.DepartureOrbit.OffsetAt(t0));
                     Assert.True((laneStart - ramp).Length < 1e-3 * Math.Max(1, ramp.Length * 1e-6), $"{s.Name} lane starts {(laneStart - ramp).Length:G3} units off its ramp");
-                    var tail = scale.LaneScene(eph, scene, s, 0.002, out _);
+                    var tail = scale.LaneScene(eph, scene, w.Fleet.Lanes, s, 0.002, out _);
                     Assert.True((tail - laneStart).Length < 0.05 * scale.LocalDistance(eph.Catalog.Sun, s.LaneLengthKm), $"{s.Name} jumps leaving the ramp");
                     checkedRamps++;
                     eph.Update(jd);

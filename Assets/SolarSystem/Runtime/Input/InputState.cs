@@ -35,6 +35,8 @@ namespace SolarSystem.Input
         public bool ToggleMarket;
         public bool WatchBattle;
         public bool ToggleLanes;
+        public bool ToggleSatellites;
+        public bool LevelView;
         public bool CycleShips;
         public bool CycleBackward;
         public bool Home;
@@ -58,7 +60,7 @@ namespace SolarSystem.Input
 
             Move = new Vector3(
                 Axis(kb.dKey, kb.aKey),
-                Axis(kb.eKey, kb.qKey) + Axis(kb.spaceKey, kb.cKey),
+                Axis(kb.eKey, kb.qKey) + Axis(kb.rightBracketKey, kb.cKey),
                 Axis(kb.wKey, kb.sKey));
             Move.y = Mathf.Clamp(Move.y, -1, 1);
             Boost = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
@@ -98,7 +100,7 @@ namespace SolarSystem.Input
             ToggleScale = kb.gKey.wasPressedThisFrame || kb.backquoteKey.wasPressedThisFrame;
             TimeFaster = kb.periodKey.wasPressedThisFrame || kb.equalsKey.wasPressedThisFrame || kb.numpadPlusKey.wasPressedThisFrame;
             TimeSlower = kb.commaKey.wasPressedThisFrame || kb.minusKey.wasPressedThisFrame || kb.numpadMinusKey.wasPressedThisFrame;
-            TogglePause = kb.pKey.wasPressedThisFrame || kb.pauseKey.wasPressedThisFrame;
+            TogglePause = kb.spaceKey.wasPressedThisFrame || kb.pKey.wasPressedThisFrame || kb.pauseKey.wasPressedThisFrame;
             ResetTime = kb.tKey.wasPressedThisFrame;
             ToggleOrbits = kb.oKey.wasPressedThisFrame;
             ToggleLabels = kb.lKey.wasPressedThisFrame;
@@ -107,6 +109,8 @@ namespace SolarSystem.Input
             ToggleMarket = kb.mKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;
             ToggleLanes = kb.nKey.wasPressedThisFrame;
+            ToggleSatellites = kb.kKey.wasPressedThisFrame;
+            LevelView = kb.rKey.wasPressedThisFrame;
             CycleShips = kb.tabKey.wasPressedThisFrame;
             CycleBackward = CycleShips && Boost;
             Home = kb.homeKey.wasPressedThisFrame || kb.backspaceKey.wasPressedThisFrame;
@@ -125,7 +129,7 @@ namespace SolarSystem.Input
             Boost = Slow = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = WatchBattle = ToggleLanes = CycleShips = CycleBackward = Home = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = false;
             NumberKey = -1;
         }
 

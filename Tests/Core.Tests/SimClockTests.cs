@@ -25,5 +25,48 @@ namespace SolarSystem.Core.Tests
             for (int i = 0; i < 50; i++) clock.Slower();
             Assert.Equal(0, clock.WarpIndex);
         }
+
+        [Fact]
+        public void PauseEasesToAStopAndResumesTheSameWay()
+        {
+            var clock = new SimClock(Astro.J2000);
+            clock.SetWarp(6);
+            clock.ToggleEasedPause();
+            Assert.True(clock.Pausing && clock.PauseHeld);
+            double frame = 1.0 / 144, t = 0, previous = 1;
+            while (!clock.Paused && t < 10)
+            {
+                clock.Advance(frame);
+                t += frame;
+                Assert.True(clock.Speed <= previous);
+                previous = clock.Speed;
+            }
+            // 0.99 per step at 120 steps/s from 1 to under 1%: ln(0.01)/ln(0.99)/120 = 3.82 s.
+            Assert.True(clock.Paused);
+            Assert.InRange(t, 3.7, 3.95);
+            Assert.Equal(0, clock.Speed);
+            double jd = clock.Jd;
+            clock.Advance(1);
+            Assert.Equal(jd, clock.Jd);
+
+            clock.ToggleEasedPause();
+            Assert.True(clock.Resuming && !clock.Paused);
+            t = 0;
+            while (clock.Resuming && t < 10)
+            {
+                clock.Advance(frame);
+                t += frame;
+            }
+            Assert.Equal(1, clock.Speed);
+            Assert.InRange(t, 3.7, 3.95);
+
+            // Reversing mid-ease picks up from where it had got to, not from a standstill.
+            clock.ToggleEasedPause();
+            for (int i = 0; i < 100; i++) clock.Advance(frame);
+            double partway = clock.Speed;
+            clock.ToggleEasedPause();
+            Assert.Equal(partway, clock.Speed);
+            Assert.True(clock.Resuming);
+        }
     }
 }

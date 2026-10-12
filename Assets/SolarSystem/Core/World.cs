@@ -18,7 +18,26 @@ namespace SolarSystem.Core
         public Diplomacy Diplomacy { get; } = new Diplomacy();
         public War War { get; private set; }
 
+        /// <summary>Stations, yards, factories and spacecraft in orbit, and the docking rings over populous worlds.</summary>
+        public Infrastructure Infrastructure { get; private set; }
+
         public Faction Sol, Belt, Reach, Independents, Pirates;
+
+        /// <summary>The two powers whose wars and ceasefires come and go (Sol: the Federation and the Reach).</summary>
+        public Faction RivalA, RivalB;
+
+        /// <summary>Names the pirates give their raiders; null for the default list.</summary>
+        public string[] RaiderNames;
+
+        /// <summary>The merchant fleet yards keep up before navies get their slips, and the most they build to.</summary>
+        public int MerchantTarget = 45, MerchantCap = 70;
+
+        /// <summary>How many warships a navy keeps in peace and in war.</summary>
+        public int NavyCap = 20, NavyCapAtWar = 34;
+
+        /// <summary>The most raider groups the pirates field, and what smuggling and rackets bring them a day.</summary>
+        public int PirateGroupCap = 4;
+        public double PirateIncomePerDay = 1.5e6;
 
         /// <summary>Things worth telling an observer about (a battle, a capture, a new hull), newest last.</summary>
         public readonly List<WorldEvent> Events = new List<WorldEvent>();
@@ -86,42 +105,193 @@ namespace SolarSystem.Core
             w.Independents.Treasury = 6e8;
             w.Pirates.Treasury = 2e8;
             w.Diplomacy.Set(w.Sol, w.Reach, Relation.War);
+            w.RivalA = w.Sol;
+            w.RivalB = w.Reach;
 
             w.BuildSettlements();
-            economy.Initialise();
-            w.War = new War(w, startJd, seed + 2);
+            w.Wire(startJd, seed, Hyperlanes.CreateDefault(ephemeris));
             var war = w.War;
-
-            fleet.Lanes = Hyperlanes.CreateDefault(ephemeris);
-            economy.EstimateTravelDays = fleet.EstimateTravelDays;
-            economy.Danger = body => war.Danger(body) * 0.08;
-            // Yards keep the merchant fleet up first; then the navies take their slips.
-            economy.ChooseBuild = yard => w.TraderCount() < 45 ? w.ChooseBuild(yard) : war.ChooseWarship(yard) ?? w.ChooseBuild(yard);
-            economy.ShipBuilt = w.OnShipBuilt;
-            fleet.BeforeEvent = economy.AdvanceTo;
-            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict;
-            fleet.Dwell = war.Dwell;
-            fleet.Arrived = (ship, when) =>
-            {
-                if (w.IsTrader(ship)) economy.OnArrive(ship, ship.Orbit.Body, when);
-                war.OnArrived(ship, when);
-            };
-            fleet.ChooseNext = (ship, here, when) =>
-            {
-                if (!w.IsTrader(ship)) return war.ChooseNext(ship, here, when);
-                int next = economy.PlanTrade(ship, here, when);
-                if (next < 0 && !ship.HasCargo) ship.Cargo = "Empty, looking for work";
-                return next;
-            };
+            w.Infrastructure.AddSolSpacecraft();
+            w.Infrastructure.AddSolRings(w.Economy);
+            w.Fleet.Rings.AddRange(w.Infrastructure.Rings);
 
             w.BuildMilitary(startJd);
-            w.BuildMerchants(startJd);
+            w.BuildMerchants(startJd, FreighterNames, MinerNames, CourierNames, new[] { w.Independents, w.Independents, w.Sol, w.Belt, w.Reach, w.Independents },
+                i => i % 3 == 2 ? w.Reach : w.Belt);
             int haven = w.Catalog["Deimos"].Index;
             war.RaisePirateGroup(startJd, haven);
             war.RaisePirateGroup(startJd, haven);
 
             w.Update(jd);
             return w;
+        }
+
+        /// <summary>Connects the markets, the wars and the fleet's schedule (the same in every system).</summary>
+        void Wire(double startJd, int seed, Hyperlanes lanes)
+        {
+            var economy = Economy;
+            var fleet = Fleet;
+            economy.Initialise();
+            War = new War(this, startJd, seed + 2);
+            var war = War;
+            Infrastructure = new Infrastructure(Catalog);
+            Infrastructure.AddSettlementStructures(economy, seed + 3);
+            // Merchants and couriers go down to the surface through the rings; warships and pirates hold orbit.
+            fleet.Lands = IsTrader;
+
+            fleet.Lanes = lanes;
+            economy.EstimateTravelDays = fleet.EstimateTravelDays;
+            economy.Danger = body => war.Danger(body) * 0.08;
+            // Yards keep the merchant fleet up first; then the navies take their slips.
+            economy.ChooseBuild = yard => TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
+            economy.ShipBuilt = OnShipBuilt;
+            fleet.BeforeEvent = economy.AdvanceTo;
+            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict;
+            fleet.Dwell = war.Dwell;
+            fleet.Arrived = (ship, when) =>
+            {
+                if (IsTrader(ship)) economy.OnArrive(ship, ship.Orbit.Body, when);
+                war.OnArrived(ship, when);
+            };
+            fleet.ChooseNext = (ship, here, when) =>
+            {
+                if (!IsTrader(ship)) return war.ChooseNext(ship, here, when);
+                int next = economy.PlanTrade(ship, here, when);
+                if (next < 0 && !ship.HasCargo) ship.Cargo = "Empty, looking for work";
+                return next;
+            };
+        }
+
+        // ---------------------------------------------------------------- Alpha Centauri
+
+        /// <summary>
+        /// Alpha Centauri, a century or so after settlement: the same machinery as Sol, but young and
+        /// thin. The Centauri Accord governs the Proxima colonies with a small navy; the Toliman
+        /// Combine, a corporate concern, runs the stations around A and B with no warships of its own;
+        /// Kentaurus Free Traders carry most of the freight; and the Long Dark raid the long lanes
+        /// from a derelict station out by Proxima. All fiction, on real (and candidate) worlds.
+        /// </summary>
+        public static World CreateAlphaCentauri(Ephemeris ephemeris, double jd, int seed = 4243)
+        {
+            double startJd = jd - 45;
+            var w = new World(ephemeris, startJd, seed);
+            var fleet = w.Fleet;
+
+            var accord = w.Sol = fleet.AddFaction("Centauri Accord", "CAS", new Rgb(0.3f, 0.88f, 0.75f));
+            var combine = w.Belt = fleet.AddFaction("Toliman Combine", "TCV", new Rgb(1f, 0.78f, 0.3f));
+            w.Independents = fleet.AddFaction("Kentaurus Free Traders", "KFT", new Rgb(0.78f, 0.84f, 0.92f));
+            w.Pirates = fleet.AddFaction("Long Dark", "", new Rgb(0.85f, 0.25f, 0.6f));
+            accord.IsMilitary = true;
+            w.Pirates.IsPirate = true;
+            accord.MarineQuality = 1.15;
+            combine.MarineQuality = 0.8;
+            w.Independents.MarineQuality = 0.6;
+            w.Pirates.MarineQuality = 1.2;
+            accord.Treasury = 9e8;
+            combine.Treasury = 7e8;
+            w.Independents.Treasury = 1.2e8;
+            w.Pirates.Treasury = 8e7;
+            // Rivals, not enemies: the hook for a war later.
+            w.RivalA = accord;
+            w.RivalB = combine;
+            w.MerchantTarget = 18;
+            w.MerchantCap = 28;
+            w.NavyCap = 10;
+            w.NavyCapAtWar = 16;
+            // A thin system feeds few raiders.
+            w.PirateGroupCap = 2;
+            w.PirateIncomePerDay = 4e5;
+            w.RaiderNames = new[]
+            {
+                "Lightless", "Event Horizon", "Cold Sleep", "Red Shift", "Penumbra", "Dead Air", "Null Return", "Last Light",
+                "Occultation", "Silent Running", "Umbral", "Long Fall",
+            };
+
+            w.BuildCentauriSettlements();
+            w.Wire(startJd, seed, Hyperlanes.CreateAlphaCentauri(ephemeris));
+            var war = w.War;
+            w.Infrastructure.AddCentauriRings(w.Economy);
+            w.Fleet.Rings.AddRange(w.Infrastructure.Rings);
+
+            fleet.Group(accord, startJd, ShipClass.Battleship, "Terminator", new[] { "Proxima b", "Proxima d", "Proxima c" },
+                (ShipClass.Cruiser, "Long Noon"), (ShipClass.Destroyer, "Flare"), (ShipClass.Destroyer, "Ember"));
+            fleet.Group(accord, startJd, ShipClass.Cruiser, "Centaur", new[] { "Proxima b", "Rigil Gate", "Toliman Forge" },
+                (ShipClass.Destroyer, "Hadar"), (ShipClass.Destroyer, "Agena"));
+
+            string[] freighters =
+            {
+                "Second Sun", "Tidal Lock", "Far Side", "Kentaur Pride", "Twilight Band", "Nine Lights", "Slow Fuse",
+                "Toliman's Due", "Red Noon", "Barycentre",
+            };
+            string[] haulers = { "Dross", "Cinder", "Ore Moth", "Spoil" };
+            string[] couriers = { "Long Shot", "Lightspeed Promise" };
+            w.BuildMerchants(startJd, freighters, haulers, couriers,
+                new[] { w.Independents, w.Independents, combine, w.Independents, accord }, i => combine);
+
+            int haven = w.Catalog["Blackhollow"].Index;
+            war.RaisePirateGroup(startJd, haven);
+
+            w.Update(jd);
+            return w;
+        }
+
+        void BuildCentauriSettlements()
+        {
+            var e = Economy;
+            int B(string name) => Catalog[name].Index;
+            void Mine(Settlement s, Good g, double perDay) => s.Facilities.Add(new Facility(Recipe.Mine(g, perDay), 1));
+            void Make(Settlement s, IndustryKind k, double level) => s.Facilities.Add(new Facility(Recipe.Of(k), level));
+
+            // The Accord: Proxima's worlds.
+            var kentaurus = e.Add("New Kentaurus", B("Proxima b"), SettlementKind.Colony, Sol, 400e3);
+            Mine(kentaurus, Good.Water, 2500);
+            Mine(kentaurus, Good.Nitrogen, 700);
+            Mine(kentaurus, Good.Hydrocarbons, 300);
+            Make(kentaurus, IndustryKind.PharmaLab, 2);
+            Make(kentaurus, IndustryKind.MunitionsPlant, 1);
+            Make(kentaurus, IndustryKind.Shipyard, 0.8);
+
+            var ember = e.Add("Ember Station", B("Proxima d"), SettlementKind.MiningOutpost, Sol, 30e3);
+            Mine(ember, Good.NickelIron, 4500);
+            Mine(ember, Good.Titanium, 220);
+            Mine(ember, Good.Copper, 450);
+            Mine(ember, Good.Zinc, 120);
+            Make(ember, IndustryKind.Smelter, 1);
+
+            var farReach = e.Add("Far Reach", B("Proxima c"), SettlementKind.Station, Sol, 20e3);
+            Mine(farReach, Good.Water, 4000);
+            Mine(farReach, Good.Nitrogen, 800);
+            Mine(farReach, Good.HeliumThree, 8);
+
+            // The Combine: stations around A and B.
+            var rigil = e.Add("Rigil Gate", B("Rigil Gate"), SettlementKind.Station, Belt, 120e3);
+            Make(rigil, IndustryKind.ElectronicsFab, 1.5);
+            Make(rigil, IndustryKind.MachineWorks, 1);
+            Make(rigil, IndustryKind.PharmaLab, 1);
+
+            var aurora = e.Add("Aurora Skimmer", B("Alpha Centauri Ab"), SettlementKind.Station, Belt, 15e3);
+            Mine(aurora, Good.HeliumThree, 30);
+            Mine(aurora, Good.Hydrocarbons, 800);
+
+            var forge = e.Add("Toliman Forge", B("Toliman Forge"), SettlementKind.Station, Belt, 80e3);
+            // Ore from B's debris (fiction: no asteroid belt is known there).
+            Mine(forge, Good.NickelIron, 1500);
+            Mine(forge, Good.Titanium, 120);
+            Mine(forge, Good.RareEarths, 40);
+            Mine(forge, Good.Platinum, 4);
+            Make(forge, IndustryKind.Smelter, 1.5);
+            Make(forge, IndustryKind.MachineWorks, 1);
+            Make(forge, IndustryKind.Shipyard, 1);
+
+            e.Add("Blackhollow", B("Blackhollow"), SettlementKind.Haven, Pirates, 8e3);
+
+            foreach (var s in e.Settlements) Subsist(s, Mine, Make);
+            // The Combine has no navy, so its stations are well gunned.
+            foreach (var s in e.Settlements)
+            {
+                s.MaxPlatforms = s.Population >= 400e3 ? 3 : s.Owner == Belt && s.Population >= 50e3 ? 3 : s.Kind == SettlementKind.Haven ? 1 : 2;
+                for (int i = 0; i < s.MaxPlatforms; i++) s.Platforms.Add(new ShipCombat(CombatSpec.Platform));
+            }
         }
 
         void BuildSettlements()
@@ -318,17 +488,20 @@ namespace SolarSystem.Core
         static readonly string[] MinerNames = { "Pickaxe", "Rockhound", "Prospect", "Tailings", "Motherlode", "Seam", "Slag Heap", "Assay", "Lode Star", "Gangue" };
         static readonly string[] CourierNames = { "Quicksilver", "Hermes", "Dispatch", "Lightfoot", "Express", "Swiftsure" };
 
-        void BuildMerchants(double jd)
+        void BuildMerchants(double jd, string[] freighters, string[] miners, string[] couriers, Faction[] owners, Func<int, Faction> minerOwner)
         {
             var ports = PortBodies();
-            Faction[] owners = { Independents, Independents, Sol, Belt, Reach, Independents };
-            for (int i = 0; i < FreighterNames.Length; i++)
-                AddMerchant(FreighterNames[i], ShipClass.Freighter, owners[i % owners.Length], ShipRole.Trader, ports, jd);
-            for (int i = 0; i < MinerNames.Length; i++)
-                AddMerchant(MinerNames[i], ShipClass.Miner, i % 3 == 2 ? Reach : Belt, ShipRole.Miner, ports, jd);
-            foreach (var name in CourierNames)
+            merchantNames = freighters;
+            minerNames = miners;
+            for (int i = 0; i < freighters.Length; i++)
+                AddMerchant(freighters[i], ShipClass.Freighter, owners[i % owners.Length], ShipRole.Trader, ports, jd);
+            for (int i = 0; i < miners.Length; i++)
+                AddMerchant(miners[i], ShipClass.Miner, minerOwner(i), ShipRole.Miner, ports, jd);
+            foreach (var name in couriers)
                 AddMerchant(name, ShipClass.Courier, Independents, ShipRole.Courier, ports, jd);
         }
+
+        string[] merchantNames = FreighterNames, minerNames = MinerNames;
 
         int[] PortBodies()
         {
@@ -338,7 +511,14 @@ namespace SolarSystem.Core
             return list.ToArray();
         }
 
-        Ship AddMerchant(string name, ShipClass cls, Faction owner, ShipRole role, int[] ports, double jd, int at = -1)
+        /// <summary>Puts a new hull in space: out of its yard's orbit if the yard has one, else in a parking orbit.</summary>
+        public void Launch(Ship ship, Settlement yard, double jd)
+        {
+            var slip = Infrastructure?.YardOf(yard);
+            Fleet.Station(ship, yard.Body, jd, slip?.Orbit);
+        }
+
+        Ship AddMerchant(string name, ShipClass cls, Faction owner, ShipRole role, int[] ports, double jd, int at = -1, Settlement yard = null)
         {
             var ship = Fleet.AddShip(name, cls, owner, role);
             ship.CapacityTonnes = Economy.CapacityOf(cls);
@@ -354,7 +534,8 @@ namespace SolarSystem.Core
                     if (ok) break;
                 }
             }
-            Fleet.Station(ship, at, jd);
+            if (yard != null) Launch(ship, yard, jd);
+            else Fleet.Station(ship, at, jd);
             return ship;
         }
 
@@ -371,7 +552,7 @@ namespace SolarSystem.Core
         /// <summary>Yards build merchant hulls while the merchant fleet is under strength.</summary>
         ShipClass? ChooseBuild(Settlement yard)
         {
-            if (TraderCount() >= 70) return null;
+            if (TraderCount() >= MerchantCap) return null;
             return builtCount % 3 == 2 ? ShipClass.Miner : ShipClass.Freighter;
         }
 
@@ -388,9 +569,9 @@ namespace SolarSystem.Core
             if (cls == ShipClass.Freighter || cls == ShipClass.Miner || cls == ShipClass.Courier)
             {
                 var role = cls == ShipClass.Miner ? ShipRole.Miner : cls == ShipClass.Courier ? ShipRole.Courier : ShipRole.Trader;
-                var names = cls == ShipClass.Miner ? MinerNames : FreighterNames;
+                var names = cls == ShipClass.Miner ? minerNames : merchantNames;
                 string name = names[builtCount % names.Length] + " " + Roman(2 + builtCount / names.Length);
-                ship = AddMerchant(name, cls, yard.Owner, role, PortBodies(), jd, yard.Body);
+                ship = AddMerchant(name, cls, yard.Owner, role, PortBodies(), jd, yard.Body, yard);
             }
             else return;
             Log(jd, $"{yard.Name} launches the {ship.Spec.DisplayName.ToLowerInvariant()} {ship.Name}", WorldEventKind.Launch, yard.Body);

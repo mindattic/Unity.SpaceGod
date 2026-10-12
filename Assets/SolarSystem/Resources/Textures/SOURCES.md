@@ -102,3 +102,9 @@ more fainter objects; the cutoff keeps the draw call under ~670k vertices. Kirkw
 Trojan clouds come from the data, not from any model. Positions are two-body Kepler from the
 epoch: tests against JPL Horizons put Vesta and Pallas within 0.02 AU and (624) Hektor within
 0.03 AU over 2025 to 2028.
+
+## Ship plating
+
+- `ship_plating.png`: ambientCG **MetalPlates015A** (CC0 1.0, https://ambientcg.com/a/MetalPlates015A), 1K.
+  - Packed for Ship.shader: R = the colour map as greyscale (normalised to mean 0.5), G/B = the OpenGL normal map's Y/X.
+  - Applied triplanar to every hull, station and structure.

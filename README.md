@@ -71,9 +71,59 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Lane ambushes.** Raiders lie in wait just outside a busy hyperlane. When a ship passes, an electromagnetic pulse throws every ship near that point out of the lane, knocking out their drives and shields for a minute or two, and the raiders close in. The fight happens in open space beside the lane; survivors climb back in and carry on. Ambushed lanes look dangerous to route planners for a while, so traffic shifts. Fighters fly back and land on their carriers when the shooting stops, and carriers short of fighters (or groups short of marines) go home to refit.
 - **Hyperlanes.** Twelve lanes link the planetary systems from Mercury to Pluto. Each system has a ramp per lane just outside its moons; a ship flips-and-burns to the ramp, rides the lane at up to 4% of light speed (easing in and out), and flips-and-burns from the far ramp to its destination. Earth to Mars takes a freighter about a day and a half instead of eleven. Lanes bow away from the Sun and route around it.
 
+### Alpha Centauri and the way between the stars (`Core/Systems`)
+
+- **A second star system.** The Sun's nearest neighbour, from published data:
+  - **Alpha Centauri A and B** on their real 79.8-year orbit (Akeson et al. 2021), swinging between 11.2 and 35.4 AU apart around their barycentre.
+  - **Proxima Centauri**, 12,000 AU out on its half-million-year orbit, placed where its sky position and distance put it today.
+  - **Planets:** Proxima d and b (confirmed), Proxima c (**disputed**) and the JWST giant around A, "S1" (**candidate**). Unconfirmed worlds are labelled wherever they are named.
+  - **Assumptions**, listed in [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md): orbital planes, phases, radii and the stars' poles.
+- **Simulation:** every system runs all the time on the shared clock. Only the one you are in is drawn.
+- **Lighting:** the two brightest stars where the camera is light the scene, each in the colour of its photosphere (A white, B orange, Proxima red). Proxima flares now and then.
+- **Getting there:** click **Alpha Centauri** under **STAR SYSTEMS** in the navigator. The camera:
+  1. pulls out of the system until it is a point;
+  2. turns toward the destination and glides 4.34 light-years through a view of the 21 nearest real stars;
+  3. falls into the other system's overview.
+
+  Esc skips the trip.
+- **Seeing the other system:** each system shows the other in its sky. Alpha Centauri is marked from Sol, and the Sun shines in Cassiopeia from Alpha Centauri.
+- **Alpha Centauri's game layer**, thinner and younger than Sol's:
+  - **Centauri Accord:** governs the Proxima colonies with a small navy.
+  - **Toliman Combine:** a corporate concern with no warships, running stations round A and B.
+  - **Kentaurus Free Traders:** carry most of the freight.
+  - **Long Dark:** raid the long lanes from Blackhollow.
+- **Settlements:** New Kentaurus, Ember Station, Far Reach, Rigil Gate, Aurora Skimmer, Toliman Forge and Blackhollow.
+- **Crossing:** two trunk hyperlanes cross the 12,000 AU between the A–B pair and Proxima in five days each.
+
+### In orbit: industry, spacecraft and docking rings (`Core/Infrastructure`)
+
+- **Industry in orbit.** Every settlement's industry is now physical, in orbit round its world:
+  - its shipyard is an open lattice cradle with the hull it is building framed out rib by rib, then plated as build points accrue, and launched from the yard's orbit;
+  - each foundry, fab, works, arsenal and lab is a factory station with radiators;
+  - big settlements have a spinning habitat ring.
+- **Real spacecraft:**
+  - ISS, Tiangong and Hubble;
+  - JWST at Sun–Earth L2;
+  - five Mars orbiters and the Lunar Reconnaissance Orbiter.
+
+  Orbits are circular at the published altitudes and inclinations; where each craft sits along its orbit is illustrative. Constellation clouds (Starlink shells, GPS, Galileo, GLONASS, BeiDou and the geostationary belt, thousands of points) are off by default; **K** shows them.
+- **Docking rings.** Every ship landing on a populous world with an atmosphere goes through one of its docking rings. Each ring is a station hovering directly over a city at stationary-orbit height (42,164 km from Earth's centre), turning with the ground.
+  - **Fiction:** away from the equator a ring must keep station by thrust.
+  - **Earth's seven rings:** New York, Paris, Beijing, Tokyo, Sydney, Johannesburg and Moscow.
+  - **Other ringed worlds:** Mars has two, Venus one, Titan one, and Proxima b two on its terminator.
+  - **How many rings:** more people, more rings (⌈log₁₀(population / 10⁵)⌉).
+- **Landing.** Merchants and couriers land; warships and pirates hold orbit.
+  1. **Approach:** the ship flies to the ring's holding point, velocity-matched to a point turning with the planet.
+  2. **Queue:** it waits its turn; each ring clears one ship every 30 minutes.
+  3. **Descent:** it drops tail-first down the line to the city, glowing with entry plasma through the atmosphere.
+  4. **Trade:** it lands and trades.
+  5. **Departure:** it climbs back to the ring and leaves from there.
+- **Effect on trade:** route planning counts the queue and the descent.
+- **Hull textures:** hulls, stations and structures are plated with a CC0 sci-fi panel texture (ambientCG MetalPlates015A), projected triplanar. Factions are told apart by the shade of their plating as well as their trim.
+
 ### Interface
 
-- A navigator tree of bodies and fleets: click to select, double-click to focus.
+- A navigator with a **STAR SYSTEMS** switcher, then the tree of bodies, fleets, docking rings (with their queues) and everything in orbit: click to select, double-click to focus.
 - A details panel with live distance, light time, vis-viva orbital speed, period, eccentricity and gravity for bodies. For ships, it shows status, speed, ETA, cargo or patrol orders.
 - Selection brackets, hover highlight, an off-screen pointer to the selected target, and the flight path of the selected ship (lanes included).
 - Body panels show each settlement's exports, shortages and defences; ship panels show cargo and trade profit, or hull, shields, lost hardpoints, fighters aboard and orders. **M** opens a market board, **B** jumps to the biggest battle and drops to battle time (real time), and a ticker reports battles, captures, launches and ceasefires.
@@ -115,7 +165,7 @@ Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`, named by time (`202
 | Action | Input |
 | --- | --- |
 | Swim | W A S D |
-| Down / up | Q / E, or C / Space |
+| Down / up | Q / E, or C / ] |
 | Boost / fine | Shift / Ctrl |
 | Look (free) or orbit (focus) | Hold right mouse and drag |
 | Swim speed (free) or zoom (focus) | Mouse wheel |
@@ -124,14 +174,18 @@ Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`, named by time (`202
 | Leave focus, then deselect | Esc |
 | Whole-system view | Home or Backspace |
 | Toggle gameplay / realistic scale | G or Backquote |
-| Planets: 0 Sun, 1 Mercury to 9 Pluto | Number keys (press twice to focus) |
+| Planets: 0 Sun, 1 Mercury to 9 Pluto (in Alpha Centauri: A, B, Proxima, its planets, the stations) | Number keys (press twice to focus) |
 | Cycle ships | Tab (Shift+Tab backwards) |
 | Time warp slower / faster | , and . (or - and =) |
-| Pause / reset to now | P / T |
+| Pause: time eases to a stop (x0.99 a step until under 1%), and eases back up when pressed again | Space (or P) |
+| Reset to now | T |
 | Orbits, labels, help, HUD | O, L, H, U |
 | Market board | M |
 | Watch the biggest battle (at battle time) | B |
 | Hyperlanes on / off | N |
+| Satellite constellations on / off | K |
+| Level the view to the system's plane (smooth swing: the ecliptic in Sol, the A–B orbit in Alpha Centauri) | R, or the LEVEL button |
+| Fly to another star system | Navigator, STAR SYSTEMS (Esc skips the trip) |
 
 ## Project layout
 
@@ -146,6 +200,8 @@ Assets/SolarSystem/
     Fleet.cs, Ships.cs    ship classes, factions, schedules, brachistochrone transits, lane journeys
     Hyperlanes.cs         lane network, ramps, curves, routing
     World.cs              factions, settlements, ships; advances fleet, markets and wars together
+    Systems/              Alpha Centauri's bodies, the Galaxy of star systems and the nearby-star catalogue
+    Infrastructure/       orbital yards, factories, habitats, real spacecraft, constellations, docking rings
     Economy/              goods, recipes, settlements and markets, trade planning
     Combat/               hardpoint specs, battles, fighters, war strategy and diplomacy
     SimClock.cs           Julian-date clock and time warp
@@ -155,6 +211,7 @@ Assets/SolarSystem/
   Runtime/
     SolarSystemApp.cs     frame loop, floating origin, picking, ship placement
     Camera/SpaceCamera.cs free swim, focus orbit, fly-to, SOI reference frames
+    Camera/StarTravel.cs  the camera's trip between star systems
     Views/                bodies, ships (hardpoints, damage, wrecks), fighters, battle effects, hyperlanes, starfield
     Rendering/            procedural meshes and ship hulls, Kenney loader, shaders
     UI/                   HUD and procedural icon sprites
@@ -171,7 +228,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-104 tests cover the following:
+124 tests cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -193,12 +250,15 @@ dotnet test
 - Fighters: launch, attack runs, guns and torpedoes, a loose formation that breathes, lead succession, and landing back aboard
 - Boarding: fighting through to the bridge and engineering, a small party repelled, vacuum killing crew only until the bulkheads seal, pods bouncing off shields and boarding once they are down, a breacher ramming home, lining up alongside a disabled ship, and a year of lane ambushes and prizes
 - Hyperlanes: every system reachable, lanes clear of the Sun, trips taking a day or two instead of weeks, continuity across every leg change, and drawn lanes meeting the burns at the ramps
+- Alpha Centauri: the A–B separation (11.2 to 35.4 AU), period, barycentre balance and 2035 periastron; the orbit's 79.2° tilt to the sky; Proxima where the sky puts it and its planets' periods; the Sun in Cassiopeia as seen from there; lanes connecting every port and clearing all three stars; two years of trade, raiding and nobody starving; both systems on one clock
+- Infrastructure: rings staying over their cities (latitude and longitude to a millionth of a degree, velocity = ω × r); FIFO queues clearing at most one ship per interval; no position jumps through queue, descent, landing and climb; only merchants landing; yards launching from their slips; constellations at their real altitudes and inclinations; JWST at L2
 
 ## Limitations
 
 - **Planet elements are a fit.** The JPL table is accurate to roughly arcminutes across 1800-2050, and drifts outside that window.
 - **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations.
 - **Gameplay scale bends paths.** Ships fly their true path at both scales, but gameplay scale draws it through the same compression as the planets, eased near each end so the ship stays outside the inflated worlds. In a crowded moon system an inflated neighbouring moon can still be drawn over a passing ship.
+- **Alpha Centauri is part guesswork.** The A–B orbit and Proxima's place are measured; the planets' orbital planes and phases, their radii and Proxima's orbital plane are assumed, and two of its worlds may not exist. Ships cannot yet travel between systems (only the camera can), and the trunk lanes across 12,000 AU in days are deep fiction.
 - **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought at bodies and, by pirate interdiction, beside hyperlanes; ships on flip-and-burn transits cannot be intercepted. Marines are not drawn yet (the interior model is ready for a shipboard view). There is no player control or win condition yet; you observe.
 - **Surfaces are wrapped on spheres.** Phobos, Deimos and the other small irregular moons are drawn round. Relief is shading only (exaggerated about 5×), never displacement, and lunar libration is not modelled.
 - **Weather is a model on a 2015 snapshot.** Jupiter's map is Hubble's of January 2015, turned so the Great Red Spot is where it is today; the other storms on it are 2015 weather. The flow map reproduces real band speeds and the spot's rotation, not real storm evolution. The Saturn, Uranus and Neptune maps are stylized (CC BY), so only their motion is data.
@@ -210,6 +270,8 @@ dotnet test
 - Moon colour and LOLA elevation: [NASA SVS CGI Moon Kit](https://svs.gsfc.nasa.gov/4720/) (Ernie Wright; LRO LROC and LOLA teams). Jupiter: Hubble OPAL map via [NASA SVS](https://svs.gsfc.nasa.gov/12021/) (Simon, Wong, Orton). Moon, planet and satellite mosaics and DEMs: USGS Astrogeology, NASA PDS (MOLA MEGDR), and JPL's Solar System Simulator maps (Caltech/JPL/USGS) for Miranda, Titania and Oberon.
 - Asteroids: [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html). Great Red Spot position and drift: British Astronomical Association Jupiter Section and JUPOS. Zonal winds: Porco et al. 2003, Sánchez-Lavega et al. 2000, Sromovsky et al.
 - Freighter, ore hauler and courier models: [Kenney Space Kit](https://kenney.nl/assets/space-kit), CC0.
+- Hull plating: [ambientCG MetalPlates015A](https://ambientcg.com/a/MetalPlates015A), CC0.
+- Alpha Centauri, nearby stars, spacecraft orbits and ring sites: see [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md).
 - Orbital data: JPL Solar System Dynamics, the IAU WGCCRE report, and NASA planetary fact sheets.
 - Code: no LICENSE file yet, so all rights are reserved.
 

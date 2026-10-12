@@ -35,7 +35,59 @@ namespace SolarSystem.Core
 
         public double Jd { get; private set; }
         public int WarpIndex { get; private set; } = DefaultWarpIndex;
-        public bool Paused { get; set; }
+
+        /// <summary>Stopped outright (scripts set this directly; the player's pause eases into it, see <see cref="ToggleEasedPause"/>).</summary>
+        public bool Paused
+        {
+            get => paused;
+            set
+            {
+                paused = value;
+                pausing = resuming = false;
+                Speed = value ? 0 : 1;
+            }
+        }
+
+        /// <summary>How much of the warp rate is running (1 normally, easing to 0 when pausing and back when resuming).</summary>
+        public double Speed { get; private set; } = 1;
+
+        public bool Pausing => pausing;
+        public bool Resuming => resuming;
+
+        /// <summary>Each easing step multiplies (pausing) or divides (resuming) the speed by this.</summary>
+        public const double EaseFactor = 0.99;
+
+        /// <summary>Easing steps per real second, so the ease takes the same time at any frame rate (about 3.8 s each way).</summary>
+        public const double EaseStepsPerSecond = 120;
+
+        /// <summary>Below this share of full speed a pause snaps to a dead stop; a resume starts from it.</summary>
+        public const double EaseFloor = 0.01;
+
+        bool paused, pausing, resuming;
+
+        /// <summary>
+        /// The player's pause: time slows by 0.99 a step until it is under 1% of full speed, then stops;
+        /// pressed again (or while still slowing), it picks up from 1% (or wherever it had got to) and
+        /// speeds back up the same way.
+        /// </summary>
+        public void ToggleEasedPause()
+        {
+            if (paused || pausing)
+            {
+                paused = false;
+                pausing = false;
+                resuming = true;
+                Speed = Math.Max(Speed, EaseFloor);
+            }
+            else
+            {
+                resuming = false;
+                pausing = true;
+            }
+        }
+
+        /// <summary>Paused, or on the way to it: what a pause button should show.</summary>
+        public bool PauseHeld => paused || pausing;
 
         public WarpLevel Warp => Levels[WarpIndex];
         public DateTime Utc => Astro.ToDateTime(Jd);
@@ -52,8 +104,32 @@ namespace SolarSystem.Core
         /// <summary>Advances by real seconds; returns the simulated days elapsed.</summary>
         public double Advance(double realSeconds)
         {
-            if (Paused || realSeconds <= 0) return 0;
-            double days = realSeconds * Warp.SimSecondsPerSecond / Astro.SecondsPerDay;
+            if (paused || realSeconds <= 0) return 0;
+            if (pausing || resuming)
+            {
+                double factor = Math.Pow(EaseFactor, realSeconds * EaseStepsPerSecond);
+                if (pausing)
+                {
+                    Speed *= factor;
+                    if (Speed < EaseFloor)
+                    {
+                        Speed = 0;
+                        pausing = false;
+                        paused = true;
+                        return 0;
+                    }
+                }
+                else
+                {
+                    Speed /= factor;
+                    if (Speed >= 1)
+                    {
+                        Speed = 1;
+                        resuming = false;
+                    }
+                }
+            }
+            double days = realSeconds * Warp.SimSecondsPerSecond * Speed / Astro.SecondsPerDay;
             Jd += days;
             return days;
         }

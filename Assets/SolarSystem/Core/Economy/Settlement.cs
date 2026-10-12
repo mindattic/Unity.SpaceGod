@@ -46,6 +46,9 @@ namespace SolarSystem.Core
         /// <summary>Build points banked by a shipyard, spent when a hull is laid down.</summary>
         public double BuildPoints;
 
+        /// <summary>The hull the yard is working toward (what it last chose to build), or null.</summary>
+        public ShipClass? OnSlip;
+
         /// <summary>Days since the owner last changed; production is disrupted for a while after a capture.</summary>
         public double DaysSinceCapture = 9999;
 

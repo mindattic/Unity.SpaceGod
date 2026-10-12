@@ -34,7 +34,8 @@ namespace SolarSystem.UI
             EnsureStyles();
             if (Event.current.type == EventType.Layout) app.UiRects.Clear();
 
-            DrawWorldOverlay();
+            if (app.Travel.Active) DrawTravel();
+            else DrawWorldOverlay();
             if (!app.ShowHud) return;
             DrawTopBar();
             DrawTicker();
@@ -48,15 +49,50 @@ namespace SolarSystem.UI
 
         // ---------------------------------------------------------------- world overlay
 
+        /// <summary>Between the stars: each star named, the two systems highlighted, and what the camera is doing.</summary>
+        void DrawTravel()
+        {
+            var travel = app.Travel;
+            if (Event.current.type == EventType.Repaint && app.Interstellar.Visible && app.ShowLabels)
+            {
+                foreach (var s in app.Interstellar.Stars)
+                {
+                    if (!app.RelativeToGui(s.Relative, out var p)) continue;
+                    var c = Color.Lerp(s.Color, Color.white, 0.4f);
+                    bool system = s.Name == "Sun" || s.Name == "Alpha Centauri A" || s.Name == "Proxima Centauri";
+                    string name = s.Name == "Alpha Centauri A" ? "Alpha Centauri" : s.Name == "Sun" ? "Sol" : s.Name;
+                    if (s.Name == "Alpha Centauri B") continue;
+                    double ly = s.PositionLy.Length;
+                    DrawLabel(system ? name.ToUpperInvariant() : name + (ly > 0.01 ? "  " + ly.ToString("0.0", CultureInfo.InvariantCulture) + " ly" : ""),
+                        p + new Vector2(10, -8), system ? Accent : new Color(c.r, c.g, c.b, 0.75f), !system);
+                }
+            }
+            if (string.IsNullOrEmpty(travel.Banner)) return;
+            var content = new GUIContent(travel.Banner);
+            float w = Mathf.Max(toast.CalcSize(content).x + 60, 420);
+            var r = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.18f, w, 52);
+            GUI.Box(r, GUIContent.none, panel);
+            GUI.Label(new Rect(r.x + 30, r.y + 8, w - 60, 22), content, toast);
+            var bar = new Rect(r.x + 30, r.y + 36, w - 60, 4);
+            GUI.DrawTexture(bar, buttonTexture);
+            var old = GUI.color;
+            GUI.color = Accent;
+            GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * travel.Overall, bar.height), Icons.White);
+            GUI.color = old;
+        }
+
         void DrawWorldOverlay()
         {
             if (Event.current.type != EventType.Repaint) return;
             var catalog = app.Catalog;
             double ppu = app.PixelsPerUnitAtUnitDistance();
+            DrawSkyMarkers();
+            DrawStructureLabels(ppu);
 
             for (int i = 0; i < catalog.Count; i++)
             {
                 var body = catalog[i];
+                if (!body.IsVisible) continue;
                 var scene = app.BodyScene(i);
                 if (!app.ToGui(scene, out var p, out var depth)) continue;
                 float pxRadius = (float)(app.BodyDisplayRadius(i) / depth * ppu);
@@ -75,14 +111,14 @@ namespace SolarSystem.UI
                     DrawIcon(Icons.ForBody(body), p, iconSize, tint);
 
                 if (app.ShowLabels && (body.Kind != BodyKind.Moon || pxRadius > 1.5f || ParentSeparation(body, p) > 50))
-                    DrawLabel(body.Name, p + new Vector2(Mathf.Max(pxRadius, iconSize * 0.5f) + 5, -8), tint, body.Kind == BodyKind.Moon);
+                    DrawLabel(body.Name + StatusMark(body), p + new Vector2(Mathf.Max(pxRadius, iconSize * 0.5f) + 5, -8), tint, body.Kind == BodyKind.Moon);
             }
 
             var ships = app.Fleet.Ships;
             for (int i = 0; i < ships.Count; i++)
             {
                 var ship = ships[i];
-                if (ship.Destroyed) continue;
+                if (ship.Destroyed || ship.Controller.Phase == ShipPhase.Landed) continue;
                 var scene = app.ShipScene(ship);
                 if (!app.ToGui(scene, out var p, out var depth)) continue;
                 float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
@@ -115,6 +151,57 @@ namespace SolarSystem.UI
                     var c = ship.Faction.Color;
                     DrawLabel(ship.Name, p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), new Color(c.R, c.G, c.B), false);
                 }
+            }
+        }
+
+        /// <summary>Unconfirmed worlds are marked as such wherever they are named.</summary>
+        static string StatusMark(BodyDefinition b) =>
+            b.Status == BodyStatus.Candidate ? "  (candidate)" : b.Status == BodyStatus.Disputed ? "  (disputed)" : "";
+
+        /// <summary>The other simulated systems shine in this one's sky: Alpha Centauri from Sol, the Sun in Cassiopeia from Alpha Centauri.</summary>
+        void DrawSkyMarkers()
+        {
+            if (!app.ShowLabels) return;
+            foreach (var other in app.Galaxy.Systems)
+            {
+                if (other == app.ActiveSystem) continue;
+                var dir = app.SkyDirection(other) * 1e6f;
+                if (!app.RelativeToGui(dir, out var p)) continue;
+                if (p.x < 0 || p.y < 0 || p.x > Screen.width || p.y > Screen.height) continue;
+                var c = new Color(1f, 0.95f, 0.8f, 0.9f);
+                DrawIcon(Icons.ForBody(other.Catalog.Root.IsStar ? other.Catalog.Root : other.Catalog[1]), p, 14, c);
+                string name = other.Catalog.Root.Name == "Sun" ? "Sun  (Sol System)" : other.Name;
+                double ly = Galaxy.DistanceLy(app.ActiveSystem, other);
+                DrawLabel(name + "  " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly", p + new Vector2(10, -8), c, true);
+            }
+        }
+
+        /// <summary>Yards, factories, spacecraft and docking rings are named once they are drawn big enough to see.</summary>
+        void DrawStructureLabels(double ppu)
+        {
+            var views = app.Structures;
+            if (views == null || !app.ShowLabels) return;
+            foreach (var kv in views.Scenes)
+            {
+                if (!app.ToGui(kv.Value, out var p, out var depth)) continue;
+                float px = (float)(views.Sizes[kv.Key] / depth * ppu);
+                var t = Target.OfStructure(kv.Key);
+                if (px < 6 && t != app.Selected && t != app.Hovered) continue;
+                if (app.Occluded(kv.Value)) continue;
+                var c = kv.Key.Owner != null ? new Color(kv.Key.Owner.Color.R, kv.Key.Owner.Color.G, kv.Key.Owner.Color.B) : new Color(0.85f, 0.88f, 0.92f);
+                DrawLabel(kv.Key.Name, p + new Vector2(Mathf.Max(px * 0.5f, 6) + 4, -8), c, true);
+            }
+            foreach (var kv in views.RingScenes)
+            {
+                if (!app.ToGui(kv.Value, out var p, out var depth)) continue;
+                float px = (float)(views.Sizes[kv.Key] / depth * ppu);
+                var t = Target.OfRing(kv.Key);
+                if (px < 2.5f && t != app.Selected && t != app.Hovered) continue;
+                if (app.Occluded(kv.Value)) continue;
+                int queued = 0;
+                foreach (var s in app.Fleet.Ships)
+                    if (!s.Destroyed && s.Phase == ShipPhase.Queued && s.Ring == kv.Key) queued++;
+                DrawLabel(kv.Key.Name + (queued > 0 ? "  · " + queued + " queued" : ""), p + new Vector2(Mathf.Max(px * 0.5f, 6) + 4, -8), new Color(0.6f, 0.9f, 1f), true);
             }
         }
 
@@ -235,11 +322,15 @@ namespace SolarSystem.UI
             var clock = app.Clock;
 
             GUI.Label(new Rect(r.x + 14, r.y + 7, 220, 20), clock.Utc.ToString("yyyy-MM-dd  HH:mm", CultureInfo.InvariantCulture) + " UTC", title);
-            GUI.Label(new Rect(r.x + 14, r.y + 28, 220, 18), clock.Paused ? "PAUSED" : clock.Warp.Label, small);
+            string rate = clock.Paused ? "PAUSED"
+                : clock.Pausing ? "PAUSING  x" + clock.Speed.ToString("0.00", CultureInfo.InvariantCulture)
+                : clock.Resuming ? "RESUMING  x" + clock.Speed.ToString("0.00", CultureInfo.InvariantCulture) + "  of " + clock.Warp.Label
+                : clock.Warp.Label;
+            GUI.Label(new Rect(r.x + 14, r.y + 28, 220, 18), rate, small);
 
             float bx = r.x + 200;
             if (GUI.Button(new Rect(bx, r.y + 12, 34, 28), "<<", button)) clock.Slower();
-            if (GUI.Button(new Rect(bx + 38, r.y + 12, 44, 28), clock.Paused ? ">" : "||", clock.Paused ? buttonActive : button)) clock.Paused = !clock.Paused;
+            if (GUI.Button(new Rect(bx + 38, r.y + 12, 44, 28), clock.PauseHeld ? ">" : "||", clock.PauseHeld ? buttonActive : button)) app.TogglePause();
             if (GUI.Button(new Rect(bx + 86, r.y + 12, 34, 28), ">>", button)) clock.Faster();
             if (GUI.Button(new Rect(bx + 124, r.y + 12, 44, 28), "Now", button)) app.ResetToNow();
 
@@ -266,6 +357,23 @@ namespace SolarSystem.UI
             var r = Panel(new Rect(10, 10, w, h));
             if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (navigatorOpen ? "[-]  " : "[+]  ") + "NAVIGATOR", title)) navigatorOpen = !navigatorOpen;
             if (!navigatorOpen) return;
+
+            // Star systems: one button each; the active one is where the body tree below belongs.
+            float sy = r.y + 34;
+            var oldColor = GUI.contentColor;
+            GUI.contentColor = Accent;
+            GUI.Label(new Rect(r.x + 12, sy, w - 24, 16), "STAR SYSTEMS", small);
+            GUI.contentColor = oldColor;
+            sy += 17;
+            foreach (var system in app.Galaxy.Systems)
+            {
+                bool here = system == app.ActiveSystem;
+                bool going = app.Travel.Active && app.Travel.To == system;
+                string label = system.Name + (here ? "   ◉ here" : going ? "   travelling…" : "   " + Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly  ›");
+                if (GUI.Button(new Rect(r.x + 10, sy, w - 20, 22), label, here ? buttonActive : button) && !here) app.TravelTo(system);
+                sy += 25;
+            }
+            float treeTop = sy + 4 - r.y;
 
             var catalog = app.Catalog;
             var rows = new List<(string text, Target target, int indent, Color color)>();
@@ -295,8 +403,33 @@ namespace SolarSystem.UI
                 }
             }
 
+            // Docking rings and what is in orbit, after the bodies.
+            var infra = app.World.Infrastructure;
+            if (infra != null && infra.Rings.Count > 0)
+            {
+                rows.Add(("", Target.None, 0, Color.clear));
+                rows.Add(("DOCKING RINGS", Target.None, 0, new Color(0.6f, 0.9f, 1f)));
+                foreach (var ring in infra.Rings)
+                {
+                    int queued = 0;
+                    foreach (var s in app.Fleet.Ships)
+                        if (!s.Destroyed && s.Phase == ShipPhase.Queued && s.Ring == ring) queued++;
+                    rows.Add((ring.Name + "  · " + catalog[ring.Body].Name + (queued > 0 ? "  · " + queued + " queued" : ""), Target.OfRing(ring), 1, new Color(0.6f, 0.9f, 1f)));
+                }
+            }
+            if (infra != null && infra.Structures.Count > 0)
+            {
+                rows.Add(("", Target.None, 0, Color.clear));
+                rows.Add(("IN ORBIT", Target.None, 0, new Color(0.85f, 0.88f, 0.92f)));
+                foreach (var s in infra.Structures)
+                {
+                    var c = s.Owner != null ? new Color(s.Owner.Color.R, s.Owner.Color.G, s.Owner.Color.B) : new Color(0.85f, 0.88f, 0.92f);
+                    rows.Add((s.Name + "  · " + catalog[s.Body].Name, Target.OfStructure(s), 1, c));
+                }
+            }
+
             const float rowH = 19;
-            var view = new Rect(r.x + 4, r.y + 34, w - 8, h - 40);
+            var view = new Rect(r.x + 4, r.y + treeTop, w - 8, h - treeTop - 6);
             var content = new Rect(0, 0, w - 26, rows.Count * rowH);
             navigatorScroll = GUI.BeginScrollView(view, navigatorScroll, content);
             for (int i = 0; i < rows.Count; i++)
@@ -332,7 +465,14 @@ namespace SolarSystem.UI
         {
             var b = app.Catalog[index];
             var tint = BodyTint(b);
-            rows.Add((b.Name, Target.OfBody(index), indent, b.Kind == BodyKind.Moon ? Color.Lerp(tint, Color.gray, 0.3f) : tint));
+            if (!b.IsVisible)
+            {
+                // A barycentre heads the tree as a title, not a selectable body.
+                rows.Add((b.Name.ToUpperInvariant() + "  (A-B barycentre)", Target.None, 0, Dim));
+                foreach (int child in app.Catalog.ChildrenOf(index)) AddBody(rows, child, indent);
+                return;
+            }
+            rows.Add((b.Name + StatusMark(b), Target.OfBody(index), indent, b.Kind == BodyKind.Moon ? Color.Lerp(tint, Color.gray, 0.3f) : tint));
             foreach (int child in app.Catalog.ChildrenOf(index)) AddBody(rows, child, Math.Min(indent + 1, 2));
         }
 
@@ -364,6 +504,10 @@ namespace SolarSystem.UI
             if (c.Phase == ShipPhase.Lurk) return "lurking on " + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Adrift) return "adrift by " + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Parked) return "@ " + app.Catalog[c.Orbit.Body].Name;
+            if (c.Phase == ShipPhase.Queued) return "queued @ " + c.Ring.Name;
+            if (c.Phase == ShipPhase.Descent) return "descending to " + c.Ring.City;
+            if (c.Phase == ShipPhase.Landed) return "landed @ " + c.Ring.City;
+            if (c.Phase == ShipPhase.Ascent) return "climbing to " + c.Ring.Name;
             int dest = c.Journey != null ? c.FinalBody : c.Orbit.Body;
             return (c.Phase == ShipPhase.Lane ? "=> " : "-> ") + app.Catalog[dest].Name;
         }
@@ -376,28 +520,33 @@ namespace SolarSystem.UI
             string heading, sub;
             Color headingColor = Accent;
 
-            if (t.IsBody)
+            if (t.IsStructure) StructureLines(t.Structure, lines, out heading, out sub, out headingColor);
+            else if (t.IsRing) RingLines(t.Ring, lines, out heading, out sub, out headingColor);
+            else if (t.IsBody)
             {
                 var b = app.Catalog[t.Body];
                 heading = b.Name;
-                sub = KindName(b);
+                sub = KindName(b) + (b.Status == BodyStatus.Candidate ? "  ·  CANDIDATE, unconfirmed" : b.Status == BodyStatus.Disputed ? "  ·  DISPUTED" : b.Status == BodyStatus.Fictional ? "  ·  fiction (game layer)" : "");
                 var eph = app.Ephemeris;
+                if (b.IsStar) lines.Add(("Photosphere", b.TeffK.ToString("N0", CultureInfo.InvariantCulture) + " K,  " + b.LuminositySolar.ToString(b.LuminositySolar < 0.01 ? "0.00000" : "0.000", CultureInfo.InvariantCulture) + " x the Sun's light"));
                 lines.Add(("Radius", Km(b.RadiusKm)));
                 if (b.ParentIndex >= 0)
                 {
                     var parent = app.Catalog[b.ParentIndex];
                     var k = b.Elements.At(app.Clock.Jd);
                     double dist = eph.Relative(t.Body).Length;
-                    if (b.ParentIndex == 0) lines.Add(("From Sun", Au(dist) + "  (" + LightTime(dist) + " light)"));
+                    if (parent.UsesStellarMapping) lines.Add(("From " + (parent.IsVisible ? parent.Name : "barycentre"), (dist > 1000 * Astro.AuKm ? (dist / Astro.AuKm).ToString("N0", CultureInfo.InvariantCulture) + " AU" : Au(dist)) + "  (" + LightTime(dist) + " light)"));
                     else lines.Add(("From " + parent.Name, Km(dist)));
                     lines.Add(("Orbital speed", eph.OrbitalSpeedKmS(t.Body).ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
                     lines.Add(("Period", Duration(k.PeriodDays)));
                     lines.Add(("Eccentricity", k.E.ToString("0.0000", CultureInfo.InvariantCulture)));
-                    lines.Add(("Semi-major axis", b.ParentIndex == 0 ? Au(k.A) : Km(k.A)));
+                    lines.Add(("Semi-major axis", parent.UsesStellarMapping ? (k.A > 1000 * Astro.AuKm ? (k.A / Astro.AuKm).ToString("N0", CultureInfo.InvariantCulture) + " AU" : Au(k.A)) : Km(k.A)));
                 }
                 if (b.RotationHours != 0)
                     lines.Add(("Day (sidereal)", (Math.Abs(b.RotationHours) < 48 ? Math.Abs(b.RotationHours).ToString("0.00", CultureInfo.InvariantCulture) + " h" : Duration(Math.Abs(b.RotationHours) / 24)) + (b.RotationHours < 0 ? " retro" : "")));
-                lines.Add(("Surface gravity", (b.Gm / (b.RadiusKm * b.RadiusKm) * 1000 / 9.80665).ToString("0.000", CultureInfo.InvariantCulture) + " g"));
+                if (b.Kind != BodyKind.Station) lines.Add(("Surface gravity", (b.Gm / (b.RadiusKm * b.RadiusKm) * 1000 / 9.80665).ToString("0.000", CultureInfo.InvariantCulture) + " g"));
+                var ringsHere = new List<DockingRing>(app.World.Infrastructure?.RingsAt(t.Body) ?? new DockingRing[0]);
+                if (ringsHere.Count > 0) lines.Add(("Docking rings", ringsHere.Count + ": " + string.Join(", ", ringsHere.ConvertAll(x => x.City))));
                 if (!string.IsNullOrEmpty(b.Summary)) lines.Add(("", b.Summary));
                 foreach (var s in app.Economy.At(t.Body)) AddSettlementLines(lines, s);
                 var battleHere = app.World.War.BattleAt(t.Body);
@@ -430,9 +579,28 @@ namespace SolarSystem.UI
                     lines.Add(("Remaining", Km(c.LaneLengthKm * (1 - st.Progress))));
                     lines.Add(("Lane exit", Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
                 }
+                else if (c.Phase == ShipPhase.Queued)
+                {
+                    lines.Add(("Status", "Waiting off the " + c.Ring.Name + " to be cleared down to " + c.Ring.City));
+                    lines.Add(("Cleared in", Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + "  (" + QueuePosition(c) + " in line)"));
+                }
+                else if (c.Phase == ShipPhase.Descent || c.Phase == ShipPhase.Ascent)
+                {
+                    double alt = (st.HelioKm - app.Ephemeris.Helio(c.Ring.Body)).Length - c.Ring.SurfaceKm;
+                    lines.Add(("Status", c.Phase == ShipPhase.Descent ? "Descending from the " + c.Ring.Name + " to " + c.Ring.City : "Climbing from " + c.Ring.City + " to the " + c.Ring.Name));
+                    lines.Add(("Altitude", Km(Math.Max(0, alt)) + (alt < c.Ring.EntryInterfaceKm ? "  ·  IN THE ATMOSPHERE" : "")));
+                    lines.Add(("Vertical speed", SpeedText(st.SpeedKmS)));
+                    lines.Add(("Done in", Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
+                }
+                else if (c.Phase == ShipPhase.Landed)
+                {
+                    lines.Add(("Status", "Landed at " + c.Ring.City + ", " + app.Catalog[c.Ring.Body].Name));
+                    lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + ", by the " + c.Ring.Name));
+                }
                 else if (c.Phase == ShipPhase.Transit)
                 {
-                    string where = c.Orbit.Fixed ? app.Catalog[c.Orbit.Body].Name + " hyperlane ramp" : app.Catalog[c.Orbit.Body].Name;
+                    string where = c.Ring != null && c.Orbit == c.HoldPoint ? c.Ring.Name + ", " + app.Catalog[c.Orbit.Body].Name
+                        : c.Orbit.Fixed ? app.Catalog[c.Orbit.Body].Name + " hyperlane ramp" : app.Catalog[c.Orbit.Body].Name;
                     lines.Add(("Status", (st.Progress < 0.5 ? "Burning toward " : "Braking for ") + where));
                     if (c.Journey != null) lines.Add(("Bound for", app.Catalog[c.FinalBody].Name + " by " + JourneyText(c)));
                     lines.Add(("From", app.Catalog[c.OriginBody].Name));
@@ -510,6 +678,71 @@ namespace SolarSystem.UI
             bool focused = app.SpaceCamera.FocusTarget == t && app.SpaceCamera.Mode != SpaceCamera.CameraMode.Free;
             if (GUI.Button(new Rect(r.x + 14, r.yMax - 32, 150, 24), focused ? "Re-frame  [F]" : "Focus  [F]", buttonActive)) app.FocusSelected();
             if (GUI.Button(new Rect(r.x + 172, r.yMax - 32, 150, 24), "Deselect  [Esc]", button)) app.Select(Target.None);
+        }
+
+        string QueuePosition(Ship ship)
+        {
+            int ahead = 1;
+            foreach (var s in app.Fleet.Ships)
+                if (!s.Destroyed && s.Phase == ShipPhase.Queued && s.Ring == ship.Ring && s.PhaseEndJd < ship.PhaseEndJd) ahead++;
+            return ahead == 1 ? "1st" : ahead == 2 ? "2nd" : ahead == 3 ? "3rd" : ahead + "th";
+        }
+
+        void StructureLines(OrbitalStructure s, List<(string key, string value)> lines, out string heading, out string sub, out Color headingColor)
+        {
+            heading = s.Name;
+            string kind = s.Kind == StructureKind.Shipyard ? "Orbital shipyard" : s.Kind == StructureKind.Factory ? "Factory station"
+                : s.Kind == StructureKind.Habitat ? "Orbital habitat" : s.Kind == StructureKind.CrewedStation ? "Crewed space station"
+                : s.Kind == StructureKind.Telescope ? "Space telescope" : "Robotic orbiter";
+            sub = kind + (s.Real ? "  ·  real spacecraft" : "  ·  " + (s.Owner?.Name ?? ""));
+            headingColor = s.Owner != null ? new Color(s.Owner.Color.R, s.Owner.Color.G, s.Owner.Color.B) : Accent;
+            var b = app.Catalog[s.Body];
+            if (s.AtL2) lines.Add(("Where", "Sun-" + b.Name + " L2, 1.5 million km beyond " + b.Name));
+            else
+            {
+                lines.Add(("Orbiting", b.Name));
+                lines.Add(("Altitude", Km(s.Orbit.RadiusKm - b.RadiusKm)));
+                lines.Add(("Period", Duration(Astro.TwoPi / Math.Max(s.Orbit.RateRadPerDay, 1e-12))));
+                lines.Add(("Speed", s.Orbit.SpeedKmS.ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
+            }
+            lines.Add(("Size", Km(s.LengthKm)));
+            if (s.Kind == StructureKind.Shipyard && s.Settlement != null)
+            {
+                var slip = s.Settlement.OnSlip;
+                lines.Add(("On the slip", slip != null ? ShipClassSpec.Of(slip.Value).DisplayName + ", " + Percent(s.SlipProgress) + " built" : "Empty"));
+                lines.Add(("Build points", s.Settlement.BuildPoints.ToString("N0", CultureInfo.InvariantCulture)));
+            }
+            if (s.Kind == StructureKind.Factory && s.Settlement != null)
+                foreach (var f in s.Settlement.Facilities)
+                    if (f.Recipe.Kind == s.Industry)
+                        lines.Add(("Output", f.Recipe.Name + ", level " + f.Level.ToString("0.0", CultureInfo.InvariantCulture) + ", running " + Percent(f.Utilisation)));
+            if (s.Settlement != null) lines.Add(("Serves", s.Settlement.Name + ", pop " + People(s.Settlement.Population)));
+            if (!string.IsNullOrEmpty(s.Note)) lines.Add(("", s.Note));
+        }
+
+        void RingLines(DockingRing r, List<(string key, string value)> lines, out string heading, out string sub, out Color headingColor)
+        {
+            heading = r.Name;
+            sub = "Docking ring over " + r.City + ", " + app.Catalog[r.Body].Name + "  ·  fiction: held on station by thrust";
+            headingColor = new Color(0.6f, 0.9f, 1f);
+            lines.Add(("Over", r.City + "  " + Math.Abs(r.LatDeg).ToString("0.00", CultureInfo.InvariantCulture) + (r.LatDeg >= 0 ? "° N  " : "° S  ")
+                + Math.Abs(r.LonDeg).ToString("0.00", CultureInfo.InvariantCulture) + (r.LonDeg >= 0 ? "° E" : "° W")));
+            lines.Add(("Altitude", Km(r.RadiusKm - r.SurfaceKm) + (Math.Abs(r.RadiusKm - Infrastructure.RingRadiusKm(app.Catalog[r.Body])) < 1 && r.RadiusKm > r.SurfaceKm * 3.5 ? "  (stationary-orbit height)" : "")));
+            int queued = 0, down = 0, landed = 0, up = 0;
+            foreach (var s in app.Fleet.Ships)
+            {
+                if (s.Destroyed || s.Ring != r) continue;
+                if (s.Phase == ShipPhase.Queued) queued++;
+                else if (s.Phase == ShipPhase.Descent) down++;
+                else if (s.Phase == ShipPhase.Landed) landed++;
+                else if (s.Phase == ShipPhase.Ascent) up++;
+            }
+            lines.Add(("Traffic", queued + " queued, " + down + " descending, " + landed + " landed, " + up + " climbing"));
+            lines.Add(("Clearance", "one ship every " + (r.EntryIntervalDays * 1440).ToString("0", CultureInfo.InvariantCulture) + " min" +
+                (r.NextEntryJd > app.Clock.Jd ? ", next in " + Duration(r.NextEntryJd - app.Clock.Jd) : ", clear now")));
+            lines.Add(("Descent", Duration(r.DescentDays) + " to the ground; entry interface " + Km(r.EntryInterfaceKm) + " up"));
+            if (r.Settlement != null) lines.Add(("Serves", r.Settlement.Name + " (" + r.Owner?.Name + ")"));
+            lines.Add(("", "Merchants and couriers land through the rings; warships and pirates hold orbit."));
         }
 
         void AddSettlementLines(List<(string key, string value)> lines, Settlement s)
@@ -700,6 +933,11 @@ namespace SolarSystem.UI
             float w = text.CalcSize(content).x + 28;
             var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 40, w, 30));
             GUI.Label(new Rect(r.x + 14, r.y + 6, w, 20), content, text);
+
+            // Level the view to the system's plane (a smooth swing, not a snap).
+            var level = Panel(new Rect(r.xMax + 8, r.y, 120, 30));
+            if (GUI.Button(new Rect(level.x + 4, level.y + 4, level.width - 8, 22), cam.Levelling ? "LEVELLING…" : "LEVEL  [R]", cam.Levelling ? buttonActive : button))
+                app.LevelView();
         }
 
         /// <summary>Converts a scene speed near the camera into an equivalent true speed, using the local scale.</summary>
@@ -717,12 +955,14 @@ namespace SolarSystem.UI
         {
             string[] help =
             {
-                "W A S D   swim          Q / E  or  C / Space   down / up",
+                "W A S D   swim          Q / E  or  C / ]   down / up          Space   pause (eases to a stop and back)",
                 "Shift   boost           Ctrl   fine             Wheel   swim speed / zoom",
                 "Right-drag   look / orbit                Left-click   select    (double: focus)",
                 "F   focus selection     Esc   leave focus / deselect     Home   system view",
                 "G  or  `   toggle GAMEPLAY / REALISTIC scale",
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
+                "K   satellites    R   level the view to the system plane",
+                "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 ",  .   time warp     P   pause     T   now     O  orbits   L  labels   H  help   U  HUD",
             };
             float w = 610, h = 22 + help.Length * 17;
@@ -747,16 +987,18 @@ namespace SolarSystem.UI
 
         // ---------------------------------------------------------------- formatting
 
-        string TargetName(Target t) => t.IsBody ? app.Catalog[t.Body].Name : t.IsShip ? t.Ship.Name : "";
+        string TargetName(Target t) => t.IsBody ? app.Catalog[t.Body].Name : t.IsShip ? t.Ship.Name : t.IsStructure ? t.Structure.Name : t.IsRing ? t.Ring.Name : "";
 
         static string KindName(BodyDefinition b)
         {
             switch (b.Kind)
             {
-                case BodyKind.Star: return "Star";
+                case BodyKind.Star: return b.TeffK < 3900 ? "Red dwarf star" : b.TeffK < 5300 ? "Orange dwarf star" : "Yellow dwarf star";
                 case BodyKind.DwarfPlanet: return "Dwarf planet";
                 case BodyKind.Moon: return "Moon";
-                default: return b.Name == "Jupiter" || b.Name == "Saturn" ? "Gas giant" : b.Name == "Uranus" || b.Name == "Neptune" ? "Ice giant" : "Terrestrial planet";
+                case BodyKind.Station: return "Free-flying station";
+                case BodyKind.Barycentre: return "Barycentre";
+                default: return b.GasGiant || b.Name == "Jupiter" || b.Name == "Saturn" ? "Gas giant" : b.Name == "Uranus" || b.Name == "Neptune" ? "Ice giant" : "Terrestrial planet";
             }
         }
 
@@ -772,7 +1014,8 @@ namespace SolarSystem.UI
         static string LightTime(double km)
         {
             double s = km / Astro.LightSpeedKmPerSec;
-            return s < 120 ? s.ToString("0", CultureInfo.InvariantCulture) + " s" : s < 7200 ? (s / 60).ToString("0.0", CultureInfo.InvariantCulture) + " min" : (s / 3600).ToString("0.0", CultureInfo.InvariantCulture) + " h";
+            return s < 120 ? s.ToString("0", CultureInfo.InvariantCulture) + " s" : s < 7200 ? (s / 60).ToString("0.0", CultureInfo.InvariantCulture) + " min"
+                : s < 172800 ? (s / 3600).ToString("0.0", CultureInfo.InvariantCulture) + " h" : (s / 86400).ToString("0.0", CultureInfo.InvariantCulture) + " days";
         }
 
         static string Duration(double days)

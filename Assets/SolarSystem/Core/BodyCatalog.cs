@@ -65,12 +65,26 @@ namespace SolarSystem.Core
             {
                 if (b.ParentIndex < 0) continue;
                 var parent = bodies[b.ParentIndex];
-                double soi = b.Elements.AKm * Math.Pow(b.Gm / parent.Gm, 0.4);
+                double apoapsis = b.Elements.AKm * Math.Abs(b.OrbitScale) * (1 + b.Elements.E);
+                double periapsis = b.Elements.AKm * Math.Abs(b.OrbitScale) * (1 - b.Elements.E);
+                double soi = b.Elements.AKm * Math.Pow(Math.Max(b.Gm, 0) / parent.Gm, 0.4);
                 b.SoiKm = Math.Max(soi, b.RadiusKm * 3.0);
-                if (!parent.IsStar)
-                    parent.MoonReachKm = Math.Max(parent.MoonReachKm, b.Elements.AKm * (1 + b.Elements.E));
+                if (!parent.UsesStellarMapping)
+                    parent.MoonReachKm = Math.Max(parent.MoonReachKm, apoapsis);
+                else if (parent.ParentIndex >= 0)
+                    parent.SystemReachKm = Math.Max(parent.SystemReachKm, apoapsis);
+                parent.InnermostChildKm = parent.InnermostChildKm > 0 ? Math.Min(parent.InnermostChildKm, periapsis) : periapsis;
             }
+
+            // A star in a multiple system rules the space out past what orbits it; Laplace's formula
+            // against the pair's barycentre would put that boundary absurdly far out.
+            foreach (var b in bodies)
+                if (b.IsStar && b.ParentIndex >= 0)
+                    b.SoiKm = Math.Max(b.SystemReachKm * 1.5, b.RadiusKm * 20);
         }
+
+        /// <summary>The root of the system: the Sun, or the barycentre a multiple star orbits.</summary>
+        public BodyDefinition Root => bodies[0];
 
         public BodyDefinition this[int index] => bodies[index];
         public BodyDefinition this[string name] => byName[name];
@@ -78,6 +92,8 @@ namespace SolarSystem.Core
         public IReadOnlyList<int> ChildrenOf(int index) => children[index];
 
         public static BodyCatalog CreateSolSystem() => new BodyCatalog(SolDefinitions());
+
+        public static BodyCatalog CreateAlphaCentauri() => new BodyCatalog(AlphaCentauri.Definitions());
 
         static IEnumerable<BodyDefinition> SolDefinitions()
         {

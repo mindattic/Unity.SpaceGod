@@ -8,6 +8,27 @@ namespace SolarSystem.Core
         Planet,
         DwarfPlanet,
         Moon,
+
+        /// <summary>The empty centre of mass a multiple star orbits (Alpha Centauri A and B): invisible, the system's root.</summary>
+        Barycentre,
+
+        /// <summary>A large artificial station on its own orbit about a star (game layer): a port and a lane stop.</summary>
+        Station,
+    }
+
+    /// <summary>How sure astronomy is that a body exists.</summary>
+    public enum BodyStatus
+    {
+        Confirmed,
+
+        /// <summary>Seen, but not yet confirmed (Alpha Centauri A's JWST giant).</summary>
+        Candidate,
+
+        /// <summary>Claimed, then contested (Proxima c).</summary>
+        Disputed,
+
+        /// <summary>Invented for the game layer (stations).</summary>
+        Fictional,
     }
 
     /// <summary>Which plane a body's orbital elements are measured against.</summary>
@@ -115,6 +136,19 @@ namespace SolarSystem.Core
 
         public string Summary;
 
+        public BodyStatus Status = BodyStatus.Confirmed;
+
+        /// <summary>
+        /// Multiplies the body's orbit about its parent. A binary star's two members share their
+        /// relative orbit, each scaled by the other's share of the mass (with a minus sign for one),
+        /// so they circle their barycentre on opposite sides (as JPL's Earth-Moon pair does).
+        /// </summary>
+        public double OrbitScale = 1;
+
+        /// <summary>Stars: photosphere temperature (K) and luminosity (solar), for colour and lighting.</summary>
+        public double TeffK = 5772;
+        public double LuminositySolar = 1;
+
         // Resolved by BodyCatalog.
         public int Index { get; internal set; } = -1;
         public int ParentIndex { get; internal set; } = -1;
@@ -132,8 +166,20 @@ namespace SolarSystem.Core
         /// <summary>Farthest apoapsis of the body's moons (km); zero when it has none.</summary>
         public double MoonReachKm { get; internal set; }
 
+        /// <summary>For a star with a parent (in a multiple system): farthest apoapsis of what orbits it (km).</summary>
+        public double SystemReachKm { get; internal set; }
+
+        /// <summary>Closest periapsis of anything orbiting the body (km); zero when nothing does.</summary>
+        public double InnermostChildKm { get; internal set; }
+
+        /// <summary>Drawn and listed (the barycentre is neither).</summary>
+        public bool IsVisible => Kind != BodyKind.Barycentre;
+
         public bool HasRings => RingOuterKm > 0;
         public bool IsStar => Kind == BodyKind.Star;
+
+        /// <summary>Its children are laid out with the stellar (AU power-law) mapping: a star or a barycentre.</summary>
+        public bool UsesStellarMapping => Kind == BodyKind.Star || Kind == BodyKind.Barycentre;
 
         public override string ToString() => Name;
     }

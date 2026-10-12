@@ -201,6 +201,208 @@ namespace SolarSystem.Rendering
             return scar;
         }
 
+        // ---------------------------------------------------------------- orbital structures
+
+        static readonly Dictionary<(string, Faction), Mesh> StructureCache = new Dictionary<(string, Faction), Mesh>();
+
+        static Mesh Cached(string key, Faction faction, System.Action<Builder> build)
+        {
+            if (StructureCache.TryGetValue((key, faction), out var mesh)) return mesh;
+            var b = new Builder(faction, WholeHull);
+            build(b);
+            mesh = b.ToMesh(key + "_" + (faction?.Prefix ?? "none"));
+            StructureCache[(key, faction)] = mesh;
+            return mesh;
+        }
+
+        /// <summary>A ring of boxes standing in for a torus, in the XY plane (axis +Z), radius r.</summary>
+        static void Torus(Builder b, float r, float thickness, float depth, int segments, Color color, float z = 0)
+        {
+            for (int k = 0; k < segments; k++)
+            {
+                float a = Mathf.PI * 2 * (k + 0.5f) / segments;
+                float chord = 2 * r * Mathf.Sin(Mathf.PI / segments) * 1.04f;
+                var c = new Vector3(Mathf.Cos(a) * r, Mathf.Sin(a) * r, z);
+                b.BoxRotated(c, new Vector3(chord, thickness, depth), a * Mathf.Rad2Deg + 90, color);
+            }
+        }
+
+        /// <summary>A shipyard: an open lattice cradle along +Z with a control block and gantries (the hull is drawn inside it).</summary>
+        public static Mesh GetShipyard(Faction faction) => Cached("Shipyard", faction, b =>
+        {
+            var steel = new Color(0.5f, 0.52f, 0.55f, 1f);
+            foreach (float x in new[] { -0.26f, 0.26f })
+                foreach (float y in new[] { -0.17f, 0.17f })
+                    b.Box(new Vector3(x, y, 0), new Vector3(0.025f, 0.025f, 1f), steel);
+            for (int i = 0; i <= 8; i++)
+            {
+                float z = -0.5f + i * 0.125f;
+                b.Box(new Vector3(0, 0.17f, z), new Vector3(0.54f, 0.02f, 0.02f), steel);
+                b.Box(new Vector3(0, -0.17f, z), new Vector3(0.54f, 0.02f, 0.02f), steel);
+                b.Box(new Vector3(0.26f, 0, z), new Vector3(0.02f, 0.36f, 0.02f), steel);
+                b.Box(new Vector3(-0.26f, 0, z), new Vector3(0.02f, 0.36f, 0.02f), steel);
+            }
+            b.Box(new Vector3(0.36f, 0.12f, -0.42f), new Vector3(0.16f, 0.14f, 0.2f), b.Hull);
+            b.Box(new Vector3(0.36f, 0.12f, -0.31f), new Vector3(0.12f, 0.03f, 0.02f), b.Glow(new Color(1f, 0.85f, 0.55f)));
+            b.Box(new Vector3(0, 0.21f, 0.1f), new Vector3(0.6f, 0.05f, 0.06f), b.Accent);
+            b.Box(new Vector3(0, 0.21f, -0.2f), new Vector3(0.6f, 0.05f, 0.06f), b.Accent);
+            for (int i = 0; i < 6; i++)
+                b.Box(new Vector3(i % 2 == 0 ? 0.27f : -0.27f, 0, -0.45f + i * 0.18f), new Vector3(0.03f, 0.03f, 0.03f), b.Glow(new Color(1f, 0.6f, 0.3f)));
+        });
+
+        /// <summary>One rib of a hull being framed out on a slip (a hull is about 0.14 wide at this scale).</summary>
+        public static Mesh GetSkeletonRib() => Cached("Rib", null, b =>
+        {
+            var steel = new Color(0.62f, 0.6f, 0.56f, 1f);
+            b.Box(new Vector3(0, 0.05f, 0), new Vector3(0.14f, 0.012f, 0.012f), steel);
+            b.Box(new Vector3(0, -0.05f, 0), new Vector3(0.14f, 0.012f, 0.012f), steel);
+            b.Box(new Vector3(0.07f, 0, 0), new Vector3(0.012f, 0.1f, 0.012f), steel);
+            b.Box(new Vector3(-0.07f, 0, 0), new Vector3(0.012f, 0.1f, 0.012f), steel);
+            b.Box(new Vector3(0, 0, 0), new Vector3(0.02f, 0.02f, 0.09f), new Color(0.45f, 0.43f, 0.4f, 1f));
+        });
+
+        /// <summary>A factory station: a pressurised core, an industry-coloured process block and big radiator wings.</summary>
+        public static Mesh GetFactory(Faction faction, IndustryKind industry) => Cached("Factory" + industry, faction, b =>
+        {
+            Color heat;
+            switch (industry)
+            {
+                case IndustryKind.Smelter: heat = new Color(1f, 0.5f, 0.2f); break;
+                case IndustryKind.ElectronicsFab: heat = new Color(0.4f, 0.75f, 1f); break;
+                case IndustryKind.MunitionsPlant: heat = new Color(1f, 0.3f, 0.25f); break;
+                case IndustryKind.PharmaLab: heat = new Color(0.5f, 1f, 0.6f); break;
+                default: heat = new Color(1f, 0.85f, 0.5f); break;
+            }
+            b.Cylinder(new Vector3(0, 0, 0), 0.12f, 0.8f, b.Hull, segments: 10);
+            b.Box(new Vector3(0, 0, 0.12f), new Vector3(0.34f, 0.3f, 0.26f), b.Dark);
+            b.Box(new Vector3(0, 0.16f, 0.12f), new Vector3(0.22f, 0.02f, 0.2f), b.Glow(heat));
+            b.Box(new Vector3(0, 0, -0.2f), new Vector3(0.2f, 0.2f, 0.18f), b.Accent);
+            var radiator = new Color(0.78f, 0.8f, 0.82f, 1f);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                b.Box(new Vector3(s * 0.42f, 0, -0.05f), new Vector3(0.55f, 0.01f, 0.36f), radiator);
+                b.Box(new Vector3(s * 0.15f, 0, -0.05f), new Vector3(0.1f, 0.03f, 0.03f), b.Dark);
+            }
+            b.Box(new Vector3(0, 0, 0.44f), new Vector3(0.1f, 0.1f, 0.06f), b.Dark);
+            b.Box(new Vector3(0, 0, 0.47f), new Vector3(0.05f, 0.05f, 0.01f), b.Glow(new Color(1f, 0.9f, 0.7f)));
+        });
+
+        /// <summary>A habitat: a spinning ring on four spokes round a docking hub (axis +Z).</summary>
+        public static Mesh GetHabitat(Faction faction) => Cached("Habitat", faction, b =>
+        {
+            Torus(b, 0.44f, 0.08f, 0.14f, 24, b.Hull);
+            Torus(b, 0.44f, 0.02f, 0.15f, 24, b.Glow(new Color(1f, 0.92f, 0.75f)));
+            for (int k = 0; k < 4; k++)
+            {
+                float a = Mathf.PI * 0.5f * k;
+                b.BoxRotated(new Vector3(Mathf.Cos(a) * 0.22f, Mathf.Sin(a) * 0.22f, 0), new Vector3(0.44f, 0.025f, 0.025f), a * Mathf.Rad2Deg, b.Dark);
+            }
+            b.Cylinder(Vector3.zero, 0.07f, 0.5f, b.Accent, segments: 10);
+            b.Box(new Vector3(0, 0, 0.27f), new Vector3(0.05f, 0.05f, 0.03f), b.Glow(new Color(1f, 0.85f, 0.55f)));
+        });
+
+        /// <summary>A free-flying station (Rigil Gate, Toliman Forge, Blackhollow): a long spine with twin habitat rings, docks and arrays. Radius one.</summary>
+        public static Mesh GetStationBody(string name) => Cached("StationBody" + name, null, b =>
+        {
+            bool derelict = name == "Blackhollow";
+            var hull = derelict ? new Color(0.32f, 0.3f, 0.3f, 1f) : new Color(0.7f, 0.71f, 0.74f, 1f);
+            var trim = derelict ? new Color(0.5f, 0.15f, 0.25f, 1f) : name == "Toliman Forge" ? new Color(1f, 0.6f, 0.25f, 1f) : new Color(1f, 0.78f, 0.3f, 1f);
+            b.Cylinder(Vector3.zero, 0.09f, 1.9f, hull, segments: 12);
+            foreach (float z in new[] { -0.45f, 0.45f })
+            {
+                Torus(b, 0.75f, 0.1f, 0.16f, 32, hull, z);
+                Torus(b, 0.75f, 0.03f, 0.17f, 32, derelict ? b.Dark : b.Glow(new Color(1f, 0.9f, 0.7f)), z);
+                for (int k = 0; k < 3; k++)
+                {
+                    float a = Mathf.PI * 2 * k / 3 + z;
+                    var c = new Vector3(Mathf.Cos(a) * 0.38f, Mathf.Sin(a) * 0.38f, z);
+                    b.BoxRotated(c, new Vector3(0.68f, 0.04f, 0.04f), a * Mathf.Rad2Deg, trim);
+                }
+            }
+            b.Box(new Vector3(0, 0, 0), new Vector3(0.34f, 0.34f, 0.4f), trim);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                b.Box(new Vector3(0, s * 0.6f, -0.95f), new Vector3(0.05f, 1.0f, 0.05f), b.Dark);
+                b.Box(new Vector3(0, s * 0.75f, -0.95f), new Vector3(0.45f, 0.7f, 0.01f), new Color(0.12f, 0.16f, 0.3f, 1f));
+            }
+            for (int k = 0; k < 6; k++)
+            {
+                float a = Mathf.PI * 2 * k / 6;
+                b.BoxRotated(new Vector3(Mathf.Cos(a) * 0.2f, Mathf.Sin(a) * 0.2f, 0.95f), new Vector3(0.24f, 0.03f, 0.03f), a * Mathf.Rad2Deg, b.Dark);
+                b.Box(new Vector3(Mathf.Cos(a) * 0.32f, Mathf.Sin(a) * 0.32f, 0.95f), new Vector3(0.03f, 0.03f, 0.03f), b.Glow(new Color(0.6f, 0.9f, 1f)));
+            }
+        });
+
+        /// <summary>
+        /// A docking ring: a broad torus (axis +Z, the way ships pass through to the atmosphere) with
+        /// docking arms round its rim and approach lights on its inner edge. One unit across.
+        /// </summary>
+        public static Mesh GetDockingRing(Faction faction) => Cached("DockingRing", faction, b =>
+        {
+            var hull = new Color(0.72f, 0.73f, 0.76f, 1f);
+            Torus(b, 0.42f, 0.1f, 0.12f, 40, hull);
+            Torus(b, 0.36f, 0.02f, 0.13f, 40, b.Glow(new Color(0.55f, 0.9f, 1f)));
+            Torus(b, 0.48f, 0.03f, 0.08f, 40, b.Accent);
+            for (int k = 0; k < 8; k++)
+            {
+                float a = Mathf.PI * 2 * k / 8;
+                var c = new Vector3(Mathf.Cos(a) * 0.56f, Mathf.Sin(a) * 0.56f, 0);
+                b.BoxRotated(c, new Vector3(0.14f, 0.035f, 0.05f), a * Mathf.Rad2Deg, b.Dark);
+                b.Box(new Vector3(Mathf.Cos(a) * 0.64f, Mathf.Sin(a) * 0.64f, 0), new Vector3(0.025f, 0.025f, 0.06f), b.Glow(new Color(1f, 0.4f, 0.3f)));
+            }
+        });
+
+        /// <summary>The ISS or Tiangong: a truss with modules and solar arrays (one unit across).</summary>
+        public static Mesh GetCrewedStation(bool tiangong) => Cached(tiangong ? "Tiangong" : "ISS", null, b =>
+        {
+            var white = new Color(0.86f, 0.86f, 0.84f, 1f);
+            if (tiangong)
+            {
+                b.Cylinder(Vector3.zero, 0.07f, 0.55f, white);
+                b.Box(new Vector3(0, 0, 0.2f), new Vector3(0.5f, 0.11f, 0.11f), white);
+                foreach (float s in new[] { -1f, 1f })
+                    b.Box(new Vector3(s * 0.55f, 0, 0.2f), new Vector3(0.45f, 0.01f, 0.13f), new Color(0.15f, 0.2f, 0.42f, 1f));
+                return;
+            }
+            var panel = new Color(0.55f, 0.42f, 0.18f, 1f);
+            b.Box(Vector3.zero, new Vector3(1f, 0.04f, 0.04f), new Color(0.6f, 0.6f, 0.6f, 1f));
+            b.Cylinder(new Vector3(0, 0, 0.05f), 0.05f, 0.45f, white);
+            b.Box(new Vector3(0, 0, -0.05f), new Vector3(0.18f, 0.08f, 0.08f), white);
+            foreach (float x in new[] { -0.46f, -0.32f, 0.32f, 0.46f })
+                foreach (float s in new[] { -1f, 1f })
+                    b.Box(new Vector3(x, 0, s * 0.2f), new Vector3(0.1f, 0.006f, 0.34f), panel);
+            b.Box(new Vector3(0.1f, 0.12f, 0), new Vector3(0.12f, 0.2f, 0.005f), white);
+        });
+
+        /// <summary>A telescope (Hubble's tube, or JWST's gold mirror over its sunshield) or a robotic probe.</summary>
+        public static Mesh GetSpacecraft(string name) => Cached("Craft" + (name == "JWST" || name == "Hubble" ? name : "Probe"), null, b =>
+        {
+            if (name == "JWST")
+            {
+                var gold = new Color(1f, 0.78f, 0.3f, 1f);
+                for (int k = 0; k < 6; k++)
+                {
+                    float a = Mathf.PI * 2 * k / 6;
+                    b.BoxRotated(new Vector3(Mathf.Cos(a) * 0.14f, Mathf.Sin(a) * 0.14f, 0.15f), new Vector3(0.16f, 0.14f, 0.01f), a * Mathf.Rad2Deg, gold);
+                }
+                b.Box(new Vector3(0, 0, 0.15f), new Vector3(0.12f, 0.12f, 0.01f), gold);
+                b.Box(new Vector3(0, -0.22f, 0), new Vector3(0.9f, 0.01f, 0.5f), new Color(0.75f, 0.6f, 0.75f, 1f));
+                b.Box(new Vector3(0, -0.27f, 0), new Vector3(0.12f, 0.08f, 0.12f), new Color(0.3f, 0.3f, 0.32f, 1f));
+                return;
+            }
+            if (name == "Hubble")
+            {
+                b.Cylinder(Vector3.zero, 0.16f, 1f, new Color(0.8f, 0.8f, 0.82f, 1f), segments: 12);
+                foreach (float s in new[] { -1f, 1f })
+                    b.Box(new Vector3(s * 0.38f, 0, -0.1f), new Vector3(0.45f, 0.01f, 0.18f), new Color(0.15f, 0.2f, 0.42f, 1f));
+                return;
+            }
+            b.Box(Vector3.zero, new Vector3(0.25f, 0.25f, 0.3f), new Color(0.75f, 0.65f, 0.35f, 1f));
+            b.Cylinder(new Vector3(0, 0, 0.22f), 0.2f, 0.03f, new Color(0.85f, 0.85f, 0.85f, 1f), segments: 12);
+            foreach (float s in new[] { -1f, 1f })
+                b.Box(new Vector3(s * 0.45f, 0, 0), new Vector3(0.6f, 0.01f, 0.22f), new Color(0.15f, 0.2f, 0.42f, 1f));
+        });
+
         static void BuildBattleship(Builder b)
         {
             b.Frustum(-0.42f, 0.30f, new Vector2(0.15f, 0.085f), new Vector2(0.11f, 0.06f), 0, b.Hull);
@@ -352,7 +554,8 @@ namespace SolarSystem.Rendering
             {
                 this.section = section;
                 var f = faction != null ? new Color(faction.Color.R, faction.Color.G, faction.Color.B, 1f) : Color.gray;
-                Hull = Color.Lerp(new Color(0.6f, 0.62f, 0.66f, 1f), f, 0.12f);
+                // Factions are told apart by the shade of their plating as well as their trim.
+                Hull = Color.Lerp(new Color(0.6f, 0.62f, 0.66f, 1f), f, 0.32f);
                 Accent = f;
             }
 
@@ -403,6 +606,19 @@ namespace SolarSystem.Rendering
                 Quad(F(1, -1), F(-1, -1), B(-1, -1), B(1, -1), color);
                 Quad(F(-1, -1), F(-1, 1), B(-1, 1), B(-1, -1), color);
                 Quad(F(1, 1), F(1, -1), B(1, -1), B(1, 1), color);
+            }
+
+            /// <summary>A box turned <paramref name="degrees"/> about Z, then moved to <paramref name="center"/> (for rings and spokes).</summary>
+            public void BoxRotated(Vector3 center, Vector3 size, float degrees, Color color)
+            {
+                int before = vertices.Count;
+                Box(Vector3.zero, size, color);
+                var q = Quaternion.Euler(0, 0, degrees);
+                for (int i = before; i < vertices.Count; i++)
+                {
+                    vertices[i] = q * vertices[i] + center;
+                    normals[i] = q * normals[i];
+                }
             }
 
             public void Box(Vector3 center, Vector3 size, Color color)

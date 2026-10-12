@@ -75,7 +75,8 @@ Shader "SolarSystem/Ring"
 
                 float3 l = normalize(_SunPositionWS.xyz - i.positionWS);
                 float3 n = normalize(i.normalWS);
-                float light = 0.3 + 0.7 * abs(dot(n, l));
+                float3 light = 0.3 * _SunColor.rgb + 0.7 * abs(dot(n, l)) * _SunColor.rgb
+                    + 0.7 * abs(dot(n, normalize(_Sun2PositionWS.xyz - i.positionWS))) * _Sun2Color.rgb;
 
                 float3 oc = i.positionWS - _PlanetPosRadius.xyz;
                 float b = dot(oc, l);

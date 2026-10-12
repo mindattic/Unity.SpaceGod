@@ -41,6 +41,18 @@ namespace SolarSystem.Core
 
         /// <summary>Thrown out of a hyperlane by an interdiction pulse, drifting beside it.</summary>
         Adrift,
+
+        /// <summary>Waiting off a docking ring to be cleared down, edging in along the holding line.</summary>
+        Queued,
+
+        /// <summary>Dropping from the ring straight down to its city, through the atmosphere.</summary>
+        Descent,
+
+        /// <summary>Down at the city's port (not drawn; it trades here).</summary>
+        Landed,
+
+        /// <summary>Climbing back up to the ring to leave.</summary>
+        Ascent,
     }
 
     public sealed class ShipClassSpec
@@ -123,12 +135,18 @@ namespace SolarSystem.Core
         /// </summary>
         public bool Fixed;
 
+        /// <summary>
+        /// Centre of the circle, offset from the body along its spin axis: zero for an orbit; for a
+        /// point fixed over a place on a turning world (a docking ring) the circle is its parallel of latitude.
+        /// </summary>
+        public DVec3 Center;
+
         public double PhaseAt(double jd) => PhaseAtEpoch + RateRadPerDay * (jd - EpochJd);
 
         public DVec3 OffsetAt(double jd)
         {
             double p = PhaseAt(jd);
-            return (U * Math.Cos(p) + V * Math.Sin(p)) * RadiusKm;
+            return Center + (U * Math.Cos(p) + V * Math.Sin(p)) * RadiusKm;
         }
 
         public DVec3 TangentAt(double jd)
@@ -249,6 +267,13 @@ namespace SolarSystem.Core
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;
 
+        /// <summary>The docking ring a merchant is landing through (or has landed through), and where it waits to be cleared.</summary>
+        public DockingRing Ring;
+        public ParkingOrbit HoldPoint;
+
+        /// <summary>On the ground or on its way down or up (not in orbit, cannot be attacked).</summary>
+        public bool Planetside => Phase == ShipPhase.Descent || Phase == ShipPhase.Landed || Phase == ShipPhase.Ascent;
+
         /// <summary>The battle this ship is fighting in, or null.</summary>
         public Battle Battle;
 
@@ -275,13 +300,17 @@ namespace SolarSystem.Core
         /// <summary>Fraction of the transit distance covered (0..1); 0 while parked.</summary>
         public readonly double Progress;
 
-        public ShipState(DVec3 helio, DVec3 facing, double speed, bool burning, double progress)
+        /// <summary>Entry heating, 0..1: the plasma sheath of a ship descending through an atmosphere.</summary>
+        public readonly float Heat;
+
+        public ShipState(DVec3 helio, DVec3 facing, double speed, bool burning, double progress, float heat = 0)
         {
             HelioKm = helio;
             Facing = facing;
             SpeedKmS = speed;
             Burning = burning;
             Progress = progress;
+            Heat = heat;
         }
     }
 }

@@ -22,6 +22,7 @@ namespace SolarSystem.UI
             {
                 case BodyKind.Star: return star ??= Draw(StarSdf);
                 case BodyKind.Moon: return dot ??= Draw(p => Ring(p, 0.42f, 0.16f));
+                case BodyKind.Station: return hexagon ??= Draw(Hexagon);
                 default: return ring ??= Draw(p => Ring(p, 0.62f, 0.14f));
             }
         }

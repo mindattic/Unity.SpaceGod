@@ -187,7 +187,7 @@ namespace SolarSystem.Core
             pulseReady[lurker] = jd + 1;
             lanes0().Danger.TryGetValue(lane, out double danger);
             lanes0().Danger[lane] = danger + 3;
-            world.Log(jd, $"Black Banner raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
+            world.Log(jd, $"{world.Pirates.Name} raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
             BumpDanger(lane.A, 1);
             BumpDanger(lane.B, 1);
             BattleStarted?.Invoke(b);
@@ -256,14 +256,14 @@ namespace SolarSystem.Core
             {
                 if (ship.HasCargo) Loot(ship);
                 double roll = rng.NextDouble();
-                if (warship && hull >= 0.3) how = Steal(ship, captor, b) ? "pressed into Black Banner service" : "scuttled";
+                if (warship && hull >= 0.3) how = Steal(ship, captor, b) ? $"pressed into {world.Pirates.Name} service" : "scuttled";
                 else if (warship) { Scuttle(ship); how = "scuttled"; }
                 else if (roll < 0.55) { LeaveAdrift(ship, jd); how = "stripped and left adrift"; }
                 else if (roll < 0.85)
                 {
                     world.Pirates.Treasury += Economy.HullPrice(ship.Spec.Class) * 0.25;
                     ship.Destroyed = true;
-                    how = "taken to Blackwater and sold to the breakers";
+                    how = $"taken to {HavenName()} and sold to the breakers";
                 }
                 else { Scuttle(ship); how = "scuttled"; }
             }
@@ -482,7 +482,7 @@ namespace SolarSystem.Core
             {
                 if (s.Destroyed || s.Battle != null) continue;
                 var c = s.Controller;
-                if (c.Destroyed || c.Phase != ShipPhase.Parked || c.Orbit.Body != body) continue;
+                if (c.Destroyed || !Fleet.IsAt(c, body)) continue;
                 list.Add(s);
             }
             return list;
@@ -881,6 +881,13 @@ namespace SolarSystem.Core
             return -1;
         }
 
+        string HavenName()
+        {
+            foreach (var s in Economy.Settlements)
+                if (s.Kind == SettlementKind.Haven) return s.Name;
+            return "a pirate haven";
+        }
+
         public bool AtWar(Faction f)
         {
             foreach (var g in Fleet.Factions)
@@ -1210,7 +1217,8 @@ namespace SolarSystem.Core
         public void RaisePirateGroup(double jd, int body)
         {
             var pirates = world.Pirates;
-            string Name() => RaiderNames[raidersRaised++ % RaiderNames.Length] + (raidersRaised > RaiderNames.Length ? " " + (raidersRaised / RaiderNames.Length + 1) : "");
+            var names = world.RaiderNames ?? RaiderNames;
+            string Name() => names[raidersRaised++ % names.Length] + (raidersRaised > names.Length ? " " + (raidersRaised / names.Length + 1) : "");
             var leader = Fleet.AddShip(Name(), raidersRaised % 3 == 0 ? ShipClass.Cruiser : ShipClass.Destroyer, pirates, ShipRole.Patrol);
             leader.Route = new[] { body };
             int escorts = 1 + rng.Next(2);
@@ -1234,18 +1242,19 @@ namespace SolarSystem.Core
             foreach (var s in Fleet.Ships)
                 if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate) groups++;
             // Smuggling and protection rackets keep the Banner afloat between prizes.
-            world.Pirates.Treasury += 1.5e6;
-            if (groups >= 4 || world.Pirates.Treasury < 5e7 || rng.NextDouble() > 0.08) return;
+            world.Pirates.Treasury += world.PirateIncomePerDay;
+            if (groups >= world.PirateGroupCap || world.Pirates.Treasury < 5e7 || rng.NextDouble() > 0.08) return;
             world.Pirates.Treasury -= 4e7;
             RaisePirateGroup(jd, haven);
-            world.Log(jd, "A new Black Banner raider group sails from Blackwater", WorldEventKind.Info, haven);
+            world.Log(jd, $"A new {world.Pirates.Name} raider group sails from {HavenName()}", WorldEventKind.Info, haven);
         }
 
         /// <summary>Wars wind down to ceasefires when both sides have bled, and flare up again months later.</summary>
         void DiplomacyCycle(double jd)
         {
-            var a = world.Sol;
-            var b = world.Reach;
+            var a = world.RivalA;
+            var b = world.RivalB;
+            if (a == null || b == null) return;
             var r = Diplomacy.Get(a, b);
             if (r == Relation.War)
             {
@@ -1282,7 +1291,7 @@ namespace SolarSystem.Core
             int count = 0;
             foreach (var s in Fleet.Ships)
                 if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary) count++;
-            int cap = AtWar(f) ? 34 : 20;
+            int cap = AtWar(f) ? world.NavyCapAtWar : world.NavyCap;
             if (count >= cap) return null;
             return WarshipCycle[(builtWarships + yard.Id) % WarshipCycle.Length];
         }
@@ -1324,7 +1333,7 @@ namespace SolarSystem.Core
                 foreach (var s in Economy.Settlements)
                     if (s.Owner == yard.Owner && !own.Contains(s.Body)) own.Add(s.Body);
                 ship.Route = own.ToArray();
-                Fleet.Station(ship, yard.Body, jd);
+                world.Launch(ship, yard, jd);
             }
             world.Log(jd, $"{yard.Name} commissions the {cls.ToString().ToLowerInvariant()} {ship.Name}" + (group != null ? $", joining {group.Name}" : ""), WorldEventKind.Launch, yard.Body);
             return ship;
@@ -1351,7 +1360,7 @@ namespace SolarSystem.Core
                 if (u.Ship != null && (flag == null || u.Ship.Combat.Spec.Hull > flag.Combat.Spec.Hull)) flag = u.Ship;
             }
             var owner = flag?.Faction ?? f;
-            string who = owner.IsPirate ? "Black Banner raiders" : owner.Name;
+            string who = owner.IsPirate ? owner.Name + " raiders" : owner.Name;
             return flag != null ? $"{who} ({flag.Name}, {count} ships)" : $"{who} defences";
         }
 

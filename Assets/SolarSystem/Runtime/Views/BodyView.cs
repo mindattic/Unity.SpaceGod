@@ -15,6 +15,15 @@ namespace SolarSystem.Views
         readonly Transform ring;
         readonly Material ringMaterial;
         readonly Transform glow;
+        readonly Material glowMaterial;
+
+        /// <summary>A free-flying station: drawn as a model with the ship shader, not a sphere.</summary>
+        readonly bool station;
+
+        // A flare star brightens suddenly and fades over seconds (Proxima Centauri).
+        readonly bool flareStar;
+        float flare;
+        float nextFlareAt;
 
         static Mesh sphereMesh;
         static Mesh quadMesh;
@@ -37,23 +46,43 @@ namespace SolarSystem.Views
             sphereMesh ??= MeshFactory.UvSphere();
             quadMesh ??= MeshFactory.Quad();
 
-            Root.AddComponent<MeshFilter>().sharedMesh = sphereMesh;
+            station = body.Kind == BodyKind.Station;
+            Root.AddComponent<MeshFilter>().sharedMesh = station ? ShipMeshFactory.GetStationBody(body.Name) : sphereMesh;
             renderer = Root.AddComponent<MeshRenderer>();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
 
             var tint = new Color(body.Color.R, body.Color.G, body.Color.B);
+            if (!body.IsVisible)
+            {
+                // A barycentre: an empty point in space.
+                material = Materials.Create(Materials.Planet, body.Name);
+                renderer.sharedMaterial = material;
+                renderer.enabled = false;
+                return;
+            }
+            if (station)
+            {
+                material = ShipModels.ProceduralMaterial;
+                renderer.sharedMaterial = material;
+                return;
+            }
             if (body.IsStar)
             {
-                material = Materials.Create(Materials.Sun, "Sun");
-                material.SetColor("_Color", new Color(1f, 0.9f, 0.72f));
+                // Tinted by photosphere temperature relative to the Sun's, so the Sun keeps its look.
+                var light = SolarSystemApp.LightColor(body, 1);
+                var t = new Color(light.x, light.y, light.z);
+                flareStar = body.TeffK < 3300;
+                nextFlareAt = Time.unscaledTime + 6f + UnityEngine.Random.value * 10f;
+                material = Materials.Create(Materials.Sun, body.Name);
+                material.SetColor("_Color", new Color(1f, 0.9f, 0.72f) * t);
 
                 var glowGo = new GameObject("Corona");
                 glowGo.transform.SetParent(parent, false);
                 glowGo.AddComponent<MeshFilter>().sharedMesh = quadMesh;
                 var glowRenderer = glowGo.AddComponent<MeshRenderer>();
-                var glowMaterial = Materials.Create(Materials.Glow, "Corona");
-                glowMaterial.SetColor("_Color", new Color(1f, 0.72f, 0.4f));
+                glowMaterial = Materials.Create(Materials.Glow, "Corona");
+                glowMaterial.SetColor("_Color", new Color(1f, 0.72f, 0.4f) * t);
                 glowMaterial.SetFloat("_Intensity", 1.1f);
                 glowMaterial.SetFloat("_Falloff", 2.6f);
                 glowRenderer.sharedMaterial = glowMaterial;
@@ -136,6 +165,14 @@ namespace SolarSystem.Views
             var t = Root.transform;
             t.localPosition = relative;
             t.localScale = Vector3.one * radius;
+            if (station)
+            {
+                // Spine along the station's pole, turning slowly about it.
+                var axis = ToUnity(Body.Pole);
+                var side = Vector3.Cross(axis, Vector3.up).sqrMagnitude > 1e-6f ? Vector3.Cross(axis, Vector3.up).normalized : Vector3.right;
+                t.localRotation = Quaternion.LookRotation(axis, Quaternion.AngleAxis(Time.unscaledTime * 6f, axis) * side);
+                return;
+            }
             var pole = ToUnity(Body.Pole);
             // The sphere mesh has north on +Y, longitude 0 on +X and east on +Z. Ecliptic→Unity is a
             // reflection, which turns the right-handed (meridian, north, east) triad into a proper rotation.
@@ -152,8 +189,10 @@ namespace SolarSystem.Views
             if (glow != null)
             {
                 float distance = relative.magnitude;
-                // Corona: at least ~4% of the view so the Sun reads as a star from anywhere in the system.
-                float size = Mathf.Max(radius * 7f, distance * 0.07f);
+                // Corona: at least ~4% of the view so the Sun reads as a star from anywhere in the system;
+                // dimmer stars (K and M dwarfs) a little less.
+                float presence = Mathf.Clamp(Mathf.Pow((float)Body.LuminositySolar, 0.12f), 0.45f, 1.1f);
+                float size = Mathf.Max(radius * 7f, distance * 0.07f * presence) * (1 + flare * 0.8f);
                 var toCamera = distance > 0 ? -relative / distance : -cameraForward;
                 glow.localPosition = relative + toCamera * Mathf.Min(radius * 1.05f, distance * 0.5f);
                 glow.localRotation = Quaternion.LookRotation(-toCamera, Vector3.up);
@@ -168,6 +207,19 @@ namespace SolarSystem.Views
         /// </summary>
         public void UpdateWeather(double jd, double simSecondsPerSecond)
         {
+            if (flareStar)
+            {
+                // Proxima is a flare star: every so often it brightens several-fold in a second and fades.
+                float now = Time.unscaledTime;
+                if (now >= nextFlareAt)
+                {
+                    flare = 0.6f + UnityEngine.Random.value * 1.4f;
+                    nextFlareAt = now + 14f + UnityEngine.Random.value * 26f;
+                }
+                flare = Mathf.Max(0, flare - flare * Time.unscaledDeltaTime * 0.9f - Time.unscaledDeltaTime * 0.02f);
+                material.SetFloat("_Intensity", 1.15f * (1 + flare));
+                glowMaterial.SetFloat("_Intensity", 1.1f * (1 + flare * 1.5f));
+            }
             if (windProfile != null)
             {
                 double phase = jd / flowLoopDays;
@@ -185,7 +237,7 @@ namespace SolarSystem.Views
                     material.SetVector("_Grs", Vector4.zero);
                 }
             }
-            else if (!Body.IsStar && Body.SurfaceHaze >= 0.99f)
+            else if (!Body.IsStar && !station && Body.SurfaceHaze >= 0.99f)
             {
                 // Cloud deck angle relative to the (slowly turning) surface frame, in the map's east sense.
                 double cloudRate = -360.0 / VenusCloudPeriodDays - BodyOrientation.RateDegPerDay(Body);
@@ -197,7 +249,7 @@ namespace SolarSystem.Views
 
         public void SetVisible(bool visible)
         {
-            renderer.enabled = visible;
+            renderer.enabled = visible && Body.IsVisible;
         }
 
         public static Vector3 ToUnity(DVec3 ecliptic) => new Vector3((float)ecliptic.X, (float)ecliptic.Z, (float)ecliptic.Y);

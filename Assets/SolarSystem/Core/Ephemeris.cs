@@ -70,8 +70,8 @@ namespace SolarSystem.Core
                     continue;
                 }
                 var k = b.Elements.At(jd);
-                relative[i] = frames[i].ToEcliptic(Kepler.Position(k));
-                velocity[i] = frames[i].ToEcliptic(Kepler.Velocity(k));
+                relative[i] = frames[i].ToEcliptic(Kepler.Position(k)) * b.OrbitScale;
+                velocity[i] = frames[i].ToEcliptic(Kepler.Velocity(k)) * b.OrbitScale;
             }
 
             // JPL's "Earth" elements are the Earth-Moon barycentre; Earth sits 4,670 km from it.
@@ -90,14 +90,14 @@ namespace SolarSystem.Core
         {
             var b = Catalog[body];
             if (b.Elements == null) return DVec3.Zero;
-            var rel = frames[body].ToEcliptic(Kepler.Position(b.Elements.At(jd)));
+            var rel = frames[body].ToEcliptic(Kepler.Position(b.Elements.At(jd))) * b.OrbitScale;
             if (body == earthIndex)
                 rel -= RelativeAt(moonIndex, jd) * moonMassFraction;
             return HelioAt(b.ParentIndex, jd) + rel;
         }
 
         DVec3 RelativeAt(int body, double jd) =>
-            frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd)));
+            frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd))) * Catalog[body].OrbitScale;
 
         /// <summary>Samples one full orbit (relative to the parent) with the elements at <paramref name="jd"/>.</summary>
         public void SampleOrbit(int body, double jd, DVec3[] output)
@@ -110,7 +110,7 @@ namespace SolarSystem.Core
                 // Uniform in eccentric anomaly, so eccentric orbits get points where curvature is.
                 double ecc = Astro.TwoPi * i / (n - 1);
                 double m = ecc - k.E * Math.Sin(ecc);
-                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m)));
+                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m))) * b.OrbitScale;
             }
         }
 
@@ -129,7 +129,7 @@ namespace SolarSystem.Core
             {
                 double ecc = now - sense * Astro.TwoPi * i / (n - 1);
                 double m = ecc - k.E * Math.Sin(ecc);
-                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m)));
+                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m))) * b.OrbitScale;
             }
         }
 
@@ -137,7 +137,8 @@ namespace SolarSystem.Core
         public double OrbitalSpeedKmS(int body)
         {
             var b = Catalog[body];
-            if (b.ParentIndex < 0) return 0;
+            if (b.ParentIndex < 0 || b.Elements == null) return 0;
+            if (b.OrbitScale != 1) return RelativeVelocityKmS(body).Length;
             double gm = Catalog[b.ParentIndex].Gm + b.Gm;
             return Kepler.VisVivaSpeed(gm, relative[body].Length, b.Elements.At(Jd).A);
         }

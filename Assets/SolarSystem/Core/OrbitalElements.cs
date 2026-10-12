@@ -74,6 +74,49 @@ namespace SolarSystem.Core
             };
         }
 
+        /// <summary>
+        /// An orbit given by its geometry in the ecliptic frame: the direction of periapsis and the
+        /// orbit's normal (the right-hand pole of its motion). Used where the real orbit is measured
+        /// in another frame (a visual binary on the sky) or only its shape is known (exoplanets).
+        /// </summary>
+        public static OrbitalElements FromVectors(double epochJd, double aKm, double e, DVec3 periapsisDirection, DVec3 normal,
+            double meanAnomalyDeg, double periodDays)
+        {
+            var h = normal.Normalized;
+            var p = (periapsisDirection - h * DVec3.Dot(periapsisDirection, h)).Normalized;
+            double i = Math.Acos(Math.Max(-1, Math.Min(1, h.Z))) * Astro.Rad2Deg;
+            var n = DVec3.Cross(DVec3.UnitZ, h);
+            n = n.LengthSquared < 1e-12 ? DVec3.UnitX : n.Normalized;
+            double node = Math.Atan2(n.Y, n.X) * Astro.Rad2Deg;
+            double argPeri = Math.Atan2(DVec3.Dot(DVec3.Cross(n, p), h), DVec3.Dot(n, p)) * Astro.Rad2Deg;
+            return FromClassical(epochJd, aKm, e, i, node, argPeri, meanAnomalyDeg, periodDays);
+        }
+
+        /// <summary>
+        /// The periapsis direction and orbit normal (ecliptic J2000) of a visual binary's relative orbit
+        /// (Campbell elements: inclination, position angle of the node, argument of periastron), for a
+        /// pair at the given right ascension and declination. The sky is spanned by north, east and the
+        /// line of sight away from us; which of the two nodes is ascending cannot be told from images
+        /// alone, so the convention that the companion recedes past the given node is used.
+        /// </summary>
+        public static void VisualBinaryGeometry(double raDeg, double decDeg, double iDeg, double nodeDeg, double argPeriDeg,
+            out DVec3 periapsisDirection, out DVec3 normal)
+        {
+            double ra = raDeg * Astro.Deg2Rad, dec = decDeg * Astro.Deg2Rad;
+            var north = new DVec3(-Math.Sin(dec) * Math.Cos(ra), -Math.Sin(dec) * Math.Sin(ra), Math.Cos(dec));
+            var east = new DVec3(-Math.Sin(ra), Math.Cos(ra), 0);
+            var away = new DVec3(Math.Cos(dec) * Math.Cos(ra), Math.Cos(dec) * Math.Sin(ra), Math.Sin(dec));
+            double i = iDeg * Astro.Deg2Rad, node = nodeDeg * Astro.Deg2Rad, w = argPeriDeg * Astro.Deg2Rad;
+            DVec3 Sky(double u) =>
+                north * (Math.Cos(u) * Math.Cos(node) - Math.Sin(u) * Math.Sin(node) * Math.Cos(i))
+                + east * (Math.Cos(u) * Math.Sin(node) + Math.Sin(u) * Math.Cos(node) * Math.Cos(i))
+                + away * (Math.Sin(u) * Math.Sin(i));
+            var p = Astro.EquatorialToEcliptic(Sky(w));
+            var q = Astro.EquatorialToEcliptic(Sky(w + Math.PI / 2));
+            periapsisDirection = p.Normalized;
+            normal = DVec3.Cross(p, q).Normalized;
+        }
+
         /// <summary>Kepler's third law: period in days for semi-major axis a (km) around gm (km³/s²).</summary>
         public static double PeriodFromGm(double aKm, double gm) =>
             Astro.TwoPi * Math.Sqrt(aKm * aKm * aKm / gm) / Astro.SecondsPerDay;

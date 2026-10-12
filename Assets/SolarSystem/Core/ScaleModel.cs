@@ -75,9 +75,9 @@ namespace SolarSystem.Core
         {
             double r = body.RadiusKm;
             double rDisplay = GameplayRadius(r);
-            if (distanceKm <= r) return rDisplay * distanceKm / r;
+            if (distanceKm <= r) return r > 0 ? rDisplay * distanceKm / r : 0;
 
-            if (body.IsStar)
+            if (body.UsesStellarMapping)
             {
                 return rDisplay + GameAuScale *
                     (Math.Pow(distanceKm / Astro.AuKm, GameAuExponent) - Math.Pow(r / Astro.AuKm, GameAuExponent));
@@ -91,8 +91,8 @@ namespace SolarSystem.Core
         public double InverseLocalDistance(BodyDefinition body, double sceneDistance)
         {
             if (sceneDistance <= 0) return 0;
-            double lo = Math.Log(body.RadiusKm * 1e-6);
-            double hi = Math.Log(1e13);
+            double lo = Math.Log(Math.Max(body.RadiusKm, 1) * 1e-6);
+            double hi = Math.Log(1e15);
             for (int i = 0; i < 90; i++)
             {
                 double mid = 0.5 * (lo + hi);
@@ -156,7 +156,7 @@ namespace SolarSystem.Core
 
         /// <summary>How far (km) from a body points are placed with its own local mapping.</summary>
         public static double NeighbourhoodKm(BodyDefinition body) =>
-            Math.Max(body.RadiusKm * NeighbourhoodRadii, body.MoonReachKm * NeighbourhoodMoonMargin);
+            Math.Max(body.RadiusKm * NeighbourhoodRadii, Math.Max(body.MoonReachKm, body.SystemReachKm) * NeighbourhoodMoonMargin);
 
         /// <summary>
         /// Scene position (Unity axes) of a true heliocentric point (km), seen from the neighbourhood
@@ -181,7 +181,7 @@ namespace SolarSystem.Core
         /// </summary>
         DVec3 MapThrough(Ephemeris ephemeris, DVec3[] scene, List<int> bodies, int count, DVec3 helioKm)
         {
-            if (count == 0) return scene[0] + LocalOffset(ephemeris.Catalog.Sun, helioKm - ephemeris.Helio(0));
+            if (count == 0) return scene[0] + LocalOffset(ephemeris.Catalog.Root, helioKm - ephemeris.Helio(0));
 
             int body = bodies[count - 1];
             var b = ephemeris.Catalog[body];
@@ -262,15 +262,29 @@ namespace SolarSystem.Core
         /// the scale model places them (each in its planet's neighbourhood), so the ship meets the
         /// burns at either end exactly. The Sun keep-out and bow are scaled into scene units.
         /// </summary>
-        public DVec3 LaneScene(Ephemeris ephemeris, DVec3[] scene, Ship ship, double progress, out DVec3 travelDirection)
+        public DVec3 LaneScene(Ephemeris ephemeris, DVec3[] scene, Hyperlanes lanes, Ship ship, double progress, out DVec3 travelDirection)
         {
             var hop = ship.LaneLeg;
-            var a = MapNear(ephemeris, scene, hop.From, ephemeris.Helio(hop.From) + ship.LaneFromOffset);
-            var b = MapNear(ephemeris, scene, hop.To, ephemeris.Helio(hop.To) + ship.LaneToOffset);
-            double keepOut = LocalDistance(ephemeris.Catalog.Sun, Hyperlanes.SunKeepOutKm);
+            var aKm = ephemeris.Helio(hop.From) + ship.LaneFromOffset;
+            var bKm = ephemeris.Helio(hop.To) + ship.LaneToOffset;
+            return LaneCurveScene(ephemeris, scene, lanes, hop.Lane, hop.From, aKm, hop.To, bKm, progress, out travelDirection);
+        }
+
+        /// <summary>
+        /// A point on a lane drawn in scene space between ramp points given in true km (each mapped in
+        /// its planet's neighbourhood), bowed from the lane's hub and swung round the same star as the
+        /// true-km curve, with the keep-out scaled into scene units by that star's own mapping.
+        /// </summary>
+        public DVec3 LaneCurveScene(Ephemeris ephemeris, DVec3[] scene, Hyperlanes lanes, Lane lane, int from, DVec3 aKm, int to, DVec3 bKm,
+            double progress, out DVec3 travelDirection)
+        {
+            var a = MapNear(ephemeris, scene, from, aKm);
+            var b = MapNear(ephemeris, scene, to, bKm);
+            int star = lanes.KeepOutStar(aKm, bKm, ephemeris.Jd);
+            double keepOut = LocalDistance(ephemeris.Catalog[star], lanes.KeepOutKm(star));
             var up = DVec3.UnitY;
-            travelDirection = Hyperlanes.CurveTangent(a, b, hop.Lane.Bend, keepOut, progress, up);
-            return Hyperlanes.Curve(a, b, hop.Lane.Bend, keepOut, progress, up);
+            travelDirection = Hyperlanes.CurveTangent(a, b, lane.Bend, scene[lane.Hub], scene[star], keepOut, progress, up);
+            return Hyperlanes.Curve(a, b, lane.Bend, scene[lane.Hub], scene[star], keepOut, progress, up);
         }
 
         /// <summary>Scene position of a hyperlane ramp (for drawing the network).</summary>

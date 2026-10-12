@@ -219,6 +219,7 @@ namespace SolarSystem.Core
                 var yard = s.Shipyard;
                 if (yard == null || ChooseBuild == null) continue;
                 var cls = ChooseBuild(s);
+                s.OnSlip = cls;
                 if (cls == null) continue;
                 double cost = HullCost(cls.Value);
                 if (s.BuildPoints < cost) continue;

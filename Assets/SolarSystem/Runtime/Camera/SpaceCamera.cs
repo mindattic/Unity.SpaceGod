@@ -33,6 +33,10 @@ namespace SolarSystem.Cameras
     /// Free-camera position is stored as a true (km) offset from a reference body, the body whose
     /// sphere of influence you are in, so the camera co-moves with whatever you are near under any
     /// time warp, and keeps its place relative to it when the scale is toggled.
+    ///
+    /// "Up" is a frame of its own (<see cref="UpFrame"/>): the ecliptic in Sol, but any plane can be
+    /// made level (Alpha Centauri's A-B orbit lies steeply across the ecliptic). Yaw, pitch and the
+    /// focus orbit are measured in that frame; <see cref="Level"/> swings to a new one smoothly.
     /// </summary>
     public sealed class SpaceCamera
     {
@@ -49,12 +53,19 @@ namespace SolarSystem.Cameras
         public Target FocusTarget { get; private set; } = Target.None;
         public int FrameBody => frame;
 
+        /// <summary>Which way is up: Unity's +Y turned onto the plane the view keeps level.</summary>
+        public Quaternion UpFrame { get; private set; } = Quaternion.identity;
+
+        /// <summary>True while swinging round to a new level.</summary>
+        public bool Levelling => levelT < 1f;
+
         /// <summary>Current swim speed in scene units per second (for the HUD).</summary>
         public double CurrentSpeed { get; private set; }
 
         public double SpeedMultiplier { get; private set; } = 1.0;
 
         const float TravelSeconds = 1.6f;
+        const float LevelSeconds = 1.4f;
         const float LookSensitivity = 0.12f;
         const double MinSpeedMultiplier = 1.0 / 64, MaxSpeedMultiplier = 64;
 
@@ -74,23 +85,93 @@ namespace SolarSystem.Cameras
         double travelEndZoom;
         float travelT;
 
+        // The rotation the view had before levelling, relative to where it is now, eased away.
+        Quaternion levelOffset = Quaternion.identity;
+        float levelT = 1f;
+
         public SpaceCamera(ICameraWorld world)
         {
             this.world = world;
         }
 
+        Vector3 Up => UpFrame * Vector3.up;
+
+        /// <summary>A world direction expressed in the level frame.</summary>
+        Vector3 ToLocal(Vector3 v) => Quaternion.Inverse(UpFrame) * v;
+
         // ---------------------------------------------------------------- commands
 
-        /// <summary>Places the free camera at a scene position looking along yaw/pitch.</summary>
+        /// <summary>
+        /// Swings the view round, over a second and a half, so that the plane with normal
+        /// <paramref name="planeNormal"/> (Unity axes) is level: the camera stays where it is and keeps
+        /// looking the same way as nearly as it can, losing only its roll against the new horizon.
+        /// </summary>
+        public void Level(Vector3 planeNormal)
+        {
+            if (planeNormal.sqrMagnitude < 1e-12f) planeNormal = Vector3.up;
+            var before = Rotation;
+            UpFrame = Quaternion.FromToRotation(Vector3.up, planeNormal.normalized);
+            RederiveAngles();
+            Rotation = ComposedRotation();
+            levelOffset = before * Quaternion.Inverse(Rotation);
+            levelT = 0f;
+        }
+
+        /// <summary>Takes a new level frame at once (switching systems, say), keeping the view as it is.</summary>
+        public void SetUpFrame(Quaternion frame)
+        {
+            UpFrame = frame;
+            levelT = 1f;
+            RederiveAngles();
+        }
+
+        /// <summary>Yaw/pitch (free) and orbit angles (focus) from the current view, in the current frame.</summary>
+        void RederiveAngles()
+        {
+            var forward = ToLocal(Rotation * Vector3.forward);
+            yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            pitch = Mathf.Clamp(-Mathf.Asin(Mathf.Clamp(forward.y, -1, 1)) * Mathf.Rad2Deg, -89f, 89f);
+            if (Mode != CameraMode.Free && !FocusTarget.IsNone)
+            {
+                var offset = ScenePosition - world.TargetScene(FocusTarget);
+                if (offset.LengthSquared > 0)
+                {
+                    var look = -ToLocal(ToVector(offset.Normalized));
+                    orbitYaw = Mathf.Atan2(look.x, look.z) * Mathf.Rad2Deg;
+                    orbitPitch = Mathf.Clamp(-Mathf.Asin(Mathf.Clamp(look.y, -1, 1)) * Mathf.Rad2Deg, -88f, 88f);
+                }
+            }
+        }
+
+        Quaternion ComposedRotation() =>
+            Mode == CameraMode.Focus ? UpFrame * Quaternion.Euler(orbitPitch, orbitYaw, 0) : UpFrame * Quaternion.Euler(pitch, yaw, 0);
+
+        /// <summary>Places the free camera at a scene position looking along yaw/pitch (world axes).</summary>
         public void PlaceFree(DVec3 scenePosition, float yawDeg, float pitchDeg)
         {
             Mode = CameraMode.Free;
             FocusTarget = Target.None;
-            yaw = yawDeg;
-            pitch = Mathf.Clamp(pitchDeg, -89f, 89f);
-            Rotation = Quaternion.Euler(pitch, yaw, 0);
+            SetRotation(Quaternion.Euler(Mathf.Clamp(pitchDeg, -89f, 89f), yawDeg, 0));
             velocity = Vector3.zero;
             SetScenePosition(scenePosition);
+        }
+
+        /// <summary>Puts the free camera at a scene position with a rotation (driven from outside, as by star travel).</summary>
+        public void SetPose(DVec3 scenePosition, Quaternion rotation)
+        {
+            Mode = CameraMode.Free;
+            FocusTarget = Target.None;
+            SetRotation(rotation);
+            velocity = Vector3.zero;
+            SetScenePosition(scenePosition);
+        }
+
+        public void SetRotation(Quaternion rotation)
+        {
+            Rotation = rotation;
+            var forward = ToLocal(rotation * Vector3.forward);
+            yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            pitch = Mathf.Clamp(-Mathf.Asin(Mathf.Clamp(forward.y, -1, 1)) * Mathf.Rad2Deg, -89f, 89f);
         }
 
         /// <summary>Flies to <paramref name="target"/> and enters focus. <paramref name="radii"/> overrides the framing distance.</summary>
@@ -107,24 +188,26 @@ namespace SolarSystem.Cameras
             if (double.IsNaN(radii) && Mode != CameraMode.Free && FocusTarget == target) framing = zoomTarget;
             else if (double.IsNaN(radii) && currentRadii > MinZoom(target) * 1.05 && currentRadii < framing) framing = currentRadii;
 
-            var dir = distance > 0 ? offset / distance : new DVec3(0, 0.3, -1).Normalized;
+            // Work in the level frame: elevation is measured from its horizon.
+            var dir = distance > 0 ? ToLocal(ToVector(offset / distance)) : new Vector3(0, 0.3f, -1).normalized;
             // Approach from the side we are already on, but never from straight over a pole.
-            var flat = new Vector3((float)dir.X, 0, (float)dir.Z);
-            float elevation = Mathf.Asin(Mathf.Clamp((float)dir.Y, -1, 1)) * Mathf.Rad2Deg;
+            var flat = new Vector3(dir.x, 0, dir.z);
+            float elevation = Mathf.Asin(Mathf.Clamp(dir.y, -1, 1)) * Mathf.Rad2Deg;
             elevation = pitchOverride ?? Mathf.Clamp(elevation, -55f, 55f);
             if (flat.sqrMagnitude < 1e-8f) flat = Vector3.back;
             flat.Normalize();
             float e = elevation * Mathf.Deg2Rad;
-            var endDir = new Vector3(flat.x * Mathf.Cos(e), Mathf.Sin(e), flat.z * Mathf.Cos(e));
+            var endLocal = new Vector3(flat.x * Mathf.Cos(e), Mathf.Sin(e), flat.z * Mathf.Cos(e));
+            var endWorld = UpFrame * endLocal;
 
-            travelStartOffset = distance > 0 ? offset : new DVec3(endDir.x, endDir.y, endDir.z) * r * framing * 3;
+            travelStartOffset = distance > 0 ? offset : new DVec3(endWorld.x, endWorld.y, endWorld.z) * r * framing * 3;
             travelStartRotation = Rotation;
-            travelEndDirection = new DVec3(endDir.x, endDir.y, endDir.z);
+            travelEndDirection = new DVec3(endWorld.x, endWorld.y, endWorld.z);
             travelEndZoom = framing;
             travelT = 0;
 
-            // The orbit angles that reproduce endDir: offset = Euler(pitch, yaw) * back.
-            var look = -endDir;
+            // The orbit angles that reproduce endDir: offset = Euler(pitch, yaw) * back, in the level frame.
+            var look = -endLocal;
             orbitYaw = Mathf.Atan2(look.x, look.z) * Mathf.Rad2Deg;
             orbitPitch = -Mathf.Asin(Mathf.Clamp(look.y, -1, 1)) * Mathf.Rad2Deg;
             zoom = zoomTarget = framing;
@@ -137,8 +220,12 @@ namespace SolarSystem.Cameras
         public void ExitFocus()
         {
             if (Mode == CameraMode.Free) return;
-            var forward = Rotation * Vector3.forward;
-            PlaceFree(ScenePosition, Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg, -Mathf.Asin(Mathf.Clamp(forward.y, -1, 1)) * Mathf.Rad2Deg);
+            var rotation = Rotation;
+            Mode = CameraMode.Free;
+            FocusTarget = Target.None;
+            SetRotation(rotation);
+            velocity = Vector3.zero;
+            SetScenePosition(ScenePosition);
         }
 
         public static double DefaultFraming(Target target)
@@ -167,6 +254,13 @@ namespace SolarSystem.Cameras
                     UpdateFree(dt, input);
                     break;
             }
+
+            // Levelling: the old orientation's difference from the new one eases away.
+            if (levelT < 1f)
+            {
+                levelT = Mathf.Min(1f, levelT + dt / LevelSeconds);
+                Rotation = Quaternion.Slerp(levelOffset, Quaternion.identity, SmootherStep(levelT)) * Rotation;
+            }
         }
 
         void UpdateFree(float dt, InputState input)
@@ -176,7 +270,7 @@ namespace SolarSystem.Cameras
                 yaw += input.LookDelta.x * LookSensitivity;
                 pitch = Mathf.Clamp(pitch - input.LookDelta.y * LookSensitivity, -89f, 89f);
             }
-            Rotation = Quaternion.Euler(pitch, yaw, 0);
+            Rotation = UpFrame * Quaternion.Euler(pitch, yaw, 0);
 
             if (Math.Abs(input.Scroll) > 0)
                 SpeedMultiplier = Math.Max(MinSpeedMultiplier, Math.Min(MaxSpeedMultiplier, SpeedMultiplier * Math.Pow(1.3, input.Scroll)));
@@ -213,7 +307,7 @@ namespace SolarSystem.Cameras
                 zoomTarget = Math.Max(MinZoom(FocusTarget), Math.Min(5e7, zoomTarget * Math.Pow(0.82, input.Scroll)));
             zoom = Math.Exp(Math.Log(zoom) + (Math.Log(zoomTarget) - Math.Log(zoom)) * (1 - Math.Exp(-dt * 10)));
 
-            Rotation = Quaternion.Euler(orbitPitch, orbitYaw, 0);
+            Rotation = UpFrame * Quaternion.Euler(orbitPitch, orbitYaw, 0);
             var back = Rotation * Vector3.back;
             double r = world.TargetRadius(FocusTarget);
             ScenePosition = world.TargetScene(FocusTarget) + new DVec3(back.x, back.y, back.z) * (zoom * r);
@@ -235,7 +329,7 @@ namespace SolarSystem.Cameras
             var dir = Vector3.Slerp(ToVector(startDir), ToVector(travelEndDirection), e).normalized;
             ScenePosition = target + new DVec3(dir.x, dir.y, dir.z) * dist;
 
-            var lookAt = Quaternion.LookRotation(-dir, Vector3.up);
+            var lookAt = Quaternion.LookRotation(-dir, Up);
             Rotation = Quaternion.Slerp(travelStartRotation, lookAt, SmootherStep(Mathf.Min(1f, travelT * 1.8f)));
 
             if (travelT >= 1f)

@@ -143,10 +143,13 @@ Shader "SolarSystem/Planet"
                 float ndl = dot(n, l);
                 float relief = saturate(dot(shadingN, l));
                 float lit = saturate(relief * 1.05 + 0.03 * saturate(ndl * 4.0)) * smoothstep(-0.12, 0.1, ndl);
-                float3 col = albedo * (lit + _Ambient);
+                float3 l2 = normalize(_Sun2PositionWS.xyz - i.positionWS);
+                float ndl2 = dot(n, l2);
+                float lit2 = saturate(dot(shadingN, l2) * 1.05) * smoothstep(-0.12, 0.1, ndl2);
+                float3 col = albedo * (lit * _SunColor.rgb + lit2 * _Sun2Color.rgb + _Ambient);
 
                 float rim = pow(1.0 - saturate(dot(n, viewDir)), 3.0);
-                float daySide = smoothstep(-0.35, 0.45, ndl);
+                float3 daySide = smoothstep(-0.35, 0.45, ndl) * _SunColor.rgb + smoothstep(-0.35, 0.45, ndl2) * _Sun2Color.rgb;
                 col += _AtmoColor.rgb * rim * _AtmoStrength * daySide;
                 col += float3(0.35, 0.7, 1.0) * rim * _Highlight * 0.35;
 

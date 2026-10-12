@@ -5,6 +5,12 @@
 // the world origin (floating origin), so this is also the direction to the Sun from the eye.
 float4 _SunPositionWS;
 
+// The main star's light colour times intensity (white for the Sun), and a second star's
+// (Alpha Centauri B beside A); the second is black where there is none. Set by SolarSystemApp.
+float4 _SunColor;
+float4 _Sun2PositionWS;
+float4 _Sun2Color;
+
 float SolarHash13(float3 p)
 {
     p = frac(p * 0.1031);

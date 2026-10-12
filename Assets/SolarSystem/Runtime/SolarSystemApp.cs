@@ -12,7 +12,12 @@ namespace SolarSystem
 {
     /// <summary>
     /// Owns the simulation and drives every frame:
-    /// input → clock → ephemeris → fleet → scale layout → ships → camera → camera-relative views.
+    /// input → clock → every star system (ephemeris, fleet, markets, wars) → scale layout of the
+    /// active system → ships → camera → camera-relative views.
+    ///
+    /// Every star system in the <see cref="Galaxy"/> is simulated on the shared clock all the time;
+    /// only the active one is drawn. Switching system tears its views down and builds the other's
+    /// (the camera flies between them through the interstellar view, see <see cref="StarTravel"/>).
     ///
     /// Floating origin: the Unity camera never moves from the world origin. All positions are kept
     /// in double-precision scene units and every renderer is placed at (scene - camera) each frame,
@@ -21,17 +26,27 @@ namespace SolarSystem
     [DefaultExecutionOrder(-100)]
     public sealed class SolarSystemApp : MonoBehaviour, ICameraWorld
     {
-        public BodyCatalog Catalog { get; private set; }
-        public Ephemeris Ephemeris { get; private set; }
+        public Galaxy Galaxy { get; private set; }
+
+        /// <summary>The star system being looked at; the properties below are its.</summary>
+        public StarSystem ActiveSystem { get; private set; }
+
+        public BodyCatalog Catalog => ActiveSystem.Catalog;
+        public Ephemeris Ephemeris => ActiveSystem.Ephemeris;
+        public World World => ActiveSystem.World;
         public SimClock Clock { get; private set; }
         public ScaleModel Scale { get; private set; }
-        public World World { get; private set; }
         public Fleet Fleet => World.Fleet;
         public Economy Economy => World.Economy;
         public SpaceCamera SpaceCamera { get; private set; }
         public Camera UnityCamera { get; private set; }
+        public StarTravel Travel { get; private set; }
+        public InterstellarView Interstellar { get; private set; }
 
-        /// <summary>The real main belt and Jupiter Trojans (JPL SBDB), drawn on the GPU.</summary>
+        /// <summary>Yards, factories, habitats, spacecraft and docking rings of the active system.</summary>
+        public StructureViews Structures { get; private set; }
+
+        /// <summary>The real main belt and Jupiter Trojans (JPL SBDB), drawn on the GPU (Sol only).</summary>
         public AsteroidBelt AsteroidBelt { get; private set; }
         public InputState Input { get; } = new InputState();
 
@@ -44,6 +59,14 @@ namespace SolarSystem
         public bool ShowHud { get; set; } = true;
         public bool ShowMarket { get; set; }
         public bool ShowLanes { get; set; } = true;
+
+        /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
+        public bool ShowSatellites { get; set; }
+
+        /// <summary>False while the camera is between the stars (the system's views are hidden).</summary>
+        public bool SystemVisible { get; private set; } = true;
+
+        public bool IsSol => ActiveSystem.Catalog.Root.Name == "Sun";
 
         /// <summary>Every body's scene position this frame.</summary>
         public DVec3[] BodyScenes => bodyScene;
@@ -86,8 +109,10 @@ namespace SolarSystem
         FighterViews fighterViews;
         LaneView laneView;
         EmbeddedPods embeddedPods;
+        SatelliteSwarm swarm;
         Faction[] viewFaction = new Faction[0];
         readonly Dictionary<ShipCombat, GameObject> platformViews = new Dictionary<ShipCombat, GameObject>();
+        readonly List<(Transform t, Material m)> entryGlows = new List<(Transform, Material)>();
         Battle battleTimeFor;
 
         /// <summary>Scene units per km inside a battle: the ship scale, so a fight reads at ship size in both views.</summary>
@@ -102,21 +127,20 @@ namespace SolarSystem
             var site = b.Site;
             if (site == null) return bodyScene[b.Body] + Scale.LocalOffset(Catalog[b.Body], b.Anchor);
             var hop = site.Hop;
-            var a = Scale.MapNear(Ephemeris, bodyScene, hop.From, Ephemeris.Helio(hop.From) + site.FromOffset);
-            var c = Scale.MapNear(Ephemeris, bodyScene, hop.To, Ephemeris.Helio(hop.To) + site.ToOffset);
-            double keepOut = Scale.LocalDistance(Catalog.Sun, Hyperlanes.SunKeepOutKm);
-            var onLane = Hyperlanes.Curve(a, c, hop.Lane.Bend, keepOut, site.Progress, DVec3.UnitY);
-            return onLane + SideScene(Ephemeris.Helio(hop.From) + site.FromOffset, site.Side);
+            var aKm = Ephemeris.Helio(hop.From) + site.FromOffset;
+            var cKm = Ephemeris.Helio(hop.To) + site.ToOffset;
+            var onLane = Scale.LaneCurveScene(Ephemeris, bodyScene, Fleet.Lanes, hop.Lane, hop.From, aKm, hop.To, cKm, site.Progress, out _);
+            return onLane + SideScene(aKm, site.Side);
         }
 
-        /// <summary>A sideways offset (true km) beside a lane, in scene units at that distance from the Sun.</summary>
+        /// <summary>A sideways offset (true km) beside a lane, in scene units at that distance from the system's root.</summary>
         DVec3 SideScene(DVec3 nearHelio, DVec3 sideKm) =>
-            sideKm.SwapYZ * Scale.LocalDistanceDerivative(Catalog.Sun, Math.Max(nearHelio.Length, 1e6));
+            sideKm.SwapYZ * Scale.LocalDistanceDerivative(Catalog.Root, Math.Max(nearHelio.Length, 1e6));
 
         /// <summary>A ship lurking beside a lane, or drifting after being pulled out of one.</summary>
         DVec3 LaneHoldScene(Ship ship, out DVec3 along)
         {
-            var on = Scale.LaneScene(Ephemeris, bodyScene, ship, ship.LaneHold, out along);
+            var on = Scale.LaneScene(Ephemeris, bodyScene, Fleet.Lanes, ship, ship.LaneHold, out along);
             double ease = Astro.SmoothStep(0, 0.08, Clock.Jd - ship.PhaseStartJd);
             return on + SideScene(Fleet.LanePoint(ship, Clock.Jd, ship.LaneHold), ship.LaneHoldSide) * ease;
         }
@@ -132,6 +156,7 @@ namespace SolarSystem
         Vector3[] pathPoints = new Vector3[64];
 
         Transform worldRoot;
+        Transform systemRoot;
         Hud hud;
         double scaleFrom = 1;
         float scaleT = 1f;
@@ -146,43 +171,25 @@ namespace SolarSystem
             Application.targetFrameRate = 144;
             QualitySettings.vSyncCount = 1;
 
-            Catalog = BodyCatalog.CreateSolSystem();
-            Ephemeris = new Ephemeris(Catalog);
             Clock = SimClock.StartingNow();
             Scale = new ScaleModel { Blend = 1 };
-            Ephemeris.Update(Clock.Jd);
-            World = World.CreateDefault(Ephemeris, Clock.Jd);
+            Galaxy = Galaxy.CreateDefault(Clock.Jd);
 
             SetupCamera();
             worldRoot = new GameObject("World").transform;
             Starfield.Create(worldRoot);
-
-            bodyScene = new DVec3[Catalog.Count];
-            bodyRadius = new double[Catalog.Count];
-            bodyViews = new BodyView[Catalog.Count];
-            orbitLines = new LineStrip[Catalog.Count];
-            for (int i = 0; i < Catalog.Count; i++)
-            {
-                bodyViews[i] = new BodyView(Catalog[i], worldRoot);
-                if (Catalog[i].ParentIndex >= 0) orbitLines[i] = new LineStrip("Orbit " + Catalog[i].Name, worldRoot);
-            }
             orbitSamples = new DVec3[257];
             orbitPoints = new Vector3[orbitSamples.Length];
 
-            BuildShipViews();
-            pathLine = new LineStrip("Flight path", worldRoot);
-            pathLine.Visible = false;
-
             hud = new Hud(this);
-            battleFx = new BattleFx(this, worldRoot);
-            fighterViews = new FighterViews(this, worldRoot);
-            laneView = new LaneView(this, worldRoot);
-            embeddedPods = new EmbeddedPods(this);
-            SubscribeWorld();
             SpaceCamera = new SpaceCamera(this);
+            Travel = new StarTravel(this);
+            Interstellar = new InterstellarView(Galaxy, worldRoot);
+            SubscribeWorlds();
+
+            Activate(Galaxy.Systems[0]);
             AsteroidBelt = AsteroidBelt.Create(this);
 
-            Scale.Layout(Ephemeris, bodyScene);
             var earth = Catalog["Earth"].Index;
             var start = bodyScene[earth] + new DVec3(-0.6, 0.35, -1).Normalized * (Scale.DisplayRadius(Catalog[earth]) * 9);
             SpaceCamera.PlaceFree(start, 0, 0);
@@ -191,9 +198,87 @@ namespace SolarSystem
             Select(Target.OfBody(earth));
         }
 
-        void SubscribeWorld()
+        /// <summary>Battle toasts from whichever system is being watched.</summary>
+        void SubscribeWorlds()
         {
-            World.War.BattleStarted += b => ShowToast(b.Name.ToUpperInvariant() + " has begun");
+            foreach (var system in Galaxy.Systems)
+            {
+                var s = system;
+                s.World.War.BattleStarted += b =>
+                {
+                    if (s == ActiveSystem) ShowToast(b.Name.ToUpperInvariant() + " has begun");
+                };
+            }
+        }
+
+        /// <summary>
+        /// Makes <paramref name="system"/> the one drawn: its bodies, orbits, ships, lanes, battles,
+        /// structures and rings get views (the previous system's are torn down). The camera keeps its
+        /// scene position; callers place it.
+        /// </summary>
+        public void Activate(StarSystem system)
+        {
+            if (systemRoot != null) Destroy(systemRoot.gameObject);
+            ActiveSystem = system;
+            systemRoot = new GameObject(system.Name).transform;
+            systemRoot.SetParent(worldRoot, false);
+            SystemVisible = true;
+
+            int n = Catalog.Count;
+            bodyScene = new DVec3[n];
+            bodyRadius = new double[n];
+            bodyViews = new BodyView[n];
+            orbitLines = new LineStrip[n];
+            for (int i = 0; i < n; i++)
+            {
+                bodyViews[i] = new BodyView(Catalog[i], systemRoot);
+                if (Catalog[i].ParentIndex >= 0) orbitLines[i] = new LineStrip("Orbit " + Catalog[i].Name, systemRoot);
+            }
+            shipViews = null;
+            BuildShipViews();
+            pathLine = new LineStrip("Flight path", systemRoot) { Visible = false };
+            battleFx = new BattleFx(this, systemRoot);
+            fighterViews = new FighterViews(this, systemRoot);
+            laneView = new LaneView(this, systemRoot);
+            embeddedPods = new EmbeddedPods(this);
+            platformViews.Clear();
+            entryGlows.Clear();
+            Structures = new StructureViews(this, systemRoot);
+            swarm = new SatelliteSwarm(this, systemRoot);
+            if (AsteroidBelt != null) AsteroidBelt.enabled = IsSol;
+
+            viewFaction = new Faction[0];
+            lastBattleScene = new DVec3[0];
+            battleTimeFor = null;
+            Selected = Target.None;
+            Hovered = Target.None;
+            Scale.Layout(Ephemeris, bodyScene);
+            UpdateRadii();
+            Structures.Layout();
+            // A new system starts level with the ecliptic again (R levels to its own plane).
+            SpaceCamera.SetUpFrame(Quaternion.identity);
+            SpaceCamera.SetPose(SpaceCamera.ScenePosition, SpaceCamera.Rotation);
+        }
+
+        /// <summary>Hides the active system's views (between the stars) or shows them again.</summary>
+        public void SetSystemVisible(bool visible)
+        {
+            SystemVisible = visible;
+            if (systemRoot != null) systemRoot.gameObject.SetActive(visible);
+        }
+
+        /// <summary>Flies the camera to another star system.</summary>
+        public void TravelTo(StarSystem system)
+        {
+            if (system == null || system == ActiveSystem || Travel.Active) return;
+            Select(Target.None);
+            Travel.Begin(system);
+        }
+
+        void UpdateRadii()
+        {
+            // The barycentre is drawn as nothing but still needs a size to frame the system around it.
+            for (int i = 0; i < Catalog.Count; i++) bodyRadius[i] = Catalog[i].IsVisible ? Scale.DisplayRadius(Catalog[i]) : 1.0;
         }
 
         void SetupCamera()
@@ -235,7 +320,7 @@ namespace SolarSystem
             Array.Resize(ref wreckLocal, ships.Count);
             for (int i = have; i < ships.Count; i++)
             {
-                shipViews[i] = new ShipView(ships[i], worldRoot);
+                shipViews[i] = new ShipView(ships[i], systemRoot);
                 shipBlendT[i] = 1;
                 wreckStart[i] = -1;
             }
@@ -259,7 +344,7 @@ namespace SolarSystem
             wreckLocal = new DVec3[ships.Count];
             for (int i = 0; i < ships.Count; i++)
             {
-                shipViews[i] = new ShipView(ships[i], worldRoot);
+                shipViews[i] = new ShipView(ships[i], systemRoot);
                 shipBlendT[i] = 1;
                 wreckStart[i] = ships[i].Destroyed ? float.MaxValue : -1;
             }
@@ -273,18 +358,19 @@ namespace SolarSystem
             HandleCommands();
 
             Clock.Advance(dt);
-            Ephemeris.Update(Clock.Jd);
-            World.Update(Clock.Jd);
+            Galaxy.Update(Clock.Jd);
             SyncShipViews();
 
             AnimateScale(dt);
             Scale.Layout(Ephemeris, bodyScene);
-            for (int i = 0; i < Catalog.Count; i++) bodyRadius[i] = Scale.DisplayRadius(Catalog[i]);
+            UpdateRadii();
             UpdateShips(dt);
+            Structures.Layout();
 
             DropLostTargets();
             BattleTime();
-            SpaceCamera.Update(dt, Input);
+            if (Travel.Active) Travel.Update(dt);
+            else SpaceCamera.Update(dt, Input);
             UpdateClipPlanes();
             UpdateViews(dt);
             UpdateHover();
@@ -376,10 +462,19 @@ namespace SolarSystem
         void HandleCommands()
         {
             var i = Input;
+            if (Travel.Active)
+            {
+                // Between the stars only time and the escape hatch work.
+                if (i.Escape) Travel.Finish();
+                if (i.TimeFaster) Clock.Faster();
+                if (i.TimeSlower) Clock.Slower();
+                if (i.TogglePause) TogglePause();
+                return;
+            }
             if (i.ToggleScale) ToggleScale();
             if (i.TimeFaster) Clock.Faster();
             if (i.TimeSlower) Clock.Slower();
-            if (i.TogglePause) Clock.Paused = !Clock.Paused;
+            if (i.TogglePause) TogglePause();
             if (i.ResetTime) ResetToNow();
             if (i.ToggleOrbits) ShowOrbits = !ShowOrbits;
             if (i.ToggleLabels) ShowLabels = !ShowLabels;
@@ -387,6 +482,12 @@ namespace SolarSystem
             if (i.ToggleHud) ShowHud = !ShowHud;
             if (i.ToggleMarket) ShowMarket = !ShowMarket;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
+            if (i.LevelView) LevelView();
+            if (i.ToggleSatellites)
+            {
+                ShowSatellites = !ShowSatellites;
+                ShowToast(ShowSatellites ? "SATELLITES ON: constellations drawn" : "SATELLITES OFF  (K to show)");
+            }
             if (i.WatchBattle)
             {
                 var b = BiggestBattle();
@@ -404,11 +505,19 @@ namespace SolarSystem
             if (i.NumberKey >= 0) NumberHotkey(i.NumberKey);
         }
 
-        static readonly string[] NumberBodies = { "Sun", "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto" };
+        static readonly string[] SolNumberBodies = { "Sun", "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto" };
+
+        static readonly string[] CentauriNumberBodies =
+        {
+            "Alpha Centauri A", "Alpha Centauri B", "Proxima Centauri", "Proxima b", "Proxima d", "Proxima c",
+            "Alpha Centauri Ab", "Rigil Gate", "Toliman Forge", "Blackhollow",
+        };
 
         void NumberHotkey(int key)
         {
-            var target = Target.OfBody(Catalog[NumberBodies[key]].Index);
+            var names = IsSol ? SolNumberBodies : CentauriNumberBodies;
+            if (key >= names.Length || !Catalog.TryGet(names[key], out var body)) return;
+            var target = Target.OfBody(body.Index);
             bool repeat = key == lastNumberKey && Time.unscaledTime - lastNumberTime < 0.45f;
             Select(target);
             if (repeat || SpaceCamera.Mode != SpaceCamera.CameraMode.Free) SpaceCamera.FocusOn(target);
@@ -420,7 +529,7 @@ namespace SolarSystem
         {
             var candidates = new List<Ship>();
             foreach (var s in Fleet.Ships)
-                if (!s.IsEscort && !s.Destroyed) candidates.Add(s);
+                if (!s.IsEscort && !s.Destroyed && s.Phase != ShipPhase.Landed) candidates.Add(s);
             if (candidates.Count == 0) return;
             int current = Selected.IsShip ? candidates.IndexOf(Selected.Ship.Controller) : -1;
             int next = ((current + direction) % candidates.Count + candidates.Count) % candidates.Count;
@@ -444,12 +553,49 @@ namespace SolarSystem
             SpaceCamera.FocusOn(Selected, refocus ? SpaceCamera.DefaultFraming(Selected) : double.NaN);
         }
 
+        /// <summary>Camera elevation of the system overview, degrees.</summary>
+        public const float OverviewPitch = 52f;
+
+        /// <summary>How much of the system the overview frames: the inner planets in Sol, the A-B pair in Alpha Centauri.</summary>
+        double OverviewSpanKm => Catalog.Root.Kind == BodyKind.Barycentre ? 22 * Astro.AuKm : 2.2 * Astro.AuKm;
+
+        /// <summary>The overview's camera distance from the system's root, scene units.</summary>
+        public double OverviewDistance() => Scale.LocalDistance(Catalog.Root, OverviewSpanKm) * 1.9;
+
         public void FocusSystemOverview()
         {
-            var sun = Target.OfBody(0);
-            Select(sun);
-            double span = Scale.LocalDistance(Catalog.Sun, 2.2 * Astro.AuKm);
-            SpaceCamera.FocusOn(sun, span * 1.9 / bodyRadius[0], 52f);
+            var root = Target.OfBody(0);
+            Select(Catalog.Root.IsVisible ? root : Target.None);
+            SpaceCamera.FocusOn(root, OverviewDistance() / Math.Max(bodyRadius[0], 1e-9), OverviewPitch);
+        }
+
+        /// <summary>
+        /// The plane a system is laid out in, as its north-side normal (Unity axes): the ecliptic for
+        /// a single star, the orbit of the first star round the barycentre for a binary (Alpha
+        /// Centauri's A-B plane, steeply tilted to the ecliptic).
+        /// </summary>
+        public Vector3 SystemPlaneNormal()
+        {
+            if (Catalog.Root.IsStar || Catalog.Count < 2) return Vector3.up;
+            var n = DVec3.Cross(Ephemeris.Relative(1), Ephemeris.RelativeVelocityKmS(1)).Normalized.SwapYZ;
+            return n.LengthSquared > 0 ? new Vector3((float)n.X, (float)n.Y, (float)n.Z) : Vector3.up;
+        }
+
+        public string SystemPlaneName => Catalog.Root.IsStar ? "the ecliptic" : "the A–B orbital plane";
+
+        /// <summary>Swings the view smoothly round until the system's plane is level.</summary>
+        public void LevelView()
+        {
+            if (Travel.Active) return;
+            SpaceCamera.Level(SystemPlaneNormal());
+            ShowToast("LEVEL: " + SystemPlaneName.ToUpperInvariant() + " is now horizontal");
+        }
+
+        /// <summary>Space: the whole simulation (every system) eases to a stop, or back up to speed.</summary>
+        public void TogglePause()
+        {
+            Clock.ToggleEasedPause();
+            ShowToast(Clock.PauseHeld ? "PAUSING: every system easing to a stop  (Space to resume)" : "RESUMING: time picking back up to " + Clock.Warp.Label);
         }
 
         public void ToggleScale()
@@ -492,13 +638,16 @@ namespace SolarSystem
             Clock.SetWarp(SimClock.DefaultWarpIndex);
             if (backwards)
             {
-                // Schedules only run forward; rebuild the fleet at the new date.
-                Ephemeris.Update(now);
-                World = World.CreateDefault(Ephemeris, now);
-                SubscribeWorld();
-                if (Selected.IsShip) Select(Target.None);
-                if (SpaceCamera.FocusTarget.IsShip) SpaceCamera.ExitFocus();
-                BuildShipViews();
+                // Schedules only run forward; rebuild every system at the new date.
+                int index = Galaxy.Systems.IndexOf(ActiveSystem);
+                var cameraAt = SpaceCamera.ScenePosition;
+                var cameraRotation = SpaceCamera.Rotation;
+                Galaxy = Galaxy.CreateDefault(now);
+                Destroy(Interstellar.Root);
+                Interstellar = new InterstellarView(Galaxy, worldRoot);
+                SubscribeWorlds();
+                Activate(Galaxy.Systems[Math.Max(0, index)]);
+                SpaceCamera.SetPose(cameraAt, cameraRotation);
             }
             ShowToast("Time reset to now");
         }
@@ -541,9 +690,16 @@ namespace SolarSystem
                         shipScene[i] = bodyScene[orbit.Body] + Scale.LocalOffset(Catalog[orbit.Body], orbit.OffsetAt(jd));
                         facing = st.Facing.SwapYZ;
                     }
+                    else if (ship.Phase == ShipPhase.Queued || ship.Planetside)
+                    {
+                        // At a docking ring: in the ringed world's own (turning) neighbourhood.
+                        int body = ship.Ring.Body;
+                        shipScene[i] = bodyScene[body] + Scale.LocalOffset(Catalog[body], st.HelioKm - Ephemeris.Helio(body));
+                        facing = st.Facing.SwapYZ;
+                    }
                     else if (ship.Phase == ShipPhase.Lane)
                     {
-                        shipScene[i] = Scale.LaneScene(Ephemeris, bodyScene, ship, st.Progress, out var travel);
+                        shipScene[i] = Scale.LaneScene(Ephemeris, bodyScene, Fleet.Lanes, ship, st.Progress, out var travel);
                         facing = travel;
                     }
                     else if (ship.Phase == ShipPhase.Lurk || ship.Phase == ShipPhase.Adrift)
@@ -632,6 +788,8 @@ namespace SolarSystem
         {
             if (target.IsBody) return bodyScene[target.Body];
             if (target.IsShip) return shipScene[target.Ship.Id];
+            if (target.IsStructure && Structures.Scenes.TryGetValue(target.Structure, out var s)) return s;
+            if (target.IsRing && Structures.RingScenes.TryGetValue(target.Ring, out var r)) return r;
             return DVec3.Zero;
         }
 
@@ -639,6 +797,8 @@ namespace SolarSystem
         {
             if (target.IsBody) return bodyRadius[target.Body];
             if (target.IsShip) return shipLength[target.Ship.Id] * 0.5;
+            if (target.IsStructure && Structures.Sizes.TryGetValue(target.Structure, out var s)) return s * 0.5;
+            if (target.IsRing && Structures.Sizes.TryGetValue(target.Ring, out var r)) return r * 0.5;
             return 1;
         }
 
@@ -649,6 +809,10 @@ namespace SolarSystem
                 best = Math.Min(best, (p - bodyScene[i]).Length - bodyRadius[i]);
             for (int i = 0; i < shipScene.Length; i++)
                 best = Math.Min(best, (p - shipScene[i]).Length - shipLength[i] * 0.5);
+            foreach (var kv in Structures.Scenes)
+                best = Math.Min(best, (p - kv.Value).Length - Structures.Sizes[kv.Key] * 0.5);
+            foreach (var kv in Structures.RingScenes)
+                best = Math.Min(best, (p - kv.Value).Length - Structures.Sizes[kv.Key] * 0.5);
             return Math.Max(best, 1e-7);
         }
 
@@ -668,12 +832,70 @@ namespace SolarSystem
             return new Vector3((float)d.X, (float)d.Y, (float)d.Z);
         }
 
+        /// <summary>
+        /// Lights the scene with the two stars that shine brightest where the camera is (luminosity
+        /// over distance squared): the Sun alone in Sol; A with B beside it in Alpha Centauri, or
+        /// Proxima out by Proxima. Light colours follow each star's temperature, the Sun's being white.
+        /// </summary>
+        void UpdateLights()
+        {
+            int first = -1, second = -1;
+            double best = 0, next = 0;
+            for (int i = 0; i < Catalog.Count; i++)
+            {
+                var b = Catalog[i];
+                if (!b.IsStar) continue;
+                double d = Math.Max((SpaceCamera.ScenePosition - bodyScene[i]).Length, bodyRadius[i]);
+                double flux = b.LuminositySolar / (d * d);
+                if (flux > best)
+                {
+                    second = first;
+                    next = best;
+                    first = i;
+                    best = flux;
+                }
+                else if (flux > next)
+                {
+                    second = i;
+                    next = flux;
+                }
+            }
+            if (first < 0) first = 0;
+            Shader.SetGlobalVector("_SunPositionWS", Relative(bodyScene[first]));
+            Shader.SetGlobalVector("_SunColor", LightColor(Catalog[first], 1));
+            if (second >= 0)
+            {
+                // The square root keeps a companion's light a visible fill; the true ratio would hide it.
+                float strength = Mathf.Clamp01((float)Math.Sqrt(next / best)) * 0.9f;
+                Shader.SetGlobalVector("_Sun2PositionWS", Relative(bodyScene[second]));
+                Shader.SetGlobalVector("_Sun2Color", LightColor(Catalog[second], strength));
+            }
+            else
+            {
+                Shader.SetGlobalVector("_Sun2PositionWS", Relative(bodyScene[first]));
+                Shader.SetGlobalVector("_Sun2Color", Vector4.zero);
+            }
+        }
+
+        static readonly Rgb SunLight = AlphaCentauri.StarColor(5772);
+
+        /// <summary>A star's light relative to sunlight (so the Sun lights white), scaled to its brightest channel.</summary>
+        public static Vector4 LightColor(BodyDefinition star, float strength)
+        {
+            var c = AlphaCentauri.StarColor(star.TeffK);
+            var v = new Vector3(c.R / Mathf.Max(SunLight.R, 1e-3f), c.G / Mathf.Max(SunLight.G, 1e-3f), c.B / Mathf.Max(SunLight.B, 1e-3f));
+            float max = Mathf.Max(v.x, Mathf.Max(v.y, v.z));
+            v /= Mathf.Max(max, 1e-3f);
+            return new Vector4(v.x * strength, v.y * strength, v.z * strength, strength);
+        }
+
         void UpdateViews(float dt)
         {
-            Shader.SetGlobalVector("_SunPositionWS", Relative(bodyScene[0]));
+            if (!SystemVisible) return;
+            UpdateLights();
             var forward = SpaceCamera.Rotation * Vector3.forward;
             double pixelsPerUnit = PixelsPerUnitAtUnitDistance();
-            double warp = Clock.Paused ? 0 : Clock.Warp.SimSecondsPerSecond;
+            double warp = Clock.Paused ? 0 : Clock.Warp.SimSecondsPerSecond * Clock.Speed;
 
             for (int i = 0; i < Catalog.Count; i++)
             {
@@ -686,8 +908,9 @@ namespace SolarSystem
                     target == Selected || target == Hovered, forward);
                 bodyViews[i].UpdateWeather(Clock.Jd, warp);
             }
-            AsteroidBelt?.Render(Clock.Jd, Scale, Relative(bodyScene[0]));
+            if (IsSol) AsteroidBelt?.Render(Clock.Jd, Scale, Relative(bodyScene[0]));
 
+            int glowIndex = 0;
             for (int i = 0; i < shipViews.Length; i++)
             {
                 var ship = Fleet.Ships[i];
@@ -702,10 +925,18 @@ namespace SolarSystem
                 {
                     // Taken as a prize: repaint in the captor's livery.
                     Destroy(shipViews[i].Root);
-                    shipViews[i] = new ShipView(ship, worldRoot);
+                    shipViews[i] = new ShipView(ship, systemRoot);
                     viewFaction[i] = ship.Faction;
                 }
                 var rel = Relative(shipScene[i]);
+                var controller = ship.Controller;
+                if (controller.Phase == ShipPhase.Landed)
+                {
+                    shipViews[i].SetVisible(false);
+                    continue;
+                }
+                float heat = shipStates[i].Heat;
+                if (heat > 0.01f) PlaceEntryGlow(glowIndex++, i, rel, heat, pixelsPerUnit);
                 double px = shipLength[i] / Math.Max(rel.magnitude, 1e-9) * pixelsPerUnit;
                 // Too small to read: hide the model, the HUD draws a billboard icon instead.
                 bool visible = px >= 5;
@@ -723,14 +954,51 @@ namespace SolarSystem
                     target == Selected || target == Hovered);
                 shipViews[i].ApplyCombat(ship.Combat, ship.Battle != null, thrusting, Time.unscaledTime, dt);
             }
+            for (int g = glowIndex; g < entryGlows.Count; g++) entryGlows[g].t.gameObject.SetActive(false);
 
             UpdatePlatforms();
             laneView.Update(ShowLanes);
             fighterViews.Update();
             embeddedPods.Update();
             battleFx.Update();
+            Structures.Update(true);
+            swarm.Update(ShowSatellites);
             UpdateOrbitLines(dt);
             UpdatePathLine();
+        }
+
+        static Mesh glowQuad;
+
+        /// <summary>The plasma sheath round a ship coming down through an atmosphere: a hot glow at its nose.</summary>
+        void PlaceEntryGlow(int index, int ship, Vector3 rel, float heat, double pixelsPerUnit)
+        {
+            if (index >= entryGlows.Count)
+            {
+                glowQuad ??= MeshFactory.Quad();
+                var go = new GameObject("Entry glow");
+                go.transform.SetParent(systemRoot, false);
+                go.AddComponent<MeshFilter>().sharedMesh = glowQuad;
+                var mr = go.AddComponent<MeshRenderer>();
+                var m = Materials.Create(Materials.Glow, "Entry glow");
+                m.SetFloat("_Falloff", 2.0f);
+                mr.sharedMaterial = m;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                entryGlows.Add((go.transform, m));
+            }
+            var (t, material) = entryGlows[index];
+            t.gameObject.SetActive(true);
+            float length = (float)shipLength[ship];
+            // Ships come down tail-first: the sheath forms on the face meeting the air, below the drive.
+            var nose = shipRotation[ship] * Vector3.forward;
+            var p = rel - nose * length * 0.55f;
+            float dist = Mathf.Max(p.magnitude, 1e-6f);
+            // At least a few pixels, so a descent shows as a spark from orbit.
+            float size = Mathf.Max(length * (0.45f + 0.75f * heat), dist * 5f / (float)pixelsPerUnit * heat);
+            t.localPosition = p;
+            t.localRotation = Quaternion.LookRotation(p / dist, Vector3.up);
+            t.localScale = Vector3.one * size;
+            material.SetColor("_Color", Color.Lerp(new Color(1f, 0.55f, 0.25f), new Color(1f, 0.4f, 0.75f), heat));
+            material.SetFloat("_Intensity", 0.35f + 0.9f * heat);
         }
 
         /// <summary>A ship lost in battle breaks up and burns out where it died.</summary>
@@ -772,7 +1040,7 @@ namespace SolarSystem
                     if (!platformViews.TryGetValue(u.Combat, out var go))
                     {
                         go = new GameObject(u.Name);
-                        go.transform.SetParent(worldRoot, false);
+                        go.transform.SetParent(systemRoot, false);
                         go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetPlatform(u.Faction);
                         var mr = go.AddComponent<MeshRenderer>();
                         mr.sharedMaterial = ShipModels.ProceduralMaterial;
@@ -822,7 +1090,11 @@ namespace SolarSystem
                 else
                 {
                     alpha = 1f;
-                    color = body.Kind == BodyKind.DwarfPlanet ? new Color(0.7f, 0.62f, 0.5f, 0.32f) : new Color(0.45f, 0.62f, 0.9f, 0.42f);
+                    color = body.Kind == BodyKind.DwarfPlanet ? new Color(0.7f, 0.62f, 0.5f, 0.32f)
+                        : body.Kind == BodyKind.Station ? new Color(0.9f, 0.75f, 0.45f, 0.3f)
+                        : body.IsStar ? new Color(1f, 0.85f, 0.55f, 0.35f)
+                        : body.Status != BodyStatus.Confirmed ? new Color(0.6f, 0.6f, 0.7f, 0.25f)
+                        : new Color(0.45f, 0.62f, 0.9f, 0.42f);
                 }
                 if (selected) color = new Color(0.55f, 0.9f, 1f, 0.85f);
                 line.Visible = alpha > 0.01f;
@@ -857,7 +1129,7 @@ namespace SolarSystem
             for (int k = 0; k < pathPoints.Length; k++)
             {
                 double u = progress + (1 - progress) * k / (pathPoints.Length - 1);
-                pathPoints[k] = Relative(ship.Phase == ShipPhase.Lane ? Scale.LaneScene(Ephemeris, bodyScene, ship, u, out _) : TransitScene(ship, u, out _));
+                pathPoints[k] = Relative(ship.Phase == ShipPhase.Lane ? Scale.LaneScene(Ephemeris, bodyScene, Fleet.Lanes, ship, u, out _) : TransitScene(ship, u, out _));
             }
             var c = ship.Faction.Color;
             pathLine.SetPoints(pathPoints, pathPoints.Length, new Color(c.R, c.G, c.B, 0.9f), 1f, 0.35f);
@@ -868,6 +1140,13 @@ namespace SolarSystem
 
         public double PixelsPerUnitAtUnitDistance() =>
             Screen.height / (2.0 * Math.Tan(UnityCamera.fieldOfView * 0.5 * Mathf.Deg2Rad));
+
+        /// <summary>Where another star system shines in this one's sky (a Unity-axes unit vector).</summary>
+        public Vector3 SkyDirection(StarSystem other)
+        {
+            var d = (other.PositionLy - ActiveSystem.PositionLy).Normalized.SwapYZ;
+            return new Vector3((float)d.X, (float)d.Y, (float)d.Z);
+        }
 
         // ---------------------------------------------------------------- picking
 
@@ -881,6 +1160,14 @@ namespace SolarSystem
             return sp.z > 0;
         }
 
+        /// <summary>Projects a camera-relative point (or direction far away) to GUI coordinates.</summary>
+        public bool RelativeToGui(Vector3 rel, out Vector2 gui)
+        {
+            var sp = UnityCamera.WorldToScreenPoint(rel);
+            gui = new Vector2(sp.x, Screen.height - sp.y);
+            return sp.z > 0;
+        }
+
         /// <summary>True if a sphere of radius <paramref name="ignoreRadius"/> at scene point p is hidden behind any body.</summary>
         public bool Occluded(DVec3 p, int ignoreBody = -1)
         {
@@ -890,7 +1177,7 @@ namespace SolarSystem
             dir /= len;
             for (int i = 0; i < bodyScene.Length; i++)
             {
-                if (i == ignoreBody) continue;
+                if (i == ignoreBody || !Catalog[i].IsVisible) continue;
                 var oc = SpaceCamera.ScenePosition - bodyScene[i];
                 double b = DVec3.Dot(oc, dir);
                 double c = oc.LengthSquared - bodyRadius[i] * bodyRadius[i];
@@ -905,7 +1192,7 @@ namespace SolarSystem
 
         void UpdateHover()
         {
-            if (Input.LookHeld || IsPointerOverUi())
+            if (Input.LookHeld || IsPointerOverUi() || Travel.Active)
             {
                 Hovered = Target.None;
                 return;
@@ -916,7 +1203,7 @@ namespace SolarSystem
 
         void HandleSelectionClicks()
         {
-            if (!Input.SelectClicked) return;
+            if (!Input.SelectClicked || Travel.Active) return;
             Select(Hovered);
             if (Input.SelectDoubleClicked && !Hovered.IsNone) SpaceCamera.FocusOn(Hovered);
         }
@@ -929,6 +1216,7 @@ namespace SolarSystem
 
             for (int i = 0; i < Catalog.Count; i++)
             {
+                if (!Catalog[i].IsVisible) continue;
                 if (!ToGui(bodyScene[i], out var p, out var depth)) continue;
                 double pxRadius = bodyRadius[i] / depth * ppu;
                 double pickRadius = Math.Max(pxRadius, Icons.PixelSize(Catalog[i]) * 0.5 + 5);
@@ -946,7 +1234,7 @@ namespace SolarSystem
             var ships = Fleet.Ships;
             for (int i = 0; i < ships.Count; i++)
             {
-                if (ships[i].Destroyed) continue;
+                if (ships[i].Destroyed || ships[i].Controller.Phase == ShipPhase.Landed) continue;
                 if (!ToGui(shipScene[i], out var p, out var depth)) continue;
                 double px = shipLength[i] / depth * ppu;
                 double pickRadius = Math.Max(px * 0.5, Icons.PixelSize(ships[i].Spec.Class) * 0.5 + 4);
@@ -961,6 +1249,25 @@ namespace SolarSystem
                     best = Target.OfShip(ships[i]);
                 }
             }
+
+            // Structures and rings, only once they are drawn large enough to be things.
+            void Consider(object key, DVec3 scene, Target t)
+            {
+                if (!ToGui(scene, out var p, out var depth)) return;
+                double px = Structures.Sizes[key] / depth * ppu;
+                if (px < 4) return;
+                double pickRadius = Math.Max(px * 0.5, 8);
+                double d = (p - gui).magnitude;
+                if (d > pickRadius || Occluded(scene)) return;
+                double score = d / pickRadius + 0.2;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = t;
+                }
+            }
+            foreach (var kv in Structures.Scenes) Consider(kv.Key, kv.Value, Target.OfStructure(kv.Key));
+            foreach (var kv in Structures.RingScenes) Consider(kv.Key, kv.Value, Target.OfRing(kv.Key));
             return best;
         }
     }

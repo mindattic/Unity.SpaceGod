@@ -31,7 +31,7 @@ namespace SolarSystem.Views
 
         static readonly int EngineGlowId = Shader.PropertyToID("_EngineGlow");
         static readonly int HighlightId = Shader.PropertyToID("_Highlight");
-        static readonly int ColorId = Shader.PropertyToID("_Color");
+        static readonly int ColorId = Shader.PropertyToID("_Tint");
 
         /// <summary>Breaches open as the hull falls below these fractions.</summary>
         static readonly float[] BreachAt = { 0.85f, 0.7f, 0.55f, 0.4f, 0.28f, 0.16f };

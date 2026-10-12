@@ -153,13 +153,16 @@ Shader "SolarSystem/GasGiant"
 
                 float ndl = dot(n, l);
                 float lit = saturate(ndl * 1.05 + 0.03) * smoothstep(-0.12, 0.1, ndl);
+                float3 l2 = normalize(_Sun2PositionWS.xyz - i.positionWS);
+                float ndl2 = dot(n, l2);
+                float lit2 = saturate(ndl2 * 1.05) * smoothstep(-0.12, 0.1, ndl2);
                 // Mild limb darkening of a deep atmosphere.
                 float mu = saturate(dot(n, viewDir));
                 float limb = lerp(0.72, 1.0, sqrt(mu));
-                float3 col = albedo * (lit * limb + _Ambient);
+                float3 col = albedo * ((lit * _SunColor.rgb + lit2 * _Sun2Color.rgb) * limb + _Ambient);
 
                 float rim = pow(1.0 - mu, 3.0);
-                float daySide = smoothstep(-0.35, 0.45, ndl);
+                float3 daySide = smoothstep(-0.35, 0.45, ndl) * _SunColor.rgb + smoothstep(-0.35, 0.45, ndl2) * _Sun2Color.rgb;
                 col += _AtmoColor.rgb * rim * _AtmoStrength * daySide;
                 col += float3(0.35, 0.7, 1.0) * rim * _Highlight * 0.35;
                 return half4(col, 1);

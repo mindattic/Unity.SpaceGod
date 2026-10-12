@@ -28,6 +28,9 @@ namespace SolarSystem.Core
         /// <summary>Hops within a planet's system are routed around the planet at this many radii.</summary>
         public const double PlanetKeepOutRadii = 2.0;
 
+        /// <summary>A ship waits for its parking orbit to face the way out only if that takes less than this (days).</summary>
+        public const double MaxFacingWaitDays = 2.0;
+
         public Fleet(Ephemeris ephemeris, int seed)
         {
             this.ephemeris = ephemeris;
@@ -54,6 +57,16 @@ namespace SolarSystem.Core
 
         /// <summary>Ships that run their own schedule (not escorts, not destroyed, not held by something else).</summary>
         public Func<Ship, bool> IsHeld;
+
+        /// <summary>Docking rings: ships that <see cref="Lands"/> reach a ringed world through one of its rings.</summary>
+        public readonly List<DockingRing> Rings = new List<DockingRing>();
+
+        /// <summary>Which ships go down to the surface at ringed worlds (merchants); null for none.</summary>
+        public Func<Ship, bool> Lands;
+
+        /// <summary>A ship at a body and able to fight there: holding orbit, or waiting at its ring.</summary>
+        public static bool IsAt(Ship ship, int body) =>
+            (ship.Phase == ShipPhase.Parked || ship.Phase == ShipPhase.Queued) && ship.Orbit != null && ship.Orbit.Body == body;
 
         /// <summary>
         /// Advances every ship's schedule up to <paramref name="jd"/>, processing departures and
@@ -92,6 +105,7 @@ namespace SolarSystem.Core
                 var helio = ephemeris.Helio(s.Orbit.Body) + s.Orbit.OffsetAt(jd);
                 return new ShipState(helio, s.Orbit.TangentAt(jd), s.Orbit.SpeedKmS, false, 0);
             }
+            if (s.Phase == ShipPhase.Queued || s.Planetside) return RingState(s, jd);
             if (s.Phase == ShipPhase.Lurk || s.Phase == ShipPhase.Adrift)
             {
                 // Slide out of the lane over the first couple of hours rather than jump.
@@ -129,6 +143,54 @@ namespace SolarSystem.Core
                 s.PathLength > 0 ? dist / s.PathLength : 1);
         }
 
+        /// <summary>
+        /// A ship at a docking ring, in the body's turning frame: queued (easing in from its holding
+        /// point to the ring over the wait), descending (straight down under the ring to the city,
+        /// heating as it passes the entry interface), landed, or climbing back up.
+        /// </summary>
+        ShipState RingState(Ship s, double jd)
+        {
+            var ring = s.Ring;
+            var centre = ephemeris.Helio(ring.Body);
+            double total = Math.Max(s.PhaseEndJd - s.PhaseStartJd, 1e-9);
+            double u = Math.Max(0, Math.Min(1, (jd - s.PhaseStartJd) / total));
+            if (s.Phase == ShipPhase.Queued)
+            {
+                double e = Astro.SmoothStep(0, 1, u);
+                var from = s.HoldPoint.OffsetAt(jd);
+                var to = ring.RingPoint.OffsetAt(jd);
+                var p = DVec3.Lerp(from, to, e);
+                var drift = (to - from).Length * 6 * u * (1 - u) / (total * Astro.SecondsPerDay);
+                return new ShipState(centre + p, (centre - (centre + p)).Normalized, drift, false, 0);
+            }
+            var up = ring.Up(jd);
+            double r = RingRadiusAt(s, u);
+            double rate = (RingRadiusAt(s, Math.Min(1, u + 1e-4)) - RingRadiusAt(s, Math.Max(0, u - 1e-4))) / (2e-4 * total * Astro.SecondsPerDay);
+            float heat = 0;
+            if (s.Phase != ShipPhase.Landed)
+            {
+                double altitude = r - ring.SurfaceKm;
+                // Brightest on the way down, a little after the interface; a gentler glow climbing out.
+                double depth = 1 - altitude / Math.Max(ring.EntryInterfaceKm, 1);
+                heat = (float)(Math.Max(0, Math.Min(1, depth * 1.6)) * Math.Max(0, Math.Min(1, altitude / (ring.EntryInterfaceKm * 0.15))) * (s.Phase == ShipPhase.Descent ? 1 : 0.35));
+            }
+            // Tail-first like a landing rocket: the drive points at the ground, braking on the way
+            // down and lifting on the way up.
+            var facing = up;
+            return new ShipState(centre + up * r, facing, Math.Abs(rate), s.Phase != ShipPhase.Landed, u, heat);
+        }
+
+        /// <summary>Distance from the ringed body's centre during a descent or climb at fraction u.</summary>
+        static double RingRadiusAt(Ship s, double u)
+        {
+            var ring = s.Ring;
+            if (s.Phase == ShipPhase.Landed) return ring.SurfaceKm;
+            // Fast through the empty upper part, slow and careful through the air near the ground.
+            double e = s.Phase == ShipPhase.Descent ? 1 - Math.Pow(1 - u, 2.2) : Math.Pow(u, 2.2);
+            double top = ring.RadiusKm, bottom = ring.SurfaceKm;
+            return s.Phase == ShipPhase.Descent ? top + (bottom - top) * e : bottom + (top - bottom) * e;
+        }
+
         /// <summary>Distance fraction along the lane at a date (eased in and out).</summary>
         public static double LaneProgress(Ship s, double jd) =>
             s.LaneStartProgress + (s.LaneEndProgress - s.LaneStartProgress) * Hyperlanes.Progress((jd - s.PhaseStartJd) / Math.Max(s.PhaseEndJd - s.PhaseStartJd, 1e-9));
@@ -138,7 +200,7 @@ namespace SolarSystem.Core
         {
             var a = ephemeris.HelioAt(s.LaneLeg.From, jd) + s.LaneFromOffset;
             var b = ephemeris.HelioAt(s.LaneLeg.To, jd) + s.LaneToOffset;
-            return Hyperlanes.Curve(a, b, s.LaneLeg.Lane.Bend, Hyperlanes.SunKeepOutKm, progress, DVec3.UnitZ);
+            return Lanes.CurveKm(s.LaneLeg.Lane, a, b, progress, jd);
         }
 
         /// <summary>
@@ -219,8 +281,77 @@ namespace SolarSystem.Core
             }
             else if (ship.Phase == ShipPhase.Lane) EndLane(ship);
             else if (ship.Phase == ShipPhase.Lurk || ship.Phase == ShipPhase.Adrift) ResumeLane(ship, ship.PhaseEndJd);
-            else if (ship.Journey != null && ship.Orbit.Fixed) StartLane(ship, ship.PhaseEndJd);
+            else if (ship.Phase == ShipPhase.Queued) BeginDescent(ship);
+            else if (ship.Phase == ShipPhase.Descent) Arrive(ship, landed: true);
+            else if (ship.Phase == ShipPhase.Landed)
+            {
+                if (ship.DestinationBody == ship.Ring.Body) ScheduleNext(ship, ship.PhaseEndJd);
+                else BeginAscent(ship);
+            }
+            else if (ship.Phase == ShipPhase.Ascent) Depart(ship);
+            else if (ship.Journey != null && ship.JourneyIndex < ship.Journey.Count && ship.Orbit.Fixed) StartLane(ship, ship.PhaseEndJd);
+            else if (ship.Ring != null && ship.Orbit == ship.HoldPoint) JoinQueue(ship);
             else Arrive(ship);
+        }
+
+        // ---------------------------------------------------------------- docking rings
+
+        /// <summary>The way a ship arrives at a body: in orbit, or to the holding point of the ring with the shortest queue.</summary>
+        ParkingOrbit ArrivalFor(Ship ship, int body)
+        {
+            ship.Ring = null;
+            ship.HoldPoint = null;
+            if (Lands == null || !Lands(ship)) return NewParkingOrbit(body, ship);
+            DockingRing best = null;
+            foreach (var r in Rings)
+                if (r.Body == body && (best == null || r.NextEntryJd < best.NextEntryJd)) best = r;
+            if (best == null) return NewParkingOrbit(body, ship);
+            ship.Ring = best;
+            ship.HoldPoint = best.HoldPoint(ship);
+            return ship.HoldPoint;
+        }
+
+        /// <summary>Minimum time from the holding point to the ring (an unhurried approach).</summary>
+        public const double MinQueueDays = 12.0 / 1440;
+
+        /// <summary>Arrived off the ring: take the next free slot to descend (rings clear one ship per interval).</summary>
+        void JoinQueue(Ship ship)
+        {
+            double jd = ship.PhaseEndJd;
+            var ring = ship.Ring;
+            double entry = Math.Max(jd + MinQueueDays, ring.NextEntryJd);
+            ring.NextEntryJd = entry + ring.EntryIntervalDays;
+            ship.Phase = ShipPhase.Queued;
+            ship.Path = null;
+            ship.PhaseStartJd = jd;
+            ship.PhaseEndJd = entry;
+        }
+
+        void BeginDescent(Ship ship)
+        {
+            double jd = ship.PhaseEndJd;
+            ship.Orbit = ship.Ring.RingPoint;
+            ship.Phase = ShipPhase.Descent;
+            ship.PhaseStartJd = jd;
+            ship.PhaseEndJd = jd + ship.Ring.DescentDays;
+        }
+
+        void BeginAscent(Ship ship)
+        {
+            double jd = ship.PhaseEndJd;
+            ship.Phase = ShipPhase.Ascent;
+            ship.PhaseStartJd = jd;
+            ship.PhaseEndJd = jd + ship.Ring.DescentDays;
+        }
+
+        /// <summary>Days a ship landing at a ringed world adds for the queue, the descent and the climb out.</summary>
+        double RingOverheadDays(Ship ship, int body, double arriveJd)
+        {
+            if (Lands == null || !Lands(ship)) return 0;
+            double best = double.MaxValue;
+            foreach (var r in Rings)
+                if (r.Body == body) best = Math.Min(best, Math.Max(0, r.NextEntryJd - arriveJd) + MinQueueDays + 2 * r.DescentDays);
+            return best == double.MaxValue ? 0 : best;
         }
 
         /// <summary>
@@ -245,7 +376,7 @@ namespace SolarSystem.Core
                 var hop = ship.Journey[0];
                 Burn(ship, departJd, hop.From, () => RampOrbit(hop, hop.From, departJd));
             }
-            else Burn(ship, departJd, to, () => NewParkingOrbit(to, ship));
+            else Burn(ship, departJd, to, () => ArrivalFor(ship, to));
         }
 
         /// <summary>A hyperlane ramp as a fixed point attached to its planet.</summary>
@@ -268,7 +399,7 @@ namespace SolarSystem.Core
             var estimate = Hyperlanes.RideDays(Lanes.LaneLengthKm(hop.Lane, jd));
             ship.LaneToOffset = Lanes.RampOffset(hop.Lane, hop.To, jd + estimate);
             var b = ephemeris.HelioAt(hop.To, jd) + ship.LaneToOffset;
-            ship.LaneLengthKm = Hyperlanes.CurveLength(a, b, hop.Lane.Bend, Hyperlanes.SunKeepOutKm, DVec3.UnitZ);
+            ship.LaneLengthKm = Lanes.CurveLengthKm(hop.Lane, a, b, jd);
             ship.DepartureOrbit = ship.Orbit;
             ship.OriginBody = hop.From;
             ship.FrameBody = 0;
@@ -277,7 +408,7 @@ namespace SolarSystem.Core
             ship.LaneStartProgress = 0;
             ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
             ship.PhaseStartJd = jd;
-            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm * ship.LaneEndProgress);
+            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm) * ship.LaneEndProgress;
         }
 
         /// <summary>Back into the lane from where the ship stopped (a lurk over, or an ambush survived), and on to its end.</summary>
@@ -288,7 +419,7 @@ namespace SolarSystem.Core
             ship.LaneEndProgress = 1;
             ship.LaneHoldSide = DVec3.Zero;
             ship.PhaseStartJd = jd;
-            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm * Math.Max(1e-3, 1 - ship.LaneHold));
+            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm) * Math.Max(1e-3, 1 - ship.LaneHold);
         }
 
         /// <summary>Drops out of the lane where the ship is, a little to one side (an interdiction pulse).</summary>
@@ -335,7 +466,7 @@ namespace SolarSystem.Core
             else
             {
                 int to = ship.FinalBody;
-                Burn(ship, jd, to, () => NewParkingOrbit(to, ship));
+                Burn(ship, jd, to, () => ArrivalFor(ship, to));
             }
         }
 
@@ -344,7 +475,7 @@ namespace SolarSystem.Core
         {
             int from = ship.Orbit.Body;
             int frame = CommonFrame(from, to);
-            double keepOut = frame == 0 ? SunKeepOutKm : catalog[frame].RadiusKm * PlanetKeepOutRadii;
+            double keepOut = FrameKeepOutKm(frame);
             var start = RelativeTo(frame, from, departJd) + ship.Orbit.OffsetAt(departJd);
             var startVelocity = VelocityRelativeTo(frame, from, departJd) + ship.Orbit.VelocityAt(departJd);
             // Match velocities at both ends unless that path runs into something the rest-to-rest
@@ -368,6 +499,19 @@ namespace SolarSystem.Core
         }
 
         /// <summary>
+        /// How wide a transit flown in a frame gives its centre: <see cref="SunKeepOutKm"/> for a star
+        /// (scaled for its luminosity, so Proxima's close planets stay reachable), a couple of radii
+        /// for a planet, nothing for an empty barycentre (its stars are steered round instead).
+        /// </summary>
+        double FrameKeepOutKm(int frame)
+        {
+            var f = catalog[frame];
+            if (f.IsStar) return SunKeepOutKm * Math.Sqrt(Math.Max(f.LuminositySolar, 1e-6));
+            if (f.Kind == BodyKind.Barycentre) return 0;
+            return f.RadiusKm * PlanetKeepOutRadii;
+        }
+
+        /// <summary>
         /// Plans the transit onto <paramref name="ship"/>. Returns false if the path would pass inside
         /// the keep-out around the frame's centre, or through either end's body or the planets they orbit.
         /// </summary>
@@ -385,8 +529,13 @@ namespace SolarSystem.Core
             {
                 double arriveJd = departJd + flightDays;
                 var target = RelativeTo(frame, to, arriveJd);
-                arrival.EpochJd = arriveJd;
-                if (!arrival.Fixed) arrival.PhaseAtEpoch = arrival.PhaseFacing((start - target).Normalized);
+                // A fixed point keeps its own epoch: re-dating it would turn a point that rotates with
+                // its body (a docking ring) to the wrong place.
+                if (!arrival.Fixed)
+                {
+                    arrival.EpochJd = arriveJd;
+                    arrival.PhaseAtEpoch = arrival.PhaseFacing((start - target).Normalized);
+                }
                 v1 = matchVelocity ? VelocityRelativeTo(frame, to, arriveJd) + arrival.VelocityAt(arriveJd) : DVec3.Zero;
                 // The drift covers (v0 + v1)·T / 2 of the way; the flip-and-burn covers the rest.
                 var shift = (v0 + v1) * (flightDays * 0.5);
@@ -466,10 +615,10 @@ namespace SolarSystem.Core
             return (a + d * t).Length;
         }
 
-        void Arrive(Ship ship)
+        void Arrive(Ship ship, bool landed = false)
         {
             double arriveJd = ship.PhaseEndJd;
-            ship.Phase = ShipPhase.Parked;
+            ship.Phase = landed ? ShipPhase.Landed : ShipPhase.Parked;
             ship.TripsCompleted++;
             ship.Path = null;
             ship.Journey = null;
@@ -483,6 +632,19 @@ namespace SolarSystem.Core
         /// <summary>Picks the next destination and the departure time: dwell, then wait for the parking orbit to face the target.</summary>
         public void ScheduleNext(Ship ship, double nowJd)
         {
+            // Mid-descent or mid-climb the schedule is fixed; a queued ship (after a fight, say) just
+            // takes its turn again.
+            if (ship.Phase == ShipPhase.Descent || ship.Phase == ShipPhase.Ascent) return;
+            if (ship.Phase == ShipPhase.Queued)
+            {
+                ship.HoldPoint = FixedHold(ship, nowJd);
+                ship.Orbit = ship.HoldPoint;
+                double entry = Math.Max(nowJd + MinQueueDays, ship.Ring.NextEntryJd);
+                ship.Ring.NextEntryJd = entry + ship.Ring.EntryIntervalDays;
+                ship.PhaseStartJd = nowJd;
+                ship.PhaseEndJd = entry;
+                return;
+            }
             int here = ship.Orbit.Body;
             int chosen = ChooseNext != null ? ChooseNext(ship, here, nowJd) : -1;
             double dwell = Dwell != null ? Dwell(ship, DwellDays(ship)) : DwellDays(ship);
@@ -502,7 +664,25 @@ namespace SolarSystem.Core
             double have = ship.Orbit.PhaseAt(windowJd);
             double delta = (want - have) % Astro.TwoPi;
             if (delta < 0) delta += Astro.TwoPi;
-            ship.PhaseEndJd = windowJd + delta / ship.Orbit.RateRadPerDay;
+            // Around a station (no real gravity) or on a fixed point, the "orbit" barely turns: just go.
+            double wait = ship.Orbit.RateRadPerDay > 0 && !ship.Orbit.Fixed ? delta / ship.Orbit.RateRadPerDay : 0;
+            ship.PhaseEndJd = windowJd + (wait > MaxFacingWaitDays ? 0 : wait);
+        }
+
+        /// <summary>A queued ship's current spot, frozen into a new holding point to ease in from.</summary>
+        ParkingOrbit FixedHold(Ship ship, double jd)
+        {
+            var at = RingState(ship, jd).HelioKm - ephemeris.Helio(ship.Ring.Body);
+            var hold = ship.Ring.Point(at.Length);
+            // Keep it on the ship's own parallel and meridian, not the ring's.
+            var north = BodyOrientation.MapNorth(catalog[ship.Ring.Body]);
+            double lat = Math.Asin(Math.Max(-1, Math.Min(1, DVec3.Dot(at.Normalized, north))));
+            double phase = Math.Atan2(DVec3.Dot(at, hold.V), DVec3.Dot(at, hold.U));
+            hold.Center = north * (at.Length * Math.Sin(lat));
+            hold.RadiusKm = at.Length * Math.Cos(lat);
+            hold.EpochJd = jd;
+            hold.PhaseAtEpoch = phase;
+            return hold;
         }
 
         int ChooseDestination(Ship ship, int here, double jd)
@@ -606,6 +786,10 @@ namespace SolarSystem.Core
         List<(DVec3 center, double radius)> Avoidances(int frame, int from, int to, double departJd, double arriveJd, DVec3 shift)
         {
             var list = new List<(DVec3, double)>();
+            if (catalog[frame].Kind == BodyKind.Barycentre)
+                foreach (int star in catalog.ChildrenOf(frame))
+                    if (catalog[star].IsStar)
+                        list.Add((RelativeTo(frame, star, 0.5 * (departJd + arriveJd)), FrameKeepOutKm(star)));
             for (int b = catalog[from].ParentIndex, moon = from; b > 0 && b != frame; moon = b, b = catalog[b].ParentIndex)
                 list.Add((RelativeTo(frame, b, departJd), Berth(b, moon, departJd)));
             for (int b = catalog[to].ParentIndex, moon = to; b > 0 && b != frame; moon = b, b = catalog[b].ParentIndex)
@@ -735,8 +919,25 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Parks a ship at a body with a randomised departure so a fresh fleet does not move in lockstep.</summary>
-        public void Station(Ship ship, int body, double jd)
+        public void Station(Ship ship, int body, double jd) => Station(ship, body, jd, null);
+
+        /// <summary>As <see cref="Station(Ship, int, double)"/>, in a given orbit (a new hull leaving its yard).</summary>
+        public void Station(Ship ship, int body, double jd, ParkingOrbit orbit)
         {
+            ship.Ring = null;
+            ship.HoldPoint = null;
+            if (orbit != null)
+            {
+                ship.Orbit = new ParkingOrbit
+                {
+                    Body = body, RadiusKm = orbit.RadiusKm, U = orbit.U, V = orbit.V, Center = orbit.Center,
+                    EpochJd = jd, PhaseAtEpoch = orbit.PhaseAt(jd) - 0.002, RateRadPerDay = orbit.RateRadPerDay,
+                };
+                ship.Phase = ShipPhase.Parked;
+                ship.PhaseStartJd = jd;
+                ScheduleNext(ship, jd + 0.2 + rng.NextDouble() * 0.5);
+                return;
+            }
             ship.Orbit = NewParkingOrbit(body, ship);
             ship.Orbit.EpochJd = jd;
             ship.Orbit.PhaseAtEpoch = rng.NextDouble() * Astro.TwoPi;
@@ -853,11 +1054,12 @@ namespace SolarSystem.Core
                         if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5);
                     }
                     days += Burn((Lanes.RampHelio(route[route.Count - 1].Lane, b, jd) - ephemeris.HelioAt(to, jd)).Length);
-                    return days + 0.3;
+                    return days + 0.3 + RingOverheadDays(ship, to, jd + days);
                 }
             }
             double d = (ephemeris.HelioAt(to, jd) - ephemeris.HelioAt(from, jd)).Length;
-            return Burn(d) + 1.0;
+            double direct = Burn(d) + 1.0;
+            return direct + RingOverheadDays(ship, to, jd + direct);
         }
 
         /// <summary>Where the first leg of a trip heads: the first lane's ramp, or the destination itself.</summary>
