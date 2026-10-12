@@ -39,6 +39,16 @@ namespace SolarSystem
             yield return Wait(2.6f);
             yield return stop("05-freighter");
 
+            var miner = app.Fleet.Ships.FirstOrDefault(s => !s.Destroyed && s.Controller.Phase != ShipPhase.Landed && s.Spec.Class == ShipClass.Miner);
+            Focus(app, Target.OfShip(miner), 3.5);
+            yield return Wait(2.6f);
+            yield return stop("05b-miner");
+
+            var courier = app.Fleet.Ships.FirstOrDefault(s => !s.Destroyed && s.Controller.Phase != ShipPhase.Landed && s.Spec.Class == ShipClass.Courier);
+            Focus(app, Target.OfShip(courier), 3);
+            yield return Wait(2.6f);
+            yield return stop("05c-courier");
+
             Focus(app, Target.OfBody(app.Catalog["Saturn"].Index), 3.2);
             yield return Wait(2.6f);
             yield return stop("06-saturn");
