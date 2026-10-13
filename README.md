@@ -165,6 +165,10 @@ Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic
 
 Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`, named by time (`2026-10-11T14.38.03.577.png`); each image's `.json` sidecar names the tour stop it shows (`\"tag\": \"03-carrier-group\"`). In the editor, **MindAttic > Capture** toggles the same for Play Mode.
 
+MindAttic.Capture also auto-starts in plain Editor Play sessions and dev builds (not gated by
+`-capture`). Currently disabled project-wide: `"enabled": false` in
+`Assets/StreamingAssets/capture.json`. Flip it to `true` (or remove the key) to re-enable.
+
 ## Controls
 
 | Action | Input |
