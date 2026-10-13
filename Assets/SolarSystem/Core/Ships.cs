@@ -65,32 +65,30 @@ namespace SolarSystem.Core
     {
         public ShipClass Class { get; }
         public string DisplayName { get; }
-        public double LengthKm { get; }
 
         /// <summary>Sustained drive acceleration in g. Torch-drive fiction; the kinematics are real.</summary>
         public double AccelG { get; }
 
         public bool IsMilitary { get; }
 
-        ShipClassSpec(ShipClass c, string name, double lengthKm, double accelG, bool military)
+        ShipClassSpec(ShipClass c, string name, double accelG, bool military)
         {
             Class = c;
             DisplayName = name;
-            LengthKm = lengthKm;
             AccelG = accelG;
             IsMilitary = military;
         }
 
         static readonly ShipClassSpec[] Specs =
         {
-            new ShipClassSpec(ShipClass.Carrier, "Carrier", 3.2, 0.3, true),
-            new ShipClassSpec(ShipClass.Battleship, "Battleship", 2.4, 0.3, true),
-            new ShipClassSpec(ShipClass.Cruiser, "Cruiser", 1.2, 0.3, true),
-            new ShipClassSpec(ShipClass.Destroyer, "Destroyer", 0.45, 0.3, true),
-            new ShipClassSpec(ShipClass.Freighter, "Freighter", 0.6, 0.1, false),
-            new ShipClassSpec(ShipClass.Miner, "Ore hauler", 0.3, 0.06, false),
-            new ShipClassSpec(ShipClass.Courier, "Courier", 0.08, 1.2, false),
-            new ShipClassSpec(ShipClass.Breacher, "Breacher", 0.18, 0.5, true),
+            new ShipClassSpec(ShipClass.Carrier, "Carrier", 0.3, true),
+            new ShipClassSpec(ShipClass.Battleship, "Battleship", 0.3, true),
+            new ShipClassSpec(ShipClass.Cruiser, "Cruiser", 0.3, true),
+            new ShipClassSpec(ShipClass.Destroyer, "Destroyer", 0.3, true),
+            new ShipClassSpec(ShipClass.Freighter, "Freighter", 0.1, false),
+            new ShipClassSpec(ShipClass.Miner, "Ore hauler", 0.06, false),
+            new ShipClassSpec(ShipClass.Courier, "Courier", 1.2, false),
+            new ShipClassSpec(ShipClass.Breacher, "Breacher", 0.5, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];
@@ -177,6 +175,9 @@ namespace SolarSystem.Core
         public ShipClassSpec Spec;
         public Faction Faction;
         public ShipRole Role;
+
+        /// <summary>This hull's own length — per-design (the mesh/stat variant this ship was built as), not per-class.</summary>
+        public double LengthKm => Combat.Spec.LengthKm;
 
         /// <summary>Escorts fly in formation on a leader; slot is in leader lengths (x right, y up, z forward).</summary>
         public Ship Leader;

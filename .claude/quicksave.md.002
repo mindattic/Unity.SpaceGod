@@ -1,0 +1,90 @@
+# Quicksave — UnitySolarSystem: living multi-system sim (Alpha Centauri, rings, avoidance, free ships)
+_Printed: 2026-10-11_
+
+## Current task
+Nothing is mid-edit. Everything is committed and pushed to `main` (latest `c8e4375`). Resume by asking the owner for the next feature.
+
+Standing owner direction for every new feature: "make sure this is a simulation, not a static clockwork with no room for freedom and adjustment". Ships should notice and react: avoid collisions, roam freely, change their minds mid-flight. Prefer stateful, reactive agent behaviour layered over the analytic Kepler/brachistochrone schedules.
+
+## Decisions locked this session
+- **Docking rings:**
+  - Rings hover directly over cities (powered station-keeping, labelled fiction) at the stationary-orbit radius, else 3 radii.
+  - Earth has 7 rings: New York, Paris, Beijing, Tokyo, Sydney, Johannesburg, Moscow.
+  - Mars has 2 (Jezero, Tharsis); Venus and Titan have 1 each; Proxima b has 2 (Dawn and Dusk on the terminator).
+  - Only merchants and couriers land (`IsTrader`); warships and pirates hold orbit.
+- **Alpha Centauri candidates:** S1 ("Alpha Centauri Ab") is included as a CANDIDATE and Proxima c as DISPUTED; both are labelled.
+- **Out of scope until asked:** interstellar ship travel. Only the camera travels between systems (StarTravel).
+- **Satellite constellations** are OFF by default; the K key toggles them.
+- **Ship plating:** CC0 ambientCG MetalPlates015A, applied triplanar in Ship.shader, packed into `Resources/Textures/ship_plating.png` (R = detail, GB = normal). Factions are told apart by hull shading.
+- **Space** is an eased pause (×0.99 per step at 120 steps/s down to 1%, then 0; it resumes the same way). Up/down movement moved to Q/E or C/].
+- **R / LEVEL button** smoothly levels the view to the system plane (ecliptic in Sol, A–B orbit in Alpha Centauri). A new system starts with the ecliptic level.
+- **Economy** stays at full complexity (owner: easier to dial down than to build up).
+- **Commits:** only when the owner asks (`/commit` also pushes). Footer:
+  - `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
+  - `Claude-Session: https://claude.ai/code/session_017GEbVV7vbX7qjt2TdN9AmZ`
+- Never stage `.claude/worktrees/`; it belongs to another session.
+
+## State / where we are
+Commits this session, all pushed:
+
+1. **`5ccbe77`** Alpha Centauri, orbital industry and docking rings:
+   - Galaxy and StarSystem;
+   - StarTravel, the interstellar view and two-star lighting;
+   - yards, factories, habitats and real spacecraft;
+   - rings with Queued → Descent → Landed → Ascent;
+   - plating, the R level key and the eased pause.
+2. **`8af0041`** Review fixes:
+   - landed ships stay out of battles;
+   - Proxima b gates sit on the terminator;
+   - queue slots kept after battles;
+   - reset-while-following crash fixed;
+   - material leaks fixed;
+   - demo takeover keys.
+3. **`c8e4375`** Bug hunt, orbit accuracy and reactive ships:
+   - **Orbits:** Moon via the Meeus ch. 47 LunarTheory (2.37° → 0.007°); Phobos refit with tidal decay (7.5° → 0.07°); Ceres mean anomaly bug (100° → 0.49°); Charon refit; Earth velocity barycentre fix.
+   - **Combat and lane fixes:** scuttle detach, derelicts excluded, boarding casualties and retakes, double interdiction, OnArrived sides, prize routes, capture cleanup, lane rejoin easing, lane shape locked per ride, `Hyperlanes.SetDanger` clears the route cache.
+   - **Runtime fixes:** owned meshes destroyed, faction cache canon, level mid-flight, tour battle handler, asteroid labels hidden during travel, `UpdateShips` on Activate.
+   - **Transits:** BuildPath iterates waypoints; no-drift fallback; every frame child avoided.
+   - **Reactive ships:** `Fleet.StepAvoidance`, `ShipRole.Free` wanderers, `Fleet.Divert` on new battles, ring queues as a spaced line, unique hold points, `OwnSpot` for detached ships.
+- **Last verification:**
+  - 158/158 core tests pass;
+  - the Unity capture build succeeds;
+  - the full 49-stop capture tour ran with 0 exceptions.
+- **Last demo video:** `R:\MindAttic\Capture\UnitySolarSystem\UnitySolarSystem_2026-10-11T19.58.33.575.mp4` (before the plating tone-down and later work).
+
+## Open questions / pending
+- **Miranda (1.7°), Enceladus (0.45°) and Deimos (0.37°)** errors are inherent to the mean-orbit model. Improving them needs periodic perturbation terms; not requested.
+- **Ship sidesteps are only km-scale,** so they're barely visible at gameplay zoom. Possibly make avoidance visible, if the owner wants it.
+- **Further "simulation not clockwork" ideas,** not yet built:
+  - convoys re-routing around dangerous lanes mid-journey;
+  - pirates intercepting merchants in open space;
+  - free ships reacting to battles (fleeing or spectating);
+  - traders replanning when a market changes mid-trip.
+- **A fresh `-demo -capture video hq` recording** may be wanted to show the latest work.
+
+## Next concrete steps
+1. Ask the owner what they want next; offer the open items above.
+2. Before any commit, run the core tests, the Unity build and the capture tour (commands below), and check line endings. Files keep their index EOL; new files are CRLF except `Target.cs`/LF-indexed ones (`git ls-files --eol`).
+
+## Anchors
+- **Repo:** `D:\Projects\MindAttic\UnitySolarSystem` (branch `main`, remote `mindattic/UnitySolarSystem`).
+- **Core files:**
+  - `Assets/SolarSystem/Core/Fleet.cs`: StepAvoidance, Divert, ring phases, QueuePosition, BuildPath, WanderOrbit.
+  - `Ships.cs`, `Hyperlanes.cs`, `World.cs` (Wire, CreateAlphaCentauri, AddFreeShips, DivertAround), `Ephemeris.cs`, `LunarTheory.cs`, `OrbitalElements.cs` (LDotDot), `BodyCatalog.cs`.
+  - `Systems/AlphaCentauri.cs`, `Systems/Galaxy.cs`, `Systems/SOURCES.md`, `Infrastructure/Infrastructure.cs`, `Combat/War.cs`.
+- **Runtime files:**
+  - `Assets/SolarSystem/Runtime/SolarSystemApp.cs` (Activate, TravelTo, LevelView, TogglePause, KmToSceneNear).
+  - `Camera/SpaceCamera.cs` (UpFrame, Level), `Camera/StarTravel.cs`.
+  - `Views/StructureViews.cs`, `InterstellarView.cs`, `SatelliteSwarm.cs`.
+  - `UI/Hud.cs`, `Rendering/Materials.cs` (MarkShared, Own, DestroyOwned), `ShipMeshFactory.cs` (Canon).
+  - `Resources/Shaders/Ship.shader` (plating), `Points.shader`.
+- **Tests:** `Tests/Core.Tests/` (`AvoidanceTests.cs`, `AlphaCentauriTests.cs`, `InfrastructureTests.cs`, `OrbitalMechanicsTests.cs`, ...).
+- **Memory note:** `C:\Users\ryand\.claude\projects\D--Projects-MindAttic-UnitySolarSystem\memory\living-solar-system-direction.md`; it now includes the fourth-round "simulation not clockwork" direction.
+- **Scratch tools:** `%TEMP%\claude\...\scratchpad\orbitfit\` holds `fit.py`, `phobos.py`, `ceres.py`, `horizons.json`, `planets.json`, a `check/` harness (Horizons error per body) and `probe/`. Patch helper: `scratchpad\patchlib.py`.
+- **Commands:**
+  - Tests: `cd Tests/Core.Tests && dotnet test`
+  - Compile: `"/c/Program Files/Unity/Hub/Editor/6000.4.3f1/Editor/Unity.exe" -batchmode -nographics -quit -projectPath . -logFile -` (grep for `error CS`)
+  - Capture build: `... -batchmode -quit -projectPath . -executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows -logFile -`
+  - Tour: `./Builds/Capture/UnitySolarSystem.exe -capture screen -screen-width 1600 -screen-height 900 -screen-fullscreen 0 -logFile <log>`
+  - Demo video: `./Builds/Capture/UnitySolarSystem.exe -demo -capture video hq`; close with PowerShell `(Get-Process UnitySolarSystem).CloseMainWindow()`.
+  - Captures land in `R:\MindAttic\Capture\UnitySolarSystem\`; each sidecar `.json` has a `"tag"` naming the tour stop.

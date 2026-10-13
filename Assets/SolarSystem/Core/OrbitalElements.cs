@@ -138,7 +138,8 @@ namespace SolarSystem.Core
             double varpi = VarpiDeg + VarpiDot * t;
             double node = NodeDeg + NodeDot * t;
             double m = Astro.WrapRadians((l - varpi) * Astro.Deg2Rad);
-            double n = (LDotDegPerCentury + 2 * LDotDotDegPerCentury2 * t) / Astro.DaysPerCentury * Astro.Deg2Rad;
+            // Mean motion is dM/dt = dL/dt - d(varpi)/dt, not the mean-longitude rate alone.
+            double n = (LDotDegPerCentury + 2 * LDotDotDegPerCentury2 * t - VarpiDot) / Astro.DaysPerCentury * Astro.Deg2Rad;
             return new KeplerState(a, e, i, node * Astro.Deg2Rad, (varpi - node) * Astro.Deg2Rad, m, n);
         }
     }

@@ -157,7 +157,7 @@ namespace SolarSystem.Core
                 }
                 run = Math.Max(0, Math.Min(1, run));
                 f.Utilisation = run * efficiency;
-                foreach (var (g, rate) in f.Recipe.Inputs) s.Stock[(int)g] = Math.Max(0, s.Stock[(int)g] - rate * f.Level * dt * run);
+                foreach (var (g, rate) in f.Recipe.Inputs) s.Stock[(int)g] = Math.Max(0, s.Stock[(int)g] - rate * f.Level * dt * run * efficiency);
                 foreach (var (g, rate) in f.Recipe.Outputs) s.Stock[(int)g] += rate * f.Level * dt * run * efficiency;
                 if (f.Recipe.Kind == IndustryKind.Shipyard)
                 {
@@ -387,6 +387,7 @@ namespace SolarSystem.Core
                 if (options.Count == 0) return -1;
                 var pick = Choose(options);
                 Release(ship);
+                ship.CargoBonus = 0;
                 ship.CargoDestination = pick.To;
                 pick.To.Inbound[(int)pick.Good] += pick.Tonnes;
                 ship.Cargo = CargoText(ship);

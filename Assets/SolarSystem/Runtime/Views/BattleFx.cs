@@ -36,6 +36,7 @@ namespace SolarSystem.Views
         readonly Mesh mesh;
         readonly List<Effect> effects = new List<Effect>();
         readonly Dictionary<Battle, int> seen = new Dictionary<Battle, int>();
+        readonly List<Battle> staleSeen = new List<Battle>();
         readonly List<Vector3> vertices = new List<Vector3>();
         readonly List<Color> colors = new List<Color>();
         readonly List<Vector3> uvs = new List<Vector3>();
@@ -64,6 +65,7 @@ namespace SolarSystem.Views
             var war = app.World.War;
             foreach (var b in war.Battles) Collect(b, now);
             foreach (var b in war.Ended) Collect(b, now);
+            PruneSeen(war);
 
             effects.RemoveAll(e => now - e.Born > e.Life);
             if (effects.Count > MaxEffects) effects.RemoveRange(0, effects.Count - MaxEffects);
@@ -97,7 +99,17 @@ namespace SolarSystem.Views
             }
             for (int i = start; i < b.Fx.Count; i++) Spawn(b, b.Fx[i], now);
             seen[b] = b.FxSeq;
-            if (seen.Count > 64) seen.Clear();
+        }
+
+        /// <summary>Drops a battle's seen-count once it is no longer live or kept in <see cref="War.Ended"/>,
+        /// so the dictionary cannot grow without bound and never has to be wiped wholesale.</summary>
+        void PruneSeen(War war)
+        {
+            if (seen.Count <= 64) return;
+            staleSeen.Clear();
+            foreach (var b in seen.Keys)
+                if (!war.Battles.Contains(b) && !war.Ended.Contains(b)) staleSeen.Add(b);
+            foreach (var b in staleSeen) seen.Remove(b);
         }
 
         void Spawn(Battle b, CombatFx fx, float now)

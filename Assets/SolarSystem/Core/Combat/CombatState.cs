@@ -12,6 +12,13 @@ namespace SolarSystem.Core
         public double Cooldown;
         public int Ammo;
 
+        /// <summary>This generator's own shield charge and its cap (an even share of the hull's total),
+        /// meaningful only for <see cref="SubsystemKind.ShieldGenerator"/>; set by <see cref="ShipCombat"/>.</summary>
+        public double Shield, MaxShield;
+
+        /// <summary>Battle-clock seconds this generator's arc was last hit, for its own regen pause.</summary>
+        public double LastHitSeconds = -999;
+
         /// <summary>World direction (ecliptic) the mount is aimed, for turret rendering; zero when idle.</summary>
         public DVec3 Aim;
 
@@ -37,11 +44,14 @@ namespace SolarSystem.Core
         public readonly CombatSpec Spec;
         public readonly List<Subsystem> Subsystems = new List<Subsystem>();
         public double Hull;
-        public double Shield;
-        public double LastHitSeconds = -999;
 
         /// <summary>Fighters left aboard (carriers); losses are made good at a yard.</summary>
         public int Fighters;
+
+        /// <summary>Boost charge, 0-1: drains over <see cref="CombatSpec.BoostDurationS"/> while held and
+        /// recharges (twice as slowly) otherwise. Shared by AI and player flight so boost behaves the same
+        /// whoever is flying.</summary>
+        public double BoostFraction = 1;
 
         /// <summary>The inside of the hull: compartments, who is in them, and any boarding fight.</summary>
         public readonly Interior Interior;
@@ -51,9 +61,16 @@ namespace SolarSystem.Core
         {
             Spec = spec;
             Hull = spec.Hull;
-            Shield = spec.Shield;
             Fighters = spec.Squadrons * 6;
             for (int i = 0; i < spec.Layout.Length; i++) Subsystems.Add(new Subsystem(spec.Layout[i], i));
+            int generators = 0;
+            foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) generators++;
+            if (generators > 0)
+            {
+                double share = spec.Shield / generators;
+                foreach (var s in Subsystems)
+                    if (s.Kind == SubsystemKind.ShieldGenerator) { s.MaxShield = share; s.Shield = share; }
+            }
             Interior = hull.HasValue ? Interior.For(hull.Value, spec.Crew, spec.Marines) : Interior.ForPlatform(spec.Crew, spec.Marines);
         }
 
@@ -79,12 +96,58 @@ namespace SolarSystem.Core
             }
         }
 
+        /// <summary>Total shield charge across every generator — a coarse summary (HUD display, AI
+        /// heuristics); combat itself should hit a specific generator via <see cref="GeneratorFor"/>.</summary>
+        public double Shield
+        {
+            get
+            {
+                double total = 0;
+                foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) total += s.Shield;
+                return total;
+            }
+        }
+
+        /// <summary>The live shield generator covering a yaw angle (degrees, 0 = bow), or null if none does.</summary>
+        public Subsystem GeneratorFor(double yawDeg)
+        {
+            foreach (var s in Subsystems)
+                if (s.Kind == SubsystemKind.ShieldGenerator && !s.Destroyed && s.Def.ContainsYaw(yawDeg)) return s;
+            return null;
+        }
+
+        public void ZeroAllShields()
+        {
+            foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) s.Shield = 0;
+        }
+
+        /// <summary>Resets every generator's regen-pause timer (a ship entering a fresh battle starts able to regen).</summary>
+        public void ResetShieldTimers()
+        {
+            foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) s.LastHitSeconds = -999;
+        }
+
+        /// <summary>Regens every live generator that has not been hit in the last 8 battle-seconds, each
+        /// toward its own cap, sharing the hull's total regen rate evenly across its generators.</summary>
+        public void RegenShields(double nowSeconds, double dt)
+        {
+            int generators = 0;
+            foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) generators++;
+            if (generators == 0) return;
+            double share = Spec.ShieldRegen / generators;
+            foreach (var s in Subsystems)
+            {
+                if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed) continue;
+                if (nowSeconds - s.LastHitSeconds > 8) s.Shield = Math.Min(s.MaxShield, s.Shield + share * dt);
+            }
+        }
+
         public bool Armed
         {
             get
             {
                 foreach (var s in Subsystems)
-                    if (s.Def.IsWeapon && !s.Destroyed && s.Kind != SubsystemKind.PointDefense) return true;
+                    if (s.Def.IsWeapon && !s.Destroyed && s.Kind != SubsystemKind.PointDefense && (!s.Def.Weapon.Missile || s.Ammo > 0)) return true;
                 return false;
             }
         }
@@ -144,16 +207,25 @@ namespace SolarSystem.Core
             }
         }
 
-        /// <summary>Repairs up to <paramref name="share"/> of the hull and every hardpoint by the same share; restocks ammo.</summary>
+        /// <summary>Repairs up to <paramref name="share"/> of the hull and every hardpoint by the same share.
+        /// Does not restock ammo or crew: callers that owe a cost for those (<see cref="War"/>'s yard refit)
+        /// gate them separately; callers with no such cost (defence platforms) call <see cref="FreeResupply"/> too.</summary>
         public void Repair(double share)
         {
             Hull = Math.Min(Spec.Hull, Hull + Spec.Hull * share);
             foreach (var s in Subsystems)
             {
                 s.Hp = Math.Min(s.Def.MaxHp, Math.Max(s.Hp, 0) + s.Def.MaxHp * share * 1.5);
-                if (s.Def.Weapon != null) s.Ammo = s.Def.Weapon.Ammo;
+                if (s.Kind == SubsystemKind.ShieldGenerator) s.Shield = s.MaxShield;
             }
-            Shield = Spec.Shield;
+        }
+
+        /// <summary>Fully restocks ammo and musters crew/marines back to spec, free. Only for callers (defence
+        /// platforms) with no costed resupply logic of their own; ships are resupplied via <see cref="War"/>'s refit.</summary>
+        public void FreeResupply()
+        {
+            foreach (var s in Subsystems)
+                if (s.Def.Weapon != null) s.Ammo = s.Def.Weapon.Ammo;
             Interior.Muster(Spec.Crew, Spec.Marines);
         }
 

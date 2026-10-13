@@ -561,7 +561,7 @@ namespace SolarSystem.UI
                 heading = ship.Name;
                 sub = ship.Faction.Name + " " + ship.Spec.DisplayName.ToLowerInvariant();
                 headingColor = new Color(ship.Faction.Color.R, ship.Faction.Color.G, ship.Faction.Color.B);
-                lines.Add(("Length", Km(ship.Spec.LengthKm)));
+                lines.Add(("Length", Km(ship.LengthKm)));
                 lines.Add(("Drive", ship.Spec.AccelG.ToString("0.##", CultureInfo.InvariantCulture) + " g, flip-and-burn; hyperlanes between systems"));
                 if (ship.IsEscort) lines.Add(("Escorting", ship.Leader.Name));
                 if (c.Phase == ShipPhase.Lurk)
@@ -923,6 +923,9 @@ namespace SolarSystem.UI
             string s;
             switch (cam.Mode)
             {
+                case SpaceCamera.CameraMode.Focus when cam.PilotLocked:
+                    s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + "   (WASD throttle/strafe, mouse to steer, Shift boost, Enter to release)";
+                    break;
                 case SpaceCamera.CameraMode.Focus:
                     s = "FOCUS  ·  " + TargetName(cam.FocusTarget) + "   (WASD to swim free, wheel to zoom, right-drag to orbit)";
                     break;

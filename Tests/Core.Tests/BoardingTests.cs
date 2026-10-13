@@ -102,7 +102,7 @@ namespace SolarSystem.Core.Tests
             var b = NewBattle(5);
             var breacher = b.AddShip(Hull(ShipClass.Breacher, Red, 0), 0, new DVec3(6, 0, 0), -DVec3.UnitX);
             var freighter = b.AddShip(Hull(ShipClass.Freighter, Blue, 1), 1, new DVec3(-4, 0, 0), DVec3.UnitX);
-            freighter.Combat.Shield = 0;
+            freighter.Combat.ZeroAllShields();
             foreach (var s in freighter.Combat.Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) s.Hp = 0;
             bool latched = false;
             for (int i = 0; i < 2000 && !b.Over; i++)

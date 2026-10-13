@@ -26,8 +26,17 @@ namespace SolarSystem.Views
         bool visible = true;
         float wreckSpin;
 
+        // Shield ring: one wedge per shield generator, built once (geometry is fixed) and recoloured
+        // each frame from that generator's own charge. Built for every ship, not just warships, so a
+        // freighter's shields show too.
+        readonly List<Subsystem> shieldGenerators = new List<Subsystem>();
+        MeshRenderer shieldRingRenderer;
+        Mesh shieldRingMesh;
+        int[] shieldWedgeStart, shieldWedgeCount;
+        Color[] shieldVertexColors;
+
         static Mesh plumeMesh, quadMesh;
-        static Material plumeMaterial, fireMaterial, engineMaterial;
+        static Material plumeMaterial, fireMaterial, engineMaterial, shieldRingMaterial;
 
         static readonly int EngineGlowId = Shader.PropertyToID("_EngineGlow");
         static readonly int HighlightId = Shader.PropertyToID("_Highlight");
@@ -74,6 +83,8 @@ namespace SolarSystem.Views
             plume.sharedMaterial = plumeMaterial;
             plume.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
+            BuildShieldRing();
+
             if (bow == null)
             {
                 parts = new Part[0];
@@ -105,6 +116,7 @@ namespace SolarSystem.Views
             plumeMaterial = GlowMaterial("Plume", new Color(0.45f, 0.75f, 1f), 1.4f, 1.6f);
             fireMaterial = GlowMaterial("Fire", new Color(1f, 0.5f, 0.18f), 1.6f, 1.8f);
             engineMaterial = GlowMaterial("EngineGlow", new Color(0.5f, 0.8f, 1f), 1.5f, 2.2f);
+            shieldRingMaterial = Materials.MarkShared(Materials.Create(Materials.Fx, "ShieldRing"));
         }
 
         static Material GlowMaterial(string name, Color c, float intensity, float falloff)
@@ -114,6 +126,108 @@ namespace SolarSystem.Views
             m.SetFloat("_Intensity", intensity);
             m.SetFloat("_Falloff", falloff);
             return m;
+        }
+
+        /// <summary>
+        /// Builds the ring's geometry once: one flat annular wedge per shield generator, in the hull's
+        /// own normalized (nose +Z, up +Y) space, just outside the hull. Every vertex shares one UV so
+        /// the Fx shader's radial shape term comes out a constant multiplier everywhere — the wedge
+        /// geometry itself is what draws the ring; the shader just makes it glow additively from the
+        /// vertex colour, which is where each generator's own charge gets shown (recoloured every frame
+        /// in <see cref="UpdateShieldRing"/>, never rebuilt).
+        /// </summary>
+        void BuildShieldRing()
+        {
+            foreach (var s in Ship.Combat.Subsystems)
+                if (s.Kind == SubsystemKind.ShieldGenerator) shieldGenerators.Add(s);
+            if (shieldGenerators.Count == 0) return;
+
+            // Size the ring off the hull's own (local) bounds rather than a guessed constant, so it
+            // clears whatever the actual mesh's proportions are — hull shapes vary a lot by design.
+            var hullBounds = new Bounds();
+            bool any = false;
+            foreach (var r in renderers)
+            {
+                if (!any) { hullBounds = r.localBounds; any = true; }
+                else hullBounds.Encapsulate(r.localBounds);
+            }
+            float hullRadius = any ? Mathf.Max(Mathf.Abs(hullBounds.extents.x), Mathf.Abs(hullBounds.extents.z)) : 0.5f;
+            float innerR = hullRadius * 1.15f, outerR = hullRadius * 1.3f;
+            const int segsPerWedge = 6;
+            const float gapFraction = 0.92f; // a hair narrower than the mechanical arc: a visible seam between neighbours
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector3>();
+            var cols = new List<Color>();
+            var tris = new List<int>();
+            shieldWedgeStart = new int[shieldGenerators.Count];
+            shieldWedgeCount = new int[shieldGenerators.Count];
+
+            for (int gi = 0; gi < shieldGenerators.Count; gi++)
+            {
+                var def = shieldGenerators[gi].Def;
+                shieldWedgeStart[gi] = verts.Count;
+                float halfDeg = (float)(def.ArcWidthDeg * 0.5 * gapFraction);
+                float centerDeg = (float)def.ArcCenterDeg;
+                float a0 = (centerDeg - halfDeg) * Mathf.Deg2Rad;
+                float a1 = (centerDeg + halfDeg) * Mathf.Deg2Rad;
+                for (int k = 0; k <= segsPerWedge; k++)
+                {
+                    float t = Mathf.Lerp(a0, a1, (float)k / segsPerWedge);
+                    float s = Mathf.Sin(t), c = Mathf.Cos(t);
+                    int baseIdx = verts.Count;
+                    verts.Add(new Vector3(s * innerR, 0, c * innerR));
+                    verts.Add(new Vector3(s * outerR, 0, c * outerR));
+                    uvs.Add(new Vector3(0.5f, 0.5f, 0f));
+                    uvs.Add(new Vector3(0.5f, 0.5f, 0f));
+                    cols.Add(Color.clear);
+                    cols.Add(Color.clear);
+                    if (k > 0)
+                    {
+                        int p = baseIdx - 2;
+                        // Both windings, so the ring reads whichever side the camera is on.
+                        tris.Add(p); tris.Add(p + 1); tris.Add(baseIdx + 1);
+                        tris.Add(p); tris.Add(baseIdx + 1); tris.Add(baseIdx);
+                        tris.Add(p); tris.Add(baseIdx + 1); tris.Add(p + 1);
+                        tris.Add(p); tris.Add(baseIdx); tris.Add(baseIdx + 1);
+                    }
+                }
+                shieldWedgeCount[gi] = verts.Count - shieldWedgeStart[gi];
+            }
+
+            shieldRingMesh = Materials.Own(new Mesh { name = "ShieldRing" });
+            shieldRingMesh.SetVertices(verts);
+            shieldRingMesh.SetUVs(0, uvs);
+            shieldRingMesh.SetColors(cols);
+            shieldRingMesh.SetTriangles(tris, 0);
+            shieldRingMesh.RecalculateBounds();
+
+            var go = new GameObject("ShieldRing");
+            go.transform.SetParent(Root.transform, false);
+            go.AddComponent<MeshFilter>().sharedMesh = shieldRingMesh;
+            shieldRingRenderer = go.AddComponent<MeshRenderer>();
+            shieldRingRenderer.sharedMaterial = shieldRingMaterial;
+            shieldRingRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            shieldRingRenderer.enabled = false;
+            shieldVertexColors = cols.ToArray();
+        }
+
+        /// <summary>Recolours each wedge from its own generator's live charge; only shown while fighting.</summary>
+        void UpdateShieldRing(bool fighting)
+        {
+            if (shieldRingRenderer == null) return;
+            shieldRingRenderer.enabled = fighting && visible;
+            if (!fighting || !visible) return;
+            for (int gi = 0; gi < shieldGenerators.Count; gi++)
+            {
+                var gen = shieldGenerators[gi];
+                float frac = !gen.Destroyed && gen.MaxShield > 0 ? (float)(gen.Shield / gen.MaxShield) : 0f;
+                var c = gen.Destroyed
+                    ? Color.clear
+                    : Color.Lerp(new Color(0.1f, 0.25f, 0.5f, 0.22f), new Color(0.4f, 0.75f, 1f, 1f), frac);
+                int start = shieldWedgeStart[gi], count = shieldWedgeCount[gi];
+                for (int v = 0; v < count; v++) shieldVertexColors[start + v] = c;
+            }
+            shieldRingMesh.SetColors(shieldVertexColors);
         }
 
         Transform SectionFor(float z) => bow != null && z >= ShipMeshFactory.SplitZ ? bow : stern;
@@ -212,7 +326,9 @@ namespace SolarSystem.Views
         /// </summary>
         public void ApplyCombat(ShipCombat combat, bool fighting, bool thrusting, float now, float dt)
         {
-            if (!visible || bow == null) return;
+            if (!visible) return;
+            UpdateShieldRing(fighting);
+            if (bow == null) return;
             var inverse = Quaternion.Inverse(Root.transform.rotation);
             foreach (var p in parts)
             {
@@ -291,6 +407,7 @@ namespace SolarSystem.Views
                 return false;
             }
             SetVisible(true);
+            if (shieldRingRenderer != null) shieldRingRenderer.enabled = false;
             var t = Root.transform;
             t.localPosition = relative;
             t.localRotation = rotation;
@@ -330,6 +447,7 @@ namespace SolarSystem.Views
         public void Derelict(Vector3 relative, Quaternion rotation, float length, float now)
         {
             SetVisible(true);
+            if (shieldRingRenderer != null) shieldRingRenderer.enabled = false;
             var t = Root.transform;
             t.localPosition = relative;
             t.localRotation = rotation * Quaternion.Euler(now * 1.3f, now * 0.7f, now * 2.1f);
@@ -371,6 +489,7 @@ namespace SolarSystem.Views
             {
                 plume.enabled = false;
                 foreach (var g in glows) g.R.enabled = false;
+                if (shieldRingRenderer != null) shieldRingRenderer.enabled = false;
             }
             else
             {

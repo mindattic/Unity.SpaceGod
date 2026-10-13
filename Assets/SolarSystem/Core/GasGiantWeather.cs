@@ -96,7 +96,7 @@ namespace SolarSystem.Core
             int n = output.Length;
             for (int i = 0; i < n; i++)
             {
-                double lat = -90.0 + 180.0 * i / (n - 1);
+                double lat = -90.0 + 180.0 * i / Math.Max(1, n - 1);
                 output[i] = (float)DriftDegPerDay(body, profile, lat);
             }
         }

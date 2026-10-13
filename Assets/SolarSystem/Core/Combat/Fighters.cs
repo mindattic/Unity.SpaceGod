@@ -52,8 +52,9 @@ namespace SolarSystem.Core
             Hull = 70, Shield = 30, ShieldRegen = 2, Armor = 0, MaxSpeed = 0.35, Accel = 0.25, TurnRateDegS = 120,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0.2, 0, 0.4),
-                new SubsystemDef(SubsystemKind.FighterGuns, -0.2, 0, 0.4),
+                new SubsystemDef(SubsystemKind.FighterGuns, 0.2, 0, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.FighterGuns, -0.2, 0, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },
         };
 
@@ -62,8 +63,9 @@ namespace SolarSystem.Core
             Hull = 130, Shield = 50, ShieldRegen = 2, Armor = 1, MaxSpeed = 0.26, Accel = 0.15, TurnRateDegS = 80,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0, 0.05, 0.4),
+                new SubsystemDef(SubsystemKind.FighterGuns, 0, 0.05, 0.4, arcWidthDeg: 28),
                 new SubsystemDef(SubsystemKind.Torpedo, 0, -0.1, 0),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },
         };
 
@@ -144,7 +146,7 @@ namespace SolarSystem.Core
             if (u.Target == null || !u.Target.Present || (f.Phase != FighterPhase.AttackRun && rng.NextDouble() < dt / 20))
             {
                 u.Target = ChooseTarget(b, u);
-                if (f.Phase == FighterPhase.Dogfight || f.Phase == FighterPhase.AttackRun) f.Phase = FighterPhase.Approach;
+                if (f.Phase == FighterPhase.Dogfight || f.Phase == FighterPhase.AttackRun) Switch(f, FighterPhase.Approach);
             }
             var t = u.Target;
             DVec3 goal;
@@ -303,7 +305,7 @@ namespace SolarSystem.Core
             double toDeck = (deck - u.Pos).Length;
             var goal = toDeck < 0.6 ? deck : approach;
             Steer(b, u, goal + carrier.Vel * 2, u.Combat.Spec.MaxSpeed, dt, carrier.Vel);
-            if (toDeck < 0.12)
+            if (toDeck < Math.Max(0.12, u.Vel.Length * dt * 1.5))
             {
                 u.Docked = true;
                 carrier.Combat.RestoreFighters(1);

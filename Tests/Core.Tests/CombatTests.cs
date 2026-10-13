@@ -37,6 +37,7 @@ namespace SolarSystem.Core.Tests
         public void TheStrongerGroupWinsAndHardpointsTakeTheDamage()
         {
             int blueWins = 0;
+            bool anyBeam = false, anyMissileOrImpact = false;
             for (int seed = 1; seed <= 6; seed++)
             {
                 var (b, _, _) = Skirmish(seed, new[]
@@ -49,24 +50,66 @@ namespace SolarSystem.Core.Tests
                 if (b.Winner == 0) blueWins++;
                 var subsHit = b.Units.SelectMany(u => u.Combat.Subsystems).Count(s => s.Hp < s.Def.MaxHp);
                 Assert.True(subsHit > 0, "no hardpoint was ever damaged");
-                Assert.Contains(b.Fx, f => f.Kind == FxKind.Beam);
-                Assert.Contains(b.Fx, f => f.Kind == FxKind.MissileLaunch || f.Kind == FxKind.Impact);
+                // A single fast-resolving seed can end (e.g. via an early boarding) before slower, longer-
+                // cooldown beam weapons ever get a turn; only require beam fire somewhere across the sample.
+                anyBeam |= b.Fx.Any(f => f.Kind == FxKind.Beam);
+                anyMissileOrImpact |= b.Fx.Any(f => f.Kind == FxKind.MissileLaunch || f.Kind == FxKind.Impact);
                 output.WriteLine($"seed {seed}: winner {b.Winner} after {b.Seconds / 60:0} min, dead {b.Units.Count(u => u.Dead)}, fled {b.Units.Count(u => u.Fled)}");
             }
             Assert.True(blueWins >= 5, $"the battleship group won only {blueWins} of 6");
+            Assert.True(anyBeam, "no beam weapon ever fired across any seed");
+            Assert.True(anyMissileOrImpact, "no missile or impact ever happened across any seed");
         }
 
         [Fact]
-        public void LosingTheReactorDestroysTheShipAndLosingTheGeneratorDropsShields()
+        public void ABattleshipWithItsForwardBatteryKnockedOutTurnsBroadsideInstead()
+        {
+            var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };
+            var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 7);
+            var battleship = Hull(ShipClass.Battleship, blue, 0);
+            // Knock out the forward/aft spinal HeavyLasers so a broadside battery becomes the strongest arc.
+            foreach (var s in battleship.Combat.Subsystems)
+                if (s.Kind == SubsystemKind.HeavyLaser) s.Hp = 0;
+            var target = Hull(ShipClass.Destroyer, red, 1);
+            var bu = b.AddShip(battleship, 0, DVec3.Zero, DVec3.UnitX);
+            var tu = b.AddShip(target, 1, new DVec3(20, 0, 0), -DVec3.UnitX);
+
+            for (int i = 0; i < 200; i++) b.Advance(1);
+
+            double angleToTarget = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(bu.Forward, (tu.Pos - bu.Pos).Normalized)))) * Astro.Rad2Deg;
+            output.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");
+            Assert.True(angleToTarget > 30, "the battleship still pointed its bow at the target instead of presenting a broadside");
+        }
+
+        [Fact]
+        public void AHealthyBattleshipStillNosesInBecauseItsSpinalBatteryIsStrongest()
+        {
+            var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };
+            var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 7);
+            var battleship = Hull(ShipClass.Battleship, blue, 0);
+            var target = Hull(ShipClass.Destroyer, red, 1);
+            var bu = b.AddShip(battleship, 0, DVec3.Zero, new DVec3(0, 1, 0));
+            var tu = b.AddShip(target, 1, new DVec3(20, 0, 0), new DVec3(0, -1, 0));
+
+            for (int i = 0; i < 200; i++) b.Advance(1);
+
+            double angleToTarget = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(bu.Forward, (tu.Pos - bu.Pos).Normalized)))) * Astro.Rad2Deg;
+            output.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");
+            Assert.True(angleToTarget < 20, "a fully healthy battleship should still point its strongest (spinal) battery at the target");
+        }
+
+        [Fact]
+        public void LosingTheReactorDestroysTheShipAndLosingAGeneratorDropsItsOwnShields()
         {
             var (b, _, _) = Skirmish(3, new[] { (ShipClass.Cruiser, 0), (ShipClass.Cruiser, 1) });
             var target = b.Units[1];
             var gen = target.Combat.Subsystems.First(s => s.Kind == SubsystemKind.ShieldGenerator);
-            target.Combat.Shield = 0;
+            gen.Shield = 0;
             b.ApplyDamage(target, gen, 5000, target.Pos);
             Assert.True(gen.Destroyed);
-            Assert.False(target.Combat.HasShieldGenerator);
-            Assert.Equal(0, target.Combat.Shield);
+            Assert.Equal(0, gen.Shield);
 
             var reactor = target.Combat.Subsystems.First(s => s.Kind == SubsystemKind.Reactor);
             target.Combat.Hull = target.Combat.Spec.Hull;

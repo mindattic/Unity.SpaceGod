@@ -1,90 +1,99 @@
-# Quicksave — crash-recovery backfill after the 2026-10-10 computer crash
-_Printed: 2026-10-10_
+# Quicksave — /bughunt on UnitySolarSystem: 5 bugs found and fixed, working tree unreviewed by user yet
+_Printed: 2026-10-12_
 
 ## Current task
-There is no in-flight work to resume. The computer crashed, but this repo was already fully
-committed and pushed to `origin/main` at the time (`git status` clean, nothing ahead/behind). This
-quicksave is a manual backfill of the crash-recovery convention (`quicksave`/`quickload`/the
-`do`/`recover` hook), not a resume of lost work — nothing was lost. Treat **Next concrete steps**
-below as the reasoned continuation of the project from its last real commit, not as something
-already underway.
-
-## What the original build session said needs the owner (verbatim from its final report)
-Session: Launcher tab, transcript `49c440fd-b1be-4b18-96d6-1726e4def952` (scratch copy in
-`D:\Projects\MindAttic\_recovery\launcher-solarsystem-49c440fd`). It finished and pushed before the crash.
-- **Not checked:** how it *feels* to fly with mouse and keyboard — needs the owner at the controls.
-- Only Earth's Moon is placed accurately along its orbit; other moons' orbital positions are
-  placeholders (motion is right). At gameplay scale, transiting ships follow a path between where
-  planets *appear*, not the true straight line (true path at realistic scale). The swim-speed
-  readout can show "0.9 c" at gameplay scale. No combat or economy yet.
-- No free carrier/battleship models with a clear licence were found, so warships are code-built;
-  freighters/haulers/couriers use Kenney's Space Kit (public domain).
-On resume, ask the owner how the Homeworld-style flight felt before picking the next item.
+Just finished running `/bughunt` (no time budget — exhaustive single pass) across the whole
+tracked codebase plus the 3 new untracked files. Found and fixed 5 real bugs, verified with the
+Core.Tests suite (165/165 passing). **Nothing has been committed.** The user has not yet reviewed
+or approved the fixes in the working tree — next step on resume is to wait for the user's
+reaction (they may want changes, a commit, or further investigation) rather than assuming the
+hunt is fully "done and accepted."
 
 ## Decisions locked this session
-- The crash-recovery convention (`.claude\commands\quicksave.md`, `.claude\commands\quickload.md`,
-  `.claude\hooks\quickload-on-do.ps1`, `.claude\settings.json` registering the `UserPromptSubmit`
-  hook) was added to this repo, mirroring the convention already used elsewhere in MindAttic
-  (template: `D:\Projects\MindAttic\ChiMesh\.claude\`). Typing a bare `do`, `do it`, or `recover`
-  now restores this file as working memory.
-- Project conventions per `AGENTS.md`/`CLAUDE.md`: follow the shared protocol at
-  `..\mindattic-agent-standard\AGENTS.md`, then this repo's own documentation (this project has no
-  separate BIBLE.md/USER_STORIES.md of its own — the README is the canonical design/status doc).
-  `Assets/SolarSystem/Core` is engine-free C# compiled standalone by `Tests/Core.Tests`
-  (`dotnet test`, 41 passing); floating-origin rendering and the scale-model blend live in
-  `Assets/SolarSystem/Runtime`. These architectural boundaries are not up for relitigation.
+- Bughunt scope: all tracked C# source (74 files) + 3 untracked in-progress files
+  (`PilotFlight.cs`, `PilotFlightTests.cs`, `ModelViewer.cs`) — these were explicitly included
+  since they're real in-progress work, not generated/vendored code.
+- Combat `Repair()` bug: fixed by splitting hull/subsystem repair (scaled by share) from a new
+  `FreeResupply()` method (full ammo/crew/marine reset) — ships now only get costed resupply via
+  `War.Refit()`'s existing gated logic; platforms (no costed path) call both `Repair()` and
+  `FreeResupply()` from `RebuildPlatforms()`.
+- Economy bug: fixed by multiplying input consumption by `efficiency` (not just `run`) in
+  `Economy.Produce()`, so non-limiting input shortages no longer waste plentiful inputs.
+- InputState bugs: fixed `MouseDelta` not being cleared in `Reset()` (caused runaway piloting
+  rotation on device-null frames), and fixed the scroll-wheel normalization discontinuity (was
+  snapping small raw deltas straight to a full ±1 notch).
+- ModelViewer bug: **root cause found, not a Frame Debugger mystery.** The project renders
+  camera-relative (`SolarSystemApp.UpdateClipPlanes` pins the camera at `Vector3.zero`;
+  `SolarSystemApp.Relative(scene) = scene - cameraPosition`), so all live scene geometry is always
+  drawn clustered near world-origin — exactly where ModelViewer's own instantiated model and
+  camera also sit. ModelViewer only ever disabled *other cameras*; it never restricted its own
+  camera's `cullingMask`, so it was rendering the live scene's nearby geometry too. Fixed by adding
+  a dedicated `ModelViewer` Unity layer (slot 31, previously unused — see
+  `ProjectSettings/TagManager.asset`) and restricting the viewer's camera + light + instantiated
+  model (recursively) to that layer.
+- ModelViewer.cs and InputState.cs changes can't be compiled/tested outside Unity (the standalone
+  `Tests/SolarSystem.Core.csproj` only compiles `Assets/SolarSystem/Core/**`, not `Runtime/**`) —
+  verified by hand-reading, not by a build. Worth opening in the Unity editor to confirm visually,
+  especially the ModelViewer fix (toggle with `V` key, or `-modelviewer <name>` on the command
+  line).
 
 ## State / where we are
-- Last two commits: `0722599` — "Add missing CLAUDE.md provider-compatibility forwarder", and
-  before that `8d7bb20` — "Unity solar system: Kepler ephemeris, live gameplay/realistic scale,
-  Homeworld-style camera, patrolling fleets" (the substantive PoC commit). `origin/main` matches
-  local `main` exactly.
-- The simulation core (Kepler ephemeris for Sun/8 planets/Ceres/Pluto/Eris/14 moons, real IAU
-  poles/sidereal rotation, gameplay<->realistic scale blending, a 50-ship 4-faction fleet with
-  planned brachistochrone transits) is built and covered by 41 passing core tests
-  (`Tests/Core.Tests`). Rendering (floating origin, custom URP shaders, billboarding, orbit
-  trails) and the navigator/details-panel UI are built per the README's feature list.
-- README's own "Limitations" section is the closest thing to a backlog this project has (there is
-  no separate BIBLE/USER_STORIES doc here, unlike UnityEve/GridGameGaiden):
-  - Moon phases are placeholder for every moon except Earth's (position along orbit is fixed,
-    flagged in the details panel).
-  - Planetary elements are a JPL fit accurate ~1800-2050, drifting outside that window.
-  - Ship drives are kinematically real but the accelerations (0.06-1.2 g sustained) are fictional;
-    transits ignore solar gravity (negligible at those accelerations, by design).
-  - At gameplay scale, transiting ships follow a drawn path between compressed positions rather
-    than the true inertial line (realistic scale uses the true line).
-  - **"Not a game yet."** No combat, economy, or win condition — explicitly called out as the
-    biggest gap.
+- Build/test baseline before any fixes: clean build, 0 warnings, 165/165 tests passing.
+- 4 parallel read-only search agents ran across: combat subsystem, core orbital physics (found
+  nothing confirmed), economy/infrastructure, runtime/views/rendering/UI. Each reported findings
+  with file:line + triggering state.
+- All 5 confirmed bugs fixed; final test run after all fixes: still 165/165 passing.
+- Files touched by this bughunt (on top of pre-existing working-tree changes from earlier work):
+  - `Assets/SolarSystem/Core/Combat/CombatState.cs`
+  - `Assets/SolarSystem/Core/Combat/War.cs`
+  - `Assets/SolarSystem/Core/Economy/Economy.cs`
+  - `Assets/SolarSystem/Runtime/Input/InputState.cs`
+  - `Assets/SolarSystem/Runtime/ModelViewer.cs`
+  - `ProjectSettings/TagManager.asset` (added "ModelViewer" layer name at slot 31)
+- Last message to user: full bughunt report table (bug → fix → verification) plus the ModelViewer
+  root-cause explanation. Awaiting user's response — no further action taken since then.
 
 ## Open questions / pending
-- No open questions were raised in this session (it is a backfill, not a live discussion). The
-  owner has not said whether the next phase is "make it a game" (combat/economy/win condition) or
-  continued simulation fidelity work (moon phases, ship paths at gameplay scale) — the steps below
-  are inferred from the README's own stated limitations, not confirmed instructions.
+- Has the user reviewed/approved these 5 fixes? Not yet confirmed.
+- Does the user want this committed? Per project convention, don't commit unless explicitly asked.
+- Should the ModelViewer fix be visually verified in the Unity editor before trusting it fully?
+  Not done in this session (no Unity editor access here).
+- The pre-existing working-tree changes (Battle.cs, Boarding.cs, CombatSpecs.cs, Fighters.cs,
+  Ephemeris.cs, Fleet.cs, GasGiantWeather.cs, OrbitalElements.cs, Ships.cs, World.cs,
+  ProjectSetup.cs, SpaceCamera.cs, DemoRunner.cs, SceneTour.cs, SolarSystemApp.cs, Hud.cs,
+  BattleFx.cs, ShipView.cs, GraphicsSettings.asset, QualitySettings.asset, BoardingTests.cs,
+  CombatTests.cs, plus untracked PilotFlight.cs/.cs.meta, ModelViewer.cs.meta,
+  PilotFlightTests.cs, and `.claude/worktrees/`) were NOT part of this bughunt's own edits — they
+  were already modified/untracked before this session started and were left untouched except
+  where overlapping with the bugs above (CombatState.cs, War.cs, Economy.cs, InputState.cs,
+  ModelViewer.cs, TagManager.asset).
 
 ## Next concrete steps
-1. Confirm the project still builds/tests cleanly post-crash: `cd Tests/Core.Tests && dotnet test`
-   (expect 41 passing), then open in Unity Hub and confirm `Assets/Scenes/SolarSystem.unity` still
-   loads and plays.
-2. Decide with the owner which limitation to close first. The README's ordering and the project's
-   own framing ("Not a game yet") suggest this is the largest open gap: no combat, economy, or win
-   condition exists at all, so this is likely the next big design conversation rather than a small
-   fix.
-3. If simulation fidelity is prioritized instead: give the non-Earth moons real orbital-position
-   calculation (replacing the fixed placeholder angle) would be the next concrete, scoped,
-   test-covered piece of work — it's explicitly flagged and isolated to `Ephemeris.cs`/
-   `BodyCatalog.cs`.
-4. Smaller, well-scoped fix: make gameplay-scale ship transit paths match the true inertial line
-   the way realistic-scale already does, removing the "drawn, not flown" caveat.
+1. Wait for user feedback on the bughunt report; do not commit without explicit instruction.
+2. If asked to commit: stage exactly the 6 files listed above (or whatever subset the user wants),
+   write a commit message describing the 5 fixes, following the repo's commit style (see recent
+   commits below).
+3. If the user wants the ModelViewer fix verified visually: that requires opening the project in
+   the Unity editor (not available in this CLI session) — flag that limitation again if asked.
 
 ## Anchors
-- Files: `AGENTS.md`, `CLAUDE.md`, `README.md`, `Assets/SolarSystem/Core/Ephemeris.cs`,
-  `Assets/SolarSystem/Core/BodyCatalog.cs`, `Assets/SolarSystem/Core/ScaleModel.cs`,
-  `Assets/SolarSystem/Core/Fleet.cs`, `Assets/SolarSystem/Runtime/SolarSystemApp.cs`,
-  `Assets/SolarSystem/Runtime/Camera/SpaceCamera.cs`, `Tests/Core.Tests`
-- Names / ids: `Kepler`, `OrbitalElements`, `Ephemeris`, `ScaleModel`, `Fleet`, `SimClock`,
-  `SpaceCamera`
+- Files: see "State / where we are" list above for exact paths touched this session.
+- Repo root: `D:\Projects\MindAttic\UnitySolarSystem`
+- Test project: `D:\Projects\MindAttic\UnitySolarSystem\Tests\Core.Tests\Core.Tests.csproj`
+  (compiles `Assets/SolarSystem/Core/**` as a plain netstandard2.1 lib; Runtime/** is Unity-only
+  and not covered by this test project)
 - Commands to re-run:
-  - `cd Tests/Core.Tests && dotnet test`
-  - `Unity.exe -batchmode -quit -projectPath . -executeMethod SolarSystem.EditorTools.ProjectSetup.SetupAndBuild`
-  - `Builds/Windows/UnitySolarSystem.exe -capture <folder>` (scripted camera tour + screenshots)
+  - `cd /d/Projects/MindAttic/UnitySolarSystem/Tests/Core.Tests && dotnet test --nologo`
+    (last run: 165/165 passed, ~1 min)
+  - `cd /d/Projects/MindAttic/UnitySolarSystem && git status --short` to see full diff state
+  - `git diff Assets/SolarSystem/Core/Combat/CombatState.cs Assets/SolarSystem/Core/Combat/War.cs
+    Assets/SolarSystem/Core/Economy/Economy.cs Assets/SolarSystem/Runtime/Input/InputState.cs
+    Assets/SolarSystem/Runtime/ModelViewer.cs ProjectSettings/TagManager.asset` to review just
+    this session's changes
+- Recent commits (for commit-message style reference):
+  - `4f24b98` Add Miner and Courier camera stops to the scripted tour
+  - `a314111` Fix malformed accessor data in the 5 Kenney ship glb files
+  - `ebea6cd` Lock package resolution for com.unity.cloud.gltfast
+  - `ebedc2f` Fix checkerboard rendering on Kenney ship craft; commit glTFast import metas
+  - `910d49a` Convert ship craft from FBX to pre-normalized glTF 2.0 (.glb)
+- Git user: Ryan DeBraal; email on this account: shampoo1232@mindattic.com

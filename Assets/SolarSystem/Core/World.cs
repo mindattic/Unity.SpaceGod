@@ -42,6 +42,10 @@ namespace SolarSystem.Core
         /// <summary>Things worth telling an observer about (a battle, a capture, a new hull), newest last.</summary>
         public readonly List<WorldEvent> Events = new List<WorldEvent>();
 
+        /// <summary>The ship under direct player control, if any; its schedule is suspended while flown
+        /// (see <see cref="Fleet.IsHeld"/>) and a pilot-flight controller owns its position instead.</summary>
+        public Ship PilotedShip;
+
         /// <summary>Raised when a ship joins the fleet after the start (a yard finished it).</summary>
         public event Action<Ship> ShipAdded;
 
@@ -148,7 +152,7 @@ namespace SolarSystem.Core
             economy.ChooseBuild = yard => TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
             economy.ShipBuilt = OnShipBuilt;
             fleet.BeforeEvent = economy.AdvanceTo;
-            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict;
+            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip;
             fleet.Dwell = war.Dwell;
             fleet.Arrived = (ship, when) =>
             {

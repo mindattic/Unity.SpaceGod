@@ -18,6 +18,9 @@ namespace SolarSystem.Cameras
 
         /// <summary>Distance from a scene point to the nearest surface (body or ship hull), scene units.</summary>
         double NearestSurface(DVec3 scenePosition);
+
+        /// <summary>A target's own facing, scene (Unity) axes; identity when it has none.</summary>
+        Quaternion TargetRotation(Target target);
     }
 
     /// <summary>
@@ -63,6 +66,10 @@ namespace SolarSystem.Cameras
         public double CurrentSpeed { get; private set; }
 
         public double SpeedMultiplier { get; private set; } = 1.0;
+
+        /// <summary>True while piloting: <see cref="Focus"/> rides a fixed distance behind the target and
+        /// matches its own facing instead of taking right-drag orbit input, which steers the ship instead.</summary>
+        public bool PilotLocked { get; private set; }
 
         const float TravelSeconds = 1.6f;
         const float LevelSeconds = 1.4f;
@@ -230,9 +237,18 @@ namespace SolarSystem.Cameras
             var rotation = Rotation;
             Mode = CameraMode.Free;
             FocusTarget = Target.None;
+            PilotLocked = false;
             SetRotation(rotation);
             velocity = Vector3.zero;
             SetScenePosition(ScenePosition);
+        }
+
+        /// <summary>Settles into a close chase a fixed distance behind a piloted ship: its own facing
+        /// drives the view, so right-drag is free for flight input instead of orbiting.</summary>
+        public void EnterPilotChase(Target target, double radii)
+        {
+            FocusOn(target, radii);
+            PilotLocked = true;
         }
 
         public static double DefaultFraming(Target target)
@@ -247,7 +263,7 @@ namespace SolarSystem.Cameras
         public void Update(float dt, InputState input)
         {
             bool moving = input.Move.sqrMagnitude > 0.01f;
-            if (Mode != CameraMode.Free && moving) ExitFocus();
+            if (Mode != CameraMode.Free && moving && !PilotLocked) ExitFocus();
 
             switch (Mode)
             {
@@ -305,6 +321,18 @@ namespace SolarSystem.Cameras
 
         void UpdateFocus(float dt, InputState input)
         {
+            if (PilotLocked)
+            {
+                Rotation = world.TargetRotation(FocusTarget);
+                if (Math.Abs(input.Scroll) > 0)
+                    zoomTarget = Math.Max(MinZoom(FocusTarget), Math.Min(20, zoomTarget * Math.Pow(0.82, input.Scroll)));
+                zoom = Math.Exp(Math.Log(zoom) + (Math.Log(zoomTarget) - Math.Log(zoom)) * (1 - Math.Exp(-dt * 10)));
+                var chaseBack = Rotation * Vector3.back;
+                double chaseR = world.TargetRadius(FocusTarget);
+                ScenePosition = world.TargetScene(FocusTarget) + new DVec3(chaseBack.x, chaseBack.y, chaseBack.z) * (zoom * chaseR);
+                CurrentSpeed = 0;
+                return;
+            }
             if (input.LookHeld)
             {
                 orbitYaw += input.LookDelta.x * LookSensitivity;

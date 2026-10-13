@@ -13,6 +13,10 @@ namespace SolarSystem.Input
         public Vector3 Move;
         public Vector2 LookDelta;
         public bool LookHeld;
+
+        /// <summary>Raw mouse delta, unconditional (unlike <see cref="LookDelta"/>, which only reports while
+        /// the right button is held for camera orbit) — piloting reads this for always-on heading control.</summary>
+        public Vector2 MouseDelta;
         public float Scroll;
         public bool Boost;
         public bool Slow;
@@ -42,6 +46,9 @@ namespace SolarSystem.Input
         public bool Home;
         public int NumberKey = -1;
 
+        /// <summary>Takes or releases direct control of the selected/focused ship.</summary>
+        public bool Pilot;
+
         Vector2 pressPosition;
         float lastClickTime = -10f;
         Vector2 lastClickPosition;
@@ -67,8 +74,9 @@ namespace SolarSystem.Input
             Slow = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
 
             MousePosition = mouse.position.ReadValue();
+            MouseDelta = mouse.delta.ReadValue();
             LookHeld = mouse.rightButton.isPressed;
-            LookDelta = LookHeld ? mouse.delta.ReadValue() : Vector2.zero;
+            LookDelta = LookHeld ? MouseDelta : Vector2.zero;
             if (mouse.rightButton.wasPressedThisFrame)
             {
                 rightPressPosition = MousePosition;
@@ -81,8 +89,18 @@ namespace SolarSystem.Input
             if (!pointerOverUi)
             {
                 float wheel = mouse.scroll.ReadValue().y;
-                Scroll = Mathf.Abs(wheel) > 0.01f ? Mathf.Sign(wheel) * Mathf.Min(Mathf.Abs(wheel) / 120f, 3f) : 0f;
-                if (Mathf.Abs(wheel) > 0.01f && Mathf.Abs(Scroll) < 0.01f) Scroll = Mathf.Sign(wheel);
+                if (Mathf.Abs(wheel) > 0.01f)
+                {
+                    // Standard mice report multiples of 120 per notch; trackpads and high-resolution wheels
+                    // already report small per-notch values directly, so scale each convention on its own
+                    // rather than dividing both by 120 and snapping the underflowed result to a full notch.
+                    float normalized = Mathf.Abs(wheel) < 2f ? wheel : wheel / 120f;
+                    Scroll = Mathf.Clamp(normalized, -3f, 3f);
+                }
+                else
+                {
+                    Scroll = 0f;
+                }
             }
 
             if (mouse.leftButton.wasPressedThisFrame) pressPosition = MousePosition;
@@ -114,6 +132,7 @@ namespace SolarSystem.Input
             CycleShips = kb.tabKey.wasPressedThisFrame;
             CycleBackward = CycleShips && Boost;
             Home = kb.homeKey.wasPressedThisFrame || kb.backspaceKey.wasPressedThisFrame;
+            Pilot = kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame;
 
             Key[] digits = { Key.Digit0, Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
             for (int i = 0; i < digits.Length; i++)
@@ -125,11 +144,12 @@ namespace SolarSystem.Input
             Move = Vector3.zero;
             LookDelta = Vector2.zero;
             LookHeld = false;
+            MouseDelta = Vector2.zero;
             Scroll = 0;
             Boost = Slow = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = false;
             NumberKey = -1;
         }
 

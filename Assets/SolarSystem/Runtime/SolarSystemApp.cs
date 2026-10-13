@@ -26,6 +26,10 @@ namespace SolarSystem
     [DefaultExecutionOrder(-100)]
     public sealed class SolarSystemApp : MonoBehaviour, ICameraWorld
     {
+        /// <summary>Raised when the galaxy is rebuilt from scratch (a backwards time reset): anything holding
+        /// references into the old one (a running tour, a capture) must stop rather than run on stale data.</summary>
+        public event Action GalaxyRebuilt;
+
         public Galaxy Galaxy { get; private set; }
 
         /// <summary>The star system being looked at; the properties below are its.</summary>
@@ -52,6 +56,15 @@ namespace SolarSystem
 
         public Target Selected { get; private set; } = Target.None;
         public Target Hovered { get; private set; } = Target.None;
+
+        /// <summary>The ship under direct player control, if any (ship-only, or <see cref="Target.None"/>).</summary>
+        public Target Piloted { get; private set; } = Target.None;
+        public bool IsPiloting => !Piloted.IsNone;
+
+        int pilotFrameBody;
+        DVec3 pilotOffsetKm, pilotVelKmS, pilotForward;
+        float pilotYawDeg, pilotPitchDeg;
+        const float PilotLookSensitivity = 0.12f;
 
         public bool ShowOrbits { get; set; } = true;
         public bool ShowLabels { get; set; } = true;
@@ -371,6 +384,7 @@ namespace SolarSystem
             AnimateScale(dt);
             Scale.Layout(Ephemeris, bodyScene);
             UpdateRadii();
+            UpdatePiloting(dt);
             UpdateShips(dt);
             Structures.Layout();
 
@@ -384,8 +398,8 @@ namespace SolarSystem
             HandleSelectionClicks();
 
             ToastAge += dt;
-            Cursor.lockState = Input.LookHeld ? CursorLockMode.Locked : CursorLockMode.None;
-            Cursor.visible = !Input.LookHeld;
+            Cursor.lockState = Input.LookHeld || IsPiloting ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !(Input.LookHeld || IsPiloting);
         }
 
         /// <summary>A ship destroyed while selected or followed: let go of it.</summary>
@@ -393,7 +407,8 @@ namespace SolarSystem
         {
             if (Selected.IsShip && Selected.Ship.Destroyed) Select(Target.None);
             if (Hovered.IsShip && Hovered.Ship.Destroyed) Hovered = Target.None;
-            if (SpaceCamera.FocusTarget.IsShip && SpaceCamera.FocusTarget.Ship.Destroyed) SpaceCamera.ExitFocus();
+            if (IsPiloting && Piloted.Ship.Destroyed) ExitPiloting();
+            else if (SpaceCamera.FocusTarget.IsShip && SpaceCamera.FocusTarget.Ship.Destroyed) SpaceCamera.ExitFocus();
         }
 
         /// <summary>Following a ship into battle slows the clock to battle time once, so the fight can be watched.</summary>
@@ -505,11 +520,13 @@ namespace SolarSystem
             if (i.Focus) FocusSelected();
             if (i.Escape)
             {
-                if (SpaceCamera.Mode != SpaceCamera.CameraMode.Free) SpaceCamera.ExitFocus();
+                if (IsPiloting) ExitPiloting();
+                else if (SpaceCamera.Mode != SpaceCamera.CameraMode.Free) SpaceCamera.ExitFocus();
                 else Select(Target.None);
             }
-            if (i.CycleShips) CycleShips(i.CycleBackward ? -1 : 1);
-            if (i.NumberKey >= 0) NumberHotkey(i.NumberKey);
+            if (i.CycleShips && !IsPiloting) CycleShips(i.CycleBackward ? -1 : 1);
+            if (i.NumberKey >= 0 && !IsPiloting) NumberHotkey(i.NumberKey);
+            if (i.Pilot) TogglePiloting();
         }
 
         static readonly string[] SolNumberBodies = { "Sun", "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto" };
@@ -558,6 +575,85 @@ namespace SolarSystem
             }
             bool refocus = SpaceCamera.Mode == SpaceCamera.CameraMode.Focus && SpaceCamera.FocusTarget == Selected;
             SpaceCamera.FocusOn(Selected, refocus ? SpaceCamera.DefaultFraming(Selected) : double.NaN);
+        }
+
+        // ---------------------------------------------------------------- piloting
+
+        public void TogglePiloting()
+        {
+            if (IsPiloting)
+            {
+                ExitPiloting();
+                return;
+            }
+            var t = Selected.IsShip ? Selected : Hovered.IsShip ? Hovered : Target.None;
+            if (!t.IsShip)
+            {
+                ShowToast("Select a ship to pilot it");
+                return;
+            }
+            var ship = t.Ship;
+            if (ship.Destroyed || ship.Derelict || ship.IsEscort || ship.Battle != null || ship.Phase != ShipPhase.Parked)
+            {
+                ShowToast("Can't take the helm of that ship right now");
+                return;
+            }
+
+            Piloted = t;
+            World.PilotedShip = ship;
+            pilotFrameBody = ship.Orbit.Body;
+            pilotOffsetKm = ship.Orbit.OffsetAt(Clock.Jd);
+            pilotVelKmS = DVec3.Zero;
+            pilotForward = Fleet.StateOf(ship, Clock.Jd).Facing;
+            var facingSwapped = pilotForward.SwapYZ;
+            var facingUnity = new Vector3((float)facingSwapped.X, (float)facingSwapped.Y, (float)facingSwapped.Z);
+            var localFacing = Quaternion.Inverse(SpaceCamera.UpFrame) * facingUnity;
+            pilotYawDeg = Mathf.Atan2(localFacing.x, localFacing.z) * Mathf.Rad2Deg;
+            pilotPitchDeg = Mathf.Asin(Mathf.Clamp(localFacing.y, -1f, 1f)) * Mathf.Rad2Deg;
+
+            Select(t);
+            SpaceCamera.EnterPilotChase(t, 6);
+            Clock.SetWarp(0);
+            ShowToast("Piloting " + ship.Name + ", " + Clock.Warp.Label + "  (Enter to release, . to speed up)");
+        }
+
+        void ExitPiloting()
+        {
+            var ship = Piloted.Ship;
+            Piloted = Target.None;
+            World.PilotedShip = null;
+            if (ship != null && !ship.Destroyed) Fleet.ScheduleNext(ship, Clock.Jd);
+            SpaceCamera.ExitFocus();
+            ShowToast("Released manual control");
+        }
+
+        /// <summary>Turns mouse delta + throttle/strafe keys into a flight command and steps the hull's
+        /// position every frame piloting is active, before <see cref="UpdateShips"/> reads it.</summary>
+        void UpdatePiloting(float dt)
+        {
+            if (!IsPiloting) return;
+            var ship = Piloted.Ship;
+            if (ship == null || ship.Destroyed)
+            {
+                ExitPiloting();
+                return;
+            }
+
+            pilotYawDeg += Input.MouseDelta.x * PilotLookSensitivity;
+            pilotPitchDeg = Mathf.Clamp(pilotPitchDeg - Input.MouseDelta.y * PilotLookSensitivity, -85f, 85f);
+            var commanded = SpaceCamera.UpFrame * Quaternion.Euler(pilotPitchDeg, pilotYawDeg, 0);
+            var desiredUnity = commanded * Vector3.forward;
+            var desiredForward = new DVec3(desiredUnity.x, desiredUnity.y, desiredUnity.z).SwapYZ;
+
+            var input = new PilotInput
+            {
+                DesiredForward = desiredForward,
+                Throttle = Mathf.Clamp(Input.Move.z, -1f, 1f),
+                StrafeRight = Mathf.Clamp(Input.Move.x, -1f, 1f),
+                StrafeUp = Mathf.Clamp(Input.Move.y, -1f, 1f),
+                Boost = Input.Boost,
+            };
+            PilotFlight.Step(ref pilotOffsetKm, ref pilotVelKmS, ref pilotForward, ship.Combat, input, dt);
         }
 
         /// <summary>Camera elevation of the system overview, degrees.</summary>
@@ -658,6 +754,7 @@ namespace SolarSystem
                 SubscribeWorlds();
                 Activate(Galaxy.Systems[Math.Max(0, index)]);
                 SpaceCamera.SetPose(cameraAt, cameraRotation);
+                GalaxyRebuilt?.Invoke();
             }
             ShowToast("Time reset to now");
         }
@@ -676,7 +773,20 @@ namespace SolarSystem
                 {
                     var ship = ships[i];
                     if (ship.IsEscort != (pass == 1)) continue;
-                    shipLength[i] = Scale.ShipLength(ship.Spec.LengthKm);
+                    shipLength[i] = Scale.ShipLength(ship.LengthKm);
+
+                    if (ship == World.PilotedShip)
+                    {
+                        shipScene[i] = bodyScene[pilotFrameBody] + Scale.LocalOffset(Catalog[pilotFrameBody], pilotOffsetKm);
+                        var pilotFacing = pilotForward.SwapYZ;
+                        var pf = new Vector3((float)pilotFacing.X, (float)pilotFacing.Y, (float)pilotFacing.Z);
+                        if (pf.sqrMagnitude < 1e-12f) pf = Vector3.forward;
+                        var pup = Mathf.Abs(Vector3.Dot(pf.normalized, Vector3.up)) > 0.98f ? Vector3.right : Vector3.up;
+                        shipRotation[i] = Quaternion.LookRotation(pf, pup);
+                        shipRotationInitialised[i] = true;
+                        continue;
+                    }
+
                     var st = Fleet.StateOf(ship, jd);
                     shipStates[i] = st;
 
@@ -833,13 +943,19 @@ namespace SolarSystem
             return 1;
         }
 
+        public Quaternion TargetRotation(Target target) => target.IsShip ? shipRotation[target.Ship.Id] : Quaternion.identity;
+
         public double NearestSurface(DVec3 p)
         {
             double best = double.MaxValue;
             for (int i = 0; i < bodyScene.Length; i++)
                 best = Math.Min(best, (p - bodyScene[i]).Length - bodyRadius[i]);
-            for (int i = 0; i < shipScene.Length; i++)
+            var ships = Fleet.Ships;
+            for (int i = 0; i < ships.Count; i++)
+            {
+                if (ships[i].Destroyed || ships[i].Controller.Phase == ShipPhase.Landed) continue;
                 best = Math.Min(best, (p - shipScene[i]).Length - shipLength[i] * 0.5);
+            }
             foreach (var kv in Structures.Scenes)
                 best = Math.Min(best, (p - kv.Value).Length - Structures.Sizes[kv.Key] * 0.5);
             foreach (var kv in Structures.RingScenes)
@@ -1054,7 +1170,7 @@ namespace SolarSystem
                 return;
             }
             var scene = BattleScene(battle, wreckLocal[i]);
-            if (!shipViews[i].Wreck(Relative(scene), shipRotation[i], (float)Scale.ShipLength(ship.Spec.LengthKm), Time.unscaledTime - wreckStart[i], Time.unscaledTime))
+            if (!shipViews[i].Wreck(Relative(scene), shipRotation[i], (float)Scale.ShipLength(ship.LengthKm), Time.unscaledTime - wreckStart[i], Time.unscaledTime))
                 wreckStart[i] = float.MaxValue;
         }
 

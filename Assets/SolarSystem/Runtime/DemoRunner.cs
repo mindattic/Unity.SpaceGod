@@ -12,11 +12,18 @@ namespace SolarSystem
     {
         SolarSystemApp app;
 
+        bool rebuilt;
+
         void Start()
         {
             app = GetComponent<SolarSystemApp>();
+            app.GalaxyRebuilt += OnGalaxyRebuilt;
             StartCoroutine(Loop());
         }
+
+        void OnDestroy() => app.GalaxyRebuilt -= OnGalaxyRebuilt;
+
+        void OnGalaxyRebuilt() => rebuilt = true;
 
         IEnumerator Loop()
         {
@@ -29,7 +36,7 @@ namespace SolarSystem
 
         void Update()
         {
-            if (TookOver())
+            if (rebuilt || TookOver())
             {
                 // A pause pressed to take over is kept (the clock is easing to a stop); otherwise run on.
                 if (!app.Input.TogglePause) app.Clock.Paused = false;

@@ -172,8 +172,8 @@ namespace SolarSystem.Core
                 },
             };
             Hook(b);
-            approach = DVec3.Cross(DVec3.UnitZ, lurker.LaneHoldSide);
-            approach = approach.LengthSquared > 0 ? approach.Normalized : DVec3.UnitX;
+            var approach = DVec3.Cross(DVec3.UnitZ, lurker.LaneHoldSide);
+            b.ApproachAxis = approach.LengthSquared > 0 ? approach.Normalized : DVec3.UnitX;
             Join(b, lurker, 0, false);
             foreach (var v in victims) Join(b, v, 1, false);
             BattleUnit source = b.UnitOf(lurker);
@@ -181,7 +181,7 @@ namespace SolarSystem.Core
             {
                 if (u.Side != 1) continue;
                 u.Stunned = 60 + rng.NextDouble() * 60;
-                u.Combat.Shield = 0;
+                u.Combat.ZeroAllShields();
             }
             if (source != null) b.Emit(FxKind.Pulse, source.Pos, source.Pos, 30, 0, source, -1);
             Battles.Add(b);
@@ -490,7 +490,7 @@ namespace SolarSystem.Core
                 for (int i = 0; i < st.Platforms.Count; i++)
                 {
                     double a = Astro.TwoPi * i / Math.Max(1, st.Platforms.Count);
-                    var pos = Spot(side) * 0.4 + new DVec3(Math.Cos(a), Math.Sin(a), 0.1) * 6;
+                    var pos = Spot(b, side) * 0.4 + new DVec3(Math.Cos(a), Math.Sin(a), 0.1) * 6;
                     b.AddPlatform(st, st.Platforms[i], side, pos);
                 }
             }
@@ -521,7 +521,8 @@ namespace SolarSystem.Core
             var list = new List<Ship>();
             foreach (var s in Fleet.Ships)
             {
-                if (s.Destroyed || s.Battle != null) continue;
+                // A ship under direct player control isn't swept into a fight the AI decides to start.
+                if (s.Destroyed || s.Battle != null || s == world.PilotedShip) continue;
                 var c = s.Controller;
                 // A stripped, abandoned hulk is not a fighting group.
                 if (c.Destroyed || s.Derelict || c.Derelict || !Fleet.IsAt(c, body)) continue;
@@ -543,31 +544,30 @@ namespace SolarSystem.Core
             string name = (n == 0 ? "Battle of " : Ordinal(n + 1) + " Battle of ") + b0.Name;
             var b = new Battle(nextBattleId++, body, name, anchor, jd, rng.Next());
             Hook(b);
-            approach = DVec3.Cross(anchor.Normalized, DVec3.UnitZ);
+            var approach = DVec3.Cross(anchor.Normalized, DVec3.UnitZ);
             if (approach.LengthSquared < 1e-6) approach = DVec3.UnitX;
-            approach = approach.Normalized;
+            b.ApproachAxis = approach.Normalized;
             return b;
         }
 
-        DVec3 approach = DVec3.UnitX;
-
         /// <summary>Where a side's line starts: the two sides open about 26 km apart.</summary>
-        DVec3 Spot(int side) => approach * (side == 0 ? 13 : -13);
+        static DVec3 Spot(Battle b, int side) => b.ApproachAxis * (side == 0 ? 13 : -13);
 
         void Join(Battle b, Ship ship, int side, bool late)
         {
             if (ship.Battle != null || ship.Destroyed) return;
-            var groupCentre = late ? approach * (side == 0 ? 30 : -30) : Spot(side);
+            var groupCentre = late ? b.ApproachAxis * (side == 0 ? 30 : -30) : Spot(b, side);
             var jitter = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, (rng.NextDouble() - 0.5) * 0.4) * 6;
             var face = -groupCentre;
             if (ship.IsEscort)
             {
                 var leaderUnit = b.UnitOf(ship.Leader);
                 if (leaderUnit == null && ship.Leader.Battle == null) Join(b, ship.Leader, side, late);
+                if (ship.Battle != null) return;
                 leaderUnit = b.UnitOf(ship.Leader);
                 if (leaderUnit != null)
                 {
-                    var slot = ship.FormationSlot * (ship.Leader.Spec.LengthKm * 1.3 + 0.8);
+                    var slot = ship.FormationSlot * (ship.Leader.LengthKm * 1.3 + 0.8);
                     leaderUnit.Basis(out var r, out var up);
                     var u = b.AddShip(ship, side, leaderUnit.Pos + r * slot.X + up * slot.Y + leaderUnit.Forward * slot.Z, leaderUnit.Forward);
                     u.Leader = leaderUnit;
@@ -1118,7 +1118,7 @@ namespace SolarSystem.Core
                     if (st.Owner == s.Faction && (st.HasShipyard || st.Kind == SettlementKind.Haven)) yard = st;
                 if (yard == null) continue;
 
-                double scale = s.Spec.LengthKm;
+                double scale = s.LengthKm;
                 double damage = s.Combat.Damage;
                 if (damage > 0.001)
                 {
@@ -1131,7 +1131,7 @@ namespace SolarSystem.Core
                     yard.Stock[(int)Good.Alloys] -= Math.Min(yard.Stock[(int)Good.Alloys], alloys * have);
                     yard.Stock[(int)Good.Electronics] -= Math.Min(yard.Stock[(int)Good.Electronics], electronics * have);
                     s.Faction.Treasury -= (alloys * yard.Price[(int)Good.Alloys] + electronics * yard.Price[(int)Good.Electronics]) * have;
-                    s.Combat.Repair(share * have);
+                    if (have > 0) s.Combat.Repair(share * have);
                 }
                 int missing = 0;
                 foreach (var sub in s.Combat.Subsystems)
@@ -1235,7 +1235,7 @@ namespace SolarSystem.Core
             foreach (var st in Economy.Settlements)
             {
                 foreach (var p in st.Platforms)
-                    if (p.Damage > 0) p.Repair(0.05);
+                    if (p.Damage > 0) { p.Repair(0.05); p.FreeResupply(); }
                 if (st.Platforms.Count >= st.MaxPlatforms || BattleAt(st.Body) != null) continue;
                 // A new platform every couple of weeks while the port can afford the steel.
                 if (rng.NextDouble() > 0.07) continue;
@@ -1262,7 +1262,11 @@ namespace SolarSystem.Core
         {
             var pirates = world.Pirates;
             var names = world.RaiderNames ?? RaiderNames;
-            string Name() => names[raidersRaised++ % names.Length] + (raidersRaised > names.Length ? " " + (raidersRaised / names.Length + 1) : "");
+            string Name()
+            {
+                int n = raidersRaised++;
+                return names[n % names.Length] + (n >= names.Length ? " " + (n / names.Length + 1) : "");
+            }
             var leader = Fleet.AddShip(Name(), raidersRaised % 3 == 0 ? ShipClass.Cruiser : ShipClass.Destroyer, pirates, ShipRole.Patrol);
             leader.Route = new[] { body };
             int escorts = 1 + rng.Next(2);

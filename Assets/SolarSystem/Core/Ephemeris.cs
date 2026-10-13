@@ -119,7 +119,7 @@ namespace SolarSystem.Core
             for (int i = 0; i < n; i++)
             {
                 // Uniform in eccentric anomaly, so eccentric orbits get points where curvature is.
-                double ecc = Astro.TwoPi * i / (n - 1);
+                double ecc = Astro.TwoPi * i / Math.Max(1, n - 1);
                 double m = ecc - k.E * Math.Sin(ecc);
                 output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m))) * b.OrbitScale;
             }
@@ -136,11 +136,16 @@ namespace SolarSystem.Core
             double now = Kepler.SolveEccentricAnomaly(k.MeanAnomaly, k.E);
             int n = output.Length;
             double sense = k.MeanMotion >= 0 ? 1 : -1;
+            // The Moon (lunar theory) and Earth (Earth-Moon barycentre offset) are drawn off their
+            // mean Kepler ellipse; shift the whole trail so it still meets the body where it is drawn.
+            DVec3 offset = DVec3.Zero;
+            if (body == moonIndex) offset = LunarTheory.Position(jd) - frames[body].ToEcliptic(Kepler.Position(k)) * b.OrbitScale;
+            else if (body == earthIndex) offset = -LunarTheory.Position(jd) * moonMassFraction;
             for (int i = 0; i < n; i++)
             {
-                double ecc = now - sense * Astro.TwoPi * i / (n - 1);
+                double ecc = now - sense * Astro.TwoPi * i / Math.Max(1, n - 1);
                 double m = ecc - k.E * Math.Sin(ecc);
-                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m))) * b.OrbitScale;
+                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m))) * b.OrbitScale + offset;
             }
         }
 

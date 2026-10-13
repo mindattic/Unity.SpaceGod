@@ -36,6 +36,7 @@ namespace SolarSystem.EditorTools
         [MenuItem("Solar System/Rebuild Main Scene")]
         public static void CreateScene()
         {
+            if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 

@@ -24,17 +24,17 @@ namespace SolarSystem
             yield return Wait(2.6f);
             yield return stop("02-inner-system-gameplay");
 
-            var carrier = app.Fleet.Ships.First(s => s.Spec.Class == ShipClass.Carrier);
+            var carrier = app.Fleet.Ships.FirstOrDefault(s => !s.Destroyed && s.Controller.Phase != ShipPhase.Landed && s.Spec.Class == ShipClass.Carrier);
             Focus(app, Target.OfShip(carrier), 7);
             yield return Wait(2.6f);
             yield return stop("03-carrier-group");
 
-            var battleship = app.Fleet.Ships.First(s => s.Spec.Class == ShipClass.Battleship && !s.IsEscort);
+            var battleship = app.Fleet.Ships.FirstOrDefault(s => !s.Destroyed && s.Controller.Phase != ShipPhase.Landed && s.Spec.Class == ShipClass.Battleship && !s.IsEscort);
             Focus(app, Target.OfShip(battleship), 4);
             yield return Wait(2.6f);
             yield return stop("04-battleship");
 
-            var freighter = app.Fleet.Ships.First(s => s.Spec.Class == ShipClass.Freighter);
+            var freighter = app.Fleet.Ships.FirstOrDefault(s => !s.Destroyed && s.Controller.Phase != ShipPhase.Landed && s.Spec.Class == ShipClass.Freighter);
             Focus(app, Target.OfShip(freighter), 3.5);
             yield return Wait(2.6f);
             yield return stop("05-freighter");
@@ -407,7 +407,7 @@ namespace SolarSystem
             var eye = app.BodyScene(body) + dir * (r * radii * 1.3);
             var look = -dir;
             app.SpaceCamera.PlaceFree(eye, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
-            app.SpaceCamera.FocusOn(t, radii, (float)(Math.Asin(Math.Max(-1, Math.Min(1, dir.Y))) * Mathf.Rad2Deg));
+            app.SpaceCamera.FocusOn(t, radii, LevelPitchDeg(app, dir));
         }
 
         /// <summary>Frames a ship from scene direction <paramref name="dir"/> (unit, from the ship).</summary>
@@ -418,7 +418,15 @@ namespace SolarSystem
             var eye = app.ShipScene(ship) + dir * (app.ShipDisplayLength(ship) * 0.5 * radii * 1.3);
             var look = -dir;
             app.SpaceCamera.PlaceFree(eye, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
-            app.SpaceCamera.FocusOn(t, radii, (float)(Math.Asin(Math.Max(-1, Math.Min(1, dir.Y))) * Mathf.Rad2Deg));
+            app.SpaceCamera.FocusOn(t, radii, LevelPitchDeg(app, dir));
+        }
+
+        /// <summary>FocusOn's pitch override is an elevation in the (possibly tilted) level frame, not world axes.</summary>
+        static float LevelPitchDeg(SolarSystemApp app, DVec3 dir)
+        {
+            var world = new Vector3((float)dir.X, (float)dir.Y, (float)dir.Z);
+            var local = Quaternion.Inverse(app.SpaceCamera.UpFrame) * world;
+            return Mathf.Asin(Mathf.Clamp(local.y, -1, 1)) * Mathf.Rad2Deg;
         }
 
         static DVec3 Dir(SolarSystemApp app, int from, int to) => (app.BodyScene(to) - app.BodyScene(from)).Normalized;

@@ -85,6 +85,14 @@ namespace SolarSystem.Core
             var d = (point - Pos) / Math.Max(LengthKm, 1e-9);
             return new DVec3(DVec3.Dot(d, right), DVec3.Dot(d, up), DVec3.Dot(d, Forward));
         }
+
+        /// <summary>Yaw angle (degrees) of a battle-local point relative to this hull's own facing:
+        /// 0 = dead ahead, 90 = starboard, 180 = astern, 270 = port.</summary>
+        public double YawDegOf(DVec3 point)
+        {
+            var local = ToLocal(point);
+            return Astro.WrapDegrees360(Math.Atan2(local.X, local.Z) * Astro.Rad2Deg);
+        }
     }
 
     public enum MissileKind
@@ -183,6 +191,9 @@ namespace SolarSystem.Core
         /// <summary>Where the fight is: an offset (km, ecliptic) from the body's centre, fixed in its frame.</summary>
         public readonly DVec3 Anchor;
 
+        /// <summary>This battle's line-of-approach axis; fixed at creation so late joiners always use the right axis.</summary>
+        public DVec3 ApproachAxis = DVec3.UnitX;
+
         public readonly double StartJd;
         public double Seconds;
         public readonly List<BattleUnit> Units = new List<BattleUnit>();
@@ -241,7 +252,7 @@ namespace SolarSystem.Core
 
         public BattleUnit AddShip(Ship ship, int side, DVec3 pos, DVec3 forward)
         {
-            var u = NewUnit(UnitKind.Ship, side, ship.Faction, ship.Combat, ship.Spec.LengthKm, pos, forward);
+            var u = NewUnit(UnitKind.Ship, side, ship.Faction, ship.Combat, ship.LengthKm, pos, forward);
             u.Ship = ship;
             ship.Battle = this;
             if (ship.Combat.Spec.Squadrons > 0) Launch?.Invoke(this, u);
@@ -257,6 +268,7 @@ namespace SolarSystem.Core
 
         public BattleUnit NewUnit(UnitKind kind, int side, Faction faction, ShipCombat combat, double lengthKm, DVec3 pos, DVec3 forward)
         {
+            combat.ResetShieldTimers();
             var u = new BattleUnit
             {
                 Id = nextUnitId++, Kind = kind, Side = side, Faction = faction, Combat = combat, LengthKm = lengthKm,
@@ -328,8 +340,7 @@ namespace SolarSystem.Core
                 if (!u.Present) continue;
                 var c = u.Combat;
                 if (u.Stunned > 0) u.Stunned -= dt;
-                else if (Seconds - c.LastHitSeconds > 8 && c.HasShieldGenerator)
-                    c.Shield = Math.Min(c.Spec.Shield, c.Shield + c.Spec.ShieldRegen * dt);
+                else c.RegenShields(Seconds, dt);
                 // No escape with boarders fighting aboard (or a breacher stuck in the hull).
                 if (u.Kind == UnitKind.Ship && u.Latched == null && !c.Disabled && !c.Interior.UnderBoarding && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
                     u.Fled = true;
@@ -498,7 +509,7 @@ namespace SolarSystem.Core
                 u.Pos += u.Vel * dt;
                 return;
             }
-            if (u.BoardTarget != null)
+            if (u.BoardTarget != null && !u.Fleeing)
             {
                 Approach(u, dt);
                 return;
@@ -548,8 +559,45 @@ namespace SolarSystem.Core
             u.Vel += dv.Length > step ? dv.Normalized * step : dv;
             u.Pos += u.Vel * dt;
 
-            var face = u.Fleeing || u.Target == null ? u.Vel : u.Target.Pos - u.Pos;
+            var face = u.Fleeing || u.Target == null ? u.Vel : BroadsideFacing(u, (u.Target.Pos - u.Pos).Normalized);
             TurnToward(u, face, c.Spec.TurnRateDegS, dt);
+        }
+
+        /// <summary>
+        /// Which way to point the bow so the hull's strongest ready battery (not on cooldown, with
+        /// ammo, its mount not destroyed) bears on the target — a broadside warship turns a flank in,
+        /// not its nose. A hull with no real arc spread (every weapon omnidirectional, today's default)
+        /// has a single candidate centred on the bow, so this is a strict generalization of the old
+        /// always-point-the-nose behavior, not a special case.
+        /// </summary>
+        DVec3 BroadsideFacing(BattleUnit u, DVec3 toTarget)
+        {
+            Dictionary<int, double> byArc = null;
+            foreach (var s in u.Combat.Subsystems)
+            {
+                if (!s.Def.IsWeapon || s.Destroyed || s.Kind == SubsystemKind.PointDefense || s.Kind == SubsystemKind.BoardingPods) continue;
+                var w = s.Def.Weapon;
+                if (w.Missile && s.Ammo <= 0) continue;
+                byArc ??= new Dictionary<int, double>();
+                int key = (int)Math.Round(Astro.WrapDegrees360(s.Def.ArcCenterDeg));
+                byArc.TryGetValue(key, out double sum);
+                byArc[key] = sum + w.Damage * w.Salvo / w.Cooldown;
+            }
+            if (byArc == null) return toTarget;
+            int bestArc = 0;
+            double best = -1;
+            foreach (var kv in byArc)
+                if (kv.Value > best) { best = kv.Value; bestArc = kv.Key; }
+            return RotateYaw(toTarget, bestArc);
+        }
+
+        /// <summary>Rotates a direction by an angle (degrees) around the battle's vertical (ecliptic) axis.</summary>
+        static DVec3 RotateYaw(DVec3 v, double angleDeg)
+        {
+            double rad = angleDeg * Astro.Deg2Rad;
+            double cos = Math.Cos(rad), sin = Math.Sin(rad);
+            var axis = DVec3.UnitZ;
+            return v * cos + DVec3.Cross(axis, v) * sin + axis * DVec3.Dot(axis, v) * (1 - cos);
         }
 
         /// <summary>A unit's station on its leader: slot in the leader's frame plus a slow human wander.</summary>
@@ -649,8 +697,9 @@ namespace SolarSystem.Core
                 var target = ChooseWeaponTarget(u, origin, w);
                 // Hold fire on a prize our own people are boarding or closing on.
                 if (target != null && IsPrize(u, target)) target = null;
-                // Fighter guns are fixed forward: only fire with the target in a narrow cone.
-                if (target != null && s.Kind == SubsystemKind.FighterGuns && DVec3.Dot(u.Forward, (target.Pos - origin).Normalized) < 0.97) target = null;
+                // A mount with a real firing arc (a broadside battery, fixed-forward fighter guns) can
+                // only engage a target that actually falls within it.
+                if (target != null && s.Def.ArcWidthDeg < 360 && !s.Def.ContainsYaw(u.YawDegOf(target.Pos))) target = null;
                 if (target == null)
                 {
                     s.Aim = DVec3.Zero;
@@ -769,7 +818,7 @@ namespace SolarSystem.Core
                     case SubsystemKind.HeavyLaser:
                     case SubsystemKind.LaserTurret:
                     case SubsystemKind.MissileLauncher: w = 3; break;
-                    case SubsystemKind.ShieldGenerator: w = target.Combat.Shield > 0 ? 2.5 : 0.5; break;
+                    case SubsystemKind.ShieldGenerator: w = s.Shield > 0 ? 2.5 : 0.5; break;
                     case SubsystemKind.Engine: w = 1.4; break;
                     case SubsystemKind.Hangar: w = target.Combat.Fighters > 0 ? 1.8 : 0.4; break;
                     case SubsystemKind.Bridge: w = 1.1; break;
@@ -798,14 +847,18 @@ namespace SolarSystem.Core
         {
             if (!target.Present) return;
             var c = target.Combat;
-            c.LastHitSeconds = Seconds;
-            if (c.Shield > 0 && c.HasShieldGenerator)
+            var generator = c.GeneratorFor(target.YawDegOf(at));
+            if (generator != null)
             {
-                double soaked = Math.Min(c.Shield, damage);
-                c.Shield -= soaked;
-                damage -= soaked;
-                Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, -1);
-                if (damage <= 0) return;
+                generator.LastHitSeconds = Seconds;
+                if (generator.Shield > 0)
+                {
+                    double soaked = Math.Min(generator.Shield, damage);
+                    generator.Shield -= soaked;
+                    damage -= soaked;
+                    Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, -1);
+                    if (damage <= 0) return;
+                }
             }
             damage = Math.Max(damage * 0.15, damage - c.Spec.Armor);
             Emit(FxKind.Impact, at, at, damage, target.Side, target, sub?.Index ?? -1);
@@ -819,7 +872,7 @@ namespace SolarSystem.Core
                     sub.Hp = 0;
                     Emit(FxKind.SubsystemDestroyed, at, at, target.LengthKm * 0.12, target.Side, target, sub.Index);
                     if (sub.Kind == SubsystemKind.Reactor) c.Hull = 0;
-                    if (sub.Kind == SubsystemKind.ShieldGenerator) c.Shield = 0;
+                    if (sub.Kind == SubsystemKind.ShieldGenerator) sub.Shield = 0;
                     if (sub.Kind == SubsystemKind.Hangar) c.Fighters = Math.Max(0, c.Fighters - 6);
                 }
             }
@@ -840,7 +893,7 @@ namespace SolarSystem.Core
             {
                 if (m.Gone) continue;
                 m.Life -= dt;
-                if (m.Life <= 0 || m.Target == null || !m.Target.Present)
+                if (m.Life <= 0 || m.Target == null || !m.Target.Present || m.Target.Side == m.Side)
                 {
                     m.Gone = true;
                     Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.05, m.Side, null, -1);
@@ -898,6 +951,7 @@ namespace SolarSystem.Core
             s.Cooldown = s.Def.Weapon.Cooldown * (0.85 + rng.NextDouble() * 0.3);
             for (int k = 0; k < s.Def.Weapon.Salvo && s.Ammo > 0; k++)
             {
+                if (u.Combat.MarinesAvailable < WeaponSpec.PodMarines * 2) break;
                 s.Ammo--;
                 RemoveMarines(u.Combat.Interior, WeaponSpec.PodMarines);
                 var spread = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, rng.NextDouble() - 0.5) * 0.3;
@@ -914,7 +968,8 @@ namespace SolarSystem.Core
         void PodHit(Missile m, BattleUnit t, DVec3 at)
         {
             var c = t.Combat;
-            if (c.Shield > 0 && c.HasShieldGenerator)
+            var generator = c.GeneratorFor(t.YawDegOf(at));
+            if (generator != null && generator.Shield > 0)
             {
                 Emit(FxKind.PodBounce, at, at, t.LengthKm, t.Side, t, -1);
                 return;
@@ -958,9 +1013,15 @@ namespace SolarSystem.Core
         /// </summary>
         void ChooseBoarding(BattleUnit u)
         {
-            if (u.BoardTarget != null && (!u.BoardTarget.Present || u.BoardTarget.Captured)) u.BoardTarget = null;
-            if (u.BoardTarget != null || u.Fleeing || u.Combat.Disabled) return;
             bool breacher = u.Ship != null && u.Ship.Spec.Class == ShipClass.Breacher;
+            if (u.BoardTarget != null)
+            {
+                var bt = u.BoardTarget;
+                bool stillOpen = bt.Present && !bt.Captured &&
+                    (bt.Combat.Disabled || bt.Stunned > 10 || (breacher && (bt.Combat.Shield <= bt.Combat.Spec.Shield * 0.25 || !bt.Combat.HasShieldGenerator)));
+                if (!stillOpen) u.BoardTarget = null;
+            }
+            if (u.BoardTarget != null || u.Fleeing || u.Combat.Disabled) return;
             bool boarder = breacher || u.Faction.IsPirate || u.Faction.IsMilitary;
             if (!boarder || u.Combat.MarinesAvailable < 15) return;
             BattleUnit best = null;
@@ -1027,9 +1088,12 @@ namespace SolarSystem.Core
                     Embed(t, contact, to, u.Side, true);
                     var local = t.ToLocal(contact);
                     var space = t.Combat.Interior.Nearest(local.Z, local.Y);
-                    double marines = c.MarinesAvailable * 0.9;
-                    RemoveMarines(c.Interior, marines);
-                    t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality * 1.15, marines, space, true, Seconds, rng);
+                    if (!t.Combat.Interior.Captured && (t.Combat.Interior.Boarder == null || t.Combat.Interior.Boarder == u.Faction))
+                    {
+                        double marines = c.MarinesAvailable * 0.9;
+                        RemoveMarines(c.Interior, marines);
+                        t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality * 1.15, marines, space, true, Seconds, rng);
+                    }
                     Emit(FxKind.Breach, contact, contact - to.Normalized * 0.1, t.LengthKm * 0.15, u.Side, t, space.Index);
                 }
                 return;
@@ -1044,11 +1108,14 @@ namespace SolarSystem.Core
                     u.LatchLocal = t.ToLocal(u.Pos);
                     u.BoardTarget = null;
                     u.LatchTimer = 0;
-                    double marines = c.MarinesAvailable * 0.85;
-                    RemoveMarines(c.Interior, marines);
-                    var airlock = t.Combat.Interior.Of(CompartmentKind.Midships) ?? t.Combat.Interior.Nearest(0, 0);
-                    t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality, marines, airlock, false, Seconds, rng);
-                    Emit(FxKind.Latch, u.Pos, t.Pos, u.LengthKm, u.Side, t, airlock.Index);
+                    if (!t.Combat.Interior.Captured && (t.Combat.Interior.Boarder == null || t.Combat.Interior.Boarder == u.Faction))
+                    {
+                        double marines = c.MarinesAvailable * 0.85;
+                        RemoveMarines(c.Interior, marines);
+                        var airlock = t.Combat.Interior.Of(CompartmentKind.Midships) ?? t.Combat.Interior.Nearest(0, 0);
+                        t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality, marines, airlock, false, Seconds, rng);
+                        Emit(FxKind.Latch, u.Pos, t.Pos, u.LengthKm, u.Side, t, airlock.Index);
+                    }
                 }
             }
             else u.LatchTimer = 0;

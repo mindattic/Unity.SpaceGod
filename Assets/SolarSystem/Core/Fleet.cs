@@ -84,7 +84,7 @@ namespace SolarSystem.Core
         public Ship EvadingFrom(Ship ship) => evadingFrom.TryGetValue(ship.Controller, out var s) ? s : null;
 
         /// <summary>The closest two ships may pass (km): a margin plus a few hull lengths each.</summary>
-        public static double SafeDistanceKm(Ship a, Ship b) => 3 + 4 * (a.Spec.LengthKm + b.Spec.LengthKm);
+        public static double SafeDistanceKm(Ship a, Ship b) => 3 + 4 * (a.LengthKm + b.LengthKm);
 
         /// <summary>A ship at a body and able to fight there: holding orbit, or waiting at its ring.</summary>
         public static bool IsAt(Ship ship, int body) =>
@@ -184,7 +184,7 @@ namespace SolarSystem.Core
                     }
                     // The nearer the pass in time, the harder they turn.
                     double push = (safe - dmin) * (1 - 0.5 * tca / AvoidanceHorizonDays);
-                    double la = a.Spec.LengthKm, lb = b.Spec.LengthKm;
+                    double la = a.LengthKm, lb = b.LengthKm;
                     target[i] -= away * (push * lb / (la + lb));
                     target[j] += away * (push * la / (la + lb));
                     threatened[i] = threatened[j] = true;
@@ -1216,7 +1216,7 @@ namespace SolarSystem.Core
                 Spec = ShipClassSpec.Of(c),
                 Faction = faction,
                 Role = role,
-                Combat = new ShipCombat(CombatSpec.Of(c), c),
+                Combat = new ShipCombat(CombatSpec.RandomOf(c, rng), c),
             };
             ships.Add(ship);
             return ship;

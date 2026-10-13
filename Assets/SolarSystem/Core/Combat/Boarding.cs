@@ -332,7 +332,7 @@ namespace SolarSystem.Core
 
             var bridge = Of(CompartmentKind.Bridge);
             var engineering = Of(CompartmentKind.Engineering);
-            if (bridge.Taken && engineering.Taken)
+            if (bridge.Taken && !bridge.Contested && engineering.Taken && !engineering.Contested)
             {
                 Captured = true;
                 Note(seconds, bridge.Index, $"The {Boarder.Name} hold the bridge and engineering: the ship is taken ({Crew:0} crew surrender)");
@@ -341,7 +341,11 @@ namespace SolarSystem.Core
             if (Boarders <= 0.5)
             {
                 Note(seconds, -1, $"The {Boarder.Name} boarders are wiped out; the crew hold the ship");
-                foreach (var c in Compartments) c.Boarders = 0;
+                foreach (var c in Compartments)
+                {
+                    c.Boarders = 0;
+                    if (c.Taken && c.Crew + c.Marines <= 0.01) c.Taken = false;
+                }
                 Boarder = null;
             }
             return false;
