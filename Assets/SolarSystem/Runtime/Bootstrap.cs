@@ -5,10 +5,10 @@ namespace SolarSystem
 {
     /// <summary>
     /// Makes any scene playable: if no <see cref="SolarSystemApp"/> exists after load, one is
-    /// created. With no flags that is all that happens. <c>-autoplay</c> runs the scripted tour once
-    /// and quits (<see cref="CaptureRunner"/>); <c>-demo</c> plays the same tour live, on loop, as an
-    /// interactive showcase (<see cref="DemoRunner"/>). Pair either with <c>-capture</c> (parsed
-    /// separately by MindAttic.Capture) to record the session.
+    /// created. With no flags that is all that happens. <c>-demo</c> runs the scripted tour once and
+    /// quits (<see cref="CaptureRunner"/>) — the same flag name used for it in every MindAttic Unity
+    /// project. Pair it with <c>-capture</c> (parsed separately by MindAttic.Capture) to record the
+    /// session.
     /// </summary>
     public static class Bootstrap
     {
@@ -18,15 +18,11 @@ namespace SolarSystem
             var app = UnityEngine.Object.FindAnyObjectByType<SolarSystemApp>();
             if (app == null) app = new GameObject("Solar System").AddComponent<SolarSystemApp>();
 
-            if (HasCommandLineFlag("-autoplay") && app.GetComponent<CaptureRunner>() == null)
+            if (HasCommandLineFlag("-demo") && app.GetComponent<CaptureRunner>() == null)
             {
-                // -capture's own timer (if requested) keeps running unmodified: -autoplay only adds
+                // -capture's own timer (if requested) keeps running unmodified: -demo only adds
                 // the tour, it does not change what -capture does.
                 app.gameObject.AddComponent<CaptureRunner>();
-            }
-            else if (HasCommandLineFlag("-demo") && app.GetComponent<DemoRunner>() == null)
-            {
-                app.gameObject.AddComponent<DemoRunner>();
             }
         }
 

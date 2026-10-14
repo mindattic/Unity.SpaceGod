@@ -172,5 +172,106 @@ namespace SolarSystem.Core.Tests
             foreach (var s in w.Economy.Settlements)
                 Assert.True(s.Population >= s.InitialPopulation * 0.5, $"{s.Name} collapsed to {s.Population:N0}");
         }
+
+        [Fact]
+        public void TheDestroyersRailgunIsAFixedSpinalGunThatHitsHarderThanAnyTurret()
+        {
+            var layout = CombatSpec.Of(ShipClass.Destroyer).Layout;
+            var rail = Assert.Single(layout, s => s.Kind == SubsystemKind.Railgun);
+            Assert.True(rail.ArcWidthDeg < 360, "a railgun should be a fixed spinal mount, not omnidirectional");
+
+            var w = rail.Weapon;
+            Assert.NotNull(w);
+            Assert.True(w.RangeKm > WeaponSpec.Heavy.RangeKm, "a railgun should outrange even a heavy laser");
+            Assert.True(w.Damage > WeaponSpec.Heavy.Damage && w.Damage < WeaponSpec.Torpedo.Damage,
+                "a railgun should hit harder than a heavy laser but softer than a torpedo");
+            Assert.False(w.Missile, "a railgun is a direct-fire kinetic weapon, not a missile");
+        }
+
+        [Fact]
+        public void ARailgunHitIsDrawnDifferentlyFromALaserBeam()
+        {
+            var (b, blue, red) = Skirmish(1, new[] { (ShipClass.Destroyer, 0), (ShipClass.Destroyer, 1) });
+            b.Units[0].Combat.Subsystems.First(s => s.Kind == SubsystemKind.Railgun).Cooldown = 0;
+            bool sawRailgunFx = false;
+            for (int i = 0; i < 4000 && !sawRailgunFx && !b.Over; i++)
+            {
+                b.Advance(1);
+                sawRailgunFx = b.Fx.Any(f => f.Kind == FxKind.Railgun || f.Kind == FxKind.RailgunMiss);
+            }
+            Assert.True(sawRailgunFx, "the Destroyer's railgun never fired a visible shot");
+        }
+
+        [Fact]
+        public void APlayerControlledHullsForwardGunsOnlyFireOnCommandWhileSideBatteriesStayAutonomous()
+        {
+            var (b, blue, red) = Skirmish(5, new[] { (ShipClass.Battleship, 0), (ShipClass.Battleship, 1) });
+            var player = b.Units[0];
+            var enemy = b.Units[1];
+            player.PlayerControlled = true;
+            player.PlayerFireHeld = false;
+            player.Pos = DVec3.Zero;
+            player.Forward = DVec3.UnitX;
+            // Dead abeam to starboard (yaw 90): outside the forward guns' +-60 degree arc but square
+            // in the starboard turret's and missile battery's 150-degree arc.
+            enemy.Pos = new DVec3(0, -15, 0);
+
+            var forwardGun = player.Combat.Subsystems.First(s => s.Kind == SubsystemKind.HeavyLaser);
+            var sideGun = player.Combat.Subsystems.First(s => s.Kind == SubsystemKind.LaserTurret);
+            bool forwardFiredWithoutTheTrigger = false, sideFiredAutonomously = false;
+            double forwardCooldown = forwardGun.Cooldown, sideCooldown = sideGun.Cooldown;
+            for (int i = 0; i < 400 && !b.Over; i++)
+            {
+                b.Advance(1);
+                if (forwardGun.Cooldown > forwardCooldown + 1e-9) forwardFiredWithoutTheTrigger = true;
+                if (sideGun.Cooldown > sideCooldown + 1e-9) sideFiredAutonomously = true;
+                forwardCooldown = forwardGun.Cooldown;
+                sideCooldown = sideGun.Cooldown;
+            }
+            Assert.False(forwardFiredWithoutTheTrigger, "a player-controlled forward gun fired without the trigger held");
+            Assert.True(sideFiredAutonomously, "side/aft batteries should keep fighting on their own while piloting");
+        }
+
+        [Fact]
+        public void HoldingFireAimedAtAHostileFiresThePlayerControlledForwardGun()
+        {
+            var (b, blue, red) = Skirmish(6, new[] { (ShipClass.Battleship, 0), (ShipClass.Battleship, 1) });
+            var player = b.Units[0];
+            var enemy = b.Units[1];
+            player.PlayerControlled = true;
+            player.PlayerFireHeld = true;
+            player.Pos = DVec3.Zero;
+            enemy.Pos = new DVec3(10, 0, 0);
+            player.Forward = (enemy.Pos - player.Pos).Normalized;
+
+            var forwardGun = player.Combat.Subsystems.First(s => s.Kind == SubsystemKind.HeavyLaser);
+            bool fired = false;
+            double cooldown = forwardGun.Cooldown;
+            for (int i = 0; i < 30 && !fired && !b.Over; i++)
+            {
+                // The AI isn't steering this hull anymore (Battle.Move skips a player-controlled
+                // unit entirely) -- hold the nose on target exactly as a player's own mouse would.
+                player.Forward = (enemy.Pos - player.Pos).Normalized;
+                b.Advance(1);
+                if (forwardGun.Cooldown > cooldown + 1e-9) fired = true;
+                cooldown = forwardGun.Cooldown;
+            }
+            Assert.True(fired, "the player's forward gun never fired despite holding the trigger aimed at a hostile");
+        }
+
+        [Fact]
+        public void APlayerControlledUnitKeepsTheHullExactlyWhereThePilotLoopPutIt()
+        {
+            var (b, blue, red) = Skirmish(7, new[] { (ShipClass.Battleship, 0), (ShipClass.Battleship, 1) });
+            var player = b.Units[0];
+            player.PlayerControlled = true;
+            var pinned = new DVec3(42, -7, 3);
+            player.Pos = pinned;
+            player.Vel = DVec3.Zero;
+            for (int i = 0; i < 50 && !b.Over; i++) b.Advance(1);
+            Assert.Equal(pinned.X, player.Pos.X, 6);
+            Assert.Equal(pinned.Y, player.Pos.Y, 6);
+            Assert.Equal(pinned.Z, player.Pos.Z, 6);
+        }
     }
 }

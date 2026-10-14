@@ -9,8 +9,8 @@ namespace SolarSystem
     /// <summary>
     /// The scripted camera tour through the system: inner planets, a carrier group, a battleship,
     /// a freighter mid-burn, Saturn, Earth at both scales, Jupiter, then real surfaces, weather and
-    /// the asteroid belt. Shared by <see cref="CaptureRunner"/>, which stops at each shot to save a
-    /// screenshot, and <see cref="DemoRunner"/>, which just plays it live.
+    /// the asteroid belt. Run by <see cref="CaptureRunner"/>, which stops at each shot to save a
+    /// screenshot when <c>-capture</c> is also active.
     /// </summary>
     public static class SceneTour
     {
@@ -75,6 +75,7 @@ namespace SolarSystem
             yield return CentauriTour(app, stop);
             yield return SurfaceTour(app, stop);
             yield return BattleTour(app, stop);
+            yield return CombatShowcaseTour(app, stop);
         }
 
         // ---------------------------------------------------------------- what is in orbit
@@ -246,8 +247,8 @@ namespace SolarSystem
             // Catch it the moment it starts (it does not run in its first frame) and drop to battle time.
             void Started(Battle b)
             {
-                // The tour was stopped (the player took over the demo): stop watching.
-                if (app.GetComponent<DemoRunner>() == null && app.GetComponent<CaptureRunner>() == null)
+                // The tour was stopped: stop watching.
+                if (app.GetComponent<CaptureRunner>() == null)
                 {
                     war.BattleStarted -= Started;
                     return;
@@ -297,6 +298,90 @@ namespace SolarSystem
                 yield return stop("22-battle-" + (k + 1));
             }
             app.Clock.SetWarp(SimClock.DefaultWarpIndex);
+        }
+
+        // ---------------------------------------------------------------- combat showcase (USS-T10)
+
+        /// <summary>
+        /// Three staged skirmishes, each built to put one distinct combat feel on camera reliably
+        /// rather than hoping the live war happens to produce it in time for a capture: a capital-ship
+        /// broadside line (<see cref="Battle.BroadsideFacing"/>), then a Breacher "heavy fighter"
+        /// dogfight and a Courier "light fighter" one (their forward guns, see
+        /// <see cref="CombatSpec"/>), each watched close since nobody is actually piloting them.
+        /// </summary>
+        static IEnumerator CombatShowcaseTour(SolarSystemApp app, Func<string, IEnumerator> stop)
+        {
+            yield return BroadsideShowcase(app, stop);
+            yield return DogfightShowcase(app, stop, "Neptune", app.World.Sol, app.World.Reach, ShipClass.Breacher, "41-breacher-dogfight");
+            yield return DogfightShowcase(app, stop, "Pluto", app.World.Pirates, app.World.Sol, ShipClass.Courier, "42-courier-dogfight");
+        }
+
+        /// <summary>A Sol/Reach battleship-and-cruiser line off Uranus: the whole engagement, then
+        /// whichever capital ship has taken the most damage, to catch a flank turned in once its bow
+        /// guns are out rather than its nose held on target.</summary>
+        static IEnumerator BroadsideShowcase(SolarSystemApp app, Func<string, IEnumerator> stop)
+        {
+            int uranus = app.Catalog["Uranus"].Index;
+            var battle = TriggerSkirmish(app, uranus, app.World.Sol, app.World.Reach,
+                new[] { ShipClass.Battleship, ShipClass.Battleship, ShipClass.Cruiser });
+            if (battle == null) yield break;
+            app.Clock.Paused = false;
+            app.WatchBattle(battle);
+            yield return Wait(8f);
+            yield return stop("40-capital-broadside");
+            yield return Wait(14f);
+            var hurt = battle.Units.Where(u => u.Ship != null && u.Present).OrderByDescending(u => u.Combat.Damage).Select(u => u.Ship).FirstOrDefault();
+            if (hurt != null)
+            {
+                var t = Target.OfShip(hurt);
+                app.Select(t);
+                app.SpaceCamera.FocusOn(t, 5, 12f);
+            }
+            yield return Wait(4f);
+            yield return stop("40b-capital-broadside-flank");
+            app.Clock.SetWarp(SimClock.DefaultWarpIndex);
+        }
+
+        /// <summary>A small, fast skirmish between <paramref name="cls"/> hulls, watched in close chase
+        /// from behind one of them (<see cref="Cameras.SpaceCamera.EnterPilotChase"/>, otherwise only
+        /// used for the player's own piloted ship) so its forward-mounted gun -- a Breacher's
+        /// HeavyLaser, a Courier's FighterGuns -- reads clearly as it fights.</summary>
+        static IEnumerator DogfightShowcase(SolarSystemApp app, Func<string, IEnumerator> stop, string bodyName, Faction aggressor, Faction defender, ShipClass cls, string stopId)
+        {
+            int body = app.Catalog[bodyName].Index;
+            var battle = TriggerSkirmish(app, body, aggressor, defender, new[] { cls, cls, cls });
+            if (battle == null) yield break;
+            app.Clock.Paused = false;
+            app.EnterBattleTime(battle);
+            for (int k = 0; k < 2 && !battle.Over; k++)
+            {
+                var subject = battle.Units.FirstOrDefault(u => u.Ship != null && u.Present && u.Side == 0)?.Ship
+                              ?? battle.Units.FirstOrDefault(u => u.Ship != null && u.Present)?.Ship;
+                if (subject == null) break;
+                var t = Target.OfShip(subject);
+                app.Select(t);
+                app.SpaceCamera.EnterPilotChase(t, cls == ShipClass.Breacher ? 5 : 4);
+                yield return Wait(8f);
+                yield return stop(k == 0 ? stopId : stopId + "b");
+            }
+            app.SpaceCamera.ExitFocus();
+            app.Clock.SetWarp(SimClock.DefaultWarpIndex);
+        }
+
+        /// <summary>Spawns <paramref name="classes"/> for each side parked near <paramref name="body"/>,
+        /// already hostile, and starts the fight at once -- a deterministic stand-in for waiting on the
+        /// live war to produce the matchup a demo capture wants to show (an empty, unsettled body such
+        /// as Uranus, Neptune or Pluto keeps the live war's own traffic out of it).</summary>
+        static Battle TriggerSkirmish(SolarSystemApp app, int body, Faction aggressor, Faction defender, ShipClass[] classes)
+        {
+            double jd = app.Clock.Jd;
+            var dir = new DVec3(1, 0.15, 0.4).Normalized;
+            var side = Side(dir);
+            for (int i = 0; i < classes.Length; i++)
+                app.Fleet.SpawnAt("Showcase " + aggressor.Name + " " + (i + 1), classes[i], aggressor, body, dir * (2000 + i * 400), -dir, jd);
+            for (int i = 0; i < classes.Length; i++)
+                app.Fleet.SpawnAt("Showcase " + defender.Name + " " + (i + 1), classes[i], defender, body, dir * (2000 + i * 400) + side * 3000, dir, jd);
+            return app.World.War.TryStartBattle(body, aggressor, jd);
         }
 
         // ---------------------------------------------------------------- surfaces, weather, asteroids

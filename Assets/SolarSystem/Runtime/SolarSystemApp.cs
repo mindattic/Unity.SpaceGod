@@ -63,14 +63,50 @@ namespace SolarSystem
 
         int pilotFrameBody;
         DVec3 pilotOffsetKm, pilotVelKmS, pilotForward;
-        float pilotYawDeg, pilotPitchDeg;
+
+        /// <summary>Current angular speed toward the commanded heading, deg/s -- ramps toward the
+        /// hull's <see cref="PilotTuning.TurnRateDegS"/> rather than snapping to it (see
+        /// <see cref="PilotFlight.Step"/>), so it must persist across frames like <see cref="pilotVelKmS"/> does.</summary>
+        double pilotAngularRateDegS;
+
+        /// <summary>Free look orientation, accumulated by rotating around its own local axes each
+        /// frame (not world-space yaw/pitch) so the player can aim anywhere -- including straight up,
+        /// down or behind -- with no gimbal clamp.</summary>
+        Quaternion pilotLook = Quaternion.identity;
         const float PilotLookSensitivity = 0.12f;
+
+        /// <summary>What the pilot camera leans toward tracking, independent of the ship's own facing.</summary>
+        Target pilotLockTarget = Target.None;
+
+        /// <summary>Base field of view everywhere outside an active boost (matches <see cref="SetupCamera"/>'s
+        /// initial value) and the widened view boost eases toward -- a classic sense-of-speed cue
+        /// (Freelancer, Elite, Star Citizen all do this) that costs nothing to add since the ship's
+        /// actual boosted velocity is already real.</summary>
+        const float BaseFov = 60f, BoostFov = 74f, CruiseFov = 86f, FovResponseHz = 6f;
+        float cameraFov = BaseFov;
+        bool pilotBoosting;
+
+        /// <summary>The cruise drive's own ramp state (see <see cref="PilotFlight.Step"/>) -- persists
+        /// across frames like <see cref="pilotVelKmS"/> does, and only while piloting.</summary>
+        PilotCruiseState pilotCruise;
+
+        /// <summary>Seconds until the next check for a hostile worth proactively starting a fight over
+        /// (see <see cref="War.TryStartPlayerBattle"/>) -- a few times a second is plenty responsive
+        /// and cheap enough not to bother running every single frame.</summary>
+        float pilotBattleCheckTimer;
+        const float PilotBattleCheckIntervalS = 0.5f;
+
+        /// <summary>Whether the piloted ship is close enough to this system's jump gate to activate it
+        /// (see <see cref="UpdateGateActivation"/>); drives the gate's glow and the HUD prompt.</summary>
+        bool nearGate;
 
         public bool ShowOrbits { get; set; } = true;
         public bool ShowLabels { get; set; } = true;
         public bool ShowHelp { get; set; } = true;
         public bool ShowHud { get; set; } = true;
         public bool ShowMarket { get; set; }
+        public bool ShowCargo { get; set; }
+        public bool ShowSpawn { get; set; }
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -121,6 +157,7 @@ namespace SolarSystem
         BattleFx battleFx;
         FighterViews fighterViews;
         LaneView laneView;
+        GateView gateView;
         EmbeddedPods embeddedPods;
         SatelliteSwarm swarm;
         Faction[] viewFaction = new Faction[0];
@@ -259,6 +296,7 @@ namespace SolarSystem
             battleFx = new BattleFx(this, systemRoot);
             fighterViews = new FighterViews(this, systemRoot);
             laneView = new LaneView(this, systemRoot);
+            gateView = new GateView(this, systemRoot);
             embeddedPods = new EmbeddedPods(this);
             platformViews.Clear();
             entryGlows.Clear();
@@ -321,12 +359,15 @@ namespace SolarSystem
             if (listener != null) listener.enabled = true;
         }
 
-        /// <summary>Adds views (and per-ship arrays) for hulls a yard has launched since the last frame.</summary>
-        void SyncShipViews()
+        /// <summary>Adds views (and per-ship arrays) for hulls a yard has launched since the last frame.
+        /// Returns whether a resize actually happened, so a caller reached off the normal per-frame
+        /// path (<see cref="TargetScene"/>) knows whether it must also force a fresh <see cref="UpdateShips"/>
+        /// before trusting the newcomer's <see cref="shipScene"/> entry.</summary>
+        bool SyncShipViews()
         {
             var ships = Fleet.Ships;
             int have = shipViews.Length;
-            if (ships.Count == have) return;
+            if (ships.Count == have) return false;
             Array.Resize(ref shipViews, ships.Count);
             Array.Resize(ref shipScene, ships.Count);
             Array.Resize(ref shipRotation, ships.Count);
@@ -344,6 +385,7 @@ namespace SolarSystem
                 shipBlendT[i] = 1;
                 wreckStart[i] = -1;
             }
+            return true;
         }
 
         void BuildShipViews()
@@ -392,7 +434,7 @@ namespace SolarSystem
             BattleTime();
             if (Travel.Active) Travel.Update(dt);
             else SpaceCamera.Update(dt, Input);
-            UpdateClipPlanes();
+            UpdateClipPlanes(dt);
             UpdateViews(dt);
             UpdateHover();
             HandleSelectionClicks();
@@ -497,12 +539,14 @@ namespace SolarSystem
             if (i.TimeFaster) Clock.Faster();
             if (i.TimeSlower) Clock.Slower();
             if (i.TogglePause) TogglePause();
-            if (i.ResetTime) ResetToNow();
+            if (i.ResetTime && !IsPiloting) ResetToNow();
             if (i.ToggleOrbits) ShowOrbits = !ShowOrbits;
             if (i.ToggleLabels) ShowLabels = !ShowLabels;
             if (i.ToggleHelp) ShowHelp = !ShowHelp;
             if (i.ToggleHud) ShowHud = !ShowHud;
             if (i.ToggleMarket) ShowMarket = !ShowMarket;
+            if (i.ToggleCargo) ShowCargo = !ShowCargo;
+            if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
             if (i.LevelView) LevelView();
             if (i.ToggleSatellites)
@@ -593,28 +637,104 @@ namespace SolarSystem
                 return;
             }
             var ship = t.Ship;
-            if (ship.Destroyed || ship.Derelict || ship.IsEscort || ship.Battle != null || ship.Phase != ShipPhase.Parked)
+            if (ship.Destroyed || ship.Derelict)
             {
                 ShowToast("Can't take the helm of that ship right now");
                 return;
             }
+            EnterPiloting(t);
+        }
 
+        /// <summary>The body whose frame best describes a ship's current position, and its offset
+        /// there in true km -- the same per-phase placement <see cref="UpdateShips"/> computes for
+        /// drawing, used instead to seed piloting from wherever a ship actually is (mid-lane,
+        /// mid-burn, queued, landed...), not only a parked orbit.</summary>
+        (int body, DVec3 offsetKm) CurrentFrame(Ship ship, double jd)
+        {
+            var st = Fleet.StateOf(ship, jd);
+            if (ship.Phase == ShipPhase.Parked)
+                return (ship.Orbit.Body, ship.Orbit.OffsetAt(jd));
+            if ((ship.Phase == ShipPhase.Queued || ship.Planetside) && ship.Ring != null)
+                return (ship.Ring.Body, st.HelioKm - Ephemeris.Helio(ship.Ring.Body));
+            return (ship.FrameBody, st.HelioKm - Ephemeris.Helio(ship.FrameBody));
+        }
+
+        /// <summary>
+        /// Takes direct control of any flyable hull, wherever it is -- parked, mid-transit, riding or
+        /// lurking off a hyperlane, queued or landed at a ring, even mid-battle (an escort is detached
+        /// from its formation; a ship already fighting has its existing <see cref="BattleUnit"/> handed
+        /// to the player instead of starting a new fight) -- via <see cref="TogglePiloting"/>, or a
+        /// freshly spawned one via <see cref="SpawnShip"/>. Seeds every per-frame pilot field and snaps
+        /// the camera into chase.
+        /// </summary>
+        void EnterPiloting(Target t)
+        {
+            var ship = t.Ship;
             Piloted = t;
             World.PilotedShip = ship;
-            pilotFrameBody = ship.Orbit.Body;
-            pilotOffsetKm = ship.Orbit.OffsetAt(Clock.Jd);
+            if (ship.IsEscort) ship.Leader = null;
+            if (ship.Battle != null)
+            {
+                var unit = ship.Battle.UnitOf(ship);
+                if (unit != null)
+                {
+                    unit.PlayerControlled = true;
+                    unit.PlayerFireHeld = false;
+                    unit.PlayerLockTarget = null;
+                }
+            }
+            var (frame, offsetKm) = CurrentFrame(ship, Clock.Jd);
+            pilotFrameBody = frame;
+            pilotOffsetKm = offsetKm;
             pilotVelKmS = DVec3.Zero;
+            pilotAngularRateDegS = 0;
+            pilotCruise = default;
+            pilotBattleCheckTimer = 0;
             pilotForward = Fleet.StateOf(ship, Clock.Jd).Facing;
-            var facingSwapped = pilotForward.SwapYZ;
-            var facingUnity = new Vector3((float)facingSwapped.X, (float)facingSwapped.Y, (float)facingSwapped.Z);
-            var localFacing = Quaternion.Inverse(SpaceCamera.UpFrame) * facingUnity;
-            pilotYawDeg = Mathf.Atan2(localFacing.x, localFacing.z) * Mathf.Rad2Deg;
-            pilotPitchDeg = Mathf.Asin(Mathf.Clamp(localFacing.y, -1f, 1f)) * Mathf.Rad2Deg;
+            SeedPilotLook(pilotForward);
 
             Select(t);
             SpaceCamera.EnterPilotChase(t, 6);
             Clock.SetWarp(0);
-            ShowToast("Piloting " + ship.Name + ", " + Clock.Warp.Label + "  (Enter to release, . to speed up)");
+            ShowToast("Piloting " + ship.Name + ", " + Clock.Warp.Label + "  (P to release, . to speed up, Left-click to fire, T to lock a target, hold J to cruise)");
+        }
+
+        /// <summary>
+        /// Dev/sandbox tool (USS-T9): builds a ship of <paramref name="cls"/> (a random design if the
+        /// class has more than one, see <see cref="CombatSpec.RandomOf"/>) via <see cref="Fleet.SpawnAt"/>,
+        /// parked exactly where the camera is looking from, and immediately pilots it -- for testing
+        /// flight feel and combat without hunting down an existing hull in the live simulation. Releases
+        /// whatever was already being piloted first, same as pressing Enter would.
+        /// </summary>
+        public void SpawnShip(ShipClass cls, bool hostile)
+        {
+            if (IsPiloting) ExitPiloting();
+
+            int frame = SpaceCamera.FrameBody;
+            var offsetKm = Scale.InverseLocalOffset(Catalog[frame], SpaceCamera.ScenePosition - BodyScene(frame));
+            var forwardUnity = SpaceCamera.Rotation * Vector3.forward;
+            var forward = new DVec3(forwardUnity.x, forwardUnity.y, forwardUnity.z).SwapYZ;
+
+            var faction = hostile ? World.Pirates : World.Sol;
+            string name = "Sandbox " + cls + " " + (++spawnedCount);
+            var ship = Fleet.SpawnAt(name, cls, faction, frame, offsetKm, forward, Clock.Jd);
+
+            EnterPiloting(Target.OfShip(ship));
+        }
+
+        int spawnedCount;
+
+        /// <summary>Points the free-look quaternion at a facing (ecliptic, unit), level unless that
+        /// facing is itself near-vertical -- shared by <see cref="TogglePiloting"/> and a jump gate
+        /// handing the same pilot session to a new hull in the destination system.</summary>
+        void SeedPilotLook(DVec3 facing)
+        {
+            var facingSwapped = facing.SwapYZ;
+            var facingUnity = new Vector3((float)facingSwapped.X, (float)facingSwapped.Y, (float)facingSwapped.Z);
+            var upReference = SpaceCamera.UpFrame * Vector3.up;
+            pilotLook = Quaternion.LookRotation(
+                Vector3.Dot(facingUnity, upReference) > 0.999f ? SpaceCamera.UpFrame * Vector3.forward : facingUnity,
+                upReference);
         }
 
         void ExitPiloting()
@@ -622,16 +742,67 @@ namespace SolarSystem
             var ship = Piloted.Ship;
             Piloted = Target.None;
             World.PilotedShip = null;
-            if (ship != null && !ship.Destroyed) Fleet.ScheduleNext(ship, Clock.Jd);
+            pilotLockTarget = Target.None;
+            pilotBoosting = false;
+            pilotCruise = default;
+            SpaceCamera.PilotLockTarget = Target.None;
+            if (ship != null && !ship.Destroyed)
+            {
+                if (ship.Battle != null)
+                {
+                    // Hand the fight back to the crew rather than leaving the hull idle mid-battle:
+                    // its own autonomous AI (broadsides, point defence, missiles) picks up right where
+                    // manual control left off, same facing and velocity.
+                    var unit = ship.Battle.UnitOf(ship);
+                    if (unit != null)
+                    {
+                        unit.PlayerControlled = false;
+                        unit.PlayerFireHeld = false;
+                        unit.PlayerLockTarget = null;
+                    }
+                }
+                else
+                {
+                    // Pin the hull exactly where the player left it (facing included) before the AI
+                    // schedule resumes -- otherwise it picks up from the stale pre-piloting orbit and
+                    // the ship snaps back to wherever that orbit would have drifted to on its own. Taken
+                    // control may have started mid-lane, mid-burn, queued or landed (see EnterPiloting),
+                    // so the old phase's bookkeeping (path, journey, ring queue) is stale and dropped --
+                    // the ship always comes back out as a freshly Parked hull wherever it was released.
+                    var v = pilotForward;
+                    var u = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
+                    ship.Orbit = new ParkingOrbit
+                    {
+                        Body = pilotFrameBody, Center = pilotOffsetKm, RadiusKm = 0,
+                        U = u, V = v, EpochJd = Clock.Jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
+                    };
+                    ship.Phase = ShipPhase.Parked;
+                    ship.Path = null;
+                    ship.Journey = null;
+                    ship.JourneyIndex = 0;
+                    ship.Ring = null;
+                    ship.HoldPoint = null;
+                    ship.LaneHoldSide = DVec3.Zero;
+                    Fleet.ScheduleNext(ship, Clock.Jd);
+                }
+            }
             SpaceCamera.ExitFocus();
             ShowToast("Released manual control");
         }
+
+        /// <summary>Whether the piloted ship can trade at <paramref name="s"/> right now: piloting is a local
+        /// flight within one body's frame (<see cref="pilotFrameBody"/> never changes mid-flight, see
+        /// <see cref="TogglePiloting"/>), so reach is that frame matching the market's body and the ship still
+        /// being within its neighbourhood -- the same "near a world" radius <see cref="Fleet.WanderOrbit"/>
+        /// and the hyperlane ramps use -- on top of the usual diplomatic can-dock check.</summary>
+        public bool CanTradeNow(Settlement s) =>
+            IsPiloting && pilotFrameBody == s.Body && pilotOffsetKm.Length <= ScaleModel.NeighbourhoodKm(Catalog[s.Body]) && Economy.CanTrade(World.PilotedShip, s);
 
         /// <summary>Turns mouse delta + throttle/strafe keys into a flight command and steps the hull's
         /// position every frame piloting is active, before <see cref="UpdateShips"/> reads it.</summary>
         void UpdatePiloting(float dt)
         {
-            if (!IsPiloting) return;
+            if (!IsPiloting) { pilotBoosting = false; pilotCruise = default; nearGate = false; return; }
             var ship = Piloted.Ship;
             if (ship == null || ship.Destroyed)
             {
@@ -639,12 +810,20 @@ namespace SolarSystem
                 return;
             }
 
-            pilotYawDeg += Input.MouseDelta.x * PilotLookSensitivity;
-            pilotPitchDeg = Mathf.Clamp(pilotPitchDeg - Input.MouseDelta.y * PilotLookSensitivity, -85f, 85f);
-            var commanded = SpaceCamera.UpFrame * Quaternion.Euler(pilotPitchDeg, pilotYawDeg, 0);
-            var desiredUnity = commanded * Vector3.forward;
+            // Free look: rotate around the look quaternion's own local axes each frame (not a
+            // world-space yaw/pitch pair), so there's no gimbal clamp -- the nose can be pointed
+            // anywhere, including straight up/down or looping past behind.
+            pilotLook = pilotLook
+                * Quaternion.AngleAxis(Input.MouseDelta.x * PilotLookSensitivity, Vector3.up)
+                * Quaternion.AngleAxis(-Input.MouseDelta.y * PilotLookSensitivity, Vector3.right);
+            var desiredUnity = pilotLook * Vector3.forward;
             var desiredForward = new DVec3(desiredUnity.x, desiredUnity.y, desiredUnity.z).SwapYZ;
 
+            if (Input.LockTarget) ToggleLockTarget();
+            if (!pilotLockTarget.IsNone && (!pilotLockTarget.IsShip || pilotLockTarget.Ship.Destroyed)) pilotLockTarget = Target.None;
+            SpaceCamera.PilotLockTarget = pilotLockTarget;
+
+            var tuning = PilotTuning.Of(ship.Spec.Class);
             var input = new PilotInput
             {
                 DesiredForward = desiredForward,
@@ -652,8 +831,95 @@ namespace SolarSystem
                 StrafeRight = Mathf.Clamp(Input.Move.x, -1f, 1f),
                 StrafeUp = Mathf.Clamp(Input.Move.y, -1f, 1f),
                 Boost = Input.Boost,
+                Cruise = Input.Cruise,
+                InCombat = ship.Battle != null,
             };
-            PilotFlight.Step(ref pilotOffsetKm, ref pilotVelKmS, ref pilotForward, ship.Combat, input, dt);
+            // Mirrors PilotFlight.Step's own "boosting" condition, read before Step drains the
+            // charge further this frame, purely to drive the camera's FOV kick below.
+            pilotBoosting = input.Boost && tuning.BoostDurationS > 0 && ship.Combat.BoostFraction > 0;
+            PilotFlight.Step(ref pilotOffsetKm, ref pilotVelKmS, ref pilotForward, ref pilotAngularRateDegS, ref pilotCruise, ship.Combat, tuning, input, dt);
+
+            UpdatePilotBattle(ship, dt);
+            UpdateGateActivation(ship);
+        }
+
+        /// <summary>
+        /// While piloting, checks (and on the player's command, performs) this system's jump gate
+        /// transit: a flyable, in-world alternative to the menu-driven STAR SYSTEMS jump (see
+        /// <see cref="StarTravel"/>, untouched -- the camera still uses it on its own). The eligibility
+        /// and position-handoff math is Core's (<see cref="GateTransit"/>); this just wires the
+        /// activation key and re-seeds the pilot session onto the arriving hull in its new system,
+        /// exactly as <see cref="TogglePiloting"/> seeds one at the start.
+        /// </summary>
+        void UpdateGateActivation(Ship ship)
+        {
+            var gate = ActiveSystem.Gate;
+            if (gate == null || ship.Battle != null) { nearGate = false; return; }
+            var shipHelioKm = Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
+            bool wasNear = nearGate;
+            nearGate = gate.CanActivate(shipHelioKm);
+            if (nearGate && !wasNear) ShowToast("In range of " + gate.Name.ToUpperInvariant() + " to " + gate.Destination.Name.ToUpperInvariant() + " (Y to activate)");
+            if (!nearGate || !Input.ActivateGate) return;
+
+            var destination = gate.Destination;
+            if (!GateTransit.TryPerform(gate, shipHelioKm, ship, Fleet, Clock.Jd, out var arrived)) return;
+
+            World.PilotedShip = null;
+            Activate(destination);
+            Piloted = Target.OfShip(arrived);
+            World.PilotedShip = arrived;
+            pilotFrameBody = arrived.Orbit.Body;
+            pilotOffsetKm = arrived.Orbit.Center;
+            pilotVelKmS = DVec3.Zero;
+            pilotAngularRateDegS = 0;
+            pilotCruise = default;
+            pilotForward = arrived.Orbit.V;
+            pilotBattleCheckTimer = 0;
+            pilotLockTarget = Target.None;
+            SpaceCamera.PilotLockTarget = Target.None;
+            SeedPilotLook(pilotForward);
+            nearGate = false;
+
+            Select(Piloted);
+            SpaceCamera.EnterPilotChase(Piloted, 6);
+            ShowToast("Jumped to " + destination.Name.ToUpperInvariant() + " through the gate");
+        }
+
+        /// <summary>Starts (or joins) a fight the instant piloting brings the ship within range of a
+        /// hostile -- mirroring what <see cref="War.OnArrived"/> does for every AI ship, since a player
+        /// flying there is otherwise invisible to that check (see <see cref="War.PresentGroups"/>) -- and,
+        /// every frame afterward, hands the battle this frame's actual flown pose and fire/lock input
+        /// instead of letting its own AI steer and pick targets for the hull.</summary>
+        void UpdatePilotBattle(Ship ship, float dt)
+        {
+            if (ship.Battle == null)
+            {
+                pilotBattleCheckTimer -= dt;
+                if (pilotBattleCheckTimer > 0) return;
+                pilotBattleCheckTimer = PilotBattleCheckIntervalS;
+                World.War.TryStartPlayerBattle(ship, pilotOffsetKm, pilotForward, Clock.Jd);
+                return;
+            }
+
+            var unit = ship.Battle.UnitOf(ship);
+            if (unit == null) return;
+            unit.PlayerControlled = true;
+            unit.Pos = pilotOffsetKm - ship.Battle.Anchor;
+            unit.Vel = pilotVelKmS;
+            unit.Forward = pilotForward;
+            // No firing while cruising -- the cruise drive is a travel tier, not a combat one.
+            unit.PlayerFireHeld = Input.Fire && !pilotCruise.Active;
+            unit.PlayerLockTarget = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
+        }
+
+        /// <summary>Locks the camera's tracking onto whatever's hovered/selected, or clears an existing
+        /// lock -- the ship's own facing stays fully under the player's mouse control either way (the
+        /// camera itself leans toward the lock in <see cref="Cameras.SpaceCamera"/>'s focus update).</summary>
+        void ToggleLockTarget()
+        {
+            if (!pilotLockTarget.IsNone) { pilotLockTarget = Target.None; return; }
+            var t = Selected.IsShip ? Selected : Hovered.IsShip ? Hovered : Target.None;
+            if (t.IsShip && t.Ship != Piloted.Ship) pilotLockTarget = t;
         }
 
         /// <summary>Camera elevation of the system overview, degrees.</summary>
@@ -831,7 +1097,7 @@ namespace SolarSystem
                     else
                     {
                         shipScene[i] = TransitScene(ship, st.Progress, out var travel);
-                        facing = st.Progress < 0.5 ? travel : -travel;
+                        facing = travel;
                     }
 
                     // Stepping aside to keep clear of another ship: the sidestep (true km) in scene units here.
@@ -927,6 +1193,12 @@ namespace SolarSystem
 
         public DVec3 TargetScene(Target target)
         {
+            // A ship spawned this same frame (the scripted tour's skirmishes, the Spawn & Pilot grid,
+            // a jump-gate arrival) may not have been sized into shipScene yet -- the per-ship arrays
+            // only grow once a frame, in Update, but this is also reached from a coroutine step or an
+            // OnGUI click that can land before or after that. A resize alone leaves the newcomer's
+            // entry zeroed, so also force one fresh UpdateShips to actually place it before reading it.
+            if (target.IsShip && SyncShipViews()) UpdateShips(0f);
             if (target.IsBody) return bodyScene[target.Body];
             if (target.IsShip) return shipScene[target.Ship.Id];
             if (target.IsStructure && Structures.Scenes.TryGetValue(target.Structure, out var s)) return s;
@@ -965,12 +1237,16 @@ namespace SolarSystem
 
         // ---------------------------------------------------------------- views
 
-        void UpdateClipPlanes()
+        void UpdateClipPlanes(float dt)
         {
             double nearest = NearestSurface(SpaceCamera.ScenePosition);
             UnityCamera.nearClipPlane = (float)Math.Max(1e-6, Math.Min(nearest * 0.25, 20.0));
             UnityCamera.farClipPlane = 5e8f;
             UnityCamera.transform.SetPositionAndRotation(Vector3.zero, SpaceCamera.Rotation);
+
+            float targetFov = IsPiloting && pilotCruise.Active ? CruiseFov : IsPiloting && pilotBoosting ? BoostFov : BaseFov;
+            cameraFov = Mathf.Lerp(cameraFov, targetFov, 1f - Mathf.Exp(-dt * FovResponseHz));
+            UnityCamera.fieldOfView = cameraFov;
         }
 
         public Vector3 Relative(DVec3 scene)
@@ -1063,6 +1339,9 @@ namespace SolarSystem
                 var ship = Fleet.Ships[i];
                 if (ship.Destroyed)
                 {
+                    // A jump gate retires the origin hull the same way a kill does (so its id stays put
+                    // for every ship after it -- see GateTransit) but it flew off, not blew up.
+                    if (ship.GateDeparted) { shipViews[i].SetVisible(false); continue; }
                     DrawWreck(i, ship);
                     continue;
                 }
@@ -1105,6 +1384,7 @@ namespace SolarSystem
 
             UpdatePlatforms();
             laneView.Update(ShowLanes);
+            gateView.Update(true, nearGate);
             fighterViews.Update();
             embeddedPods.Update();
             battleFx.Update();
@@ -1350,7 +1630,9 @@ namespace SolarSystem
 
         void HandleSelectionClicks()
         {
-            if (!Input.SelectClicked || Travel.Active) return;
+            // The fire trigger shares the left button; a locked, centred cursor while piloting would
+            // otherwise register every release as an in-place click and reselect something underfoot.
+            if (!Input.SelectClicked || Travel.Active || IsPiloting) return;
             Select(Hovered);
             if (Input.SelectDoubleClicked && !Hovered.IsNone) SpaceCamera.FocusOn(Hovered);
         }

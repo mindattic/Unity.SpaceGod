@@ -33,12 +33,19 @@ Shader "SolarSystem/Glow"
             {
                 float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
+                // Only Unity's own particle system meshes actually populate this (static glow quads
+                // (MeshFactory.Quad/Plume) carry no colour stream, which URP fills in as opaque white)
+                // -- it's what lets a ParticleSystem's Start Colour / Colour-over-Lifetime modules fade
+                // an engine's exhaust particles instead of every particle popping in and out at full
+                // brightness.
+                float4 color : COLOR;
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float4 color : TEXCOORD1;
             };
 
             Varyings vert(Attributes v)
@@ -46,6 +53,7 @@ Shader "SolarSystem/Glow"
                 Varyings o;
                 o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
                 o.uv = v.uv;
+                o.color = v.color;
                 return o;
             }
 
@@ -54,7 +62,7 @@ Shader "SolarSystem/Glow"
                 float d = length(i.uv * 2.0 - 1.0);
                 float a = saturate(1.0 - d);
                 float glow = pow(a, _Falloff) + pow(a, 12.0) * 0.6;
-                return half4(_Color.rgb * glow * _Intensity, 1);
+                return half4(_Color.rgb * i.color.rgb * glow * _Intensity * i.color.a, 1);
             }
             ENDHLSL
         }

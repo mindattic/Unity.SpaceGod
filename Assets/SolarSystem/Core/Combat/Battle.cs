@@ -25,6 +25,20 @@ namespace SolarSystem.Core
         public DVec3 Pos, Vel;
         public DVec3 Forward = DVec3.UnitX;
 
+        /// <summary>True while a human is flying this unit's <see cref="Ship"/> directly: <see cref="Battle.Move"/>
+        /// skips its own AI steering/position-integration for it (the Runtime pilot loop drives <see cref="Pos"/>,
+        /// <see cref="Vel"/> and <see cref="Forward"/> instead every frame) and <see cref="Battle.Fire"/> routes its
+        /// forward-facing weapons through <see cref="PlayerFireHeld"/>/<see cref="PlayerLockTarget"/> rather than
+        /// AI target selection. Side/aft turrets and point defence are unaffected and keep firing autonomously.</summary>
+        public bool PlayerControlled;
+
+        /// <summary>While <see cref="PlayerControlled"/>: whether the player is holding the fire trigger this frame.</summary>
+        public bool PlayerFireHeld;
+
+        /// <summary>While <see cref="PlayerControlled"/>: the target a forward missile launcher fires at. Direct-fire
+        /// weapons ignore this and aim wherever the hull's own nose (<see cref="Forward"/>) is pointed instead.</summary>
+        public BattleUnit PlayerLockTarget;
+
         public BattleUnit Target;
         public double RetargetIn;
         public bool Fled, Dead;
@@ -143,6 +157,11 @@ namespace SolarSystem.Core
     {
         Beam,
         BeamMiss,
+
+        /// <summary>A railgun's hypervelocity kinetic round -- a harder, thinner, whiter streak than a
+        /// laser <see cref="Beam"/>.</summary>
+        Railgun,
+        RailgunMiss,
         PointDefense,
         Guns,
         ShieldHit,
@@ -494,6 +513,9 @@ namespace SolarSystem.Core
 
         void Move(BattleUnit u, double dt)
         {
+            // The Runtime pilot loop is the single source of truth for a player-flown hull's pose;
+            // fighting it here would mean the battle sees a ghost position the player never flew to.
+            if (u.PlayerControlled) return;
             var c = u.Combat;
             if (u.Latched != null)
             {
@@ -694,9 +716,20 @@ namespace SolarSystem.Core
                     }
                 }
 
-                var target = ChooseWeaponTarget(u, origin, w);
-                // Hold fire on a prize our own people are boarding or closing on.
-                if (target != null && IsPrize(u, target)) target = null;
+                BattleUnit target;
+                if (u.PlayerControlled && IsPlayerAimable(s.Def))
+                {
+                    // The player's own nose guns: no AI target selection, no autofire. Side/aft
+                    // batteries (a broadside hull's real firepower) fall through to the branch below
+                    // completely unchanged, so piloting never silences a ship's crewed turrets.
+                    target = u.PlayerFireHeld ? (w.Missile ? PlayerLockedTarget(u, w, origin) : NearestAlignedHostile(u, origin, w)) : null;
+                }
+                else
+                {
+                    target = ChooseWeaponTarget(u, origin, w);
+                    // Hold fire on a prize our own people are boarding or closing on.
+                    if (target != null && IsPrize(u, target)) target = null;
+                }
                 // A mount with a real firing arc (a broadside battery, fixed-forward fighter guns) can
                 // only engage a target that actually falls within it.
                 if (target != null && s.Def.ArcWidthDeg < 360 && !s.Def.ContainsYaw(u.YawDegOf(target.Pos))) target = null;
@@ -733,7 +766,10 @@ namespace SolarSystem.Core
                 if (target.Kind == UnitKind.Fighter) size *= w.AntiSmall ? 1.4 : 0.35;
                 double chance = w.Accuracy * accuracyScale * size * (1 - 0.4 * dist / w.RangeKm);
                 bool hit = rng.NextDouble() < chance;
-                var kind = s.Kind == SubsystemKind.FighterGuns ? FxKind.Guns : w.AntiSmall ? FxKind.PointDefense : hit ? FxKind.Beam : FxKind.BeamMiss;
+                var kind = s.Kind == SubsystemKind.FighterGuns ? FxKind.Guns
+                    : w.AntiSmall ? FxKind.PointDefense
+                    : s.Kind == SubsystemKind.Railgun ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
+                    : hit ? FxKind.Beam : FxKind.BeamMiss;
                 if (hit)
                 {
                     Emit(kind, origin, aimPoint, w.Damage, u.Side, target, sub?.Index ?? -1);
@@ -745,6 +781,40 @@ namespace SolarSystem.Core
                     Emit(kind, origin, origin + (miss - origin).Normalized * Math.Min(w.RangeKm, dist * 1.3), 0, u.Side, null, -1);
                 }
             }
+        }
+
+        /// <summary>A mount the player can personally aim by pointing the hull's own nose at something --
+        /// a forward-centred hardpoint, as opposed to a side or aft battery a crew works autonomously.</summary>
+        static bool IsPlayerAimable(SubsystemDef d) => Math.Abs(Astro.WrapDegrees360(d.ArcCenterDeg)) < 0.01;
+
+        /// <summary>Boresight aim-assist for a player's direct-fire guns: the most dead-ahead hostile
+        /// within a forgiving cone (real flight sticks aren't pixel-perfect) and the weapon's range.
+        /// Picks the best alignment rather than the nearest hit, so a closer target well off-axis
+        /// doesn't steal the shot from a distant one sitting right on the reticle.</summary>
+        BattleUnit NearestAlignedHostile(BattleUnit u, DVec3 origin, WeaponSpec w)
+        {
+            const double AimConeCos = 0.985; // ~10 degrees either side of dead ahead
+            BattleUnit best = null;
+            double bestCos = AimConeCos;
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || !o.Present) continue;
+                var to = o.Pos - origin;
+                double dist = to.Length;
+                if (dist < 1e-6 || dist - o.Radius > w.RangeKm) continue;
+                double cos = DVec3.Dot(u.Forward, to.Normalized);
+                if (cos > bestCos) { bestCos = cos; best = o; }
+            }
+            return best;
+        }
+
+        /// <summary>A player's locked-on missile target, valid only while it is still hostile, present
+        /// and in range -- cleared (by the Runtime pilot loop) the moment it stops being any of those.</summary>
+        BattleUnit PlayerLockedTarget(BattleUnit u, WeaponSpec w, DVec3 origin)
+        {
+            var t = u.PlayerLockTarget;
+            if (t == null || !t.Present || !Hostile(u, t)) return null;
+            return (t.Pos - origin).Length - t.Radius <= w.RangeKm ? t : null;
         }
 
         BattleUnit ChooseWeaponTarget(BattleUnit u, DVec3 origin, WeaponSpec w)
@@ -817,6 +887,7 @@ namespace SolarSystem.Core
                 {
                     case SubsystemKind.HeavyLaser:
                     case SubsystemKind.LaserTurret:
+                    case SubsystemKind.Railgun:
                     case SubsystemKind.MissileLauncher: w = 3; break;
                     case SubsystemKind.ShieldGenerator: w = s.Shield > 0 ? 2.5 : 0.5; break;
                     case SubsystemKind.Engine: w = 1.4; break;

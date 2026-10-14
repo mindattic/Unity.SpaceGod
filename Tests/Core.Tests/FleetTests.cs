@@ -20,9 +20,12 @@ namespace SolarSystem.Core.Tests
         public void DefaultFleetHasEveryClassAndSomeShipsUnderway()
         {
             var (fleet, _) = Create();
-            // The classic fleet predates breachers (they sail with the pirates of the full world).
+            // The classic fleet predates breachers and fighters (they sail with the pirates/carriers of
+            // the full World.BuildMilitary roster, not this standalone Core.Tests fixture) -- adding
+            // either here would also perturb this fixture's own chaotic N-body simulation used by other
+            // tests, the same way it does World.CreateDefault's (see AvoidanceTests).
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
-                if (c != ShipClass.Breacher) Assert.Contains(fleet.Ships, s => s.Spec.Class == c);
+                if (c != ShipClass.Breacher && c != ShipClass.Fighter) Assert.Contains(fleet.Ships, s => s.Spec.Class == c);
             Assert.True(fleet.Ships.Count >= 40);
             Assert.Contains(fleet.Ships, s => !s.IsEscort && s.Phase == ShipPhase.Transit);
             Assert.Contains(fleet.Ships, s => !s.IsEscort && s.Phase == ShipPhase.Parked);
@@ -134,6 +137,42 @@ namespace SolarSystem.Core.Tests
             var end = eph.HelioAt(ship.FrameBody, arrive) + Fleet.TransitOffset(ship, 1);
             var target = eph.HelioAt(ship.DestinationBody, arrive) + ship.Orbit.OffsetAt(arrive);
             Assert.True((end - target).Length < 1.0);
+        }
+
+        [Fact]
+        public void SpawnAtParksAFightableShipExactlyAtTheGivenOffsetAndFacing()
+        {
+            var (fleet, eph) = Create();
+            int earth = eph.Catalog["Earth"].Index;
+            var faction = fleet.Factions[0];
+            var offset = new DVec3(5000, 0, 2000);
+            var forward = new DVec3(0, 1, 0);
+
+            var ship = fleet.SpawnAt("Test Hull", ShipClass.Destroyer, faction, earth, offset, forward, StartJd);
+
+            Assert.Equal(ShipPhase.Parked, ship.Phase);
+            Assert.Equal(earth, ship.Orbit.Body);
+            Assert.Equal(offset, ship.Orbit.OffsetAt(StartJd));
+            Assert.Equal(forward.Normalized, ship.Orbit.TangentAt(StartJd));
+            Assert.Equal(faction, ship.Faction);
+            Assert.Equal(ShipClass.Destroyer, ship.Spec.Class);
+            Assert.NotNull(ship.Combat);
+            Assert.True(ship.Combat.Spec.Hull > 0);
+            Assert.Contains(ship, fleet.Ships);
+        }
+
+        [Fact]
+        public void SpawnAtGivesAFreeShipEveryVisibleBodyAsAPortSoItNeverCrashesIfReleased()
+        {
+            var (fleet, eph) = Create();
+            int earth = eph.Catalog["Earth"].Index;
+            var faction = fleet.Factions[0];
+            var ship = fleet.SpawnAt("Test Hull", ShipClass.Courier, faction, earth, DVec3.Zero, DVec3.UnitX, StartJd);
+
+            Assert.Equal(ShipRole.Free, ship.Role);
+            Assert.NotNull(ship.Ports);
+            Assert.Contains(earth, ship.Ports);
+            fleet.ScheduleNext(ship, StartJd);
         }
     }
 }

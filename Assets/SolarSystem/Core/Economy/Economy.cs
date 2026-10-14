@@ -536,6 +536,78 @@ namespace SolarSystem.Core
             return options[0];
         }
 
+        // ---------------------------------------------------------------- player trade
+
+        /// <summary>Result of one manual buy/sell click, for the HUD to pick a toast from. <see cref="Ok"/>
+        /// also covers a partial fill (ran out of stock, credits or hold room partway through a multi-crate
+        /// request), since part of the trade still went through.</summary>
+        public enum TradeOutcome { Ok, CannotDock, NoStock, NoRoom, CantAfford, NothingToSell }
+
+        /// <summary>
+        /// Buys up to <paramref name="crates"/> standard crates of <paramref name="good"/> (see
+        /// <see cref="CargoFootprint"/>) at <paramref name="s"/> for the player's piloted <paramref name="ship"/>:
+        /// walks the price up and drains stock exactly as <see cref="Load"/> does for an AI trader's purchase,
+        /// paying from the ship's own faction treasury, and places each crate into the ship's personal
+        /// <see cref="CargoHold"/> -- never the single-slot cargo fields above, which belong to the AI trade
+        /// loop and a player-flown ship does not use. Stops at the first crate that cannot be bought; reports
+        /// how many actually went through in <paramref name="bought"/>.
+        /// </summary>
+        public TradeOutcome BuyIntoHold(Ship ship, Settlement s, Good good, int crates, out int bought)
+        {
+            bought = 0;
+            if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
+            double unitTonnes = CargoFootprint.Of(good).Tonnes;
+            for (int i = 0; i < crates; i++)
+            {
+                if (s.Available(good) < unitTonnes) return bought > 0 ? TradeOutcome.Ok : TradeOutcome.NoStock;
+                double cost = s.PurchaseCost(good, unitTonnes);
+                double total = cost * (1 + PortTax);
+                if (ship.Faction.Treasury < total) return bought > 0 ? TradeOutcome.Ok : TradeOutcome.CantAfford;
+                if (ship.PersonalHold.AddFirstFit(good) == null) return bought > 0 ? TradeOutcome.Ok : TradeOutcome.NoRoom;
+
+                s.Stock[(int)good] = Math.Max(0, s.Stock[(int)good] - unitTonnes);
+                s.Owner.Treasury += cost * PortTax;
+                s.TradeVolumeCredits += cost;
+                ship.Faction.Treasury -= total;
+                bought++;
+            }
+            if (bought > 0) s.RefreshPrices();
+            return TradeOutcome.Ok;
+        }
+
+        /// <summary>
+        /// Sells up to <paramref name="crates"/> crates of <paramref name="good"/> out of the player's
+        /// piloted <paramref name="ship"/>'s own <see cref="CargoHold"/> at <paramref name="s"/>: walks the
+        /// price down and credits treasuries exactly as <see cref="Sell"/> does for an AI trader's cargo.
+        /// Stops at the first crate of that good no longer in the hold; reports how many actually sold in
+        /// <paramref name="sold"/>.
+        /// </summary>
+        public TradeOutcome SellFromHold(Ship ship, Settlement s, Good good, int crates, out int sold)
+        {
+            sold = 0;
+            if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
+            var hold = ship.PersonalHold;
+            for (int i = 0; i < crates; i++)
+            {
+                CargoItem item = null;
+                foreach (var it in hold.Items)
+                    if (it.Good == good) { item = it; break; }
+                if (item == null) return sold > 0 ? TradeOutcome.Ok : TradeOutcome.NothingToSell;
+
+                double tonnes = item.Tonnes;
+                double value = s.SaleValue(good, tonnes);
+                double tax = value * PortTax;
+                hold.Remove(item);
+                s.Stock[(int)good] += tonnes;
+                s.Owner.Treasury += tax;
+                s.TradeVolumeCredits += value;
+                ship.Faction.Treasury += value - tax;
+                sold++;
+            }
+            if (sold > 0) s.RefreshPrices();
+            return TradeOutcome.Ok;
+        }
+
         // ---------------------------------------------------------------- queries
 
         /// <summary>Systemwide average price relative to base for a good (1 = normal).</summary>

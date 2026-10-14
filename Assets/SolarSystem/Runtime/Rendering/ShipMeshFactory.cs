@@ -60,6 +60,7 @@ namespace SolarSystem.Rendering
                 case ShipClass.Miner: BuildHauler(b); break;
                 case ShipClass.Courier: BuildCourier(b); break;
                 case ShipClass.Breacher: BuildBreacher(b); break;
+                case ShipClass.Fighter: BuildFighter(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -113,6 +114,13 @@ namespace SolarSystem.Rendering
                         b.Box(new Vector3(0, 0.01f, 0), new Vector3(0.056f, 0.022f, 0.056f), b.Hull);
                         b.Box(new Vector3(0, 0.023f, -0.01f), new Vector3(0.03f, 0.006f, 0.024f), b.Accent);
                     }
+                    break;
+                case SubsystemKind.Railgun:
+                    // Fixed spinal gun, not a turret: one long rail barrel on a bulky capacitor base,
+                    // with a glowing coil band where the round gets its final kick.
+                    b.Box(new Vector3(0, 0.014f, -0.01f), new Vector3(0.05f, 0.03f, 0.05f), b.Hull);
+                    b.Cylinder(new Vector3(0, 0.014f, 0.06f), 0.009f, 0.14f, b.Dark);
+                    b.Cylinder(new Vector3(0, 0.014f, 0.1f), 0.011f, 0.012f, b.Glow(new Color(0.75f, 0.85f, 1f)));
                     break;
                 case SubsystemKind.LaserTurret:
                     if (barrels)
@@ -550,6 +558,20 @@ namespace SolarSystem.Rendering
             b.Box(new Vector3(0, 0.035f, 0.05f), new Vector3(0.05f, 0.02f, 0.15f), b.Glow(new Color(0.6f, 0.85f, 1f)));
             b.Box(new Vector3(0, 0, -0.1f), new Vector3(0.4f, 0.01f, 0.12f), b.Accent);
             b.Nozzle(new Vector3(0, 0, -0.44f), 0.03f, 0.05f);
+        }
+
+        /// <summary>A star fighter: a slim single-seat dogfighter, a glazed canopy, and twin forward
+        /// guns on stub wings -- smaller than either the Courier or the Breacher.</summary>
+        static void BuildFighter(Builder b)
+        {
+            b.Frustum(-0.42f, 0.47f, new Vector2(0.13f, 0.075f), new Vector2(0.012f, 0.012f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.065f, 0.04f), new Vector3(0.05f, 0.03f, 0.15f), b.Glow(new Color(0.55f, 0.85f, 1f)));
+            foreach (float side in new[] { -1f, 1f })
+            {
+                b.Box(new Vector3(side * 0.2f, 0, -0.06f), new Vector3(0.08f, 0.012f, 0.2f), b.Accent);
+                b.Box(new Vector3(side * 0.24f, 0, 0.1f), new Vector3(0.018f, 0.018f, 0.09f), b.Dark);
+            }
+            b.Nozzle(new Vector3(0, 0, -0.44f), 0.04f, 0.055f);
         }
 
         /// <summary>

@@ -20,6 +20,9 @@ namespace SolarSystem.Core
         public World World { get; }
         public Hyperlanes Lanes => World.Fleet.Lanes;
 
+        /// <summary>This system's own jump gate, paired with another system's (see <see cref="Galaxy.CreateDefault"/>); null until paired.</summary>
+        public JumpGate Gate { get; internal set; }
+
         StarSystem(string name, DVec3 positionLy, Ephemeris ephemeris, World world)
         {
             Name = name;
@@ -104,10 +107,23 @@ namespace SolarSystem.Core
         public static Galaxy CreateDefault(double jd)
         {
             var g = new Galaxy();
-            g.Systems.Add(StarSystem.CreateSol(jd));
-            g.Systems.Add(StarSystem.CreateAlphaCentauri(jd));
+            var sol = StarSystem.CreateSol(jd);
+            var alphaCentauri = StarSystem.CreateAlphaCentauri(jd);
+            g.Systems.Add(sol);
+            g.Systems.Add(alphaCentauri);
             g.NearbyStars.AddRange(Neighbours());
+            LinkGates(sol, alphaCentauri);
             return g;
+        }
+
+        /// <summary>Gives each of the two simulated systems a jump gate facing the other, at its own
+        /// outer edge (see <see cref="JumpGate.RadiusKm"/>), and pairs them.</summary>
+        static void LinkGates(StarSystem sol, StarSystem alphaCentauri)
+        {
+            sol.Gate = new JumpGate("Centauri Gate", Direction(sol, alphaCentauri) * JumpGate.RadiusKm);
+            alphaCentauri.Gate = new JumpGate("Sol Gate", Direction(alphaCentauri, sol) * JumpGate.RadiusKm);
+            sol.Gate.Destination = alphaCentauri;
+            alphaCentauri.Gate.Destination = sol;
         }
 
         /// <summary>

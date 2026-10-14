@@ -18,6 +18,8 @@ namespace SolarSystem.Views
         public readonly GameObject Root;
         readonly List<Renderer> renderers = new List<Renderer>();
         readonly MeshRenderer plume;
+        readonly ParticleSystem exhaust;
+        bool exhaustPlaying;
         readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
         readonly Transform stern, bow;
         readonly Part[] parts;
@@ -83,6 +85,8 @@ namespace SolarSystem.Views
             plume.sharedMaterial = plumeMaterial;
             plume.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
+            exhaust = BuildExhaust(Root.transform);
+
             BuildShieldRing();
 
             if (bow == null)
@@ -126,6 +130,66 @@ namespace SolarSystem.Views
             m.SetFloat("_Intensity", intensity);
             m.SetFloat("_Falloff", falloff);
             return m;
+        }
+
+        /// <summary>
+        /// A stream of small glowing embers trailing from the engine nozzle, alongside (not instead
+        /// of) the existing teardrop plume mesh -- the plume reads as the steady glow of the drive
+        /// itself, this is the turbulent exhaust it throws off. Sized and simulated in the ship's own
+        /// local space with hierarchy scaling, so it shrinks and grows correctly as the ship's own
+        /// root transform is rescaled frame to frame (everything in this sim is drawn at whatever
+        /// scale the camera's current distance calls for, never a fixed real-world size).
+        /// </summary>
+        static ParticleSystem BuildExhaust(Transform parent)
+        {
+            var go = new GameObject("Exhaust");
+            go.transform.SetParent(parent, false);
+            // Cone shape emits along local +Z by default; the hull's nose is +Z (see ShipModels'
+            // doc comment), so the whole emitter is turned to face aft instead of flipping the shape.
+            go.transform.localPosition = new Vector3(0, 0, -0.5f);
+            go.transform.localRotation = Quaternion.Euler(0, 180, 0);
+
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.loop = true;
+            main.playOnAwake = false;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+            main.startLifetime = 0.3f;
+            main.startSpeed = 1.1f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.06f);
+            main.startColor = new Color(0.75f, 0.88f, 1f, 1f);
+            main.maxParticles = 150;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 70f;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 7f;
+            shape.radius = 0.015f;
+
+            var colorOverLifetime = ps.colorOverLifetime;
+            colorOverLifetime.enabled = true;
+            var fade = new Gradient();
+            fade.SetKeys(
+                new[] { new GradientColorKey(new Color(0.9f, 0.95f, 1f), 0f), new GradientColorKey(new Color(0.4f, 0.7f, 1f), 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+            colorOverLifetime.color = fade;
+
+            var sizeOverLifetime = ps.sizeOverLifetime;
+            sizeOverLifetime.enabled = true;
+            sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 1, 1, 0.2f));
+
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.sharedMaterial = plumeMaterial;
+            r.renderMode = ParticleSystemRenderMode.Billboard;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            r.alignment = ParticleSystemRenderSpace.View;
+
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            return ps;
         }
 
         /// <summary>
@@ -318,6 +382,18 @@ namespace SolarSystem.Views
             block.SetColor(ColorId, Color.white);
             SetBlock();
             plume.enabled = visible && burning;
+            SetExhaust(visible && burning);
+        }
+
+        /// <summary>Starts/stops the exhaust emitter only on an actual state change -- <see cref="ParticleSystem.Stop"/>
+        /// defaults to letting already-spawned embers finish fading out rather than clearing them instantly,
+        /// which reads as the drive spooling down rather than snapping off.</summary>
+        void SetExhaust(bool want)
+        {
+            if (want == exhaustPlaying) return;
+            exhaustPlaying = want;
+            if (want) exhaust.Play();
+            else exhaust.Stop();
         }
 
         /// <summary>
@@ -440,6 +516,7 @@ namespace SolarSystem.Views
             block.SetColor(ColorId, Color.Lerp(Color.white, new Color(0.22f, 0.2f, 0.19f), burnt));
             SetBlock();
             plume.enabled = false;
+            HardStopExhaust();
             return true;
         }
 
@@ -465,6 +542,15 @@ namespace SolarSystem.Views
             block.SetColor(ColorId, new Color(0.35f, 0.33f, 0.32f));
             SetBlock();
             plume.enabled = false;
+            HardStopExhaust();
+        }
+
+        /// <summary>A wrecked or derelict hull cuts its exhaust immediately rather than letting it fade
+        /// (see <see cref="SetExhaust"/>) -- the drive is gone, not just throttled down.</summary>
+        void HardStopExhaust()
+        {
+            exhaustPlaying = false;
+            exhaust.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
 
         void SetBlock()
@@ -488,6 +574,7 @@ namespace SolarSystem.Views
             if (!value)
             {
                 plume.enabled = false;
+                HardStopExhaust();
                 foreach (var g in glows) g.R.enabled = false;
                 if (shieldRingRenderer != null) shieldRingRenderer.enabled = false;
             }

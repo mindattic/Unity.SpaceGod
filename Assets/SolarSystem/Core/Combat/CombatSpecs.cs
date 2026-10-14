@@ -12,6 +12,11 @@ namespace SolarSystem.Core
         FighterGuns,
         Torpedo,
 
+        /// <summary>A fixed spinal kinetic cannon: no turret traverse, so the hull itself must aim it
+        /// (see <see cref="Battle.BroadsideFacing"/>) -- the tradeoff for the single hardest-hitting,
+        /// longest-ranged non-missile shot in the game.</summary>
+        Railgun,
+
         /// <summary>Launches drill-tipped boarding pods that punch into a hull and put marines aboard.</summary>
         BoardingPods,
 
@@ -45,6 +50,11 @@ namespace SolarSystem.Core
         public static readonly WeaponSpec PointDefense = new WeaponSpec { RangeKm = 3.5, Damage = 10, Cooldown = 0.35, Accuracy = 0.5, AntiSmall = true };
         public static readonly WeaponSpec FighterGuns = new WeaponSpec { RangeKm = 1.6, Damage = 14, Cooldown = 0.3, Accuracy = 0.55 };
         public static readonly WeaponSpec Torpedo = new WeaponSpec { RangeKm = 4, Damage = 420, Cooldown = 40, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.9, Salvo = 1, Ammo = 2 };
+
+        /// <summary>A kinetic spinal gun: the longest non-missile range and the hardest single hit
+        /// outside a torpedo, at the slowest cooldown -- a precise, patient weapon built around one
+        /// shot landing hard rather than sustained fire.</summary>
+        public static readonly WeaponSpec Railgun = new WeaponSpec { RangeKm = 30, Damage = 260, Cooldown = 12, Accuracy = 0.85 };
 
         /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
         public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };
@@ -101,6 +111,7 @@ namespace SolarSystem.Core
             {
                 case SubsystemKind.LaserTurret: return 220;
                 case SubsystemKind.HeavyLaser: return 380;
+                case SubsystemKind.Railgun: return 420;
                 case SubsystemKind.MissileLauncher: return 260;
                 case SubsystemKind.PointDefense: return 90;
                 case SubsystemKind.Engine: return 300;
@@ -122,6 +133,7 @@ namespace SolarSystem.Core
             {
                 case SubsystemKind.LaserTurret: return WeaponSpec.Laser;
                 case SubsystemKind.HeavyLaser: return WeaponSpec.Heavy;
+                case SubsystemKind.Railgun: return WeaponSpec.Railgun;
                 case SubsystemKind.MissileLauncher: return WeaponSpec.Missiles;
                 case SubsystemKind.PointDefense: return WeaponSpec.PointDefense;
                 case SubsystemKind.FighterGuns: return WeaponSpec.FighterGuns;
@@ -137,6 +149,7 @@ namespace SolarSystem.Core
             {
                 case SubsystemKind.LaserTurret: return "Laser turret";
                 case SubsystemKind.HeavyLaser: return "Heavy laser";
+                case SubsystemKind.Railgun: return "Railgun";
                 case SubsystemKind.MissileLauncher: return "Missile launcher";
                 case SubsystemKind.PointDefense: return "Point defence";
                 case SubsystemKind.FighterGuns: return "Guns";
@@ -294,7 +307,9 @@ namespace SolarSystem.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.035, 0.0),
-                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.12, arcCenterDeg: 0, arcWidthDeg: 150),
+                    // A fixed spinal railgun rather than a turret: the Destroyer's whole identity is
+                    // closing fast to bring its nose to bear, then landing one hard shot.
+                    new SubsystemDef(SubsystemKind.Railgun, 0, 0.03, 0.3, arcCenterDeg: 0, arcWidthDeg: 120),
                     new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.07, -0.25, arcCenterDeg: 0, arcWidthDeg: 150),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.05, 0.02, 0.2),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.05, 0.02, 0.2),
@@ -351,6 +366,9 @@ namespace SolarSystem.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.Drill, 0, 0, 0.45),
+                    // The "heavy fighter": tankier and harder-hitting than the Courier but far slower
+                    // to reload, piloted the same way as any other forward-mounted gun.
+                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.03, 0.3, arcCenterDeg: 0, arcWidthDeg: 50),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, 0.05),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.07, -0.1),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.1, arcCenterDeg: 0, arcWidthDeg: 180),
@@ -368,6 +386,29 @@ namespace SolarSystem.Core
                 Crew = 6, Marines = 0,
                 Layout = new[]
                 {
+                    // The "light fighter": the fastest, most agile hull in the game carries the
+                    // fastest-firing forward gun to match -- rapid, low-damage autocannon fire, not a
+                    // single hard-hitting shot.
+                    new SubsystemDef(SubsystemKind.FighterGuns, 0, -0.01, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.035, 0.05),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.03, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.44),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
+                },
+            } },
+            [ShipClass.Fighter] = new[] { new CombatSpec
+            {
+                DesignName = "Fighter", LengthKm = 0.1,
+                Hull = 1800, Shield = 700, ShieldRegen = 12, Armor = 1, MaxSpeed = 0.32, Accel = 0.018, Decel = 0.02,
+                BoostSpeedMultiplier = 1.7, BoostDurationS = 16, TurnRateDegS = 26,
+                Crew = 2, Marines = 0,
+                Layout = new[]
+                {
+                    // A dedicated dogfighter: twin forward guns rather than the Courier's single gun,
+                    // traded against a lighter hull than either existing "fighter" archetype.
+                    new SubsystemDef(SubsystemKind.FighterGuns, -0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.FighterGuns, 0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.035, 0.05),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.03, arcCenterDeg: 0, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),

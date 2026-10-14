@@ -18,6 +18,45 @@ namespace SolarSystem.Core
         public double StrafeRight, StrafeUp;
 
         public bool Boost;
+
+        /// <summary>Holding the cruise key: see <see cref="PilotCruiseState"/>.</summary>
+        public bool Cruise;
+
+        /// <summary>True whenever the hull is in an active battle (set by the Runtime layer from
+        /// <c>ship.Battle</c>/<c>BattleUnit.PlayerControlled</c>) -- cruise is a pure open-space travel
+        /// tier and must drop the instant combat is live, win or lose.</summary>
+        public bool InCombat;
+    }
+
+    /// <summary>
+    /// Ramp state for the cruise drive (see <see cref="PilotFlight.Step"/>): a second, much faster
+    /// speed tier for open-space travel, distinct from tactical boost. Persists across frames like
+    /// <see cref="PilotInput"/>'s caller-owned position/velocity/forward do, so it lives in its own
+    /// small struct the Runtime layer keeps alongside them.
+    /// </summary>
+    public struct PilotCruiseState
+    {
+        /// <summary>0 (tactical flight) .. 1 (full cruise speed) -- eases up over
+        /// <see cref="PilotTuning.CruiseRampS"/> while engaged, but drops to 0 instantly the moment any
+        /// disqualifying condition fires (damage, combat, throttling down, or turning hard), rather
+        /// than easing back down -- cruise is meant to feel like it snaps off, not coast down.</summary>
+        public double RampT;
+
+        double lastHull;
+        bool hasLastHull;
+
+        /// <summary>Whether cruise is contributing any extra speed at all right now.</summary>
+        public bool Active => RampT > 0;
+
+        /// <summary>Tracks the hull's own health between frames purely to notice a hit; has nothing to
+        /// do with repairs or destruction, which <see cref="ShipCombat"/> already owns.</summary>
+        internal bool NoteHullAndCheckDamage(double hull)
+        {
+            bool tookDamage = hasLastHull && hull < lastHull - 1e-9;
+            lastHull = hull;
+            hasLastHull = true;
+            return tookDamage;
+        }
     }
 
     /// <summary>
@@ -34,24 +73,33 @@ namespace SolarSystem.Core
         /// <summary>Boost drains twice as fast as it recharges.</summary>
         const double RechargeFraction = 0.5;
 
-        public static void Step(ref DVec3 pos, ref DVec3 vel, ref DVec3 forward, ShipCombat combat, in PilotInput input, double dt)
+        /// <summary>Heading drift from the desired forward still read as "flying roughly straight";
+        /// anything sharper is a deliberate turn and drops cruise.</summary>
+        const double CruiseMaxHeadingDriftDeg = 5;
+
+        /// <summary>Throttle below this reads as throttling down out of cruise, not holding it floored.</summary>
+        const double CruiseMinThrottle = 0.9;
+
+        public static void Step(ref DVec3 pos, ref DVec3 vel, ref DVec3 forward, ref double angularRateDegS, ref PilotCruiseState cruise, ShipCombat combat, in PilotTuning tuning, in PilotInput input, double dt)
         {
-            var spec = combat.Spec;
-            TurnToward(ref forward, input.DesiredForward, spec.TurnRateDegS, dt);
+            var forwardBeforeTurn = forward;
+            TurnToward(ref forward, input.DesiredForward, tuning.TurnRateDegS, tuning.AngularRampS, ref angularRateDegS, dt);
 
             // Holding boost only ever drains it (never recharges, even once empty); recharge only
             // resumes once released — otherwise holding it down at empty would flicker on and off.
-            bool wantsBoost = input.Boost && spec.BoostDurationS > 0;
+            bool wantsBoost = input.Boost && tuning.BoostDurationS > 0;
             bool boosting = wantsBoost && combat.BoostFraction > 0;
-            if (spec.BoostDurationS > 0)
+            if (tuning.BoostDurationS > 0)
             {
-                double rate = 1 / spec.BoostDurationS;
+                double rate = 1 / tuning.BoostDurationS;
                 combat.BoostFraction = wantsBoost
                     ? Math.Max(0, combat.BoostFraction - rate * dt)
                     : Math.Min(1, combat.BoostFraction + rate * RechargeFraction * dt);
             }
-            double boostMult = boosting ? spec.BoostSpeedMultiplier : 1;
-            double maxSpeed = spec.MaxSpeed * boostMult;
+            double boostMult = boosting ? tuning.BoostSpeedMultiplier : 1;
+
+            double cruiseMult = StepCruise(ref cruise, input, forwardBeforeTurn, combat, tuning, dt);
+            double maxSpeed = tuning.MaxSpeed * boostMult * cruiseMult;
 
             var up = Math.Abs(DVec3.Dot(forward, DVec3.UnitZ)) > 0.98 ? DVec3.UnitX : DVec3.UnitZ;
             var right = DVec3.Cross(forward, up).Normalized;
@@ -62,27 +110,82 @@ namespace SolarSystem.Core
                 + trueUp * (input.StrafeUp * maxSpeed * StrafeSpeedFraction);
 
             var dv = desired - vel;
-            // Boosting is a stronger burn too (more thrust, not just a higher redline), so the extra
-            // speed is actually reachable within the boost's own duration.
-            double accel = (desired.LengthSquared >= vel.LengthSquared ? spec.Accel : spec.Decel) * boostMult;
+            // Boosting (or cruising) is a stronger burn too (more thrust, not just a higher redline),
+            // so the extra speed is actually reachable within the boost's/cruise's own ramp.
+            double accel = (desired.LengthSquared >= vel.LengthSquared ? tuning.Accel : tuning.Decel) * boostMult * cruiseMult;
             double step = accel * dt;
             vel += dv.Length > step ? dv.Normalized * step : dv;
             pos += vel * dt;
         }
 
-        static void TurnToward(ref DVec3 forward, DVec3 dir, double degPerSec, double dt)
+        /// <summary>
+        /// Advances the cruise drive's ramp and returns this frame's speed multiplier (1 when not
+        /// cruising). Engaging requires holding <see cref="PilotInput.Cruise"/> at near-full throttle
+        /// while flying close to straight, with no boost and no active battle; once engaged it eases
+        /// from 1x to <see cref="PilotTuning.CruiseSpeedMultiplier"/> over
+        /// <see cref="PilotTuning.CruiseRampS"/> seconds. Any disqualifying condition -- including this
+        /// frame's hit, checked here rather than left to the caller since <see cref="ShipCombat.Hull"/>
+        /// is already in hand -- snaps the ramp back to zero immediately rather than easing it down.
+        /// </summary>
+        static double StepCruise(ref PilotCruiseState cruise, in PilotInput input, DVec3 forwardBeforeTurn, ShipCombat combat, in PilotTuning tuning, double dt)
         {
-            if (dir.LengthSquared < 1e-12) return;
+            bool tookDamage = cruise.NoteHullAndCheckDamage(combat.Hull);
+            if (tuning.CruiseSpeedMultiplier <= 1 || tuning.CruiseRampS <= 0)
+            {
+                cruise.RampT = 0;
+                return 1;
+            }
+
+            bool headingStraight = input.DesiredForward.LengthSquared < 1e-12
+                || DVec3.Dot(forwardBeforeTurn, input.DesiredForward.Normalized) > Math.Cos(CruiseMaxHeadingDriftDeg * Astro.Deg2Rad);
+            bool eligible = input.Cruise && !input.Boost && !input.InCombat && !tookDamage
+                && input.Throttle >= CruiseMinThrottle && headingStraight;
+
+            if (!eligible)
+            {
+                cruise.RampT = 0;
+                return 1;
+            }
+            cruise.RampT = Math.Min(1, cruise.RampT + dt / tuning.CruiseRampS);
+            return 1 + (tuning.CruiseSpeedMultiplier - 1) * cruise.RampT;
+        }
+
+        /// <summary>Turns toward <paramref name="dir"/> with angular inertia: <paramref name="angularRateDegS"/>
+        /// ramps toward <paramref name="degPerSec"/> over <paramref name="rampS"/> seconds (the rotational
+        /// equivalent of the hull's linear accel cap) rather than snapping straight to the max rate, and
+        /// ramps back down as the hull nears alignment so it eases in rather than oscillating around the
+        /// target. A non-positive <paramref name="rampS"/> falls back to the old instant-snap behavior.</summary>
+        static void TurnToward(ref DVec3 forward, DVec3 dir, double degPerSec, double rampS, ref double angularRateDegS, double dt)
+        {
+            if (rampS <= 0) { angularRateDegS = degPerSec; }
+
+            if (dir.LengthSquared < 1e-12)
+            {
+                if (rampS > 0) angularRateDegS = Math.Max(0, angularRateDegS - degPerSec / rampS * dt);
+                return;
+            }
             var want = dir.Normalized;
             double cos = Math.Max(-1, Math.Min(1, DVec3.Dot(forward, want)));
-            double angle = Math.Acos(cos);
-            double max = degPerSec * Astro.Deg2Rad * dt;
-            if (angle <= max || angle < 1e-6)
+            double angleDeg = Math.Acos(cos) * Astro.Rad2Deg;
+
+            if (rampS > 0)
+            {
+                double angularAccel = degPerSec / rampS;
+                // Brake early enough to settle exactly on the target instead of overshooting and
+                // oscillating back -- same idea as the linear dv cap just below, applied to rotation.
+                double brakingAngleDeg = angularRateDegS * angularRateDegS / (2 * angularAccel);
+                angularRateDegS = brakingAngleDeg >= angleDeg
+                    ? Math.Max(0, angularRateDegS - angularAccel * dt)
+                    : Math.Min(degPerSec, angularRateDegS + angularAccel * dt);
+            }
+
+            double maxDeg = angularRateDegS * dt;
+            if (angleDeg <= maxDeg || angleDeg < 1e-6)
             {
                 forward = want;
                 return;
             }
-            forward = DVec3.Lerp(forward, want, max / angle).Normalized;
+            forward = DVec3.Lerp(forward, want, maxDeg / angleDeg).Normalized;
         }
     }
 }

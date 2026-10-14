@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using SolarSystem.Cameras;
 using SolarSystem.Core;
+using SolarSystem.Rendering;
 using UnityEngine;
 
 namespace SolarSystem.UI
@@ -24,6 +25,21 @@ namespace SolarSystem.UI
         float lastRowClick = -10f;
         Target lastRowTarget = Target.None;
 
+        /// <summary>The crate currently picked up by a source click in the cargo panel, awaiting a
+        /// destination click; null means nothing is picked up.</summary>
+        CargoItem cargoSelected;
+
+        /// <summary>Crates per manual Buy/Sell click in the market board, shared by every good's row.</summary>
+        int tradeCrates = 1;
+
+        /// <summary>Dev/sandbox spawn panel: which faction the next spawned ship joins.</summary>
+        bool spawnHostile;
+
+        /// <summary>Collapse state for panels that can sit over the 3D view and get in the way --
+        /// same "[-]/[+] TITLE" bar <see cref="DrawNavigator"/> already uses, so Market/Cargo/Help can
+        /// be shrunk to just their title bar without closing them outright.</summary>
+        bool marketOpen = true, cargoOpen = true, helpOpen = true;
+
         static readonly Color Accent = new Color(0.45f, 0.85f, 1f);
         static readonly Color Dim = new Color(0.62f, 0.7f, 0.78f);
 
@@ -34,6 +50,9 @@ namespace SolarSystem.UI
             EnsureStyles();
             if (Event.current.type == EventType.Layout) app.UiRects.Clear();
 
+            // Spawn & Pilot is its own full screen, not an overlay panel -- everything else waits.
+            if (app.ShowSpawn) { DrawSpawn(); return; }
+
             if (app.Travel.Active) DrawTravel();
             else DrawWorldOverlay();
             if (!app.ShowHud) return;
@@ -43,6 +62,7 @@ namespace SolarSystem.UI
             DrawSelection();
             DrawStatus();
             if (app.ShowMarket) DrawMarket();
+            if (app.ShowCargo) DrawCargo();
             if (app.ShowHelp) DrawHelp();
             DrawToast();
         }
@@ -615,7 +635,9 @@ namespace SolarSystem.UI
                     lines.Add(("Status", ship.Battle != null ? "Fighting in the " + ship.Battle.Name : "Holding orbit at " + body.Name));
                     lines.Add(("Altitude", Km(c.Orbit.RadiusKm - body.RadiusKm)));
                     lines.Add(("Orbital speed", c.Orbit.SpeedKmS.ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
-                    lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
+                    // A freshly spawned or not-yet-scheduled ship has no destination yet (-1).
+                    if (c.DestinationBody >= 0)
+                        lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
                 }
                 var giving = app.Fleet.EvadingFrom(ship);
                 var off = app.Fleet.EvasionOf(ship);
@@ -794,18 +816,33 @@ namespace SolarSystem.UI
             if (t.IsBody) foreach (var s in app.Economy.At(t.Body)) { market = s; break; }
             if (t.IsShip && t.Ship.Controller.CargoDestination != null) market = t.Ship.Controller.CargoDestination;
 
+            // Buy/Sell only make sense for a market the player's own ship could actually hand goods
+            // over at right now -- not one merely being looked at from across the system.
+            bool canTrade = market != null && app.CanTradeNow(market);
+
             const float rowH = 17;
-            float w = 430;
-            float h = 62 + GoodInfo.Count * rowH;
+            float w = canTrade ? 600 : 430;
+            float h = marketOpen ? 62 + GoodInfo.Count * rowH + (canTrade ? 20 : 0) : 34;
             var r = Panel(new Rect(Screen.width - w - 10, 72, w, h));
-            var old = GUI.contentColor;
             string heading = market != null ? "MARKET  ·  " + market.Name : "MARKET  ·  system average";
-            GUI.Label(new Rect(r.x + 12, r.y + 8, w - 24, 22), heading, title);
+            if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (marketOpen ? "[-]  " : "[+]  ") + heading, title)) marketOpen = !marketOpen;
+            if (!marketOpen) return;
+            var old = GUI.contentColor;
             GUI.contentColor = Dim;
-            GUI.Label(new Rect(r.x + 12, r.y + 30, w, 18), market != null
+            GUI.Label(new Rect(r.x + 12, r.y + 30, w - 24, 18), market != null
                 ? market.Owner.Name + "   (select a body or a trader to change, M to close)"
                 : "Select a port to see its market.   M to close", small);
-            float y = r.y + 50;
+            if (canTrade)
+            {
+                GUI.contentColor = Color.white;
+                GUI.Label(new Rect(r.x + 12, r.y + 50, 260, 18), "Your credits: " + Credits(app.World.PilotedShip.Faction.Treasury), small);
+                GUI.Label(new Rect(r.xMax - 150, r.y + 50, 40, 18), "Qty", small);
+                if (GUI.Button(new Rect(r.xMax - 95, r.y + 48, 22, 20), "-", button)) tradeCrates = Math.Max(1, tradeCrates - 1);
+                GUI.Label(new Rect(r.xMax - 70, r.y + 50, 30, 18), tradeCrates.ToString(CultureInfo.InvariantCulture), small);
+                if (GUI.Button(new Rect(r.xMax - 40, r.y + 48, 22, 20), "+", button)) tradeCrates++;
+            }
+            float y = r.y + 50 + (canTrade ? 20 : 0);
+            GUI.contentColor = Dim;
             GUI.Label(new Rect(r.x + 12, y, 150, rowH), "Good", small);
             GUI.Label(new Rect(r.x + 170, y, 80, rowH), market != null ? "Stock" : "", small);
             GUI.Label(new Rect(r.x + 250, y, 80, rowH), "Price", small);
@@ -813,8 +850,9 @@ namespace SolarSystem.UI
             y += rowH;
             for (int g = 0; g < GoodInfo.Count; g++)
             {
-                var info = GoodInfo.Of((Good)g);
-                double ratio = market != null ? market.Price[g] / info.BasePrice : app.Economy.PriceIndex((Good)g);
+                var good = (Good)g;
+                var info = GoodInfo.Of(good);
+                double ratio = market != null ? market.Price[g] / info.BasePrice : app.Economy.PriceIndex(good);
                 GUI.contentColor = Color.white;
                 GUI.Label(new Rect(r.x + 12, y, 160, rowH), info.Name, small);
                 if (market != null)
@@ -828,9 +866,175 @@ namespace SolarSystem.UI
                 string price = (market != null ? market.Price[g] : info.BasePrice * ratio).ToString("N0", CultureInfo.InvariantCulture);
                 GUI.Label(new Rect(r.x + 250, y, 90, rowH), price, small);
                 if (market == null) GUI.Label(new Rect(r.x + 340, y, 90, rowH), "x" + ratio.ToString("0.00", CultureInfo.InvariantCulture), small);
+                if (canTrade)
+                {
+                    if (GUI.Button(new Rect(r.x + 440, y - 1, 68, rowH), "Buy", button)) ClickBuy(market, good);
+                    if (GUI.Button(new Rect(r.x + 515, y - 1, 68, rowH), "Sell", button)) ClickSell(market, good);
+                }
                 y += rowH;
             }
             GUI.contentColor = old;
+        }
+
+        void ClickBuy(Settlement market, Good good)
+        {
+            var ship = app.World.PilotedShip;
+            var outcome = app.Economy.BuyIntoHold(ship, market, good, tradeCrates, out int bought);
+            if (bought > 0)
+                app.ShowToast("Bought " + bought + " crate" + (bought == 1 ? "" : "s") + " of " + GoodInfo.Of(good).Name +
+                    (bought < tradeCrates ? "  (cargo hold is full)" : ""));
+            else
+                app.ShowToast(outcome switch
+                {
+                    Economy.TradeOutcome.NoStock => market.Name + " has none to sell",
+                    Economy.TradeOutcome.CantAfford => "Not enough credits",
+                    Economy.TradeOutcome.NoRoom => "Cargo hold is full",
+                    Economy.TradeOutcome.CannotDock => "Not welcome to trade here",
+                    _ => "Can't buy that right now",
+                });
+        }
+
+        void ClickSell(Settlement market, Good good)
+        {
+            var ship = app.World.PilotedShip;
+            var outcome = app.Economy.SellFromHold(ship, market, good, tradeCrates, out int sold);
+            if (sold > 0)
+                app.ShowToast("Sold " + sold + " crate" + (sold == 1 ? "" : "s") + " of " + GoodInfo.Of(good).Name);
+            else
+                app.ShowToast(outcome switch
+                {
+                    Economy.TradeOutcome.NothingToSell => "None of that in the hold",
+                    Economy.TradeOutcome.CannotDock => "Not welcome to trade here",
+                    _ => "Can't sell that right now",
+                });
+        }
+
+        // ---------------------------------------------------------------- spawn (dev/sandbox)
+
+        static readonly ShipClass[] SpawnClasses = (ShipClass[])Enum.GetValues(typeof(ShipClass));
+
+        /// <summary>
+        /// USS-T9 dev/sandbox tool, redesigned as its own full screen rather than a small corner panel:
+        /// every <see cref="ShipClass"/> laid out as a grid of real rendered hull previews
+        /// (<see cref="Rendering.ShipThumbnails"/>, the same model a live ship uses) -- click one to
+        /// spawn a ship of it (a random design, if the class has more than one) at the camera's current
+        /// position and immediately pilot it. See <see cref="SolarSystemApp.SpawnShip"/>.
+        /// </summary>
+        void DrawSpawn()
+        {
+            GUI.Box(new Rect(0, 0, Screen.width, Screen.height), GUIContent.none, panel);
+            RegisterUi(new Rect(0, 0, Screen.width, Screen.height));
+
+            GUI.Label(new Rect(40, 24, 500, 30), "SPAWN & PILOT", title);
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(40, 56, 700, 20), "Click a hull to spawn and pilot it at the camera   ·   V to close", small);
+            GUI.contentColor = Color.white;
+
+            if (GUI.Button(new Rect(Screen.width - 210, 28, 160, 26), spawnHostile ? "FACTION: HOSTILE" : "FACTION: HOME", spawnHostile ? buttonActive : button))
+                spawnHostile = !spawnHostile;
+            if (GUI.Button(new Rect(Screen.width - 40, 24, 30, 30), "X", button))
+                app.ShowSpawn = false;
+
+            var faction = spawnHostile ? app.World.Pirates : app.World.Sol;
+            const float cell = 176f, gap = 20f, top = 96f, labelH = 30f;
+            int perRow = Mathf.Max(1, Mathf.FloorToInt((Screen.width - 80 + gap) / (cell + gap)));
+            float gridW = perRow * (cell + gap) - gap;
+            float startX = (Screen.width - gridW) * 0.5f;
+
+            for (int i = 0; i < SpawnClasses.Length; i++)
+            {
+                var cls = SpawnClasses[i];
+                int col = i % perRow, line = i / perRow;
+                var r = new Rect(startX + col * (cell + gap), top + line * (cell + labelH + gap), cell, cell + labelH);
+                bool hover = r.Contains(Event.current.mousePosition);
+                GUI.Box(r, GUIContent.none, hover ? rowSelected : row);
+                var tex = ShipThumbnails.For(cls, faction);
+                if (tex != null) GUI.DrawTexture(new Rect(r.x + 6, r.y + 6, cell - 12, cell - 12), tex, ScaleMode.ScaleToFit);
+                GUI.Label(new Rect(r.x, r.yMax - labelH, cell, labelH), ShipClassSpec.Of(cls).DisplayName, title);
+                if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+                {
+                    app.SpawnShip(cls, spawnHostile);
+                    app.ShowSpawn = false;
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- cargo hold
+
+        /// <summary>
+        /// The player-piloted ship's grid cargo hold (<see cref="CargoHold"/>): click an occupied cell
+        /// to pick up its crate, then click an empty cell to drop it there; clicking the picked-up
+        /// crate again cancels. Separate from, and drawn independently of, the market board above.
+        /// </summary>
+        void DrawCargo()
+        {
+            var ship = app.World.PilotedShip;
+            if (ship == null)
+            {
+                cargoSelected = null;
+                return;
+            }
+            var hold = ship.PersonalHold;
+            const float cell = 28f;
+            float w = Math.Max(260, hold.Width * cell + 24);
+            float h = cargoOpen ? 74 + hold.Height * cell + (cargoSelected != null ? 28 : 0) : 34;
+            var r = Panel(new Rect(10, Screen.height - h - 56, w, h));
+
+            if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (cargoOpen ? "[-]  " : "[+]  ") + "CARGO HOLD  ·  " + ship.Name, title)) cargoOpen = !cargoOpen;
+            if (!cargoOpen) return;
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 12, r.y + 28, w - 24, 32),
+                cargoSelected != null ? "Click a cell to move the crate there  (click it again to cancel)" : "Click a crate to pick it up   [I to close]", small);
+            GUI.contentColor = Color.white;
+
+            var atCell = new CargoItem[hold.Width, hold.Height];
+            foreach (var item in hold.Items)
+                for (int dx = 0; dx < item.Width; dx++)
+                    for (int dy = 0; dy < item.Height; dy++)
+                        atCell[item.X + dx, item.Y + dy] = item;
+
+            float gx = r.x + 12, gy = r.y + 48;
+            for (int y = 0; y < hold.Height; y++)
+            {
+                for (int x = 0; x < hold.Width; x++)
+                {
+                    var occupant = atCell[x, y];
+                    var cellRect = new Rect(gx + x * cell, gy + y * cell, cell - 2, cell - 2);
+                    string label = occupant != null ? GoodAbbreviation(occupant.Good) : "";
+                    bool isSelected = occupant != null && occupant == cargoSelected;
+                    if (GUI.Button(cellRect, label, isSelected ? buttonActive : button))
+                        ClickCargoCell(hold, x, y, occupant);
+                }
+            }
+
+            if (cargoSelected != null)
+            {
+                float by = gy + hold.Height * cell + 6;
+                if (GUI.Button(new Rect(r.x + 12, by, 90, 22), "Rotate", button))
+                    hold.Move(cargoSelected, cargoSelected.X, cargoSelected.Y, !cargoSelected.Rotated);
+            }
+        }
+
+        void ClickCargoCell(CargoHold hold, int x, int y, CargoItem occupant)
+        {
+            if (cargoSelected == null)
+            {
+                if (occupant != null) cargoSelected = occupant;
+                return;
+            }
+            if (occupant == cargoSelected)
+            {
+                cargoSelected = null;
+                return;
+            }
+            if (hold.Move(cargoSelected, x, y, cargoSelected.Rotated)) cargoSelected = null;
+            else app.ShowToast("Doesn't fit there");
+        }
+
+        static string GoodAbbreviation(Good g)
+        {
+            string name = GoodInfo.Of(g).Name;
+            return name.Length <= 3 ? name : name.Substring(0, 3);
         }
 
         static string Tonnes(double t)
@@ -924,7 +1128,7 @@ namespace SolarSystem.UI
             switch (cam.Mode)
             {
                 case SpaceCamera.CameraMode.Focus when cam.PilotLocked:
-                    s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + "   (WASD throttle/strafe, mouse to steer, Shift boost, Enter to release)";
+                    s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + "   (WASD throttle/strafe, mouse to steer, Shift boost, P to release)";
                     break;
                 case SpaceCamera.CameraMode.Focus:
                     s = "FOCUS  ·  " + TargetName(cam.FocusTarget) + "   (WASD to swim free, wheel to zoom, right-drag to orbit)";
@@ -972,12 +1176,17 @@ namespace SolarSystem.UI
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
                 "K   satellites    R   level the view to the system plane",
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
-                ",  .   time warp     P   pause     T   now     O  orbits   L  labels   H  help   U  HUD",
+                "Enter  or  P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
+                "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
+                "M   market  Buy/Sell appear while piloting near the shown settlement's body",
+                "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",
             };
-            float w = 610, h = 22 + help.Length * 17;
+            float w = 610, h = helpOpen ? 42 + help.Length * 17 : 34;
             var r = Panel(new Rect(10, Screen.height - h - 10, w, h));
+            if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (helpOpen ? "[-]  " : "[+]  ") + "CONTROLS", title)) helpOpen = !helpOpen;
+            if (!helpOpen) return;
             for (int i = 0; i < help.Length; i++)
-                GUI.Label(new Rect(r.x + 12, r.y + 10 + i * 17, w - 20, 17), help[i], small);
+                GUI.Label(new Rect(r.x + 12, r.y + 34 + i * 17, w - 20, 17), help[i], small);
         }
 
         void DrawToast()

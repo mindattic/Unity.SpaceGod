@@ -71,10 +71,24 @@ namespace SolarSystem.Cameras
         /// matches its own facing instead of taking right-drag orbit input, which steers the ship instead.</summary>
         public bool PilotLocked { get; private set; }
 
+        /// <summary>While piloting: a ship the camera leans toward keeping framed, without taking the
+        /// piloted ship's own facing away from the player (see the <see cref="PilotLocked"/> branch of
+        /// <see cref="UpdateFocus"/>). <see cref="Target.None"/> when nothing is locked.</summary>
+        public Target PilotLockTarget { get; set; } = Target.None;
+
         const float TravelSeconds = 1.6f;
         const float LevelSeconds = 1.4f;
         const float LookSensitivity = 0.12f;
         const double MinSpeedMultiplier = 1.0 / 64, MaxSpeedMultiplier = 64;
+
+        /// <summary>How fast the pilot chase camera's rotation catches up to the hull's own facing
+        /// (and, with a lock, the blended look-at-target facing) -- high enough to feel tight behind
+        /// the ship, low enough that sharp turns read as a chase rather than a rigid weld.</summary>
+        const float PilotCamResponseHz = 12f;
+
+        /// <summary>How far the camera leans from the ship's own facing toward looking at a locked
+        /// target (0 = ignores the lock, 1 = looks straight at it regardless of the ship's facing).</summary>
+        const float PilotLockTrackStrength = 0.6f;
 
         readonly ICameraWorld world;
 
@@ -323,7 +337,20 @@ namespace SolarSystem.Cameras
         {
             if (PilotLocked)
             {
-                Rotation = world.TargetRotation(FocusTarget);
+                var shipRotation = world.TargetRotation(FocusTarget);
+                var wantRotation = shipRotation;
+                if (!PilotLockTarget.IsNone)
+                {
+                    var toTarget = world.TargetScene(PilotLockTarget) - world.TargetScene(FocusTarget);
+                    if (toTarget.LengthSquared > 1e-12)
+                    {
+                        var lookAt = Quaternion.LookRotation(ToVector(toTarget.Normalized), shipRotation * Vector3.up);
+                        wantRotation = Quaternion.Slerp(shipRotation, lookAt, PilotLockTrackStrength);
+                    }
+                }
+                // Eases toward the hull's facing (and any lock-on blend) rather than welding to it
+                // instantly, so sharp turns read as a chase rather than a rigid 1:1 attachment.
+                Rotation = Quaternion.Slerp(Rotation, wantRotation, 1f - Mathf.Exp(-dt * PilotCamResponseHz));
                 if (Math.Abs(input.Scroll) > 0)
                     zoomTarget = Math.Max(MinZoom(FocusTarget), Math.Min(20, zoomTarget * Math.Pow(0.82, input.Scroll)));
                 zoom = Math.Exp(Math.Log(zoom) + (Math.Log(zoomTarget) - Math.Log(zoom)) * (1 - Math.Exp(-dt * 10)));

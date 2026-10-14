@@ -55,9 +55,9 @@ namespace SolarSystem.Core
         public bool Resuming => resuming;
 
         /// <summary>Each easing step multiplies (pausing) or divides (resuming) the speed by this.</summary>
-        public const double EaseFactor = 0.99;
+        public const double EaseFactor = 0.97;
 
-        /// <summary>Easing steps per real second, so the ease takes the same time at any frame rate (about 3.8 s each way).</summary>
+        /// <summary>Easing steps per real second, so the ease takes the same time at any frame rate (about 1.3 s each way).</summary>
         public const double EaseStepsPerSecond = 120;
 
         /// <summary>Below this share of full speed a pause snaps to a dead stop; a resume starts from it.</summary>
@@ -66,7 +66,7 @@ namespace SolarSystem.Core
         bool paused, pausing, resuming;
 
         /// <summary>
-        /// The player's pause: time slows by 0.99 a step until it is under 1% of full speed, then stops;
+        /// The player's pause: time slows by 0.97 a step until it is under 1% of full speed, then stops;
         /// pressed again (or while still slowing), it picks up from 1% (or wherever it had got to) and
         /// speeds back up the same way.
         /// </summary>

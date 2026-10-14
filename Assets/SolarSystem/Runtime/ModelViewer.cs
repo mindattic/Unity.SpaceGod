@@ -13,7 +13,7 @@ namespace SolarSystem
     /// Kenney-craft plating bug directly instead of by chance during a tour capture. Deliberately kept
     /// independent of <see cref="UI.Hud"/>/<see cref="SolarSystemApp"/> (both have large unrelated
     /// in-flight changes elsewhere right now) rather than wired into the real menu — toggle with the
-    /// <c>V</c> key, or open straight to a model with <c>-modelviewer &lt;name&gt;</c> on the command
+    /// <c>F9</c> key, or open straight to a model with <c>-modelviewer &lt;name&gt;</c> on the command
     /// line (e.g. scripted into a capture tour stop later). Not a content browser: no search/filter, no
     /// editing, no side-by-side comparison — just "put this one model in front of the camera and let me
     /// look at it."
@@ -74,7 +74,9 @@ namespace SolarSystem
             var mouse = Mouse.current;
             if (kb == null) return;
 
-            if (kb.vKey.wasPressedThisFrame)
+            // F9, not V: the Spawn & Pilot screen (Hud.DrawSpawn) took V once it grew real rendered
+            // thumbnails of its own (ShipThumbnails) -- the two used to collide on the same key.
+            if (kb.f9Key.wasPressedThisFrame)
             {
                 if (open) Close();
                 else Open(selectedIndex >= 0 ? selectedIndex : 0);
@@ -222,7 +224,7 @@ namespace SolarSystem
             GUI.Box(new Rect(12, 12, panelWidth, Screen.height - 24), string.Empty, panelStyle);
             GUI.Label(new Rect(24, 20, panelWidth - 24, 24), "MODEL VIEWER", titleStyle);
             GUI.Label(new Rect(24, 46, panelWidth - 24, 40),
-                "Right-drag: orbit\nScroll: zoom\nV / Esc: close", buttonStyle);
+                "Right-drag: orbit\nScroll: zoom\nF9 / Esc: close", buttonStyle);
 
             scroll = GUI.BeginScrollView(new Rect(12, 92, panelWidth, Screen.height - 92 - 48), scroll,
                 new Rect(0, 0, panelWidth - 20, modelNames.Length * 26));

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace SolarSystem
 {
     /// <summary>
-    /// Started by <c>-autoplay</c> (see <see cref="Bootstrap"/>): runs the <see cref="SceneTour"/>
+    /// Started by <c>-demo</c> (see <see cref="Bootstrap"/>): runs the <see cref="SceneTour"/>
     /// once, then quits. Used to verify a build visually and to produce the README images. Add
     /// <c>-capture screen</c> (or <c>video</c>, or both) to save a screenshot at each stop through
     /// MindAttic.Capture — shots go to R:\MindAttic\Capture\UnitySolarSystem\UnitySolarSystem_{timestamp}.png,

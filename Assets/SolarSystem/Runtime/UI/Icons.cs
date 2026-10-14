@@ -12,7 +12,7 @@ namespace SolarSystem.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, white;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white;
 
         public static Texture2D White => white ??= Solid();
 
@@ -37,6 +37,7 @@ namespace SolarSystem.UI
                 case ShipClass.Destroyer: return chevron ??= Draw(Chevron);
                 case ShipClass.Miner: return hexagon ??= Draw(Hexagon);
                 case ShipClass.Courier: return dot ??= Draw(p => Ring(p, 0.42f, 0.16f));
+                case ShipClass.Fighter: return dart ??= Draw(p => Triangle(new Vector2(p.x * 1.8f, p.y), 0.75f));
                 default: return square ??= Draw(p => Outline(Box(p, new Vector2(0.62f, 0.62f)), 0.14f));
             }
         }
@@ -51,6 +52,7 @@ namespace SolarSystem.UI
                 case ShipClass.Cruiser: return 16;
                 case ShipClass.Destroyer: return 13;
                 case ShipClass.Courier: return 9;
+                case ShipClass.Fighter: return 8;
                 default: return 12;
             }
         }

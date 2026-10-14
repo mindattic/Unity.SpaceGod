@@ -21,6 +21,15 @@ namespace SolarSystem.Input
         public bool Boost;
         public bool Slow;
 
+        /// <summary>Held while piloting: engages the cruise drive (Elite-style) for fast open-space
+        /// travel. See <see cref="SolarSystem.Core.PilotCruiseState"/>.</summary>
+        public bool Cruise;
+
+        /// <summary>Held, not click-edged: while piloting, fires the ship's forward-mount weapons.
+        /// Left click still selects normally outside piloting, via the click-edged <see cref="SelectClicked"/>
+        /// below (gated off while piloting, so holding the trigger down and releasing it never also selects).</summary>
+        public bool Fire;
+
         public bool SelectClicked;
         public bool SelectDoubleClicked;
         public Vector2 MousePosition;
@@ -37,6 +46,10 @@ namespace SolarSystem.Input
         public bool ToggleHelp;
         public bool ToggleHud;
         public bool ToggleMarket;
+        public bool ToggleCargo;
+
+        /// <summary>Dev/sandbox panel: spawn a ship of any class at the camera and pilot it.</summary>
+        public bool ToggleSpawn;
         public bool WatchBattle;
         public bool ToggleLanes;
         public bool ToggleSatellites;
@@ -48,6 +61,14 @@ namespace SolarSystem.Input
 
         /// <summary>Takes or releases direct control of the selected/focused ship.</summary>
         public bool Pilot;
+
+        /// <summary>While piloting: locks (or clears) the camera's tracking onto the hovered/selected
+        /// ship. Shares its key with <see cref="ResetTime"/>, which is gated off while piloting so the
+        /// two never fire together.</summary>
+        public bool LockTarget;
+
+        /// <summary>While piloting, in range of this system's jump gate: activates it.</summary>
+        public bool ActivateGate;
 
         Vector2 pressPosition;
         float lastClickTime = -10f;
@@ -72,9 +93,11 @@ namespace SolarSystem.Input
             Move.y = Mathf.Clamp(Move.y, -1, 1);
             Boost = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
             Slow = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
+            Cruise = kb.jKey.isPressed;
 
             MousePosition = mouse.position.ReadValue();
             MouseDelta = mouse.delta.ReadValue();
+            Fire = mouse.leftButton.isPressed && !pointerOverUi;
             LookHeld = mouse.rightButton.isPressed;
             LookDelta = LookHeld ? MouseDelta : Vector2.zero;
             if (mouse.rightButton.wasPressedThisFrame)
@@ -118,13 +141,16 @@ namespace SolarSystem.Input
             ToggleScale = kb.gKey.wasPressedThisFrame || kb.backquoteKey.wasPressedThisFrame;
             TimeFaster = kb.periodKey.wasPressedThisFrame || kb.equalsKey.wasPressedThisFrame || kb.numpadPlusKey.wasPressedThisFrame;
             TimeSlower = kb.commaKey.wasPressedThisFrame || kb.minusKey.wasPressedThisFrame || kb.numpadMinusKey.wasPressedThisFrame;
-            TogglePause = kb.spaceKey.wasPressedThisFrame || kb.pKey.wasPressedThisFrame || kb.pauseKey.wasPressedThisFrame;
+            TogglePause = kb.spaceKey.wasPressedThisFrame || kb.pauseKey.wasPressedThisFrame;
             ResetTime = kb.tKey.wasPressedThisFrame;
+            LockTarget = kb.tKey.wasPressedThisFrame;
             ToggleOrbits = kb.oKey.wasPressedThisFrame;
             ToggleLabels = kb.lKey.wasPressedThisFrame;
             ToggleHelp = kb.hKey.wasPressedThisFrame || kb.f1Key.wasPressedThisFrame;
             ToggleHud = kb.uKey.wasPressedThisFrame;
             ToggleMarket = kb.mKey.wasPressedThisFrame;
+            ToggleCargo = kb.iKey.wasPressedThisFrame;
+            ToggleSpawn = kb.vKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;
             ToggleLanes = kb.nKey.wasPressedThisFrame;
             ToggleSatellites = kb.kKey.wasPressedThisFrame;
@@ -132,7 +158,8 @@ namespace SolarSystem.Input
             CycleShips = kb.tabKey.wasPressedThisFrame;
             CycleBackward = CycleShips && Boost;
             Home = kb.homeKey.wasPressedThisFrame || kb.backspaceKey.wasPressedThisFrame;
-            Pilot = kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame;
+            Pilot = kb.pKey.wasPressedThisFrame;
+            ActivateGate = kb.yKey.wasPressedThisFrame;
 
             Key[] digits = { Key.Digit0, Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
             for (int i = 0; i < digits.Length; i++)
@@ -146,10 +173,10 @@ namespace SolarSystem.Input
             LookHeld = false;
             MouseDelta = Vector2.zero;
             Scroll = 0;
-            Boost = Slow = false;
+            Boost = Slow = Fire = Cruise = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
             NumberKey = -1;
         }
 

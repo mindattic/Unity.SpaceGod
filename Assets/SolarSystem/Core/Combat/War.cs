@@ -445,6 +445,27 @@ namespace SolarSystem.Core
             TryStartBattle(body, ship.Faction, jd);
         }
 
+        /// <summary>A player flies a piloted ship (excluded from every other gathering of "ships present" at a
+        /// body, see <see cref="PresentGroups"/>) into range of a hostile: starts a fight there if one isn't
+        /// already on, or joins the one that is, then places the piloted ship into it at its own actual flown
+        /// position -- not a formation slot -- since the Runtime pilot loop, not this battle, owns its pose
+        /// from here on (see <see cref="BattleUnit.PlayerControlled"/>). Returns null (no-op) if nothing hostile
+        /// and willing to fight is actually present.</summary>
+        public Battle TryStartPlayerBattle(Ship ship, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
+        {
+            if (ship.Destroyed || ship.Battle != null || ship.Planetside) return null;
+            int body = ship.Orbit.Body;
+            var b = BattleAt(body) ?? TryStartBattle(body, ship.Faction, jd);
+            if (b == null) return null;
+            bool h0 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[0]);
+            bool h1 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[1]);
+            int side = h0 && !h1 ? 1 : h1 && !h0 ? 0 : -1;
+            if (side < 0) return null;
+            var unit = b.AddShip(ship, side, offsetFromBodyKm - b.Anchor, forward);
+            unit.PlayerControlled = true;
+            return b;
+        }
+
         /// <summary>Starts a battle at <paramref name="body"/> if <paramref name="aggressor"/> has a quarrel with anyone there.</summary>
         public Battle TryStartBattle(int body, Faction aggressor, double jd)
         {

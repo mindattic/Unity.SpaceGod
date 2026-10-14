@@ -284,8 +284,11 @@ namespace SolarSystem.Core
             PointAtDistance(s, dist, out var pos, out var dir);
             var burn = dir * (s.AccelKmPerDay2 * Math.Min(tau, total - tau));
             var velocity = burn + DriftVelocity(s, tau);
-            // The drive points along the thrust: the flip-and-burn plus the steady velocity-matching push.
-            var thrust = (tau < half ? dir : -dir) * s.AccelKmPerDay2 + DriftAcceleration(s);
+            // Same accelerate-then-decelerate profile as ever (see dist above), but the nose stays
+            // pointed prograde the whole way instead of flipping to burn retrograde at the midpoint --
+            // a visible 180 every single trip read as dead time, not drama, so the hull now just slows
+            // (owner: "same physics, just have the ship slowing down... it doesn't look fun").
+            var thrust = dir * s.AccelKmPerDay2 + DriftAcceleration(s);
             var at = ephemeris.HelioAt(s.FrameBody, jd) + pos + Drift(s, tau);
             return new ShipState(at, thrust.Normalized, velocity.Length / Astro.SecondsPerDay, true,
                 s.PathLength > 0 ? dist / s.PathLength : 1);
@@ -1219,6 +1222,46 @@ namespace SolarSystem.Core
                 Combat = new ShipCombat(CombatSpec.RandomOf(c, rng), c),
             };
             ships.Add(ship);
+            return ship;
+        }
+
+        /// <summary>
+        /// Adds a ship built elsewhere than <see cref="AddShip"/> straight into this fleet's list:
+        /// a jump gate's arrival (see <see cref="GateTransit"/>), which clones rather than moves the
+        /// departing hull, since every other ship's id is its fixed index into this very list (ships
+        /// are never removed, only marked <see cref="Ship.Destroyed"/> in place) -- shuffling an
+        /// existing one out from the middle would desync every id after it.
+        /// </summary>
+        public void Receive(Ship ship)
+        {
+            ship.Id = ships.Count;
+            ships.Add(ship);
+        }
+
+        /// <summary>
+        /// Creates a ship of a class/design (see <see cref="AddShip"/>) and parks it at an exact
+        /// body-relative offset facing <paramref name="forward"/>, for a dev/sandbox spawn rather than
+        /// a real yard -- built the same way a jump gate's arrival parks a fresh copy at the far gate
+        /// (see <see cref="GateTransit.TryPerform"/>). Free role with every visible body as a port, so
+        /// it behaves like any independent ship if ever released from piloting.
+        /// </summary>
+        public Ship SpawnAt(string name, ShipClass c, Faction faction, int frameBody, DVec3 offsetKm, DVec3 forward, double jd)
+        {
+            var ship = AddShip(name, c, faction, ShipRole.Free);
+            var anywhere = new List<int>();
+            foreach (var b in catalog.Bodies)
+                if (b.IsVisible && !b.IsStar) anywhere.Add(b.Index);
+            ship.Ports = anywhere.ToArray();
+
+            var v = forward.LengthSquared > 1e-12 ? forward.Normalized : DVec3.UnitX;
+            var u = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
+            ship.Orbit = new ParkingOrbit
+            {
+                Body = frameBody, RadiusKm = 0, Center = offsetKm, U = u, V = v,
+                EpochJd = jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
+            };
+            ship.Phase = ShipPhase.Parked;
+            ship.PhaseStartJd = jd;
             return ship;
         }
 

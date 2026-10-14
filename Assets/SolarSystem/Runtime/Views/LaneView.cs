@@ -66,12 +66,26 @@ namespace SolarSystem.Views
                 }
                 Sprite(curve[0], 16, LaneColor * 0.7f, 2);
                 Sprite(curve[Samples], 16, LaneColor * 0.7f, 2);
-                // Traffic pulses: a few each way, at a pace that reads as speed at any zoom.
-                for (int k = 0; k < 4; k++)
+                // Ambient flow: a faint pulse each way, just to read as a live highway at any zoom,
+                // even when nothing is actually riding it right now.
+                for (int k = 0; k < 2; k++)
                 {
-                    float phase = (now * 0.06f + k / 4f + lane.Id * 0.137f) % 1f;
-                    Sprite(Along(phase), 5, PulseColor * 0.9f, 0);
-                    Sprite(Along(1 - ((phase + 0.125f) % 1f)), 4, PulseColor * 0.6f, 0);
+                    float phase = (now * 0.06f + k / 2f + lane.Id * 0.137f) % 1f;
+                    Sprite(Along(phase), 4, PulseColor * 0.35f, 0);
+                }
+                // Real traffic: every ship actually riding this lane, or holding just off it after an
+                // interrupted ride, drawn at its own live progress and tinted by faction -- the lane is
+                // the simulation's real interplanetary transport, not a decorative loop (see
+                // Hyperlanes.cs); a pulse reaching the far ramp should correspond to an actual ship.
+                foreach (var ship in app.Fleet.Ships)
+                {
+                    if (ship.Destroyed) continue;
+                    double progress;
+                    if (ship.Phase == ShipPhase.Lane && ship.LaneLeg.Lane == lane) progress = Fleet.LaneProgress(ship, eph.Jd);
+                    else if ((ship.Phase == ShipPhase.Lurk || ship.Phase == ShipPhase.Adrift) && ship.LaneLeg.Lane == lane) progress = ship.LaneHold;
+                    else continue;
+                    var fc = ship.Faction.Color;
+                    Sprite(Along((float)progress), 7, new Color(fc.R, fc.G, fc.B) * 1.3f, 0);
                 }
             }
 

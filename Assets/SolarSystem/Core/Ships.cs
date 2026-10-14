@@ -15,6 +15,12 @@ namespace SolarSystem.Core
 
         /// <summary>A small assault ship with a drill prow: it rams a hull and disgorges marines.</summary>
         Breacher,
+
+        /// <summary>A dedicated star fighter: twin forward guns, no cargo to speak of, built to escort
+        /// capital ships and freighters and to dogfight -- distinct from the Courier/Breacher hulls,
+        /// which double as light/heavy "fighters" but are really trade and assault craft that happen
+        /// to fight well.</summary>
+        Fighter,
     }
 
     public enum ShipRole
@@ -89,6 +95,7 @@ namespace SolarSystem.Core
             new ShipClassSpec(ShipClass.Miner, "Ore hauler", 0.06, false),
             new ShipClassSpec(ShipClass.Courier, "Courier", 1.2, false),
             new ShipClassSpec(ShipClass.Breacher, "Breacher", 0.5, true),
+            new ShipClassSpec(ShipClass.Fighter, "Fighter", 1.0, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];
@@ -268,11 +275,22 @@ namespace SolarSystem.Core
         /// <summary>A supply-contract bonus the destination's owner pays on delivery, credits.</summary>
         public double CargoBonus;
 
+        /// <summary>The player's personal grid-based cargo hold (<see cref="CargoHold"/>) -- separate
+        /// from the single-slot cargo fields above that the AI trade loop owns, and built only once
+        /// asked for, since only the ship currently being piloted ever needs one.</summary>
+        public CargoHold PersonalHold => personalHold ??= new CargoHold(CargoHoldSpec.Of(Spec.Class));
+        CargoHold personalHold;
+
         /// <summary>Running trade profit, credits.</summary>
         public double Credits;
 
         /// <summary>Lost in battle: kept in the list (ids are indices) but no longer simulated or drawn.</summary>
         public bool Destroyed;
+
+        /// <summary>Set alongside <see cref="Destroyed"/> when a jump gate retires this hull here
+        /// because it carried on into another system's fleet (see <see cref="GateTransit"/>) rather
+        /// than because it was actually lost -- so the Runtime draws nothing for it instead of a wreck.</summary>
+        public bool GateDeparted;
 
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;
@@ -295,6 +313,32 @@ namespace SolarSystem.Core
         /// <summary>The ship whose state this ship shares (itself unless it is an escort).</summary>
         public Ship Controller => Leader ?? this;
 
+        /// <summary>
+        /// A copy for a jump gate to hand to the destination system's fleet (see <see cref="GateTransit"/>):
+        /// everything that makes it feel like the same ship to the player -- name, hull class, combat
+        /// state (hull, shields, hardpoints), cargo and the personal hold, credits -- but none of the
+        /// origin system's scheduling state (orbit, route, journey), which the caller sets fresh for
+        /// wherever the ship actually arrives.
+        /// </summary>
+        internal Ship CloneForGateArrival() => new Ship
+        {
+            Name = Name,
+            Spec = Spec,
+            Faction = Faction,
+            Combat = Combat,
+            CapacityTonnes = CapacityTonnes,
+            HasCargo = HasCargo,
+            CargoGood = CargoGood,
+            CargoTonnes = CargoTonnes,
+            CargoCost = CargoCost,
+            CargoDestination = CargoDestination,
+            CargoBonus = CargoBonus,
+            Cargo = Cargo,
+            Credits = Credits,
+            TripsCompleted = TripsCompleted,
+            personalHold = personalHold,
+        };
+
         public override string ToString() => Name;
     }
 
@@ -304,7 +348,8 @@ namespace SolarSystem.Core
         /// <summary>Heliocentric ecliptic position, km.</summary>
         public readonly DVec3 HelioKm;
 
-        /// <summary>Where the nose points (ecliptic, unit). Opposite the velocity during the braking half of a flip-and-burn.</summary>
+        /// <summary>Where the nose points (ecliptic, unit) -- prograde throughout a transit, including
+        /// its braking half (no visual 180 to burn retrograde; see <see cref="Fleet.BaseStateOf"/>).</summary>
         public readonly DVec3 Facing;
 
         public readonly double SpeedKmS;

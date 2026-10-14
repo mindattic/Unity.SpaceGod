@@ -124,6 +124,13 @@ namespace SolarSystem.Views
                     e.Color = Color.Lerp(faction, Color.white, 0.45f) * (fx.Size > 100 ? 1.6f : 1.1f);
                     e.Life = fx.Size > 100 ? 0.35f : 0.22f;
                     break;
+                case FxKind.Railgun:
+                case FxKind.RailgunMiss:
+                    // A hypervelocity kinetic round, not an energy pulse: near-white, thinner, and
+                    // gone faster than even a heavy laser beam.
+                    e.Color = Color.Lerp(Color.white, new Color(0.75f, 0.85f, 1f), 0.3f) * 2.2f;
+                    e.Life = 0.16f;
+                    break;
                 case FxKind.PointDefense:
                     e.Color = new Color(1f, 0.85f, 0.5f) * 0.8f;
                     e.Life = 0.08f;
@@ -189,11 +196,17 @@ namespace SolarSystem.Views
                 case FxKind.BeamMiss:
                 case FxKind.PointDefense:
                 case FxKind.Guns:
+                case FxKind.Railgun:
+                case FxKind.RailgunMiss:
                 {
                     var a = Point(e.Battle, e.A);
                     var b = Point(e.Battle, e.B);
-                    float px = e.Kind == FxKind.PointDefense || e.Kind == FxKind.Guns ? 1.6f : e.Size > 100 ? 4f : 2.6f;
+                    float px = e.Kind == FxKind.PointDefense || e.Kind == FxKind.Guns ? 1.6f
+                        : e.Kind == FxKind.Railgun || e.Kind == FxKind.RailgunMiss ? 1.8f
+                        : e.Size > 100 ? 4f : 2.6f;
                     Ribbon(a, b, px, e.Color * fade);
+                    if ((e.Kind == FxKind.Railgun || e.Kind == FxKind.RailgunMiss) && age < 0.05f)
+                        Sprite(a, PixelSize(a, 16) * (1 - age / 0.05f), Color.white, Shape.Radial);
                     break;
                 }
                 case FxKind.ShieldHit:

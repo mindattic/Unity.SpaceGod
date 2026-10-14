@@ -41,9 +41,9 @@ namespace SolarSystem.Core.Tests
                 Assert.True(clock.Speed <= previous);
                 previous = clock.Speed;
             }
-            // 0.99 per step at 120 steps/s from 1 to under 1%: ln(0.01)/ln(0.99)/120 = 3.82 s.
+            // 0.97 per step at 120 steps/s from 1 to under 1%: ln(0.01)/ln(0.97)/120 = 1.26 s.
             Assert.True(clock.Paused);
-            Assert.InRange(t, 3.7, 3.95);
+            Assert.InRange(t, 1.15, 1.4);
             Assert.Equal(0, clock.Speed);
             double jd = clock.Jd;
             clock.Advance(1);
@@ -58,7 +58,7 @@ namespace SolarSystem.Core.Tests
                 t += frame;
             }
             Assert.Equal(1, clock.Speed);
-            Assert.InRange(t, 3.7, 3.95);
+            Assert.InRange(t, 1.15, 1.4);
 
             // Reversing mid-ease picks up from where it had got to, not from a standstill.
             clock.ToggleEasedPause();

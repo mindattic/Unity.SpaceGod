@@ -30,7 +30,7 @@ namespace SolarSystem.Core
         public string[] RaiderNames;
 
         /// <summary>The merchant fleet yards keep up before navies get their slips, and the most they build to.</summary>
-        public int MerchantTarget = 45, MerchantCap = 70;
+        public int MerchantTarget = 100, MerchantCap = 170;
 
         /// <summary>How many warships a navy keeps in peace and in war.</summary>
         public int NavyCap = 20, NavyCapAtWar = 34;
@@ -205,8 +205,8 @@ namespace SolarSystem.Core
             // Rivals, not enemies: the hook for a war later.
             w.RivalA = accord;
             w.RivalB = combine;
-            w.MerchantTarget = 18;
-            w.MerchantCap = 28;
+            w.MerchantTarget = 50;
+            w.MerchantCap = 80;
             w.NavyCap = 10;
             w.NavyCapAtWar = 16;
             // A thin system feeds few raiders.
@@ -475,18 +475,23 @@ namespace SolarSystem.Core
             var fleet = Fleet;
             fleet.Group(Sol, jd, ShipClass.Carrier, "Resolute", new[] { "Earth", "Moon", "Mars" },
                 (ShipClass.Battleship, "Dauntless"), (ShipClass.Cruiser, "Aegis"), (ShipClass.Cruiser, "Halberd"),
-                (ShipClass.Destroyer, "Kestrel"), (ShipClass.Destroyer, "Merlin"));
+                (ShipClass.Destroyer, "Kestrel"), (ShipClass.Destroyer, "Merlin"),
+                (ShipClass.Fighter, "Mayfly"), (ShipClass.Fighter, "Wasp"));
             fleet.Group(Sol, jd, ShipClass.Battleship, "Vanguard", new[] { "Mars", "Ceres", "Earth" },
-                (ShipClass.Cruiser, "Lance"), (ShipClass.Destroyer, "Swift"), (ShipClass.Destroyer, "Talon"));
+                (ShipClass.Cruiser, "Lance"), (ShipClass.Destroyer, "Swift"), (ShipClass.Destroyer, "Talon"),
+                (ShipClass.Fighter, "Gadfly"), (ShipClass.Fighter, "Hornet"));
             fleet.Group(Belt, jd, ShipClass.Carrier, "Tycho Ascendant", new[] { "Ceres", "Ganymede", "Callisto", "Europa" },
                 (ShipClass.Battleship, "Iron Ledger"), (ShipClass.Cruiser, "Ore Hawk"), (ShipClass.Cruiser, "Pallas"),
-                (ShipClass.Destroyer, "Flint"));
+                (ShipClass.Destroyer, "Flint"), (ShipClass.Fighter, "Firefly"), (ShipClass.Fighter, "Cinder"));
             fleet.Group(Belt, jd, ShipClass.Cruiser, "Hygiea", new[] { "Ceres", "Mars" },
-                (ShipClass.Destroyer, "Shard"), (ShipClass.Destroyer, "Spall"));
+                (ShipClass.Destroyer, "Shard"), (ShipClass.Destroyer, "Spall"),
+                (ShipClass.Fighter, "Grit"), (ShipClass.Fighter, "Pebble"));
             fleet.Group(Reach, jd, ShipClass.Battleship, "Long Night", new[] { "Titan", "Titania", "Triton" },
-                (ShipClass.Cruiser, "Umbra"), (ShipClass.Cruiser, "Perihelion"), (ShipClass.Destroyer, "Wisp"));
+                (ShipClass.Cruiser, "Umbra"), (ShipClass.Cruiser, "Perihelion"), (ShipClass.Destroyer, "Wisp"),
+                (ShipClass.Fighter, "Nightjar"), (ShipClass.Fighter, "Moth"));
             fleet.Group(Reach, jd, ShipClass.Carrier, "Endurance", new[] { "Triton", "Charon", "Titan", "Ganymede" },
-                (ShipClass.Cruiser, "Aphelion"), (ShipClass.Destroyer, "Rime"), (ShipClass.Destroyer, "Hoarfrost"));
+                (ShipClass.Cruiser, "Aphelion"), (ShipClass.Destroyer, "Rime"), (ShipClass.Destroyer, "Hoarfrost"),
+                (ShipClass.Fighter, "Sleet"), (ShipClass.Fighter, "Driftglass"));
         }
 
         static readonly string[] FreighterNames =
