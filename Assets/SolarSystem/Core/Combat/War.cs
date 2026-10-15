@@ -725,7 +725,9 @@ namespace SolarSystem.Core
             heir.Route = dead.Route;
             heir.RouteIndex = dead.RouteIndex;
             heir.Phase = dead.Phase;
-            heir.Orbit = dead.Orbit;
+            // The old flagship is not always gone (a capture leaves it flying on under new colours): take
+            // over a little way along its orbit rather than sharing its exact spot with it indefinitely.
+            heir.Orbit = OwnSpot(dead.Orbit, heir, dead);
             heir.DepartureOrbit = dead.DepartureOrbit;
             heir.DestinationBody = dead.DestinationBody;
             heir.OriginBody = dead.OriginBody;
