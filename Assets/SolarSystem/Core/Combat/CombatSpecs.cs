@@ -44,17 +44,27 @@ namespace SolarSystem.Core
         /// <summary>Point defence: shoots missiles and fighters first.</summary>
         public bool AntiSmall;
 
+        /// <summary>Muzzle velocity (km/s) of a direct-fire kinetic round -- a railgun slug or an
+        /// autocannon burst. Zero for an energy weapon: a laser beam crosses its range effectively
+        /// instantly, so <see cref="Battle.Fire"/> resolves it the instant it's aimed rather than
+        /// spawning a travelling <see cref="KineticRound"/>.</summary>
+        public double MuzzleSpeedKmS;
+
         public static readonly WeaponSpec Laser = new WeaponSpec { RangeKm = 16, Damage = 45, Cooldown = 3.0, Accuracy = 0.8 };
         public static readonly WeaponSpec Heavy = new WeaponSpec { RangeKm = 24, Damage = 190, Cooldown = 9.0, Accuracy = 0.72 };
         public static readonly WeaponSpec Missiles = new WeaponSpec { RangeKm = 40, Damage = 260, Cooldown = 24, Accuracy = 1, Missile = true, MissileSpeedKmS = 1.4, Salvo = 2, Ammo = 16 };
         public static readonly WeaponSpec PointDefense = new WeaponSpec { RangeKm = 3.5, Damage = 10, Cooldown = 0.35, Accuracy = 0.5, AntiSmall = true };
-        public static readonly WeaponSpec FighterGuns = new WeaponSpec { RangeKm = 1.6, Damage = 14, Cooldown = 0.3, Accuracy = 0.55 };
+
+        /// <summary>A fighter's rapid-firing forward autocannon: a dumb kinetic round with a real,
+        /// if short, flight time across its short range -- not a hitscan.</summary>
+        public static readonly WeaponSpec FighterGuns = new WeaponSpec { RangeKm = 1.6, Damage = 14, Cooldown = 0.3, Accuracy = 0.55, MuzzleSpeedKmS = 3.5 };
         public static readonly WeaponSpec Torpedo = new WeaponSpec { RangeKm = 4, Damage = 420, Cooldown = 40, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.9, Salvo = 1, Ammo = 2 };
 
         /// <summary>A kinetic spinal gun: the longest non-missile range and the hardest single hit
         /// outside a torpedo, at the slowest cooldown -- a precise, patient weapon built around one
-        /// shot landing hard rather than sustained fire.</summary>
-        public static readonly WeaponSpec Railgun = new WeaponSpec { RangeKm = 30, Damage = 260, Cooldown = 12, Accuracy = 0.85 };
+        /// shot landing hard rather than sustained fire. Hypervelocity, but still slow enough next to
+        /// its own long range to take a real second or two in flight.</summary>
+        public static readonly WeaponSpec Railgun = new WeaponSpec { RangeKm = 30, Damage = 260, Cooldown = 12, Accuracy = 0.85, MuzzleSpeedKmS = 14 };
 
         /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
         public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };

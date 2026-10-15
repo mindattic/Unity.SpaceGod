@@ -153,6 +153,37 @@ namespace SolarSystem.Core
         public double Marines;
     }
 
+    /// <summary>
+    /// A railgun slug or autocannon burst in flight: a dumb, non-homing round that was aimed, with a
+    /// lead, at where its target was expected to be, and takes real time crossing the range instead of
+    /// landing the instant the trigger was pulled. <see cref="Hit"/> is decided at the muzzle, same as a
+    /// beam's accuracy roll; a round that "hit" only actually calls <see cref="Battle.ApplyDamage"/> once
+    /// it arrives, so a target that dies or peels off first takes nothing. A round that missed keeps
+    /// flying past its aim point and fades, rather than never having existed.
+    /// </summary>
+    public sealed class KineticRound
+    {
+        public DVec3 Pos, Vel;
+        public BattleUnit Target;
+        public Subsystem TargetSub;
+        public double Damage;
+
+        /// <summary>Seconds left before the round reaches its aim point (where it resolves, if it hit).</summary>
+        public double ArriveIn;
+
+        /// <summary>Seconds left before the round is removed -- longer than <see cref="ArriveIn"/> for a
+        /// miss, so it keeps travelling past the target before it fades.</summary>
+        public double Life;
+
+        public int Side;
+        public bool Hit;
+
+        /// <summary>True for a railgun slug, false for fighter autocannon fire -- cosmetic only (Runtime
+        /// draws the two differently).</summary>
+        public bool Railgun;
+        public bool Gone;
+    }
+
     public enum FxKind
     {
         Beam,
@@ -217,6 +248,7 @@ namespace SolarSystem.Core
         public double Seconds;
         public readonly List<BattleUnit> Units = new List<BattleUnit>();
         public readonly List<Missile> Missiles = new List<Missile>();
+        public readonly List<KineticRound> Rounds = new List<KineticRound>();
         public readonly List<Embedded> Embedded = new List<Embedded>();
 
         /// <summary>Set for an ambush beside a hyperlane; null for a battle at a body.</summary>
@@ -353,6 +385,7 @@ namespace SolarSystem.Core
                 if (u.Present) Fire(u, dt);
             }
             StepMissiles(dt);
+            StepRounds(dt);
             StepBoarding(dt);
             foreach (var u in Units)
             {
@@ -770,6 +803,15 @@ namespace SolarSystem.Core
                     : w.AntiSmall ? FxKind.PointDefense
                     : s.Kind == SubsystemKind.Railgun ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
                     : hit ? FxKind.Beam : FxKind.BeamMiss;
+
+                if (w.MuzzleSpeedKmS > 0)
+                {
+                    // A dumb kinetic round, not a hitscan: it takes real time to cross the range, so
+                    // fire it off and let FireKineticRound/StepRounds decide what it actually hits.
+                    FireKineticRound(u, s, origin, aimPoint, target, sub, w, hit, dist, kind);
+                    continue;
+                }
+
                 if (hit)
                 {
                     Emit(kind, origin, aimPoint, w.Damage, u.Side, target, sub?.Index ?? -1);
@@ -781,6 +823,61 @@ namespace SolarSystem.Core
                     Emit(kind, origin, origin + (miss - origin).Normalized * Math.Min(w.RangeKm, dist * 1.3), 0, u.Side, null, -1);
                 }
             }
+        }
+
+        /// <summary>
+        /// Launches a railgun slug or autocannon round: leads the target's current velocity across the
+        /// round's own time of flight (same lead construction a homing missile uses in <see cref="StepMissiles"/>,
+        /// just without the homing -- a kinetic round is dumb and flies the straight line it was aimed
+        /// down). The hit/miss roll already happened in <see cref="Fire"/>; a hit flies true to the lead
+        /// point, a miss gets the same random offset a beam's miss does and keeps going past it. Emits the
+        /// muzzle-flash Fx immediately (so it still reads as instant feedback at the gun) but defers the
+        /// actual <see cref="ApplyDamage"/> to <see cref="StepRounds"/>, once the round has actually crossed
+        /// the intervening space.
+        /// </summary>
+        void FireKineticRound(BattleUnit u, Subsystem mount, DVec3 origin, DVec3 aimPoint, BattleUnit target, Subsystem targetSub, WeaponSpec w, bool hit, double dist, FxKind kind)
+        {
+            double speed = w.MuzzleSpeedKmS;
+            double leadTime = Math.Min(dist / speed, 20);
+            var lead = aimPoint + target.Vel * leadTime;
+            var impact = hit ? lead : lead + new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, rng.NextDouble() - 0.5) * (target.LengthKm * 2 + 0.3);
+            var dir = impact - origin;
+            double travelKm = dir.Length;
+            var vel = travelKm > 1e-9 ? dir / travelKm * speed : u.Forward * speed;
+            double arriveIn = travelKm / speed;
+
+            Emit(kind, origin, hit ? impact : origin + (impact - origin).Normalized * Math.Min(w.RangeKm, dist * 1.3), 0, u.Side, null, -1);
+            Rounds.Add(new KineticRound
+            {
+                Pos = origin, Vel = vel, Target = target, TargetSub = targetSub, Damage = w.Damage,
+                ArriveIn = arriveIn, Life = arriveIn + (hit ? 0 : 0.5), Side = u.Side, Hit = hit,
+                Railgun = mount.Kind == SubsystemKind.Railgun,
+            });
+        }
+
+        /// <summary>Advances every kinetic round in flight; a round that hit calls <see cref="ApplyDamage"/>
+        /// the instant it arrives (skipped if the target died or got clear first), a round that missed just
+        /// keeps flying until its own fuse runs out.</summary>
+        void StepRounds(double dt)
+        {
+            foreach (var r in Rounds)
+            {
+                if (r.Gone) continue;
+                r.Pos += r.Vel * dt;
+                r.ArriveIn -= dt;
+                r.Life -= dt;
+                if (r.Hit && r.ArriveIn <= 0)
+                {
+                    r.Gone = true;
+                    if (r.Target.Present)
+                    {
+                        var sub = r.TargetSub != null && !r.TargetSub.Destroyed ? r.TargetSub : null;
+                        ApplyDamage(r.Target, sub, r.Damage, r.Pos);
+                    }
+                }
+                else if (r.Life <= 0) r.Gone = true;
+            }
+            Rounds.RemoveAll(r => r.Gone);
         }
 
         /// <summary>A mount the player can personally aim by pointing the hull's own nose at something --

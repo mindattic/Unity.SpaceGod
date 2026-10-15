@@ -11,6 +11,12 @@ namespace SolarSystem.Views
     /// tracers, point-defence streams, missiles with their trails, impacts, shield flashes and
     /// explosions. Effects are timed in real seconds (so they read at any time warp) and kept a few
     /// pixels wide at any distance, so a battle is visible from across a planetary system.
+    ///
+    /// All of the actual hit/miss/travel-time decisions live in Core (<see cref="Battle"/>) -- this
+    /// class only draws what already happened: a beam sweeps onto its target and leaves a scorch, a
+    /// kinetic round (<see cref="Battle.KineticRound"/>) is a travelling tracer like a missile rather
+    /// than a single instant line, and every direct-fire shot gets a brief muzzle flash and recoil kick
+    /// at the gun itself.
     /// </summary>
     public sealed class BattleFx
     {
@@ -76,6 +82,7 @@ namespace SolarSystem.Views
             indices.Clear();
             foreach (var e in effects) Draw(e, now);
             foreach (var b in war.Battles) DrawMissiles(b);
+            foreach (var b in war.Battles) DrawRounds(b);
 
             mesh.Clear();
             mesh.SetVertices(vertices);
@@ -200,13 +207,35 @@ namespace SolarSystem.Views
                 case FxKind.RailgunMiss:
                 {
                     var a = Point(e.Battle, e.A);
-                    var b = Point(e.Battle, e.B);
+                    var bFull = Point(e.Battle, e.B);
+                    // A beam sweeps onto its target across the first slice of its life instead of
+                    // appearing full-length the instant it's fired; a kinetic round's own travelling
+                    // Round entity (see DrawRounds) already reads as motion, so only the beam needs it.
+                    bool isBeam = e.Kind == FxKind.Beam || e.Kind == FxKind.BeamMiss;
+                    float sweepT = isBeam ? Mathf.Clamp01(age / Mathf.Max(e.Life * 0.3f, 1e-4f)) : 1f;
+                    var b = Vector3.Lerp(a, bFull, sweepT);
                     float px = e.Kind == FxKind.PointDefense || e.Kind == FxKind.Guns ? 1.6f
                         : e.Kind == FxKind.Railgun || e.Kind == FxKind.RailgunMiss ? 1.8f
                         : e.Size > 100 ? 4f : 2.6f;
                     Ribbon(a, b, px, e.Color * fade);
-                    if ((e.Kind == FxKind.Railgun || e.Kind == FxKind.RailgunMiss) && age < 0.05f)
-                        Sprite(a, PixelSize(a, 16) * (1 - age / 0.05f), Color.white, Shape.Radial);
+
+                    // Muzzle flash and a brief recoil kick at the gun itself, for every discrete shot
+                    // (not the continuous point-defence stream).
+                    if (e.Kind != FxKind.PointDefense)
+                    {
+                        const float muzzleWindow = 0.08f;
+                        if (age < muzzleWindow)
+                        {
+                            float k = 1 - age / muzzleWindow;
+                            Sprite(a, PixelSize(a, 15f) * k, Color.white * k, Shape.Radial);
+                            var kick = a - (bFull - a).normalized * PixelSize(a, 7f) * k;
+                            Ribbon(kick, a, px * 1.6f, Color.white * k * 0.8f);
+                        }
+                    }
+
+                    // A laser leaves a scorch where it actually hit; a miss has nothing to scorch.
+                    if (e.Kind == FxKind.Beam)
+                        Sprite(bFull, PixelSize(bFull, 6f) * (0.7f + 0.3f * t), new Color(0.3f, 0.17f, 0.1f) * fade, Shape.Radial);
                     break;
                 }
                 case FxKind.ShieldHit:
@@ -275,6 +304,28 @@ namespace SolarSystem.Views
                 Sprite(p, PixelSize(p, pod ? 8 : m.Torpedo ? 7 : 5), c * 1.4f, Shape.Radial);
                 var tail = Point(b, m.Pos - m.Vel * (pod ? 4.0 : m.Torpedo ? 3.0 : 2.0));
                 Ribbon(tail, p, pod ? 2.2f : 1.4f, c * 0.5f);
+            }
+        }
+
+        /// <summary>
+        /// A railgun slug or autocannon round actually crossing the range: drawn as a moving tracer with
+        /// a short trail, exactly like a missile, rather than the single appear-and-fade line a direct-fire
+        /// hit/miss event still gets for its own instant muzzle flash (see <see cref="Draw"/>). A round that
+        /// missed keeps flying and fading here same as a round that's still closing on a hit.
+        /// </summary>
+        void DrawRounds(Battle b)
+        {
+            foreach (var r in b.Rounds)
+            {
+                if (r.Gone) continue;
+                var p = Point(b, r.Pos);
+                var side = r.Side >= 0 && r.Side < 2 ? b.SideLeaders[r.Side] : null;
+                var faction = side != null ? new Color(side.Color.R, side.Color.G, side.Color.B) : Color.white;
+                var c = r.Railgun ? Color.Lerp(Color.white, new Color(0.75f, 0.85f, 1f), 0.3f) * 2.2f
+                    : Color.Lerp(faction, new Color(1f, 0.9f, 0.6f), 0.5f);
+                Sprite(p, PixelSize(p, r.Railgun ? 3f : 2f), c * 1.2f, Shape.Radial);
+                var tail = Point(b, r.Pos - r.Vel * (r.Railgun ? 0.05 : 0.08));
+                Ribbon(tail, p, r.Railgun ? 1.8f : 1.4f, c * 0.6f);
             }
         }
 
