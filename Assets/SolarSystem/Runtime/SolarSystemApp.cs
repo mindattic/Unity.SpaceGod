@@ -847,6 +847,8 @@ namespace SolarSystem
         void LoseHelm()
         {
             var ship = Piloted.Ship;
+            // Where it was taken: the captor's schedule (or the drifting hulk) picks up from here.
+            PinWherePiloted(ship);
             Piloted = Target.None;
             pilotLockTarget = Target.None;
             pilotBoosting = false;
