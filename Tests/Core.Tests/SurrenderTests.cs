@@ -168,6 +168,23 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AnArmedWarshipThatStrikesItsColoursCanStillBeBoarded()
+        {
+            // Its own guns are powered down: a hull waiting on terms is no threat to the boarders it asked for.
+            var b = NewBattle(20);
+            var navy = b.AddShip(Hull(ShipClass.Destroyer, Navy, 0), 0, new DVec3(-4, 0, 0), DVec3.UnitX);
+            var raider = b.AddShip(Hull(ShipClass.Destroyer, Pirates, 1), 1, new DVec3(4, 0, 0), -DVec3.UnitX);
+            Assert.That(raider.Combat.Armed, Is.True);
+            navy.PlayerControlled = true;
+            b.Surrender(raider);
+            b.Advance(1);
+            navy.PlayerControlled = false;
+            Assert.That(b.OfferSurrenderTerms(raider, SurrenderTerms.TakeShip), Is.True);
+            for (int i = 0; i < 1200 && !raider.Captured; i++) b.Advance(1);
+            Assert.That(raider.Captured, Is.True, "nobody would close on a surrendered warship to board it");
+        }
+
+        [Test]
         public void ASurrenderedShipIsTakenOnceAndStaysWithItsCaptor()
         {
             var (b, merchant, pirate) = BatteredMerchant(15, playerPirate: true);

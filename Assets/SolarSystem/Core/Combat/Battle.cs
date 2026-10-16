@@ -1275,7 +1275,7 @@ namespace SolarSystem.Core
         bool ThreatNear(BattleUnit u, DVec3 at, double km)
         {
             foreach (var o in Units)
-                if (Hostile(u, o) && !o.Captured && o.Kind != UnitKind.Fighter && o.Combat.Armed && !o.Combat.Disabled && (o.Pos - at).Length < km)
+                if (Hostile(u, o) && !o.Captured && !o.Surrendering && o.Kind != UnitKind.Fighter && o.Combat.Armed && !o.Combat.Disabled && (o.Pos - at).Length < km)
                     return true;
             return false;
         }
