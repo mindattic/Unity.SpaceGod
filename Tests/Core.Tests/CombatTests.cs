@@ -73,7 +73,9 @@ namespace SolarSystem.Core.Tests
             var bu = b.AddShip(battleship, 0, DVec3.Zero, DVec3.UnitX);
             var tu = b.AddShip(target, 1, new DVec3(20, 0, 0), -DVec3.UnitX);
 
-            for (int i = 0; i < 200; i++) b.Advance(1);
+            // Mid-fight, while the destroyer is within the broadside's reach (it later opens the range,
+            // and a hull with nothing in reach noses in to close it again, turning at its full rate).
+            for (int i = 0; i < 120; i++) b.Advance(1);
 
             double angleToTarget = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(bu.Forward, (tu.Pos - bu.Pos).Normalized)))) * Astro.Rad2Deg;
             TestContext.Out.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");

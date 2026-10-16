@@ -55,18 +55,24 @@ namespace SolarSystem.Core
         public static DVec3 Lerp(DVec3 a, DVec3 b, double t) => a + (b - a) * t;
 
         /// <summary>
-        /// Steps unit direction <paramref name="a"/> a fraction <paramref name="t"/> of the way round
-        /// to unit direction <paramref name="b"/>. When <paramref name="b"/> is exactly opposite, a
-        /// straight lerp never leaves the line (and is zero at the half-way point), so it swings round
-        /// a perpendicular instead.
+        /// Rotates unit direction <paramref name="a"/> a fraction <paramref name="t"/> of the angle
+        /// round to unit direction <paramref name="b"/> (a slerp): a straight lerp turns well short of
+        /// that at wide angles, next to nothing when nearly opposite, and never leaves the line when
+        /// exactly opposite, where any perpendicular is taken as the way round.
         /// </summary>
         public static DVec3 TurnStep(DVec3 a, DVec3 b, double t)
         {
-            if (Dot(a, b) > -0.999999) return Lerp(a, b, t).Normalized;
-            var side = Cross(a, UnitZ);
-            if (side.LengthSquared < 1e-12) side = Cross(a, UnitY);
-            double angle = t * Math.PI;
-            return (a * Math.Cos(angle) + side.Normalized * Math.Sin(angle)).Normalized;
+            double cos = Math.Max(-1, Math.Min(1, Dot(a, b)));
+            double angle = Math.Acos(cos);
+            if (angle < 1e-12) return b;
+            var side = b - a * cos;
+            if (side.LengthSquared < 1e-18)
+            {
+                side = Cross(a, UnitZ);
+                if (side.LengthSquared < 1e-12) side = Cross(a, UnitY);
+            }
+            double step = t * angle;
+            return (a * Math.Cos(step) + side.Normalized * Math.Sin(step)).Normalized;
         }
 
         /// <summary>

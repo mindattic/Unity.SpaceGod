@@ -123,6 +123,21 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ATurnStepTurnsTheFractionOfTheAngleItIsAskedFor()
+        {
+            foreach (double deg in new[] { 10.0, 90.0, 150.0, 170.0, 179.0, 179.9 })
+            {
+                double rad = deg * Math.PI / 180;
+                var want = new DVec3(Math.Cos(rad), Math.Sin(rad), 0);
+                double t = 5.0 / deg; // five degrees of the way round
+                var step = DVec3.TurnStep(DVec3.UnitX, want, t);
+                double turned = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(step, DVec3.UnitX)))) * 180 / Math.PI;
+                Assert.That(turned, Is.EqualTo(5.0).Within(1e-6), $"facing {deg} degrees away");
+                Assert.That(step.Z, Is.EqualTo(0).Within(1e-12), "it turns in the plane toward the target");
+            }
+        }
+
+        [Test]
         public void NormalizedOfTheZeroVectorIsZero()
         {
             Assert.That(DVec3.Zero.Normalized, Is.EqualTo(DVec3.Zero));
