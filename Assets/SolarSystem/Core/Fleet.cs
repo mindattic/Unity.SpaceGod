@@ -920,7 +920,8 @@ namespace SolarSystem.Core
             int here = ship.Orbit.Body;
             int chosen = ChooseNext != null ? ChooseNext(ship, here, nowJd) : -1;
             double dwell = Dwell != null ? Dwell(ship, DwellDays(ship)) : DwellDays(ship);
-            if (ship.Role == ShipRole.Free && chosen < 0 && rng.NextDouble() < 0.55)
+            // A point with no size (a binary's barycentre) has no space round it to wander out into.
+            if (ship.Role == ShipRole.Free && chosen < 0 && rng.NextDouble() < 0.55 && catalog[here].RadiusKm > 0)
             {
                 // A free ship's whim: out to somewhere new nearby rather than to another world.
                 ship.Wander = true;

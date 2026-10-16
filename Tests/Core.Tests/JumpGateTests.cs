@@ -139,6 +139,29 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AShipReleasedAtABinarysBarycentreFliesOnWithoutNaN()
+        {
+            var g = Create();
+            var ac = g.Systems[1];
+            var fleet = ac.World.Fleet;
+            int root = ac.Catalog.Root.Index;
+            Assert.That(ac.Catalog.Root.RadiusKm, Is.EqualTo(0));
+            // Where a gate arrival (or a spawn out in the open) is pinned when the player lets go.
+            var ships = Enumerable.Range(0, 12)
+                .Select(i => fleet.SpawnAt("Free " + i, ShipClass.Courier, ac.World.Independents, root, new DVec3(4850 + i, 0, 0), DVec3.UnitX, StartJd)).ToList();
+            for (double jd = StartJd; jd < StartJd + 3; jd += 0.05)
+            {
+                ac.Ephemeris.Update(jd);
+                fleet.Update(jd);
+            }
+            foreach (var s in fleet.Ships.Where(s => !s.Destroyed))
+            {
+                var p = fleet.StateOf(s, StartJd + 3).HelioKm;
+                Assert.That(double.IsNaN(p.X) || double.IsNaN(p.Y) || double.IsNaN(p.Z), Is.False, s.Name + " is at NaN");
+            }
+        }
+
+        [Test]
         public void TransitFailsWhenTheShipIsOutOfRange()
         {
             var g = Create();
