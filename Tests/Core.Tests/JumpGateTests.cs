@@ -33,8 +33,10 @@ namespace SolarSystem.Core.Tests
             var sol = g.Systems[0];
             var ac = g.Systems[1];
 
-            Assert.That(sol.Gate.PositionKm.Length, Is.EqualTo(JumpGate.RadiusKm).Within(1e-6));
-            Assert.That(ac.Gate.PositionKm.Length, Is.EqualTo(JumpGate.RadiusKm).Within(1e-6));
+            Assert.That(sol.Gate.PositionKm.Length, Is.EqualTo(sol.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
+            Assert.That(ac.Gate.PositionKm.Length, Is.EqualTo(ac.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
+            // Clear of the root's own body: the Sun's gate isn't inside the Sun.
+            Assert.That(sol.Gate.PositionKm.Length - sol.Catalog.Root.RadiusKm, Is.GreaterThanOrEqualTo(JumpGate.RadiusKm - 1e-6));
 
             // Each gate points (in its own system's frame) toward the real direction of the other star.
             double towardAc = DVec3.Dot(sol.Gate.PositionKm.Normalized, Galaxy.Direction(sol, ac));

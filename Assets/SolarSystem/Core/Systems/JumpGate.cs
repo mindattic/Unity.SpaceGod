@@ -27,7 +27,9 @@ namespace SolarSystem.Core
         /// <see cref="Galaxy.CreateDefault"/>). Null means this gate has no working pair yet.</summary>
         public StarSystem Destination { get; internal set; }
 
-        /// <summary>How far out from a system's root a gate sits.</summary>
+        /// <summary>How far out a gate sits from its system's root: above the surface of a star (inside
+        /// the Sun would be nowhere a ship can fly), from the point itself for a barycentre; see
+        /// <see cref="Galaxy.GateDistanceKm"/>.</summary>
         public const double RadiusKm = 5000;
 
         /// <summary>A ship must be within this of the gate's position to activate it.</summary>
