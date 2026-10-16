@@ -194,6 +194,20 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AnUnarmedPlayerHullWithMarinesDoesNotHoldADeadFightOpen()
+        {
+            var b = NewBattle(27);
+            var player = b.AddShip(Hull(ShipClass.Destroyer, Navy, 0), 0, new DVec3(-3, 0, 0), DVec3.UnitX);
+            player.PlayerControlled = true;
+            foreach (var s in player.Combat.Subsystems) if (s.Def.Weapon != null) s.Hp = 0;
+            var hulk = b.AddShip(Hull(ShipClass.Freighter, Traders, 1), 1, new DVec3(3, 0, 0), -DVec3.UnitX);
+            hulk.Combat.Hull = hulk.Combat.Spec.Hull * 0.1; // disabled: can't run, fight or strike
+            Assert.That(player.Combat.MarinesAvailable >= 15, Is.True);
+            for (int i = 0; i < 600 && !b.Over; i++) b.Advance(1);
+            Assert.That(b.Over, Is.True, "a gunless player hull that can't board kept the battle open");
+        }
+
+        [Test]
         public void TheAiDoesNotDecideToRunForAPlayerFlownHull()
         {
             var b = NewBattle(24);

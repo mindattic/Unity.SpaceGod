@@ -465,7 +465,9 @@ namespace SolarSystem.Core
             foreach (var u in Units)
             {
                 if (!u.Present || u.Kind == UnitKind.Fighter || u.Captured) continue;
-                bool willing = !u.Fleeing && !u.Surrendering && !u.Combat.Disabled && (u.Combat.Armed || CanBoard(u));
+                // Marines alone make a combatant only of a hull that will fly a boarding approach: the AI's,
+                // never one the player is flying (see Think), which with no guns has nothing left to fight with.
+                bool willing = !u.Fleeing && !u.Surrendering && !u.Combat.Disabled && (u.Combat.Armed || (CanBoard(u) && !u.PlayerControlled));
                 if (u.Side == 0) { any0 = true; fight0 |= willing; }
                 else { any1 = true; fight1 |= willing; }
             }
