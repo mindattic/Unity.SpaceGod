@@ -761,6 +761,8 @@ namespace SolarSystem
             pilotAngularRateDegS = 0;
             pilotCruise = default;
             pilotBattleCheckTimer = 0;
+            demandPrompted = false;
+            termsPrompted = null;
             pilotForward = facing;
             SeedPilotLook(pilotForward);
             // Out of a battle, the hull is the pilot's from here: no longer landed, descending or in formation.
@@ -973,6 +975,10 @@ namespace SolarSystem
         {
             if (ship.Battle == null)
             {
+                // Out of any fight: a hail left open when the last one ended (or before release) is gone,
+                // so the next battle's demand or surrender gets its own prompt.
+                demandPrompted = false;
+                termsPrompted = null;
                 UpdateHavenAssault(ship);
                 pilotBattleCheckTimer -= dt;
                 if (pilotBattleCheckTimer > 0) return;
