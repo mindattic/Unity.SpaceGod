@@ -12,7 +12,7 @@ namespace SolarSystem.Rendering
     /// Renders straight to a <see cref="RenderTexture"/> via a manual <see cref="Camera.Render"/> call
     /// rather than an enabled camera, so it never competes with or needs to disable the game's own
     /// camera (unlike <see cref="ModelViewer"/>, whose camera draws to the screen itself). Cached per
-    /// class: each one is built and rendered once, not every frame.
+    /// class and livery: each one is built and rendered once, not every frame.
     /// </summary>
     public static class ShipThumbnails
     {
@@ -20,14 +20,16 @@ namespace SolarSystem.Rendering
         static readonly int Layer = LayerMask.NameToLayer("ModelViewer");
 
         static Camera camera;
-        static readonly Dictionary<ShipClass, RenderTexture> cache = new Dictionary<ShipClass, RenderTexture>();
+        // Keyed by livery too: the spawn screen shows the same class in the home or the hostile colours.
+        static readonly Dictionary<(ShipClass, Faction), RenderTexture> cache = new Dictionary<(ShipClass, Faction), RenderTexture>();
 
-        /// <summary>A cached snapshot of <paramref name="cls"/>'s hull, rendering it the first time asked.</summary>
+        /// <summary>A cached snapshot of <paramref name="cls"/>'s hull in <paramref name="faction"/>'s livery, rendering it the first time asked.</summary>
         public static Texture For(ShipClass cls, Faction faction)
         {
-            if (cache.TryGetValue(cls, out var tex) && tex != null) return tex;
+            var key = (cls, ShipMeshFactory.Canon(faction));
+            if (cache.TryGetValue(key, out var tex) && tex != null) return tex;
             tex = Render(cls, faction);
-            cache[cls] = tex;
+            cache[key] = tex;
             return tex;
         }
 
