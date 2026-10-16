@@ -55,13 +55,21 @@ namespace SolarSystem.Core.Tests
             var spot = Infrastructure.EquatorialOrbit(eph.Catalog[earth], 20000, 0, 0, 0, StartJd);
             fleet.Station(a, earth, StartJd, spot);
             fleet.Station(b, earth, StartJd, spot);
+            // Let them start giving way to each other, then the player takes A.
+            for (double jd = StartJd; jd < StartJd + 0.02; jd += 0.0005)
+            {
+                eph.Update(jd);
+                fleet.Update(jd);
+            }
+            Assert.That(fleet.EvasionOf(a).Length, Is.GreaterThan(0));
             fleet.IsHeld = s => s == a;
-            for (double jd = StartJd; jd < StartJd + 0.05; jd += 0.0005)
+            for (double jd = StartJd + 0.02; jd < StartJd + 0.07; jd += 0.0005)
             {
                 eph.Update(jd);
                 fleet.Update(jd);
                 Assert.That(fleet.EvadingFrom(b), Is.Not.SameAs(a));
             }
+            Assert.That(fleet.EvasionOf(a).Length, Is.EqualTo(0), "the held ship kept a stale sidestep for when it is released");
         }
 
         /// <summary>A parked ship moves with its world round the Sun, as a ship in flight beside it does.</summary>

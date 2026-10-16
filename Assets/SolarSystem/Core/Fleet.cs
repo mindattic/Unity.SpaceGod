@@ -227,9 +227,9 @@ namespace SolarSystem.Core
                 }
                 evasion[s] = (off, v);
             }
-            // Ships no longer flying free (landed, fighting, lost) let go of their sidestep.
+            // Ships no longer flying free (landed, fighting, lost, or flown by the player) let go of their sidestep.
             var stale = new List<Ship>();
-            foreach (var kv in evasion) if (!Manoeuvrable(kv.Key)) stale.Add(kv.Key);
+            foreach (var kv in evasion) if (!Manoeuvrable(kv.Key) || (IsHeld != null && IsHeld(kv.Key))) stale.Add(kv.Key);
             foreach (var s in stale) evasion.Remove(s);
         }
 
