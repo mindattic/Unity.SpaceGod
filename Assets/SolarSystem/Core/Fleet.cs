@@ -937,8 +937,10 @@ namespace SolarSystem.Core
                 ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.05);
                 return;
             }
-            // A system with nowhere to go (only stars round a barycentre): hold here rather than pick from no ports.
-            int next = chosen >= 0 ? chosen : ship.Ports == null || ship.Ports.Length == 0 ? here : ChooseDestination(ship, here, nowJd);
+            // A system with nowhere to go (only stars round a barycentre): hold here rather than pick from no
+            // ports. A patrol goes by its route, not ports.
+            bool nowhere = ship.Role != ShipRole.Patrol && (ship.Ports == null || ship.Ports.Length == 0);
+            int next = chosen >= 0 ? chosen : nowhere ? here : ChooseDestination(ship, here, nowJd);
             if (next == here)
             {
                 ship.DestinationBody = here;

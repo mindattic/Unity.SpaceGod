@@ -33,6 +33,23 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void PatrolsGoRoundTheirRoutes()
+        {
+            var (fleet, eph) = Create();
+            var patrols = fleet.Ships.Where(s => s.Role == ShipRole.Patrol && !s.IsEscort).ToList();
+            Assert.That(patrols, Is.Not.Empty);
+            Assert.That(patrols.All(p => p.Route != null && p.Route.Length > 1), Is.True);
+            var visited = patrols.ToDictionary(p => p, p => new System.Collections.Generic.HashSet<int>());
+            for (double jd = StartJd; jd < StartJd + 120; jd += 0.5)
+            {
+                eph.Update(jd);
+                fleet.Update(jd);
+                foreach (var p in patrols) if (p.Phase == ShipPhase.Parked) visited[p].Add(p.Orbit.Body);
+            }
+            Assert.That(patrols.Count(p => visited[p].Count > 1), Is.GreaterThan(0), "no patrol ever left its first waypoint");
+        }
+
+        [Test]
         public void EveryEscortInAGroupHasItsOwnFormationSlot()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
