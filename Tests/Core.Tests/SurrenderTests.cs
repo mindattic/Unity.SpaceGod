@@ -181,6 +181,28 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AHullTakenWhileStillHailingIsNotThenLetGo()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(23, playerPirate: true);
+            int decided = 0;
+            b.SurrenderDecided += (_, u, captor, terms) => decided++;
+            // Boarders already aboard in strength when it strikes its colours: they take it inside the hailing window.
+            var interior = merchant.Combat.Interior;
+            interior.Board(Pirates, 1.2, 40, interior.Of(CompartmentKind.Midships) ?? interior.Nearest(0, 0), false, 0, new System.Random(1));
+            foreach (var c in interior.Compartments)
+            {
+                c.Crew = c.Marines = 0;
+                c.Boarders = 5;
+            }
+            b.Surrender(merchant);
+            for (int i = 0; i < 14 && !merchant.Captured; i++) b.Advance(1);
+            Assert.That(merchant.Captured, Is.True, "the boarders should have taken it inside the window");
+            b.Advance(Battle.SurrenderDecisionSeconds + 5);
+            Assert.That(decided, Is.EqualTo(0), "terms were settled on a ship already taken");
+            Assert.That(merchant.Fled, Is.False, "the prize was released as if it had been let go");
+        }
+
+        [Test]
         public void ABoarderCrippledOnItsApproachGivesUpThePrize()
         {
             var b = NewBattle(22);

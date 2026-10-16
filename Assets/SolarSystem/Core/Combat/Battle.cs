@@ -1391,6 +1391,8 @@ namespace SolarSystem.Core
             u.Fleeing = false;
             u.Target = null;
             u.BoardTarget = null;
+            // Taken while still hailing: there are no terms left to settle.
+            u.Surrendering = false;
             // A surrendered hull is taken without a fight aboard: mark it held so the fight stops there too.
             u.Combat.Interior.Captured = true;
             u.Combat.Interior.Settle();
