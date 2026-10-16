@@ -699,8 +699,11 @@ namespace SolarSystem.UI
                 else
                 {
                     var body = app.Catalog[c.Orbit.Body];
-                    lines.Add(("Status", ship.Battle != null ? "Fighting in the " + ship.Battle.Name : "Holding orbit at " + body.Name));
-                    lines.Add(("Altitude", Km(c.Orbit.RadiusKm - body.RadiusKm)));
+                    lines.Add(("Status", ship.Battle != null ? "Fighting in the " + ship.Battle.Name
+                        : (c.Orbit.Fixed ? "Holding position at " : "Holding orbit at ") + body.Name));
+                    // From where it actually is: a held position (a released or spawned hull) is a fixed point
+                    // with no orbit radius, and a ring's holding point sits off the body's centre.
+                    lines.Add(("Altitude", Km(c.Orbit.OffsetAt(app.Clock.Jd).Length - body.RadiusKm)));
                     lines.Add(("Orbital speed", c.Orbit.SpeedKmS.ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
                     // A freshly spawned or not-yet-scheduled ship has no destination yet (-1).
                     if (c.DestinationBody >= 0)
