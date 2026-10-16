@@ -931,7 +931,8 @@ namespace SolarSystem.Core
                 if (r.Hit && r.ArriveIn <= 0)
                 {
                     r.Gone = true;
-                    if (r.Target.Present)
+                    // Not into a hull that has since come over to the firer's own side (taken as a prize).
+                    if (r.Target.Present && r.Target.Side != r.Side)
                     {
                         var sub = r.TargetSub != null && !r.TargetSub.Destroyed ? r.TargetSub : null;
                         ApplyDamage(r.Target, sub, r.Damage, r.Pos);

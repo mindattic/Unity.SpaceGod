@@ -168,6 +168,18 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ARoundInFlightSparesAPrizeItsSideHasJustTaken()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(26);
+            double hull = merchant.Combat.Hull;
+            b.Rounds.Add(new KineticRound { Pos = pirate.Pos, Vel = DVec3.UnitX, Target = merchant, Damage = 500, ArriveIn = 0.5, Life = 5, Side = pirate.Side, Hit = true });
+            merchant.Side = pirate.Side; // taken by the pirates while the round was on its way
+            merchant.Captured = true;
+            b.Advance(1);
+            Assert.That(merchant.Combat.Hull, Is.EqualTo(hull).Within(1e-9));
+        }
+
+        [Test]
         public void PodsAreNotFiredAtAHullWaitingOnTerms()
         {
             var (b, merchant, pirate) = BatteredMerchant(25, playerPirate: true);
