@@ -106,6 +106,16 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Settlements:** New Kentaurus, Ember Station, Far Reach, Rigil Gate, Aurora Skimmer, Toliman Forge and Blackhollow.
 - **Crossing:** two trunk hyperlanes cross the 12,000 AU between the A–B pair and Proxima in five days each.
 
+### The nearest real systems (`Core/Systems/NearbySystems.cs`)
+
+- **Twelve more systems are visitable** from **STAR SYSTEMS**, each at its real place and distance: Barnard's Star, Luhman 16, Wolf 359, Lalande 21185, Sirius, Epsilon Eridani, Ross 128, Epsilon Indi, Tau Ceti, GJ 1061, Luyten's Star and Teegarden's Star.
+- **One builder:** every system outside Sol, Alpha Centauri included, is a catalogue entry that one builder (`StarSystemBuilder`) turns into bodies.
+- **Stars and binaries:** Sirius A and its white dwarf, and the brown-dwarf pair Luhman 16, move on their measured visual orbits. Epsilon Indi's brown dwarfs Ba and Bb circle each other 1,500 AU from A.
+- **Planets:** the confirmed ones come from the NASA Exoplanet Archive, with their real periods, axes, eccentricities and masses ("at least" where only m sin i is known). Candidates (Tau Ceti's, Wolf 359 b, Lalande 21185 d, Luyten d and e) are labelled as such. Each planet is flagged inside or outside its star's habitable zone (Kopparapu et al. 2013).
+- **Debris belts:** Epsilon Eridani's three belts and Tau Ceti's disc are drawn in their measured planes.
+- **Unsettled:** these systems have no settlements, lanes or ships yet. Anything put there later is game-layer fiction.
+- **Sources:** every value is listed in [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md).
+
 ### Orbital industry and docking rings
 
 - **Industry in orbit.** Every settlement's industry is now physical, in orbit round its world:
@@ -331,7 +341,8 @@ dotnet test
 - Fighters: launch, attack runs, guns and torpedoes, a loose formation that breathes, lead succession, and landing back aboard
 - Boarding: fighting through to the bridge and engineering, a small party repelled, vacuum killing crew only until the bulkheads seal, pods bouncing off shields and boarding once they are down, a breacher ramming home, lining up alongside a disabled ship, and a year of lane ambushes and prizes
 - Hyperlanes: every system reachable, lanes clear of the Sun, trips taking a day or two instead of weeks, continuity across every leg change, and drawn lanes meeting the burns at the ramps
-- Alpha Centauri: the A–B separation (11.2 to 35.4 AU), period, barycentre balance and 2035 periastron; the orbit's 79.2° tilt to the sky; Proxima where the sky puts it and its planets' periods; the Sun in Cassiopeia as seen from there; lanes connecting every port and clearing all three stars; two years of trade, raiding and nobody starving; both systems on one clock
+- Alpha Centauri: the A–B separation (11.2 to 35.4 AU), period, barycentre balance and 2035 periastron; the orbit's 79.2° tilt to the sky; Proxima where the sky puts it and its planets' periods; the Sun in Cassiopeia as seen from there; lanes connecting every port and clearing all three stars; two years of trade, raiding and nobody starving; every system on one clock
+- Nearby systems: every planet keeps its catalogued period, axis and eccentricity (periapsis and apoapsis traced, the orbit closing after one period); every star its mass, size and light; the binaries balanced on their barycentres, swinging a(1 ± e) apart, at periastron on the catalogued date and tilted as measured; spot checks against the Exoplanet Archive; candidates labelled; habitable-zone flags (Proxima b in, Barnard's planets out, the Sun's zone 0.98–1.69 AU); Epsilon Eridani's belts and Tau Ceti's disc; each system at its parallax distance; a quiet year in every unsettled system
 - Avoidance: head-on ships passing wide, ships sharing a spot spreading out, a month of the whole system with no near-collisions, free ships roaming, a mid-flight course change keeping position and momentum, and merchants turning aside from fresh battles
 - Infrastructure: rings staying over their cities (latitude and longitude to a millionth of a degree, velocity = ω × r); FIFO queues clearing at most one ship per interval; no position jumps through queue, descent, landing and climb; only merchants landing; yards launching from their slips; constellations at their real altitudes and inclinations; JWST at L2
 - Piloting: cruise spooling up and dropping out, forward guns firing only on the trigger, the piloted hull staying where the pilot loop puts it

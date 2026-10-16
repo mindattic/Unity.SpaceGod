@@ -72,7 +72,8 @@ namespace SolarSystem.Views
                 // Tinted by photosphere temperature relative to the Sun's, so the Sun keeps its look.
                 var light = SolarSystemApp.LightColor(body, 1);
                 var t = new Color(light.x, light.y, light.z);
-                flareStar = body.TeffK < 3300;
+                // Cool red dwarfs flare; brown dwarfs, cooler still, do not.
+                flareStar = body.TeffK < 3300 && body.TeffK > 2400;
                 nextFlareAt = Time.unscaledTime + 6f + UnityEngine.Random.value * 10f;
                 material = Materials.Create(Materials.Sun, body.Name);
                 material.SetColor("_Color", new Color(1f, 0.9f, 0.72f) * t);

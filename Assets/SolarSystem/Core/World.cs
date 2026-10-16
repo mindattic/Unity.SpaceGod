@@ -268,6 +268,28 @@ namespace SolarSystem.Core
             return w;
         }
 
+        /// <summary>
+        /// A system nobody has settled yet: real stars and worlds, the same machinery, but no
+        /// settlements, lanes or ships. Two factions exist only so the game layer has someone to
+        /// hand a ship to (a survey service and the raiders it will one day meet); both are fiction.
+        /// </summary>
+        public static World CreateUnsettled(Ephemeris ephemeris, double jd, int seed = 1)
+        {
+            double startJd = jd - 45;
+            var w = new World(ephemeris, startJd, seed);
+            var fleet = w.Fleet;
+            w.Sol = w.Independents = fleet.AddFaction("Survey Service", "SSV", new Rgb(0.7f, 0.85f, 0.95f));
+            w.Pirates = fleet.AddFaction("Unknown", "", new Rgb(0.8f, 0.3f, 0.3f));
+            w.Pirates.IsPirate = true;
+            w.MerchantTarget = w.MerchantCap = 0;
+            w.NavyCap = w.NavyCapAtWar = 0;
+            w.PirateGroupCap = 0;
+            w.PirateIncomePerDay = 0;
+            w.Wire(startJd, seed, new Hyperlanes(ephemeris));
+            w.Update(jd);
+            return w;
+        }
+
         void BuildCentauriSettlements()
         {
             var e = Economy;

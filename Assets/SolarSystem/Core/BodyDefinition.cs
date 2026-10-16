@@ -141,6 +141,18 @@ namespace SolarSystem.Core
 
         public BodyStatus Status = BodyStatus.Confirmed;
 
+        /// <summary>Exoplanets: the mass is m sin i (radial velocity alone), a lower limit.</summary>
+        public bool MassIsMinimum;
+
+        /// <summary>Exoplanets: where the orbit sits against the host star's habitable zone (see <see cref="HabitableZones"/>).</summary>
+        public HabitableZone HabitableZone;
+
+        /// <summary>Exoplanets: year of discovery (0 = not recorded).</summary>
+        public int DiscoveryYear;
+
+        /// <summary>Stars: spectral type, when catalogued ("M4.0V", "DA2").</summary>
+        public string SpectralType;
+
         /// <summary>
         /// Multiplies the body's orbit about its parent. A binary star's two members share their
         /// relative orbit, each scaled by the other's share of the mass (with a minus sign for one),

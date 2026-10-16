@@ -80,9 +80,9 @@ namespace SolarSystem.UI
                 {
                     if (!app.RelativeToGui(s.Relative, out var p)) continue;
                     var c = Color.Lerp(s.Color, Color.white, 0.4f);
-                    bool system = s.Name == "Sun" || s.Name == "Alpha Centauri A" || s.Name == "Proxima Centauri";
-                    string name = s.Name == "Alpha Centauri A" ? "Alpha Centauri" : s.Name == "Sun" ? "Sol" : s.Name;
-                    if (s.Name == "Alpha Centauri B") continue;
+                    if (s.Label == null) continue;
+                    bool system = s.System;
+                    string name = s.Label;
                     double ly = s.PositionLy.Length;
                     DrawLabel(system ? name.ToUpperInvariant() : name + (ly > 0.01 ? "  " + ly.ToString("0.0", CultureInfo.InvariantCulture) + " ly" : ""),
                         p + new Vector2(10, -8), system ? Accent : new Color(c.r, c.g, c.b, 0.75f), !system);
@@ -446,8 +446,10 @@ namespace SolarSystem.UI
                 bool here = system == app.ActiveSystem;
                 bool going = app.Travel.Active && app.Travel.To == system;
                 string label = system.Name + (here ? "   ◉ here" : going ? "   travelling…" : "   " + Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly  ›");
-                if (GUI.Button(new Rect(r.x + 10, sy, w - 20, 22), label, here ? buttonActive : button) && !here) app.TravelTo(system);
-                sy += 25;
+                // Rows tighten as the list of systems grows, so the body tree below keeps its room.
+                float rowHeight = app.Galaxy.Systems.Count > 4 ? 18 : 22;
+                if (GUI.Button(new Rect(r.x + 10, sy, w - 20, rowHeight), label, here ? buttonActive : button) && !here) app.TravelTo(system);
+                sy += rowHeight + (app.Galaxy.Systems.Count > 4 ? 2 : 3);
             }
             float treeTop = sy + 4 - r.y;
 
@@ -544,7 +546,7 @@ namespace SolarSystem.UI
             if (!b.IsVisible)
             {
                 // A barycentre heads the tree as a title, not a selectable body.
-                rows.Add((b.Name.ToUpperInvariant() + "  (A-B barycentre)", Target.None, 0, Dim));
+                rows.Add((b.Name.ToUpperInvariant() + "  (barycentre)", Target.None, 0, Dim));
                 foreach (int child in app.Catalog.ChildrenOf(index)) AddBody(rows, child, indent);
                 return;
             }
@@ -607,6 +609,14 @@ namespace SolarSystem.UI
                 var eph = app.Ephemeris;
                 if (b.IsStar) lines.Add(("Photosphere", b.TeffK.ToString("N0", CultureInfo.InvariantCulture) + " K,  " + b.LuminositySolar.ToString(b.LuminositySolar < 0.01 ? "0.00000" : "0.000", CultureInfo.InvariantCulture) + " x the Sun's light"));
                 lines.Add(("Radius", Km(b.RadiusKm)));
+                if (b.DiscoveryYear > 0)
+                {
+                    double earths = b.Gm / 398600.435;
+                    lines.Add(("Mass", (b.MassIsMinimum ? "at least " : "") + earths.ToString(earths < 10 ? "0.00" : "N0", CultureInfo.InvariantCulture) + " Earth masses"));
+                    lines.Add(("Habitable zone", b.HabitableZone == HabitableZone.Conservative ? "inside"
+                        : b.HabitableZone == HabitableZone.Optimistic ? "inside the optimistic zone only" : "outside"));
+                    lines.Add(("Found", b.DiscoveryYear.ToString(CultureInfo.InvariantCulture)));
+                }
                 if (b.ParentIndex >= 0)
                 {
                     var parent = app.Catalog[b.ParentIndex];
@@ -1277,13 +1287,20 @@ namespace SolarSystem.UI
         {
             switch (b.Kind)
             {
-                case BodyKind.Star: return b.TeffK < 3900 ? "Red dwarf star" : b.TeffK < 5300 ? "Orange dwarf star" : "Yellow dwarf star";
+                case BodyKind.Star:
+                    string kind = b.TeffK < 2400 ? "Brown dwarf" : b.RadiusKm < 0.05 * 695700 ? "White dwarf"
+                        : b.TeffK < 3900 ? "Red dwarf star" : b.TeffK < 5300 ? "Orange dwarf star" : b.TeffK < 7500 ? "Yellow dwarf star" : "White main-sequence star";
+                    return string.IsNullOrEmpty(b.SpectralType) ? kind : kind + "  (" + b.SpectralType + ")";
                 case BodyKind.DwarfPlanet: return "Dwarf planet";
                 case BodyKind.Asteroid: return "Asteroid";
                 case BodyKind.Moon: return "Moon";
                 case BodyKind.Station: return "Free-flying station";
                 case BodyKind.Barycentre: return "Barycentre";
-                default: return b.GasGiant || b.Name == "Jupiter" || b.Name == "Saturn" ? "Gas giant" : b.Name == "Uranus" || b.Name == "Neptune" ? "Ice giant" : "Terrestrial planet";
+                default:
+                    if (b.GasGiant || b.Name == "Jupiter" || b.Name == "Saturn") return "Gas giant";
+                    if (b.Name == "Uranus" || b.Name == "Neptune") return "Ice giant";
+                    double earths = b.Gm / 398600.435;
+                    return earths >= 8 ? "Neptune-like planet" : earths >= 2 ? "Super-Earth" : "Terrestrial planet";
             }
         }
 

@@ -71,7 +71,8 @@ namespace SolarSystem.Cameras
         }
 
         /// <summary>How far out the camera pulls before the system is a point: past its farthest member.</summary>
-        static double LeaveSpanKm(StarSystem s) => s.Catalog.Root.Kind == BodyKind.Barycentre ? 30000 * Astro.AuKm : 400 * Astro.AuKm;
+        static double LeaveSpanKm(StarSystem s) =>
+            s.Catalog.Root.Name == "Sun" ? 400 * Astro.AuKm : Math.Max(s.ExtentKm * 2.5, 40 * Astro.AuKm);
 
         /// <summary>Skips to the end: the destination's overview.</summary>
         public void Finish()

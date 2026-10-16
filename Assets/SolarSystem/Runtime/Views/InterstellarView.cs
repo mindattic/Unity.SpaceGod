@@ -7,9 +7,9 @@ using UnityEngine;
 namespace SolarSystem.Views
 {
     /// <summary>
-    /// The view between star systems: the Sun, Alpha Centauri and the twenty nearest stars beyond at
+    /// The view between star systems: the simulated systems' stars and the other nearest stars at
     /// their real positions (light-years, J2000 ecliptic axes like everything else), each a glow sized
-    /// by its luminosity, with the route between the simulated systems drawn as a line. It has its
+    /// by its luminosity, with a route from Sol out to each simulated system drawn as a line. It has its
     /// own coordinates (the camera's position in light-years) and never mixes with a system's scene.
     /// The seed of a galactic map.
     /// </summary>
@@ -27,6 +27,10 @@ namespace SolarSystem.Views
         public sealed class Star
         {
             public string Name;
+
+            /// <summary>What the HUD writes beside it: the system's name for a simulated system's first star, null for none.</summary>
+            public string Label;
+
             public DVec3 PositionLy;
             public Color Color;
             public float Size;
@@ -49,14 +53,19 @@ namespace SolarSystem.Views
 
             foreach (var system in galaxy.Systems)
             {
+                bool labelled = false;
                 foreach (var b in system.Catalog.Bodies)
                 {
                     if (!b.IsStar) continue;
                     var offsetLy = system.Ephemeris.Helio(b.Index) / Astro.LightYearKm;
                     var c = b.Color;
                     float size = Mathf.Clamp(Mathf.Pow((float)b.LuminositySolar, 0.25f), 0.45f, 3f);
-                    Add(b.Name == "Sun" ? "Sun" : b.Name, system.PositionLy + offsetLy, new Color(c.R, c.G, c.B), size,
-                        system: b.Index == system.Catalog.Root.Index || (b.ParentIndex == 0 && b.Name.EndsWith(" A")));
+                    // The system's first star carries its name; a companion far enough out to stand apart
+                    // (Proxima, Epsilon Indi B) its own; a close partner (Alpha Centauri B, Sirius B) none, as it would overlap.
+                    bool far = system.Ephemeris.Helio(b.Index).Length > 500 * Astro.AuKm;
+                    string label = !labelled ? (b.Name == "Sun" ? "Sol" : system.Name) : far ? b.Name : null;
+                    Add(b.Name, system.PositionLy + offsetLy, new Color(c.R, c.G, c.B), size, system: !labelled || far, label);
+                    labelled = true;
                 }
             }
             foreach (var n in galaxy.NearbyStars)
@@ -64,13 +73,13 @@ namespace SolarSystem.Views
                 double absMag = n.AbsoluteMagnitude;
                 float luminosity = double.IsNaN(absMag) ? 1e-5f : Mathf.Pow(10, -0.4f * (float)(absMag - 4.83));
                 float size = double.IsNaN(absMag) ? 0.35f : Mathf.Clamp(Mathf.Pow(luminosity, 0.25f), 0.45f, 3f);
-                Add(n.Name, n.PositionLy, new Color(n.Color.R, n.Color.G, n.Color.B), size, false);
+                Add(n.Name, n.PositionLy, new Color(n.Color.R, n.Color.G, n.Color.B), size, false, n.Name);
             }
             route = new LineStrip("Route", Root.transform);
             Root.SetActive(false);
         }
 
-        void Add(string name, DVec3 ly, Color color, float size, bool system)
+        void Add(string name, DVec3 ly, Color color, float size, bool system, string label)
         {
             var go = new GameObject(name);
             go.transform.SetParent(Root.transform, false);
@@ -82,7 +91,7 @@ namespace SolarSystem.Views
             m.SetFloat("_Falloff", 2.4f);
             mr.sharedMaterial = m;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            stars.Add(new Star { Name = name, PositionLy = ly, Color = color, Size = size, System = system, T = go.transform, Material = m });
+            stars.Add(new Star { Name = name, Label = label, PositionLy = ly, Color = color, Size = size, System = system, T = go.transform, Material = m });
         }
 
         public bool Visible
@@ -109,16 +118,24 @@ namespace SolarSystem.Views
                 s.Material.SetFloat("_Intensity", 1.6f * fade);
             }
 
-            var points = new Vector3[galaxy.Systems.Count];
-            for (int i = 0; i < points.Length; i++)
+            // A spoke from Sol out to each simulated system and back, drawn as one strip.
+            int n = galaxy.Systems.Count;
+            var points = new Vector3[Math.Max(1, 2 * n - 2)];
+            Vector3 At(int i)
             {
                 var d = (galaxy.Systems[i].PositionLy - cameraLy).SwapYZ * UnitsPerLy;
-                points[i] = new Vector3((float)d.X, (float)d.Y, (float)d.Z);
+                return new Vector3((float)d.X, (float)d.Y, (float)d.Z);
             }
-            route.SetPoints(points, points.Length, new Color(0.45f, 0.85f, 1f, 0.55f * fade), 1f, 1f);
+            points[0] = At(0);
+            for (int i = 1; i < n; i++)
+            {
+                points[2 * i - 1] = At(i);
+                if (2 * i < points.Length) points[2 * i] = points[0];
+            }
+            route.SetPoints(points, points.Length, new Color(0.45f, 0.85f, 1f, 0.4f * fade), 1f, 1f);
             route.SetTint(Color.white);
             route.Root.transform.localPosition = Vector3.zero;
-            route.Visible = points.Length > 1;
+            route.Visible = n > 1;
         }
     }
 }

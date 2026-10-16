@@ -160,6 +160,7 @@ namespace SolarSystem
         float[] wreckStart;
         BattleFx battleFx;
         DebrisFields debrisFields;
+        DiscView discView;
         FighterViews fighterViews;
         LaneView laneView;
         GateView gateView;
@@ -304,6 +305,7 @@ namespace SolarSystem
             pathLine = new LineStrip("Flight path", systemRoot) { Visible = false };
             battleFx = new BattleFx(this, systemRoot);
             debrisFields = new DebrisFields(this, systemRoot);
+            discView = new DiscView(this, systemRoot);
             fighterViews = new FighterViews(this, systemRoot);
             laneView = new LaneView(this, systemRoot);
             gateView = new GateView(this, systemRoot);
@@ -590,9 +592,20 @@ namespace SolarSystem
             "Alpha Centauri Ab", "Rigil Gate", "Toliman Forge", "Blackhollow",
         };
 
+        /// <summary>The bodies the number keys pick: Sol's and Alpha Centauri's chosen lists, elsewhere the visible bodies in catalogue order.</summary>
+        string[] NumberBodies()
+        {
+            if (IsSol) return SolNumberBodies;
+            if (ActiveSystem.Name == "Alpha Centauri") return CentauriNumberBodies;
+            var names = new List<string>();
+            foreach (var b in Catalog.Bodies)
+                if (b.IsVisible && names.Count < 10) names.Add(b.Name);
+            return names.ToArray();
+        }
+
         void NumberHotkey(int key)
         {
-            var names = IsSol ? SolNumberBodies : CentauriNumberBodies;
+            var names = NumberBodies();
             if (key >= names.Length || !Catalog.TryGet(names[key], out var body)) return;
             var target = Target.OfBody(body.Index);
             bool repeat = key == lastNumberKey && Time.unscaledTime - lastNumberTime < 0.45f;
@@ -1035,8 +1048,8 @@ namespace SolarSystem
         /// <summary>Camera elevation of the system overview, degrees.</summary>
         public const float OverviewPitch = 52f;
 
-        /// <summary>How much of the system the overview frames: the inner planets in Sol, the A-B pair in Alpha Centauri.</summary>
-        double OverviewSpanKm => Catalog.Root.Kind == BodyKind.Barycentre ? 22 * Astro.AuKm : 2.2 * Astro.AuKm;
+        /// <summary>How much of the system the overview frames: the inner planets in Sol, the A-B pair in Alpha Centauri, the planets elsewhere.</summary>
+        double OverviewSpanKm => ActiveSystem.OverviewSpanKm;
 
         /// <summary>The overview's camera distance from the system's root, scene units.</summary>
         public double OverviewDistance() => Scale.LocalDistance(Catalog.Root, OverviewSpanKm) * 1.9;
@@ -1493,6 +1506,7 @@ namespace SolarSystem
             Structures.Update(true);
             swarm.Update(ShowSatellites);
             UpdateOrbitLines(dt);
+            discView.Update(ShowOrbits);
             UpdatePathLine();
         }
 

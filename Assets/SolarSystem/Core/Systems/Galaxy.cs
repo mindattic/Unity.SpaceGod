@@ -23,13 +23,32 @@ namespace SolarSystem.Core
         /// <summary>This system's own jump gate, paired with another system's (see <see cref="Galaxy.CreateDefault"/>); null until paired.</summary>
         public JumpGate Gate { get; internal set; }
 
-        StarSystem(string name, DVec3 positionLy, Ephemeris ephemeris, World world)
+        /// <summary>The catalogue entry it was built from; null for Sol, whose bodies are listed in <see cref="BodyCatalog"/>.</summary>
+        public SystemSpec Spec { get; }
+
+        /// <summary>Debris belts and discs (Epsilon Eridani's belts, Tau Ceti's disc); empty where none is known.</summary>
+        public IReadOnlyList<DebrisDisc> Discs { get; }
+
+        /// <summary>How much of the system the overview frames (km from the root): the planets, or a binary's two stars.</summary>
+        public double OverviewSpanKm { get; }
+
+        /// <summary>The farthest any member or disc reaches from the root (km), when the system was built.</summary>
+        public double ExtentKm { get; }
+
+        StarSystem(string name, DVec3 positionLy, Ephemeris ephemeris, World world, SystemSpec spec, List<DebrisDisc> discs, double overviewSpanKm)
         {
             Name = name;
             PositionLy = positionLy;
             Catalog = ephemeris.Catalog;
             Ephemeris = ephemeris;
             World = world;
+            Spec = spec;
+            Discs = discs;
+            OverviewSpanKm = overviewSpanKm;
+            double extent = 0;
+            for (int i = 0; i < Catalog.Count; i++) extent = Math.Max(extent, ephemeris.Helio(i).Length);
+            foreach (var d in discs) extent = Math.Max(extent, ephemeris.Helio(d.HostIndex).Length + d.OuterKm);
+            ExtentKm = extent;
         }
 
         public void Update(double jd)
@@ -42,14 +61,50 @@ namespace SolarSystem.Core
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
             eph.Update(jd);
-            return new StarSystem("Sol System", DVec3.Zero, eph, World.CreateDefault(eph, jd));
+            return new StarSystem("Sol System", DVec3.Zero, eph, World.CreateDefault(eph, jd), null, new List<DebrisDisc>(), 2.2 * Astro.AuKm);
         }
 
-        public static StarSystem CreateAlphaCentauri(double jd)
+        public static StarSystem CreateAlphaCentauri(double jd) => Create(AlphaCentauri.Spec(), jd, World.CreateAlphaCentauri);
+
+        /// <summary>
+        /// Builds a system from its catalogue entry. <paramref name="world"/> makes its game layer
+        /// (settlements, fleets); left out, the system is unsettled (see <see cref="World.CreateUnsettled"/>).
+        /// </summary>
+        public static StarSystem Create(SystemSpec spec, double jd, Func<Ephemeris, double, int, World> world = null)
         {
-            var eph = new Ephemeris(BodyCatalog.CreateAlphaCentauri());
+            var built = StarSystemBuilder.Build(spec);
+            var catalog = new BodyCatalog(built.Bodies);
+            foreach (var d in built.Discs) d.HostIndex = catalog[d.HostName].Index;
+            var eph = new Ephemeris(catalog);
             eph.Update(jd);
-            return new StarSystem("Alpha Centauri", AlphaCentauri.PositionLy, eph, World.CreateAlphaCentauri(eph, jd));
+            var w = world != null ? world(eph, jd, SeedOf(spec.Name)) : World.CreateUnsettled(eph, jd, SeedOf(spec.Name));
+            double span = double.IsNaN(spec.OverviewSpanAu) ? OverviewSpan(catalog) : spec.OverviewSpanAu * Astro.AuKm;
+            return new StarSystem(spec.Name, spec.PositionLy, eph, w, spec, built.Discs, span);
+        }
+
+        /// <summary>Alpha Centauri keeps the seed its world was tuned with; the others get one from their names.</summary>
+        static int SeedOf(string name)
+        {
+            if (name == "Alpha Centauri") return 4243;
+            int h = 17;
+            foreach (char c in name) h = h * 31 + c;
+            return h & 0x7fffffff;
+        }
+
+        /// <summary>
+        /// The overview's reach: a little past the farthest planet (or binary member) about a star or
+        /// barycentre, leaving out wide companions hundreds of AU out; at least 0.12 AU.
+        /// </summary>
+        static double OverviewSpan(BodyCatalog catalog)
+        {
+            double span = 0;
+            foreach (var b in catalog.Bodies)
+            {
+                if (b.ParentIndex < 0 || b.Kind == BodyKind.Station || !catalog[b.ParentIndex].UsesStellarMapping) continue;
+                double apo = b.Elements.AKm * Math.Abs(b.OrbitScale) * (1 + b.Elements.E);
+                if (apo < 200 * Astro.AuKm) span = Math.Max(span, apo);
+            }
+            return Math.Max(span * 1.15, 0.12 * Astro.AuKm);
         }
 
         public override string ToString() => Name;
@@ -104,6 +159,11 @@ namespace SolarSystem.Core
 
         public static double DistanceLy(StarSystem from, StarSystem to) => (to.PositionLy - from.PositionLy).Length;
 
+        /// <summary>
+        /// Sol, Alpha Centauri (settled, joined to Sol by the jump gates), and the nearest real systems
+        /// beyond (<see cref="NearbySystems"/>), each visitable but unsettled; the rest of the nearest
+        /// stars are shown, not simulated.
+        /// </summary>
         public static Galaxy CreateDefault(double jd)
         {
             var g = new Galaxy();
@@ -111,7 +171,12 @@ namespace SolarSystem.Core
             var alphaCentauri = StarSystem.CreateAlphaCentauri(jd);
             g.Systems.Add(sol);
             g.Systems.Add(alphaCentauri);
-            g.NearbyStars.AddRange(Neighbours());
+            foreach (var spec in NearbySystems.All()) g.Systems.Add(StarSystem.Create(spec, jd));
+            var simulated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in g.Systems)
+                if (s.Spec?.NeighbourName != null) simulated.Add(s.Spec.NeighbourName);
+            foreach (var n in Neighbours())
+                if (!simulated.Contains(n.Name)) g.NearbyStars.Add(n);
             LinkGates(sol, alphaCentauri);
             return g;
         }
