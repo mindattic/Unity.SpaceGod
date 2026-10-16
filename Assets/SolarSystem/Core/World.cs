@@ -625,10 +625,6 @@ namespace SolarSystem.Core
             }
         }
 
-        /// <summary>
-        /// Independent pilots who go where they please: yachts and survey ships (fast courier hulls) and
-        /// prospectors (ore haulers), roaming every world in the system, not just its ports.
-        /// </summary>
         /// <summary>Where a free ship may go: any visible world but a star -- and but a hidden haven's rock,
         /// which nobody knows to go to. Shared by the free roamers, sandbox spawns and gate arrivals.</summary>
         public int[] FreeShipPorts()
@@ -642,6 +638,10 @@ namespace SolarSystem.Core
             return anywhere.ToArray();
         }
 
+        /// <summary>
+        /// Independent pilots who go where they please: yachts and survey ships (fast courier hulls) and
+        /// prospectors (ore haulers), roaming every world in the system, not just its ports.
+        /// </summary>
         void AddFreeShips(double jd, string[] yachts, string[] prospectors)
         {
             var places = FreeShipPorts();
