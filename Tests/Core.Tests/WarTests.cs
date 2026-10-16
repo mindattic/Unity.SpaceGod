@@ -190,6 +190,17 @@ namespace SolarSystem.Core.Tests
             Assert.That(b.Over, Is.False);
             Assert.That(flown.Battle, Is.Null, "the pilot stayed locked to a fight it had left");
             Assert.That(w.War.TryStartPlayerBattle(flown, here, b.Anchor, DVec3.UnitX, StartJd + 2.0 / 1440), Is.Null, "not back into the same fight");
+
+            // Released and flying its own schedule again before the fight it left is over: that fight's end
+            // doesn't reach back and reschedule it.
+            w.PilotedShip = null;
+            flown.DestinationBody = w.Catalog["Charon"].Index;
+            flown.PhaseEndJd = StartJd + 30;
+            foreach (var u in b.Units) if (u.Ship != null && u.Ship != flown) b.ApplyDamage(u, null, u.Side == 0 ? 0 : 1e9, u.Pos);
+            double jd = StartJd + 2.0 / 1440;
+            for (int i = 0; i < 400 && w.War.Battles.Contains(b); i++) w.War.Update(jd += 1.0 / 1440);
+            Assert.That(w.War.Battles, Does.Not.Contain(b));
+            Assert.That(flown.PhaseEndJd, Is.EqualTo(StartJd + 30), "the old fight's end rescheduled a ship that had left it");
         }
 
         [Test]

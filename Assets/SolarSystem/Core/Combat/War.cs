@@ -710,13 +710,18 @@ namespace SolarSystem.Core
             var fled = new int[2];
             var lootTonnes = 0.0;
             var lootValue = 0.0;
+            // Ships already let go of this battle (a pilot who left it) have moved on: whatever they are
+            // doing now -- flying, another fight -- is not this battle's to reset.
+            var left = new HashSet<BattleUnit>();
+            foreach (var u in b.Units)
+                if (u.Ship != null && u.Ship.Battle != b) left.Add(u);
             foreach (var u in b.Units)
             {
                 if (u.Side < 0 || u.Side > 1) continue;
                 if (u.Dead && u.Kind != UnitKind.Fighter) lost[u.Side]++;
                 if (u.Fled) fled[u.Side]++;
                 if (u.Kind == UnitKind.Platform && u.Dead) u.Platform.Platforms.Remove(u.Combat);
-                if (u.Ship == null) continue;
+                if (u.Ship == null || left.Contains(u)) continue;
                 var ship = u.Ship;
                 ship.Battle = null;
                 if (!u.Captured) ship.Combat.Interior.BoardersGone();
@@ -752,7 +757,7 @@ namespace SolarSystem.Core
             {
                 if (u.Ship == null || u.Dead || u.Ship.IsEscort || u.Ship.Destroyed || u.Ship.Derelict) continue;
                 // The player's ship stays the player's: its schedule is set again only on release.
-                if (u.Ship == world.PilotedShip) continue;
+                if (u.Ship == world.PilotedShip || left.Contains(u)) continue;
                 bool beaten = u.Fled || (b.Winner >= 0 && u.Side != b.Winner);
                 // Pulled out of a lane: back in and on their way. Raiders who won take the loot home;
                 // beaten ones run.
