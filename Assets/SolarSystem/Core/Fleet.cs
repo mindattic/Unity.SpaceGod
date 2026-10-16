@@ -142,13 +142,12 @@ namespace SolarSystem.Core
             var target = new DVec3[n];
             var threatened = new bool[n];
             var near = new bool[n];
-            const double h = 1e-4;
             for (int i = 0; i < n; i++)
             {
                 var s = list[i];
                 evasion.TryGetValue(s, out var e);
                 pos[i] = BaseStateOf(s, jd).HelioKm + e.offset;
-                vel[i] = (BaseStateOf(s, jd + h).HelioKm - BaseStateOf(s, jd - h).HelioKm) / (2 * h) + e.velocity;
+                vel[i] = HelioVelocityOf(s, jd) + e.velocity;
             }
             evadingFrom.Clear();
             for (int i = 0; i < n; i++)
@@ -242,6 +241,24 @@ namespace SolarSystem.Core
             var off = EvasionOf(ship);
             if (off.LengthSquared <= 0) return st;
             return new ShipState(st.HelioKm + off, st.Facing, st.SpeedKmS, st.Burning, st.Progress, st.Heat);
+        }
+
+        /// <summary>
+        /// The ship's heliocentric velocity (km/day) on its schedule, before any sidestep. A parked or
+        /// ring-bound ship is placed in its body's cached frame, which holds still across the finite
+        /// difference, so that body's own motion round the Sun is added back: without it every such
+        /// ship looked tens of km/s off from a ship in flight beside it.
+        /// </summary>
+        public DVec3 HelioVelocityOf(Ship ship, double jd)
+        {
+            const double h = 1e-4;
+            var v = (BaseStateOf(ship, jd + h).HelioKm - BaseStateOf(ship, jd - h).HelioKm) / (2 * h);
+            var s = ship.Controller;
+            int frame = s.Phase == ShipPhase.Parked ? s.Orbit.Body
+                : s.Phase == ShipPhase.Queued || s.Planetside ? s.Ring.Body
+                : -1;
+            if (frame >= 0) v += (ephemeris.HelioAt(frame, jd + h) - ephemeris.HelioAt(frame, jd - h)) / (2 * h);
+            return v;
         }
 
         /// <summary>Where the ship's schedule puts it, before any sidestep.</summary>

@@ -40,6 +40,26 @@ namespace SolarSystem.Core.Tests
             Assert.That(last > Fleet.SafeDistanceKm(a, b) * 0.9, Is.True, "they stayed on top of each other");
         }
 
+        /// <summary>A parked ship moves with its world round the Sun, as a ship in flight beside it does.</summary>
+        [Test]
+        public void AParkedShipsVelocityIncludesItsWorldsMotion()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var fleet = new Fleet(eph, 7) { Dwell = (s, d) => 30 };
+            var f = fleet.AddFaction("Test", "TS", new Rgb(1, 1, 1));
+            int earth = eph.Catalog["Earth"].Index;
+            var a = fleet.AddShip("A", ShipClass.Freighter, f, ShipRole.Trader);
+            a.Ports = new[] { earth, eph.Catalog["Moon"].Index };
+            fleet.Station(a, earth, StartJd, Infrastructure.EquatorialOrbit(eph.Catalog[earth], 20000, 0, 0, 0, StartJd));
+            fleet.Update(StartJd);
+            Assert.That(a.Phase, Is.EqualTo(ShipPhase.Parked));
+            var earthVel = (eph.HelioAt(earth, StartJd + 1e-4) - eph.HelioAt(earth, StartJd - 1e-4)) / 2e-4;
+            var rel = fleet.HelioVelocityOf(a, StartJd) - earthVel;
+            // About 4.5 km/s of orbit round Earth, not Earth's 30 km/s round the Sun missing.
+            Assert.That(rel.Length / Astro.SecondsPerDay, Is.LessThan(10));
+        }
+
         /// <summary>Head-on: two ships burning straight at each other see it coming and pass wide.</summary>
         [Test]
         public void HeadOnShipsTurnAside()
