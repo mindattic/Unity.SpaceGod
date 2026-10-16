@@ -85,10 +85,12 @@ namespace SolarSystem.Core
 
         public int Losses(Faction f) => losses.TryGetValue(f, out var n) ? n : 0;
 
+        /// <summary>The battle being fought at <paramref name="body"/>, or null. An ambush out on a hyperlane
+        /// is filed under the system root but fought out on the lane, so it is at no body.</summary>
         public Battle BattleAt(int body)
         {
             foreach (var b in Battles)
-                if (b.Body == body) return b;
+                if (b.Body == body && b.Site == null) return b;
             return null;
         }
 

@@ -52,6 +52,15 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AnAmbushOutOnALaneIsNotTheBattleAtTheSystemRoot()
+        {
+            var w = CreateWorld();
+            var ambush = new Battle(99, 0, "Ambush", new DVec3(1e8, 0, 0), StartJd, 1) { Site = new LaneSite() };
+            w.War.Battles.Add(ambush);
+            Assert.That(w.War.BattleAt(0), Is.Null, "a ship near the root would be put into a fight millions of km away");
+        }
+
+        [Test]
         public void RepeatBattlesAreNumberedWithTheRightOrdinal()
         {
             Assert.That(War.Ordinal(2), Is.EqualTo("Second"));
