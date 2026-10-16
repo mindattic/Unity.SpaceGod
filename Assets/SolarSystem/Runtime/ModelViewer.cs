@@ -202,7 +202,8 @@ namespace SolarSystem
 
             orbitYaw = 30f;
             orbitPitch = 15f;
-            zoom = Mathf.Max(instanceBounds.extents.magnitude * 3f, 1.2f);
+            // A multiple of the model's radius (PositionCamera scales it by that), not a distance.
+            zoom = 3f;
             PositionCamera();
         }
 
