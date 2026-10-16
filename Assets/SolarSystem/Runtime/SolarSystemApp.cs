@@ -525,6 +525,9 @@ namespace SolarSystem
 
         void OnGUI()
         {
+            // The model viewer has the screen: the game's HUD would paint over the model and its buttons
+            // (travel, Now, Focus...) would still act on the hidden game.
+            if (ModelViewer.CapturesInput) return;
             hud.Draw();
         }
 
