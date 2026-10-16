@@ -113,6 +113,38 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void BoardersStillAboardWhenAFightEndsDoNotStayAboardForGood()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy 6");
+            var traders = MakeFaction(w, "Hapless Traders", military: false);
+            int here = w.Catalog["Pluto"].Index;
+            var merchant = w.Fleet.AddShip("Hapless", ShipClass.Freighter, traders, ShipRole.Trader);
+            merchant.Orbit = new ParkingOrbit { Body = here };
+            merchant.Phase = ShipPhase.Parked;
+            merchant.Ports = new[] { here, w.Catalog["Charon"].Index };
+            var flown = ParkWarship(w, player, ShipClass.Destroyer, here);
+            ParkWarship(w, player, ShipClass.Destroyer, here); // an AI warship to open the fight
+            w.Diplomacy.Set(player, traders, Relation.War);
+            w.PilotedShip = flown;
+            var b = w.War.TryStartPlayerBattle(flown, here, new DVec3(5000, 0, 0), DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+            var mu = b.UnitOf(merchant);
+            Assert.That(mu, Is.Not.Null);
+            // Boarders aboard when it strikes its colours, and the player lets it go mid-fight aboard.
+            var interior = merchant.Combat.Interior;
+            interior.Board(player, 1.0, 5, interior.Nearest(0, 0), false, 0, new System.Random(1));
+            b.Surrender(mu);
+            Assert.That(b.OfferSurrenderTerms(mu, SurrenderTerms.LetGo), Is.True);
+            Assert.That(interior.UnderBoarding, Is.True);
+            double jd = StartJd;
+            for (int i = 0; i < 400 && w.War.Battles.Contains(b); i++) w.War.Update(jd += 1.0 / 1440);
+            Assert.That(w.War.Battles, Does.Not.Contain(b));
+            Assert.That(interior.Boarder, Is.Null, "the fight aboard stayed 'under way' after the battle");
+            Assert.That(flown.Combat.MarinesAvailable, Is.GreaterThan(0));
+        }
+
+        [Test]
         public void APlayerShipBoardedAndTakenIsNoLongerThePlayers()
         {
             var w = CreateWorld();

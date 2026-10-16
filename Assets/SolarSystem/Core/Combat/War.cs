@@ -719,6 +719,7 @@ namespace SolarSystem.Core
                 if (u.Ship == null) continue;
                 var ship = u.Ship;
                 ship.Battle = null;
+                if (!u.Captured) ship.Combat.Interior.BoardersGone();
                 if (u.Dead)
                 {
                     if (ship.HasCargo)

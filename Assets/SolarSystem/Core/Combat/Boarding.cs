@@ -435,6 +435,22 @@ namespace SolarSystem.Core
             }
         }
 
+        /// <summary>
+        /// The ship got away (released, fled, or the battle ran out) with the fight aboard undecided: the
+        /// boarders are gone with the battle, and what they held is the crew's again. Without this the
+        /// boarding would stay "under way" for good, keeping the ship's marines tied up.
+        /// </summary>
+        public void BoardersGone()
+        {
+            if (Captured || Boarder == null) return;
+            foreach (var c in Compartments)
+            {
+                c.Boarders = 0;
+                c.Taken = false;
+            }
+            Boarder = null;
+        }
+
         /// <summary>A prize crew takes over: the boarders become the ship's people; the old crew are prisoners.</summary>
         public void HandOver(double prizeCrew)
         {
