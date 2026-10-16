@@ -652,7 +652,15 @@ namespace SolarSystem.UI
                 lines.Add(("Length", Km(ship.LengthKm)));
                 lines.Add(("Drive", ship.Spec.AccelG.ToString("0.##", CultureInfo.InvariantCulture) + " g, flip-and-burn; hyperlanes between systems"));
                 if (ship.IsEscort) lines.Add(("Escorting", ship.Leader.Name));
-                if (c.Phase == ShipPhase.Lurk)
+                if (app.IsPiloting && app.Piloted.Ship == ship && ship.Battle == null)
+                {
+                    // Under the player's own hand: where it really is, not the spot its schedule was pinned at.
+                    var near = app.Catalog[app.PilotFrameBody];
+                    lines.Add(("Status", "Under your helm near " + near.Name));
+                    lines.Add(("Altitude", Km(app.PilotOffsetKm.Length - near.RadiusKm)));
+                    lines.Add(("Speed", SpeedText(app.PilotSpeedKmS)));
+                }
+                else if (c.Phase == ShipPhase.Lurk)
                 {
                     lines.Add(("Status", "Lying in wait beside the " + c.LaneLeg.Lane.Name + " hyperlane"));
                     lines.Add(("Until", Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + " more, unless prey comes by"));

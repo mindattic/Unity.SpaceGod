@@ -61,6 +61,12 @@ namespace SolarSystem
         public Target Piloted { get; private set; } = Target.None;
         public bool IsPiloting => !Piloted.IsNone;
 
+        /// <summary>Where the piloted ship really is (its body frame and true km offset) and how fast it is
+        /// flying: its schedule shows only the spot it was pinned at when the helm was taken.</summary>
+        public int PilotFrameBody => pilotFrameBody;
+        public DVec3 PilotOffsetKm => pilotOffsetKm;
+        public double PilotSpeedKmS => pilotVelKmS.Length;
+
         int pilotFrameBody;
         DVec3 pilotOffsetKm, pilotVelKmS, pilotForward;
 
