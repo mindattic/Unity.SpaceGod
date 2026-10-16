@@ -1097,7 +1097,9 @@ namespace SolarSystem
         /// <summary>Swings the view smoothly round until the system's plane is level.</summary>
         public void LevelView()
         {
-            if (Travel.Active) return;
+            // The chase camera follows the hull the mouse is flying: there is no view of its own to level,
+            // and the levelling ease would compound on the chase's own easing every frame.
+            if (Travel.Active || IsPiloting) return;
             SpaceCamera.Level(SystemPlaneNormal());
             ShowToast("LEVEL: " + SystemPlaneName.ToUpperInvariant() + " is now horizontal");
         }
