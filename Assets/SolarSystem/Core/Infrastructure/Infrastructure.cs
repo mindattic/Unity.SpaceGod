@@ -231,11 +231,17 @@ namespace SolarSystem.Core
                 // the true sub-parent point a degree or two either side.
                 if (double.IsNaN(lockedEpoch))
                 {
-                    lockedEpoch = Ephemeris.Jd;
-                    var toParent = -Ephemeris.Relative(body.Index);
+                    // At the ephemeris' own date, or -- asked before it has one (a world still being built) --
+                    // at J2000: the cached frame is all NaN until the first update, which left the ring nowhere.
+                    lockedEpoch = double.IsNaN(Ephemeris.Jd) ? Astro.J2000 : Ephemeris.Jd;
+                    const double h = 1e-3;
+                    DVec3 RelativeAt(double jd) => Ephemeris.HelioAt(body.Index, jd) - Ephemeris.HelioAt(body.ParentIndex, jd);
+                    var relative = RelativeAt(lockedEpoch);
+                    var motion = RelativeAt(lockedEpoch + h) - RelativeAt(lockedEpoch - h);
+                    var toParent = -relative;
                     var p = toParent - north * DVec3.Dot(toParent, north);
                     lockedW0 = Math.Atan2(DVec3.Dot(p, east), DVec3.Dot(p, node)) * Astro.Rad2Deg;
-                    double sense = DVec3.Dot(DVec3.Cross(Ephemeris.Relative(body.Index), Ephemeris.RelativeVelocityKmS(body.Index)), north) >= 0 ? 1 : -1;
+                    double sense = DVec3.Dot(DVec3.Cross(relative, motion), north) >= 0 ? 1 : -1;
                     lockedRate = sense * Math.Abs(body.Elements.At(lockedEpoch).MeanMotion);
                 }
                 epoch = lockedEpoch;

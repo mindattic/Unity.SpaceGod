@@ -209,5 +209,21 @@ namespace SolarSystem.Core.Tests
             }
             Assert.That(landed > 0, Is.True, "nobody landed at New Kentaurus");
         }
+
+        /// <summary>U.SPC-T181: a world built on an ephemeris that has no date yet (the tests' usual way) locked
+        /// Titan's Kraken Gate to a NaN face, and every merchant flying to or from it froze on a NaN schedule.</summary>
+        [Test]
+        public void AFaceLockedRingBuiltBeforeTheEphemerisHasADateIsSomewhereAndShipsLeaveIt()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            var w = World.CreateDefault(eph, StartJd);
+            var kraken = w.Infrastructure.Rings.First(r => r.Name == "Kraken Gate");
+            var at = kraken.RingPoint.OffsetAt(StartJd);
+            Assert.That(double.IsNaN(at.X) || double.IsNaN(at.Y) || double.IsNaN(at.Z), Is.False, "the ring point is NaN");
+            Assert.That(at.Length, Is.EqualTo(kraken.RadiusKm).Within(1));
+            for (double jd = StartJd; jd < StartJd + 30; jd += 0.25) w.Update(jd);
+            var frozen = w.Fleet.Ships.Where(s => !s.Destroyed && double.IsNaN(s.PhaseEndJd)).Select(s => s.Name).ToList();
+            Assert.That(frozen, Is.Empty, "ships stuck on a NaN schedule");
+        }
     }
 }

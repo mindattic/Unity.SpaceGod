@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 669 passing](https://img.shields.io/badge/core%20tests-669%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 670 passing](https://img.shields.io/badge/core%20tests-670%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -320,7 +320,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-669 NUnit tests, run in parallel in under two minutes, cover the following:
+670 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -352,7 +352,7 @@ dotnet test
 - Alpha Centauri: the A–B separation (11.2 to 35.4 AU), period, barycentre balance and 2035 periastron; the orbit's 79.2° tilt to the sky; Proxima where the sky puts it and its planets' periods; the Sun in Cassiopeia as seen from there; lanes connecting every port and clearing all three stars; two years of trade, raiding and nobody starving; every system on one clock
 - Nearby systems: every planet keeps its catalogued period, axis and eccentricity (periapsis and apoapsis traced, the orbit closing after one period); every star its mass, size and light; the binaries balanced on their barycentres, swinging a(1 ± e) apart, at periastron on the catalogued date and tilted as measured; spot checks against the Exoplanet Archive; candidates labelled; habitable-zone flags (Proxima b in, Barnard's planets out, the Sun's zone 0.98–1.69 AU); Epsilon Eridani's belts and Tau Ceti's disc; each system at its parallax distance; a quiet year in every unsettled system
 - Avoidance: head-on ships passing wide, ships sharing a spot spreading out, a month of the whole system with no near-collisions, free ships roaming, a mid-flight course change keeping position and momentum, and merchants turning aside from fresh battles
-- Infrastructure: rings staying over their cities (latitude and longitude to a millionth of a degree, velocity = ω × r); FIFO queues clearing at most one ship per interval; no position jumps through queue, descent, landing and climb; only merchants landing; yards launching from their slips; constellations at their real altitudes and inclinations; JWST at L2
+- Infrastructure: rings staying over their cities (latitude and longitude to a millionth of a degree, velocity = ω × r), including a ring over a world that keeps one face to its parent built before the ephemeris has a date; FIFO queues clearing at most one ship per interval; no position jumps through queue, descent, landing and climb; only merchants landing; yards launching from their slips; constellations at their real altitudes and inclinations; JWST at L2
 - Piloting: Newtonian flight (momentum conserved with no thrust, a burn changing it by exactly its impulse, drift and turn-and-burn with flight assist off, assist settling on the commanded velocity without overshoot, rolls, gravity close to a world and a hull too weak for it settling on the surface), cruise spooling up and dropping out, forward guns firing only on the trigger, the piloted hull staying where the pilot loop puts it
 - Cargo hold and trade: crate footprints and rotation, no overlaps or out-of-bounds placement, buying and selling at the AI's prices and taxes, docking rules
 - Adventures: each kind offered only from real sim state (a ship actually in a fight or adrift, a derelict, a wreck with salvage, raiders lurking on a lane past the danger threshold, a merchant on a dangerous lane with time left, a raider captain), within range, never twice at once, capped, rested after it ends; ignored ones failing at expiry or when the situation settles without the player; completed ones paying credits, cargo and standing; and twenty days of the live system where every offer traces to something real
