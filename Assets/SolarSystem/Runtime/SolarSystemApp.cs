@@ -112,6 +112,10 @@ namespace SolarSystem
         public bool ShowMarket { get; set; }
         public bool ShowCargo { get; set; }
         public bool ShowSpawn { get; set; }
+
+        /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
+        /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
+        bool ClickPanelOpen => ShowMarket || ShowCargo || ShowSpawn;
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -457,7 +461,7 @@ namespace SolarSystem
             HandleSelectionClicks();
 
             ToastAge += dt;
-            bool lockCursor = (Input.LookHeld || IsPiloting) && !ModelViewer.CapturesInput;
+            bool lockCursor = (Input.LookHeld || (IsPiloting && !ClickPanelOpen)) && !ModelViewer.CapturesInput;
             Cursor.lockState = lockCursor ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !lockCursor;
         }
@@ -894,9 +898,10 @@ namespace SolarSystem
             // Free look: rotate around the look quaternion's own local axes each frame (not a
             // world-space yaw/pitch pair), so there's no gimbal clamp -- the nose can be pointed
             // anywhere, including straight up/down or looping past behind.
+            var look = ClickPanelOpen ? Vector2.zero : Input.MouseDelta;
             pilotLook = pilotLook
-                * Quaternion.AngleAxis(Input.MouseDelta.x * PilotLookSensitivity, Vector3.up)
-                * Quaternion.AngleAxis(-Input.MouseDelta.y * PilotLookSensitivity, Vector3.right);
+                * Quaternion.AngleAxis(look.x * PilotLookSensitivity, Vector3.up)
+                * Quaternion.AngleAxis(-look.y * PilotLookSensitivity, Vector3.right);
             var desiredUnity = pilotLook * Vector3.forward;
             var desiredForward = new DVec3(desiredUnity.x, desiredUnity.y, desiredUnity.z).SwapYZ;
 
@@ -997,7 +1002,7 @@ namespace SolarSystem
             unit.Vel = pilotVelKmS;
             unit.Forward = pilotForward;
             // No firing while cruising -- the cruise drive is a travel tier, not a combat one.
-            unit.PlayerFireHeld = Input.Fire && !pilotCruise.Active;
+            unit.PlayerFireHeld = Input.Fire && !pilotCruise.Active && !ClickPanelOpen;
             unit.PlayerLockTarget = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
             UpdateSurrenderPrompts(ship.Battle, unit);
         }
