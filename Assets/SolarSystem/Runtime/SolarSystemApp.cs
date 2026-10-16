@@ -1376,9 +1376,15 @@ namespace SolarSystem
         public DVec3 TransitScene(Ship ship, double progress, out DVec3 travelDirection) =>
             Scale.TransitScene(Ephemeris, bodyScene, ship, progress, out travelDirection);
 
-        public DVec3 ShipScene(Ship ship) => shipScene[ship.Id];
-        public double ShipDisplayLength(Ship ship) => shipLength[ship.Id];
-        public ShipState ShipStateOf(Ship ship) => shipStates[ship.Id];
+        // A ship added since this frame's sync (spawned mid-frame by a tour coroutine, say) gets its views first.
+        void EnsureShipSynced(Ship ship)
+        {
+            if (ship.Id >= shipScene.Length && SyncShipViews()) UpdateShips(0f);
+        }
+
+        public DVec3 ShipScene(Ship ship) { EnsureShipSynced(ship); return shipScene[ship.Id]; }
+        public double ShipDisplayLength(Ship ship) { EnsureShipSynced(ship); return shipLength[ship.Id]; }
+        public ShipState ShipStateOf(Ship ship) { EnsureShipSynced(ship); return shipStates[ship.Id]; }
 
         // ---------------------------------------------------------------- ICameraWorld
 
