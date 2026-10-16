@@ -86,6 +86,19 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APortsPlatformsAreNotRefittedInTheMiddleOfAFight()
+        {
+            var w = CreateWorld();
+            var port = w.Economy.Settlements.First(s => s.Platforms.Count > 0 && !s.Fallen);
+            var platform = port.Platforms[0];
+            platform.Hull = platform.Spec.Hull * 0.5;
+            double hull = platform.Hull;
+            w.War.Battles.Add(new Battle(98, port.Body, "Battle at the port", new DVec3(1e4, 0, 0), StartJd, 1));
+            w.War.Update(StartJd + 1.01);
+            Assert.That(platform.Hull, Is.EqualTo(hull), "a platform was repaired mid-battle");
+        }
+
+        [Test]
         public void TheDailySweepDoesNotStartFightsOnThePlayersBehalf()
         {
             var w = CreateWorld();

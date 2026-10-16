@@ -1597,9 +1597,11 @@ namespace SolarSystem.Core
             foreach (var st in Economy.Settlements)
             {
                 if (st.Fallen) continue;
+                // Not mid-fight: a daily refit would refill shields and ammunition (and end a boarding) in battle.
+                if (BattleAt(st.Body) != null) continue;
                 foreach (var p in st.Platforms)
                     if (p.Damage > 0) { p.Repair(0.05); p.FreeResupply(); }
-                if (st.Platforms.Count >= st.MaxPlatforms || BattleAt(st.Body) != null) continue;
+                if (st.Platforms.Count >= st.MaxPlatforms) continue;
                 // A new platform every couple of weeks while the port can afford the steel.
                 if (rng.NextDouble() > 0.07) continue;
                 const double alloys = 3000, electronics = 200;
