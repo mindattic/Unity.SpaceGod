@@ -85,6 +85,25 @@ namespace SolarSystem.Core.Tests
         // ---------------------------------------------------------------- the player's own ship
 
         [Test]
+        public void APlayerTakingOverAShipInFlightFightsWhereItIsNotWhereItWasBound()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy");
+            var enemy = MakeFaction(w, "Enemy Navy");
+            w.Diplomacy.Set(player, enemy, Relation.War);
+            int here = w.Catalog["Pluto"].Index, boundFor = w.Catalog["Neptune"].Index;
+            var foe = ParkWarship(w, enemy, ShipClass.Destroyer, here);
+            // Taken over mid-transit: its schedule still points at Neptune, but it is flying at Pluto.
+            var flown = ParkWarship(w, player, ShipClass.Destroyer, boundFor);
+            w.PilotedShip = flown;
+            var b = w.War.TryStartPlayerBattle(flown, here, new DVec3(3000, 0, 0), DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+            Assert.That(b.Body, Is.EqualTo(here));
+            Assert.That(foe.Battle, Is.SameAs(b));
+            Assert.That(flown.Battle, Is.SameAs(b));
+        }
+
+        [Test]
         public void APlayerFlownWarshipIsNeverMergedIntoAnAiBattleGroup()
         {
             var w = CreateWorld();

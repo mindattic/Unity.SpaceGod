@@ -943,7 +943,7 @@ namespace SolarSystem
                 // The piloted ship's scanners: a hidden haven within range goes on the map.
                 foreach (var found in World.War.ScanFrom(ship.Faction, Ephemeris.HelioAt(pilotFrameBody, Clock.Jd) + pilotOffsetKm, Clock.Jd, ship.Name))
                     ShowToast("Scanners pick out a hidden pirate haven: " + found.Name + " on " + Catalog[found.Body].Name);
-                World.War.TryStartPlayerBattle(ship, pilotOffsetKm, pilotForward, Clock.Jd);
+                World.War.TryStartPlayerBattle(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
                 return;
             }
 

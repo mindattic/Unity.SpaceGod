@@ -511,12 +511,13 @@ namespace SolarSystem.Core
         /// body, see <see cref="PresentGroups"/>) into range of a hostile: starts a fight there if one isn't
         /// already on, or joins the one that is, then places the piloted ship into it at its own actual flown
         /// position -- not a formation slot -- since the Runtime pilot loop, not this battle, owns its pose
-        /// from here on (see <see cref="BattleUnit.PlayerControlled"/>). Returns null (no-op) if nothing hostile
-        /// and willing to fight is actually present.</summary>
-        public Battle TryStartPlayerBattle(Ship ship, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
+        /// from here on (see <see cref="BattleUnit.PlayerControlled"/>). <paramref name="body"/> is the body the
+        /// pilot is actually flying beside (the frame <paramref name="offsetFromBodyKm"/> is measured from), not
+        /// the ship's scheduled orbit, which for a hull taken over mid-transit is still its far-off destination.
+        /// Returns null (no-op) if nothing hostile and willing to fight is actually present.</summary>
+        public Battle TryStartPlayerBattle(Ship ship, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
         {
             if (ship.Destroyed || ship.Battle != null || ship.Planetside) return null;
-            int body = ship.Orbit.Body;
             var b = BattleAt(body) ?? TryStartBattle(body, ship.Faction, jd);
             if (b == null) return null;
             bool h0 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[0]);
