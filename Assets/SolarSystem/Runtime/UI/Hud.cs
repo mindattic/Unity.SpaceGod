@@ -28,6 +28,7 @@ namespace SolarSystem.UI
         /// <summary>The crate currently picked up by a source click in the cargo panel, awaiting a
         /// destination click; null means nothing is picked up.</summary>
         CargoItem cargoSelected;
+        CargoHold cargoSelectedHold; // the hold the picked-up crate is in: a crate never carries over to another ship's hold
 
         /// <summary>Crates per manual Buy/Sell click in the market board, shared by every good's row.</summary>
         int tradeCrates = 1;
@@ -1053,6 +1054,8 @@ namespace SolarSystem.UI
                 return;
             }
             var hold = ship.PersonalHold;
+            if (cargoSelectedHold != hold) cargoSelected = null;
+            cargoSelectedHold = hold;
             const float cell = 28f;
             float w = Math.Max(260, hold.Width * cell + 24);
             float h = cargoOpen ? 74 + hold.Height * cell + (cargoSelected != null ? 28 : 0) : 34;
