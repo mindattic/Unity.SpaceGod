@@ -84,6 +84,8 @@ namespace SolarSystem.Views
                     if (ship.Phase == ShipPhase.Lane && ship.LaneLeg.Lane == lane) progress = Fleet.LaneProgress(ship, eph.Jd);
                     else if ((ship.Phase == ShipPhase.Lurk || ship.Phase == ShipPhase.Adrift) && ship.LaneLeg.Lane == lane) progress = ship.LaneHold;
                     else continue;
+                    // Progress counts from the ramp the ship set out from; the curve runs A to B.
+                    if (ship.LaneLeg.From != lane.A) progress = 1 - progress;
                     var fc = ship.Faction.Color;
                     Sprite(Along((float)progress), 7, new Color(fc.R, fc.G, fc.B) * 1.3f, 0);
                 }
