@@ -812,7 +812,8 @@ namespace SolarSystem
         public DVec3 PlayerHelioKm()
         {
             if (IsPiloting) return Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
-            int frame = SpaceCamera.FrameBody;
+            // The camera's free-flight frame goes stale while it is focused on something far off.
+            int frame = SpaceCamera.FrameAt(SpaceCamera.ScenePosition);
             return Ephemeris.Helio(frame) + Scale.InverseLocalOffset(Catalog[frame], SpaceCamera.ScenePosition - BodyScene(frame));
         }
 
