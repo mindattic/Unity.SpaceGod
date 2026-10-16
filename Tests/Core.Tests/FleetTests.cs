@@ -33,6 +33,18 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void EveryEscortInAGroupHasItsOwnFormationSlot()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var world = World.CreateDefault(eph, StartJd);
+            var groups = world.Fleet.Ships.Where(s => s.IsEscort).GroupBy(s => s.Leader).ToList();
+            Assert.That(groups.Any(g => g.Count() > 5), Is.True, "the default roster has a group bigger than the five base slots");
+            foreach (var g in groups)
+                Assert.That(g.Select(s => s.FormationSlot).Distinct().Count(), Is.EqualTo(g.Count()), g.Key.Name + " has escorts stacked on one slot");
+        }
+
+        [Test]
         public void ShipsStayOutsideBodiesAndFiniteForTwoYears()
         {
             var (fleet, eph) = Create();

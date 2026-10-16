@@ -1439,7 +1439,7 @@ namespace SolarSystem.Core
             for (int i = 0; i < escorts.Length; i++)
             {
                 var escort = AddShip(escorts[i].name, escorts[i].cls, faction, ShipRole.Escort);
-                AddEscort(leader, escort, EscortSlots[i % EscortSlots.Length]);
+                AddEscort(leader, escort, SlotFor(i));
             }
             Station(leader, leader.Route[0], jd);
             return leader;
