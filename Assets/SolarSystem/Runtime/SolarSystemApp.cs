@@ -730,6 +730,7 @@ namespace SolarSystem
             // Where it is (and which way it faces) before an escort is cut loose from the leader it shares them with.
             var (frame, offsetKm) = CurrentFrame(ship, Clock.Jd);
             var facing = Fleet.StateOf(ship, Clock.Jd).Facing;
+            var velocity = DVec3.Zero;
             if (ship.IsEscort) ship.Leader = null;
             if (ship.Battle != null)
             {
@@ -739,11 +740,17 @@ namespace SolarSystem
                     unit.PlayerControlled = true;
                     unit.PlayerFireHeld = false;
                     unit.PlayerLockTarget = null;
+                    // Mid-fight, the hull is where the battle has it, not where its schedule would put it:
+                    // the pilot loop writes this pose back every frame (pilotOffsetKm - Anchor), so seed it from there.
+                    frame = ship.Battle.Body;
+                    offsetKm = unit.Pos + ship.Battle.Anchor;
+                    facing = unit.Forward;
+                    velocity = unit.Vel;
                 }
             }
             pilotFrameBody = frame;
             pilotOffsetKm = offsetKm;
-            pilotVelKmS = DVec3.Zero;
+            pilotVelKmS = velocity;
             pilotAngularRateDegS = 0;
             pilotCruise = default;
             pilotBattleCheckTimer = 0;
