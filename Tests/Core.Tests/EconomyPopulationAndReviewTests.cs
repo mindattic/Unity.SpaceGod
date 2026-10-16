@@ -6,7 +6,7 @@ using Xunit;
 namespace SolarSystem.Core.Tests
 {
     /// <summary>
-    /// Covers USS-T32: <see cref="Economy.Consume"/> (feeding people and growing or shrinking
+    /// Covers U.SPC-T32: <see cref="Economy.Consume"/> (feeding people and growing or shrinking
     /// population), <see cref="Economy.Fence"/> (haven smuggling), the 10-day <see cref="Economy.Review"/>
     /// (facility level drift and shipyard builds) and <see cref="Economy.Capture"/>. Settlements are
     /// built directly (no <see cref="Economy.Initialise"/>) so each test starts from known stock and

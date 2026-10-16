@@ -6,7 +6,7 @@ using Xunit;
 namespace SolarSystem.Core.Tests
 {
     /// <summary>
-    /// Covers USS-T33: the AI trader logistics in <see cref="Economy"/> -- <see cref="Economy.PlanTrade"/>,
+    /// Covers U.SPC-T33: the AI trader logistics in <see cref="Economy"/> -- <see cref="Economy.PlanTrade"/>,
     /// <see cref="Economy.OnArrive"/>, <see cref="Economy.Release"/>, <see cref="Economy.RecountInbound"/>,
     /// <see cref="Economy.Carries"/>, <see cref="Economy.CapacityOf"/> and <see cref="Economy.CargoText"/>.
     /// Until now these were only exercised indirectly, over years of simulated time, by

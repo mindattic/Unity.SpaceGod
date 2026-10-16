@@ -300,7 +300,7 @@ namespace SolarSystem
             app.Clock.SetWarp(SimClock.DefaultWarpIndex);
         }
 
-        // ---------------------------------------------------------------- combat showcase (USS-T10)
+        // ---------------------------------------------------------------- combat showcase (U.SPC-T10)
 
         /// <summary>
         /// Three staged skirmishes, each built to put one distinct combat feel on camera reliably

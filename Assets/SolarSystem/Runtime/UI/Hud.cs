@@ -914,7 +914,7 @@ namespace SolarSystem.UI
         static readonly ShipClass[] SpawnClasses = (ShipClass[])Enum.GetValues(typeof(ShipClass));
 
         /// <summary>
-        /// USS-T9 dev/sandbox tool, redesigned as its own full screen rather than a small corner panel:
+        /// U.SPC-T9 dev/sandbox tool, redesigned as its own full screen rather than a small corner panel:
         /// every <see cref="ShipClass"/> laid out as a grid of real rendered hull previews
         /// (<see cref="Rendering.ShipThumbnails"/>, the same model a live ship uses) -- click one to
         /// spawn a ship of it (a random design, if the class has more than one) at the camera's current

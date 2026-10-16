@@ -5,7 +5,7 @@ using Xunit;
 namespace SolarSystem.Core.Tests
 {
     /// <summary>
-    /// Covers USS-T35: <see cref="War"/>'s strategic rules -- <see cref="War.SiegeNeeded"/>, the
+    /// Covers U.SPC-T35: <see cref="War"/>'s strategic rules -- <see cref="War.SiegeNeeded"/>, the
     /// uncontested-siege capture flow in Sieges (and the garrisons/platforms/battles/haven status
     /// that block or reset it), the trader-booking revocation a capture triggers, <see cref="War.AtWar"/>
     /// ignoring pirates, <see cref="War.DefenceAt"/>, <see cref="War.GroupStrength"/> and

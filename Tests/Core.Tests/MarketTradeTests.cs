@@ -4,7 +4,7 @@ using Xunit;
 namespace SolarSystem.Core.Tests
 {
     /// <summary>
-    /// Covers USS-T6's manual buy/sell: <see cref="Economy.BuyIntoHold"/> and
+    /// Covers U.SPC-T6's manual buy/sell: <see cref="Economy.BuyIntoHold"/> and
     /// <see cref="Economy.SellFromHold"/>, the Core-side operations behind the player's market UI.
     /// </summary>
     public class MarketTradeTests

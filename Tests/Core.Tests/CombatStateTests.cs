@@ -6,7 +6,7 @@ using Xunit;
 namespace SolarSystem.Core.Tests
 {
     /// <summary>
-    /// Covers USS-T34: <see cref="ShipCombat"/>'s shield bookkeeping, status thresholds, repair and
+    /// Covers U.SPC-T34: <see cref="ShipCombat"/>'s shield bookkeeping, status thresholds, repair and
     /// resupply, plus <see cref="SubsystemDef.ContainsYaw"/> and the <see cref="CombatSpec"/> lookup
     /// fallbacks.
     /// </summary>

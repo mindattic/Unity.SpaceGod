@@ -700,7 +700,7 @@ namespace SolarSystem
         }
 
         /// <summary>
-        /// Dev/sandbox tool (USS-T9): builds a ship of <paramref name="cls"/> (a random design if the
+        /// Dev/sandbox tool (U.SPC-T9): builds a ship of <paramref name="cls"/> (a random design if the
         /// class has more than one, see <see cref="CombatSpec.RandomOf"/>) via <see cref="Fleet.SpawnAt"/>,
         /// parked exactly where the camera is looking from, and immediately pilots it -- for testing
         /// flight feel and combat without hunting down an existing hull in the live simulation. Releases

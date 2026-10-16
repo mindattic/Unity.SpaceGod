@@ -5,7 +5,7 @@ using Xunit;
 namespace SolarSystem.Core.Tests
 {
     /// <summary>
-    /// Covers USS-T31: the production tick in <see cref="Economy.AdvanceTo"/> / Produce, plus the
+    /// Covers U.SPC-T31: the production tick in <see cref="Economy.AdvanceTo"/> / Produce, plus the
     /// <see cref="Recipe"/> and <see cref="Facility"/> types it drives. Facilities are attached
     /// directly to a bare <see cref="Settlement"/> (population 0 unless a test needs it) so each tick
     /// is isolated from trading, pricing reviews and population growth.

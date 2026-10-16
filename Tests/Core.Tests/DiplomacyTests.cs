@@ -4,7 +4,7 @@ using Xunit;
 namespace SolarSystem.Core.Tests
 {
     /// <summary>
-    /// Covers USS-T29: <see cref="Diplomacy"/>'s relation bookkeeping and the two gates
+    /// Covers U.SPC-T29: <see cref="Diplomacy"/>'s relation bookkeeping and the two gates
     /// (<see cref="Diplomacy.Hostile"/>, <see cref="Diplomacy.CanDock"/>) that trade, combat and
     /// sieges all read. Today only <see cref="Diplomacy.CanDock"/> is exercised, indirectly, via
     /// MarketTradeTests.
