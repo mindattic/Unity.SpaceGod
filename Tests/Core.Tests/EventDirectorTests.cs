@@ -422,6 +422,19 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void NobodyCollectsABountyFromInsideTheRaidersOwnBand()
+        {
+            var r = Add(ShipClass.Destroyer, pirates, new DVec3(Astro.AuKm, 0, 0), ShipRole.Patrol);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            Assert.That(op.Kind, Is.EqualTo(OpportunityKind.Bounty));
+            // The player takes over one of the captain's own escorts, flying beside the flagship.
+            var escort = new Ship { Id = 997, Name = "Escort", Spec = ShipClassSpec.Of(ShipClass.Destroyer), Faction = pirates };
+            Tick(Jd + 0.01, escort, new DVec3(Astro.AuKm, 0, 0));
+            Assert.That(op.Engaged, Is.False);
+        }
+
+        [Test]
         public void TakingTheHelmOfTheShipInTroubleIsNotSeeingItThrough()
         {
             var adrift = Add(ShipClass.Freighter, traders, Near);

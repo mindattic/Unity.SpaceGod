@@ -85,7 +85,11 @@ namespace SolarSystem.Core
                 Refresh(op, src);
                 // Arriving counts only from another ship: taking the helm of the very ship it is about isn't
                 // seeing it through (its spot is the player's own, so it would read as arrived at once).
-                if (playerShip != null && !playerShip.Destroyed && op.Ship != playerShip && (op.HelioKm - playerHelio).Length <= ArriveKm)
+                // Nor from a hull of the very raiders a bounty or ambush is on (one of their own escorts, taken
+                // over in formation): nobody collects on their own band.
+                bool sameBand = op.Ship != null && op.Ship.Faction == playerShip?.Faction
+                    && (op.Kind == OpportunityKind.Bounty || op.Kind == OpportunityKind.PirateAmbush);
+                if (playerShip != null && !playerShip.Destroyed && op.Ship != playerShip && !sameBand && (op.HelioKm - playerHelio).Length <= ArriveKm)
                 {
                     op.Engaged = true;
                     op.EngagedBy = playerShip;
