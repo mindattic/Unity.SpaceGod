@@ -181,6 +181,21 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ABoarderCrippledOnItsApproachGivesUpThePrize()
+        {
+            var b = NewBattle(22);
+            var raider = b.AddShip(Hull(ShipClass.Destroyer, Pirates, 0), 0, new DVec3(-3, 0, 0), DVec3.UnitX);
+            var wreck = b.AddShip(Hull(ShipClass.Freighter, Traders, 1), 1, new DVec3(3, 0, 0), -DVec3.UnitX);
+            wreck.Combat.Hull = wreck.Combat.Spec.Hull * 0.1;
+            b.Advance(2);
+            Assert.That(raider.BoardTarget, Is.SameAs(wreck));
+            raider.Combat.Hull = raider.Combat.Spec.Hull * 0.1;
+            Assert.That(raider.Combat.Disabled, Is.True);
+            b.Advance(1);
+            Assert.That(raider.BoardTarget, Is.Null, "a crippled boarder that can't close would hold the battle open");
+        }
+
+        [Test]
         public void AnArmedWarshipThatStrikesItsColoursCanStillBeBoarded()
         {
             // Its own guns are powered down: a hull waiting on terms is no threat to the boarders it asked for.

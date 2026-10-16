@@ -1252,7 +1252,10 @@ namespace SolarSystem.Core
                     (bt.Combat.Disabled || bt.SurrenderOpenToBoarding || bt.Stunned > 10 || (breacher && (bt.Combat.Shield <= bt.Combat.Spec.Shield * 0.25 || !bt.Combat.HasShieldGenerator)));
                 if (!stillOpen) u.BoardTarget = null;
             }
-            if (u.BoardTarget != null || u.Fleeing || u.Combat.Disabled) return;
+            // A boarder that can no longer fly the approach (crippled, or breaking off) gives up the
+            // prize, or the battle would wait on a boarding that never comes.
+            if (u.Fleeing || u.Combat.Disabled) { u.BoardTarget = null; return; }
+            if (u.BoardTarget != null) return;
             bool boarder = breacher || u.Faction.IsPirate || u.Faction.IsMilitary;
             if (!boarder || u.Combat.MarinesAvailable < 15) return;
             BattleUnit best = null;
@@ -1387,6 +1390,7 @@ namespace SolarSystem.Core
             u.Side = side;
             u.Fleeing = false;
             u.Target = null;
+            u.BoardTarget = null;
             // A surrendered hull is taken without a fight aboard: mark it held so the fight stops there too.
             u.Combat.Interior.Captured = true;
             u.Combat.Interior.Settle();
