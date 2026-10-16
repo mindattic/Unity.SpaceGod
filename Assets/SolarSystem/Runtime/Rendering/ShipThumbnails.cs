@@ -47,9 +47,10 @@ namespace SolarSystem.Rendering
             EnsureCamera();
 
             var root = new GameObject("ShipThumbPreview") { hideFlags = HideFlags.HideAndDontSave };
-            // Far from anything the live game ever positions a ship or body at, in case layer culling
-            // alone ever isn't enough (e.g. a renderer bounds query) -- the camera only looks here anyway.
-            root.transform.position = new Vector3(1e6f, 1e6f, 1e6f);
+            // Off to one side, but near enough the origin for float precision: at 1e6 world units the hull's
+            // vertices snapped to a 1/16-unit grid (6% of a one-unit hull), stair-stepping every edge. The
+            // preview lives only inside this call and on its own layer, so nothing else ever draws it.
+            root.transform.position = new Vector3(1000f, 1000f, 1000f);
 
             var ship = new Ship { Id = 0, Spec = ShipClassSpec.Of(cls), Faction = faction };
             var renderers = new List<Renderer>();
