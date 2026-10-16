@@ -559,7 +559,7 @@ namespace SolarSystem.Core
                     if (g == Good.Nitrogen) nitrogen -= rate * f.Level;
                 }
             }
-            double foodNeed = s.Population * 0.0016 * share;
+            double foodNeed = s.Population * People.NeedOf(s.Kind, Good.Food) * share;
             if (food < foodNeed)
             {
                 double level = (foodNeed - food) / farm.Outputs[0].perDay;
@@ -567,8 +567,10 @@ namespace SolarSystem.Core
                 water -= farm.Inputs[0].perDay * level;
                 nitrogen -= farm.Inputs[1].perDay * level;
             }
-            double waterNeed = s.Population * 0.004 * share;
+            double waterNeed = s.Population * People.NeedOf(s.Kind, Good.Water) * share;
             if (water < waterNeed) mine(s, Good.Water, (waterNeed - water) * 1.05);
+            // Air leaks away: the nitrogen to top it up is a need like the farms' own.
+            nitrogen -= s.Population * People.NeedOf(s.Kind, Good.Nitrogen) * share;
             if (nitrogen < 0) mine(s, Good.Nitrogen, -nitrogen * share);
         }
 

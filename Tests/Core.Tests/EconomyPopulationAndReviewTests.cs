@@ -41,9 +41,19 @@ namespace SolarSystem.Core.Tests
             return facility;
         }
 
+        /// <summary>
+        /// Houses enough people at <paramref name="s"/> to crew its facilities <paramref name="headroom"/>
+        /// times over (U.SPC-T56: a facility runs only with its workers), so that even a population that
+        /// starves down to its floor over a long test still staffs them.
+        /// </summary>
+        static void Staff(Settlement s, double headroom = 4)
+        {
+            s.Population = s.InitialPopulation = s.Jobs / (People.LabourForceShare * People.IndustrialShare) * headroom;
+        }
+
         static void StockAllNeeds(Settlement s, double amount)
         {
-            foreach (var (g, _) in Settlement.PersonNeeds) s.Stock[(int)g] = amount;
+            foreach (var (g, _) in s.PersonNeeds) s.Stock[(int)g] = amount;
         }
 
         // ---------------------------------------------------------------- Consume: satisfaction
@@ -54,8 +64,8 @@ namespace SolarSystem.Core.Tests
             var (economy, s, _) = CreateMarket(population: 100000);
             double dt = 0.1;
             StockAllNeeds(s, Ample);
-            double needFood = Settlement.PersonNeeds[0].perPersonDay * s.Population * dt;
-            Assert.That(Settlement.PersonNeeds[0].good, Is.EqualTo(Good.Food));
+            double needFood = s.PersonNeeds[0].perPersonDay * s.Population * dt;
+            Assert.That(s.PersonNeeds[0].good, Is.EqualTo(Good.Food));
             s.Stock[(int)Good.Food] = needFood * 0.5; // only half of what the colony needs this tick
 
             economy.AdvanceTo(dt);
@@ -227,6 +237,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s, _) = CreateMarket();
             var f = AddMine(s, Good.Platinum, 1000); // trivial inputs, a very high-value output: huge margin
+            Staff(s);
             s.Stock[(int)Good.Machinery] = Ample;
             s.Stock[(int)Good.HeliumThree] = Ample;
 
@@ -256,6 +267,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s, _) = CreateMarket();
             var f = AddMine(s, Good.Platinum, 1000);
+            Staff(s, headroom: 12); // room to crew three times the base level even at the population floor
             s.Stock[(int)Good.Machinery] = Ample;
             s.Stock[(int)Good.HeliumThree] = Ample;
             s.ExtraDemand[(int)Good.Platinum] = Ample; // a sink, so the warehouse never fills as Level grows

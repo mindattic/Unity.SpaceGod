@@ -32,6 +32,16 @@ namespace SolarSystem.Core.Tests
             return facility;
         }
 
+        /// <summary>
+        /// Houses enough people at <paramref name="s"/> to crew its facilities <paramref name="headroom"/>
+        /// times over (U.SPC-T56: a facility runs only with its workers), so that even a population that
+        /// starves down to its floor over a long test still staffs them.
+        /// </summary>
+        static void Staff(Settlement s, double headroom = 4)
+        {
+            s.Population = s.InitialPopulation = s.Jobs / (People.LabourForceShare * People.IndustrialShare) * headroom;
+        }
+
         // ---------------------------------------------------------------- Recipe.Limiting
 
         [Test]
@@ -84,6 +94,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s) = CreateMarket();
             var f = AddFacility(s, IndustryKind.Smelter);
+            Staff(s);
             double dt = 0.1;
             double needNickelIron = 2200 * dt; // level 1
             s.Stock[(int)Good.NickelIron] = needNickelIron * 0.4; // only 40% of what's needed
@@ -103,6 +114,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s) = CreateMarket();
             var f = AddFacility(s, IndustryKind.Smelter);
+            Staff(s);
             double dt = 0.1;
             s.Stock[(int)Good.NickelIron] = Ample;
             s.Stock[(int)Good.Titanium] = Ample;
@@ -120,6 +132,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s) = CreateMarket();
             var f = AddFacility(s, IndustryKind.Smelter);
+            Staff(s);
             double dt = 0.1;
             double needHeliumThree = 0.8 * dt;
             s.Stock[(int)Good.NickelIron] = Ample;
@@ -139,6 +152,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s) = CreateMarket();
             var f = AddFacility(s, IndustryKind.Smelter);
+            Staff(s);
             double dt = 0.1;
             s.Stock[(int)Good.NickelIron] = 2200 * dt * 0.5; // limiting input at 50% -> run = 0.5
             s.Stock[(int)Good.Titanium] = Ample;
@@ -159,6 +173,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s) = CreateMarket();
             var f = AddFacility(s, IndustryKind.Smelter);
+            Staff(s);
             double dt = 0.1;
             s.Stock[(int)Good.NickelIron] = Ample;
             s.Stock[(int)Good.Titanium] = Ample;
@@ -181,6 +196,7 @@ namespace SolarSystem.Core.Tests
             var (economy, s) = CreateMarket();
             s.DaysSinceCapture = 0;
             var f = AddFacility(s, IndustryKind.Smelter);
+            Staff(s);
             double dt = 0.1;
             s.Stock[(int)Good.NickelIron] = Ample;
             s.Stock[(int)Good.Titanium] = Ample;
@@ -198,6 +214,7 @@ namespace SolarSystem.Core.Tests
             var (economy, s) = CreateMarket();
             s.DaysSinceCapture = 0;
             var f = AddFacility(s, IndustryKind.Smelter);
+            Staff(s);
             s.Stock[(int)Good.NickelIron] = Ample;
             s.Stock[(int)Good.Titanium] = Ample;
             s.Stock[(int)Good.HeliumThree] = Ample;
@@ -223,6 +240,7 @@ namespace SolarSystem.Core.Tests
             var farm = AddFacility(s, IndustryKind.Farm);
             var waterMine = new Facility(Recipe.Mine(Good.Water, 1000), 1);
             s.Facilities.Add(waterMine);
+            Staff(s);
             double dt = 0.1;
             // The farm's bulk (Limiting) inputs stay ample; only its minor HeliumThree feed runs dry.
             s.Stock[(int)Good.Water] = Ample;
@@ -246,6 +264,7 @@ namespace SolarSystem.Core.Tests
         {
             var (economy, s) = CreateMarket();
             AddFacility(s, IndustryKind.Shipyard, level: 1000);
+            Staff(s);
             s.Stock[(int)Good.Alloys] = Ample;
             s.Stock[(int)Good.Electronics] = Ample;
             s.Stock[(int)Good.Machinery] = Ample;

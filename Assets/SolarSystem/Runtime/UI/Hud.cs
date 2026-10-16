@@ -906,6 +906,13 @@ namespace SolarSystem.UI
         {
             lines.Add(("", ""));
             lines.Add((s.Name, s.Owner.Name + " " + KindName(s.Kind) + ", pop " + People(s.Population)));
+            if (s.Kind != SettlementKind.Haven && !s.Fallen)
+            {
+                double moving = s.NetMigration;
+                string migration = Math.Abs(moving) < 1 ? "no migration" :
+                    (moving > 0 ? "+" : "-") + Math.Abs(moving).ToString("N0", CultureInfo.InvariantCulture) + "/day " + (moving > 0 ? "moving in" : "leaving");
+                lines.Add(("People", migration + "  ·  jobs " + (s.Staffing * 100).ToString("0", CultureInfo.InvariantCulture) + "% filled  ·  wage tax " + Credits(s.WageTax) + "/day"));
+            }
             var exports = new List<(double value, string name)>();
             var shortages = new List<(double ratio, string name)>();
             for (int g = 0; g < GoodInfo.Count; g++)

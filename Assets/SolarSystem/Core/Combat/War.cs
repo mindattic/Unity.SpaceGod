@@ -1470,6 +1470,7 @@ namespace SolarSystem.Core
             if (Fleet.Lanes != null)
                 foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.SetDanger(lane, Fleet.Lanes.Danger[lane] * 0.85);
             MergeGroups();
+            PayUpkeep();
             Refit(jd);
             Sieges(jd);
             Scans(jd);
@@ -1534,12 +1535,36 @@ namespace SolarSystem.Core
             }
         }
 
-        /// <summary>Warships at a friendly yard repair and rearm, buying alloys, electronics and munitions from its market.</summary>
+        /// <summary>
+        /// A day's running costs out of each navy's treasury: crews, fuel and maintenance for every
+        /// warship it has in service and every defence platform over its ports
+        /// (<see cref="Economy.UpkeepPerYear"/> of the hull's price a year). Pirates live off plunder.
+        /// </summary>
+        void PayUpkeep()
+        {
+            const double perDay = Economy.UpkeepPerYear / 365.25;
+            foreach (var s in Fleet.Ships)
+            {
+                if (s.Destroyed || s.Derelict || !s.Spec.IsMilitary || s.Faction.IsPirate) continue;
+                s.Faction.Treasury -= Economy.HullPrice(s.Spec.Class) * perDay;
+            }
+            foreach (var st in Economy.Settlements)
+                if (!st.Owner.IsPirate && st.Platforms.Count > 0) st.Owner.Treasury -= st.Platforms.Count * PlatformPrice * perDay;
+        }
+
+        /// <summary>Credits a port's owner pays to raise one defence platform (besides its steel and electronics).</summary>
+        public const double PlatformPrice = 3e7;
+
+        /// <summary>
+        /// Warships at a friendly yard repair and rearm, buying alloys, electronics and munitions from its
+        /// market. A navy whose treasury is empty cannot pay the yard: its ships stay as they are.
+        /// </summary>
         void Refit(double jd)
         {
             foreach (var s in Fleet.Ships)
             {
                 if (s.Destroyed || s.Battle != null || !(s.Spec.IsMilitary || s.Faction.IsPirate)) continue;
+                if (s.Faction.Treasury <= 0) continue;
                 var c = s.Controller;
                 if (c.Phase != ShipPhase.Parked) continue;
                 Settlement yard = null;
@@ -1675,9 +1700,11 @@ namespace SolarSystem.Core
                 st.ExtraDemand[(int)Good.Alloys] += alloys / 14;
                 st.ExtraDemand[(int)Good.Electronics] += electronics / 14;
                 if (st.Stock[(int)Good.Alloys] < alloys || st.Stock[(int)Good.Electronics] < electronics) continue;
+                // ... and the owner can pay for it: a broke owner leaves its ports bare.
+                if (st.Owner.Treasury < PlatformPrice) continue;
                 st.Stock[(int)Good.Alloys] -= alloys;
                 st.Stock[(int)Good.Electronics] -= electronics;
-                st.Owner.Treasury -= 3e7;
+                st.Owner.Treasury -= PlatformPrice;
                 st.Platforms.Add(new ShipCombat(CombatSpec.Platform));
             }
         }

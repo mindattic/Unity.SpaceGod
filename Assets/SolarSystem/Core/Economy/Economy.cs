@@ -37,13 +37,14 @@ namespace SolarSystem.Core
         public const double TickDays = 0.25;
 
         readonly Random rng;
-        double nextReviewJd;
+        double nextReviewJd, lastReviewJd;
 
         public Economy(Diplomacy diplomacy, double startJd, int seed = 2077)
         {
             Diplomacy = diplomacy;
             Jd = startJd;
             nextReviewJd = startJd + 10;
+            lastReviewJd = startJd;
             rng = new Random(seed);
         }
 
@@ -66,7 +67,9 @@ namespace SolarSystem.Core
                     s.Satisfaction[i] = 1;
                 }
                 s.RefreshPrices();
+                People.AssignLabour(s);
             }
+            People.Migrate(Settlements, Diplomacy, 0);
         }
 
         public IEnumerable<Settlement> At(int body)
@@ -111,6 +114,7 @@ namespace SolarSystem.Core
                     continue;
                 }
                 RecomputeFlows(s);
+                People.AssignLabour(s);
                 Produce(s, dt);
                 Consume(s, dt);
                 if (s.Kind == SettlementKind.Haven) Fence(s, dt);
@@ -123,7 +127,7 @@ namespace SolarSystem.Core
         {
             Array.Clear(s.Demand, 0, s.Demand.Length);
             Array.Clear(s.Supply, 0, s.Supply.Length);
-            foreach (var (g, perPerson) in Settlement.PersonNeeds) s.Demand[(int)g] += perPerson * s.Population;
+            foreach (var (g, perPerson) in s.PersonNeeds) s.Demand[(int)g] += perPerson * s.Population;
             for (int i = 0; i < GoodInfo.Count; i++) s.Demand[i] += s.ExtraDemand[i];
             foreach (var f in s.Facilities)
             {
@@ -136,11 +140,13 @@ namespace SolarSystem.Core
         {
             // A recently captured settlement is in disarray: output recovers over 60 days.
             double disruption = Math.Min(1, 0.25 + s.DaysSinceCapture / 60);
+            double wages = 0;
             foreach (var f in s.Facilities)
             {
-                // Life support keeps running through a change of owner; industry does not.
-                bool lifeSupport = f.Recipe.Kind == IndustryKind.Farm || (f.Recipe.Kind == IndustryKind.Mine && f.Recipe.Outputs[0].good == Good.Water);
-                double run = lifeSupport ? 1 : disruption, efficiency = 1;
+                // Life support keeps running through a change of owner; industry does not. Neither runs
+                // past its crew: an understaffed facility makes less, and below a minimum crew nothing.
+                bool lifeSupport = f.LifeSupport;
+                double run = (lifeSupport ? 1 : disruption) * People.CrewFactor(f.Staffing), efficiency = 1;
                 var inputs = f.Recipe.Inputs;
                 for (int k = 0; k < inputs.Length; k++)
                 {
@@ -166,13 +172,19 @@ namespace SolarSystem.Core
                     double points = f.Recipe.Inputs[0].perDay * f.Level * dt * run;
                     s.BuildPoints = Math.Min(s.BuildPoints + points, 400000);
                 }
+                // Workers take their share of what the facility actually added.
+                wages += People.ValueAdded(s, f) * f.Utilisation * People.LabourShare;
             }
+            // Havens pay no taxes: whatever their crews earn stays off the books.
+            s.WageBill = s.Kind == SettlementKind.Haven ? 0 : wages;
+            s.WageTax = s.WageBill * People.WageTaxRate;
+            if (s.Owner != null) s.Owner.Treasury += s.WageTax * dt;
         }
 
         static void Consume(Settlement s, double dt)
         {
             for (int i = 0; i < s.Satisfaction.Length; i++) s.Satisfaction[i] = 1;
-            foreach (var (g, perPerson) in Settlement.PersonNeeds)
+            foreach (var (g, perPerson) in s.PersonNeeds)
             {
                 int i = (int)g;
                 double need = perPerson * s.Population * dt;
@@ -186,8 +198,13 @@ namespace SolarSystem.Core
             // decline of about 5% a year with none); hunger or thirst shrinks them fast, to a hard core.
             double sustenance = Math.Min(s.Satisfaction[(int)Good.Food], s.Satisfaction[(int)Good.Water]);
             double health = s.Satisfaction[(int)Good.MedicalSupplies];
-            double rate = sustenance >= 0.98 ? 0.00011 * (0.5 + 0.5 * health) - (1 - health) * 0.0002 : (sustenance - 0.98) * 0.004;
-            s.Population = Math.Max(s.InitialPopulation * 0.25, Math.Min(s.InitialPopulation * 4, s.Population * (1 + rate * dt)));
+            double rate = People.GrowthRate(sustenance, health);
+            s.Population = Math.Max(s.InitialPopulation * People.MinShare, Math.Min(s.InitialPopulation * People.MaxGrowth, s.Population * (1 + rate * dt)));
+
+            // How people have been living, remembered for about a month: what draws or drives migrants.
+            double k = 1 - Math.Exp(-dt / People.WellbeingDays);
+            s.Wellbeing += (sustenance - s.Wellbeing) * k;
+            s.HealthWellbeing += (health - s.HealthWellbeing) * k;
         }
 
         /// <summary>A haven's fences smuggle loot onward to the black market: stock drains, the owner is paid.</summary>
@@ -206,6 +223,9 @@ namespace SolarSystem.Core
         /// <summary>Every 10 days: facilities that sell dear expand, those glutted shrink; yards lay down hulls.</summary>
         void Review()
         {
+            // People move toward food, water and work, then the facilities follow the market.
+            People.Migrate(Settlements, Diplomacy, Jd - lastReviewJd);
+            lastReviewJd = Jd;
             foreach (var s in Settlements)
             {
                 foreach (var f in s.Facilities)
@@ -213,7 +233,8 @@ namespace SolarSystem.Core
                     if (f.Recipe.Kind == IndustryKind.Shipyard) continue;
                     double margin = Margin(s, f.Recipe);
                     double step = 0;
-                    if (margin > 1.4 && f.Utilisation > 0.8) step = 0.03;
+                    // Expanding takes hands: a facility short of crew does not grow.
+                    if (margin > 1.4 && f.Utilisation > 0.8 && f.Staffing >= 0.95) step = 0.03;
                     else if (margin < 0.7 || f.Utilisation < 0.2) step = -0.02;
                     f.Level = Math.Max(f.BaseLevel * 0.4, Math.Min(f.BaseLevel * 3, f.Level * (1 + step)));
                 }
@@ -257,6 +278,13 @@ namespace SolarSystem.Core
                 default: return 3000;
             }
         }
+
+        /// <summary>
+        /// Share of a warship's (or platform's) price its navy pays a year to keep it in service: crews,
+        /// fuel, spares. Operating and support is about 70% of a US weapon system's life-cycle cost (GAO),
+        /// so over 30 years each year costs 0.7 / 0.3 / 30 of the purchase.
+        /// </summary>
+        public const double UpkeepPerYear = 0.078;
 
         /// <summary>Credits the owner pays the yard (crew, weapons, fit-out) on top of the materials.</summary>
         public static double HullPrice(ShipClass c) => HullCost(c) * 1200;

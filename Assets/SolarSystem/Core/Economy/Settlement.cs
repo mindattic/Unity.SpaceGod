@@ -97,16 +97,57 @@ namespace SolarSystem.Core
         /// <summary>Warehouses hold this many days of flow; production stops when they are full.</summary>
         public const double StorageDays = 90;
 
-        /// <summary>Daily per-capita (per person) needs, tonnes, after recycling.</summary>
-        public static readonly (Good good, double perPersonDay)[] PersonNeeds =
+        /// <summary>
+        /// Daily per-person needs, tonnes, after recycling, for this kind of settlement (see
+        /// <see cref="People.NeedsOf"/>: food, water lost from a closed loop, nitrogen top-up for air
+        /// that leaks away, medical supplies, and the upkeep of the habitat itself).
+        /// </summary>
+        public (Good good, double perPersonDay)[] PersonNeeds => People.NeedsOf(Kind);
+
+        /// <summary>People of working age in work or looking for it (<see cref="People.LabourForceShare"/>).</summary>
+        public double Workforce => Population * People.LabourForceShare;
+
+        /// <summary>Workers the facilities need at their current levels.</summary>
+        public double Jobs
         {
-            (Good.Food, 0.0016),
-            (Good.Water, 0.004),
-            (Good.MedicalSupplies, 0.00002),
-            (Good.HeliumThree, 0.0000025),
-            (Good.Machinery, 0.000008),
-            (Good.Electronics, 0.0000015),
-        };
+            get
+            {
+                double jobs = 0;
+                foreach (var f in Facilities) jobs += f.Workers;
+                return jobs;
+            }
+        }
+
+        /// <summary>Share of the facilities' jobs filled over the last tick (1 where there are none).</summary>
+        public double Staffing = 1;
+
+        /// <summary>Credits a day paid to the people working the facilities, over the last tick.</summary>
+        public double WageBill;
+
+        /// <summary>Credits a day the owner collected in tax on those wages, over the last tick.</summary>
+        public double WageTax;
+
+        /// <summary>
+        /// What a member of the labour force here can expect to earn a day: the facility wage times the
+        /// chance of a facility job, the rest at the service wage (<see cref="People.ExpectedEarnings"/>).
+        /// Set at each review.
+        /// </summary>
+        public double Earnings;
+
+        /// <summary>
+        /// How well people here have been living, 0..1: food and water met, and medicine, smoothed over
+        /// about a month (<see cref="People.WellbeingDays"/>). 1 for a settlement that has wanted for nothing.
+        /// </summary>
+        public double Wellbeing = 1;
+
+        /// <summary>Medical needs met, smoothed the same way as <see cref="Wellbeing"/>.</summary>
+        public double HealthWellbeing = 1;
+
+        /// <summary>How strongly this place pulls migrants (living standard times earnings), set at each review.</summary>
+        public double Attraction = 1;
+
+        /// <summary>Net people a day arriving (positive) or leaving (negative) by migration, over the last review.</summary>
+        public double NetMigration;
 
         public double Flow(Good g) => Math.Max(Demand[(int)g], Supply[(int)g]);
 
