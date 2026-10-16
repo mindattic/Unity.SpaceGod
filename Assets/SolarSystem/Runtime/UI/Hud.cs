@@ -1889,6 +1889,8 @@ namespace SolarSystem.UI
             var hold = ship.PersonalHold;
             if (cargoSelectedHold != hold) cargoSelected = null;
             cargoSelectedHold = hold;
+            // A picked-up crate that has left the hold (sold at the market above, say) is no longer held.
+            if (cargoSelected != null && !InHold(hold, cargoSelected)) cargoSelected = null;
             const float cell = 28f;
             float w = Math.Max(260, hold.Width * cell + 24);
             float h = cargoOpen ? 74 + hold.Height * cell + (cargoSelected != null ? 28 : 0) : 34;
@@ -1927,6 +1929,13 @@ namespace SolarSystem.UI
                 if (GUI.Button(new Rect(r.x + 12, by, 90, 22), "Rotate", button))
                     hold.Move(cargoSelected, cargoSelected.X, cargoSelected.Y, !cargoSelected.Rotated);
             }
+        }
+
+        static bool InHold(CargoHold hold, CargoItem item)
+        {
+            foreach (var held in hold.Items)
+                if (held == item) return true;
+            return false;
         }
 
         void ClickCargoCell(CargoHold hold, int x, int y, CargoItem occupant)
