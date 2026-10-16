@@ -273,7 +273,9 @@ namespace SolarSystem.Core
         static void Torpedo(Battle b, BattleUnit u)
         {
             var f = u.Fighter;
-            if (!f.Bomber || f.Phase != FighterPhase.AttackRun || u.Target == null || u.Target.Kind == UnitKind.Fighter) return;
+            // Only a lead changes phase; a wingman flies (and fires on) its lead's run.
+            var phase = f.Lead != null ? f.Lead.Fighter.Phase : f.Phase;
+            if (!f.Bomber || phase != FighterPhase.AttackRun || u.Target == null || u.Target.Kind == UnitKind.Fighter) return;
             var to = u.Target.Pos - u.Pos;
             double dist = to.Length;
             if (dist > WeaponSpec.Torpedo.RangeKm || DVec3.Dot(u.Forward, to / dist) < 0.9) return;

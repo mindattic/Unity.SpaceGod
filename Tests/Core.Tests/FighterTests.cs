@@ -55,6 +55,17 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void BomberWingmenLooseTheirTorpedoesOnTheRunToo()
+        {
+            var b = CarrierAction(5);
+            var wingmen = b.Units.Where(u => u.Kind == UnitKind.Fighter && u.Fighter.Bomber && u.Fighter.Lead != null).ToList();
+            Assert.That(wingmen, Is.Not.Empty);
+            for (int i = 0; i < 900 && !b.Over; i++) b.Advance(1);
+            Assert.That(wingmen.SelectMany(f => f.Combat.Subsystems).Any(s => s.Kind == SubsystemKind.Torpedo && s.Ammo < s.Def.Weapon.Ammo), Is.True,
+                "only squadron leads ever fired a torpedo");
+        }
+
+        [Test]
         public void ACraftTurningBackIntoTheBattleKeepsAUnitHeading()
         {
             var b = CarrierAction(5);
