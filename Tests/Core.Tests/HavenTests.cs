@@ -163,6 +163,9 @@ namespace SolarSystem.Core.Tests
             Assert.That(h.Population, Is.EqualTo(0));
             Assert.That(h.Stock.Sum(), Is.EqualTo(0));
             Assert.That(w.Sol.Treasury, Is.GreaterThan(before), "the stolen goods are seized");
+            // And it stays an empty shell while it lies fallen: the markets don't repopulate or restock it.
+            w.Economy.AdvanceTo(StartJd + 10);
+            Assert.That(h.Population, Is.EqualTo(0), "the economy brought a fallen haven's people back");
             Assert.That(w.Events.Any(e => e.Kind == WorldEventKind.Capture && e.Text.Contains("board and take Hollow Iron")), Is.True);
 
             // Its raiders no longer raid or lurk: they hold where they are.

@@ -101,11 +101,19 @@ namespace SolarSystem.Core
         {
             foreach (var s in Settlements)
             {
+                s.DaysSinceCapture += dt;
+                // A fallen haven is an empty shell until it is rebuilt: nobody there to work, eat or fence
+                // (and the population floor below would otherwise bring its people straight back).
+                if (s.Fallen)
+                {
+                    // ... and nobody there going without.
+                    Array.Fill(s.Satisfaction, 1.0);
+                    continue;
+                }
                 RecomputeFlows(s);
                 Produce(s, dt);
                 Consume(s, dt);
                 if (s.Kind == SettlementKind.Haven) Fence(s, dt);
-                s.DaysSinceCapture += dt;
                 s.RefreshPrices();
             }
         }
