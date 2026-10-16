@@ -51,6 +51,27 @@ namespace SolarSystem.Core.Tests
                 if (sub.Def.Weapon != null) sub.Hp = 0;
         }
 
+        // ---------------------------------------------------------------- the player's own ship
+
+        [Test]
+        public void APlayerFlownWarshipIsNeverMergedIntoAnAiBattleGroup()
+        {
+            var w = CreateWorld();
+            var navy = MakeFaction(w, "Lonely Navy");
+            int body = w.Catalog["Pluto"].Index;
+            ParkWarship(w, navy, ShipClass.Destroyer, w.Catalog["Neptune"].Index); // the home guard, never merged
+            var flagship = ParkWarship(w, navy, ShipClass.Battleship, body);
+            var flown = ParkWarship(w, navy, ShipClass.Destroyer, body);
+            var leader = ParkWarship(w, navy, ShipClass.Destroyer, body);
+            var escort = ParkWarship(w, navy, ShipClass.Destroyer, body);
+            w.Fleet.AddEscort(flown, escort, Fleet.SlotFor(0));
+            w.PilotedShip = flown;
+            w.War.Update(StartJd + 1);
+            Assert.That(flown.IsEscort, Is.False, "the player's ship was handed to an AI flagship");
+            Assert.That(leader.Leader, Is.SameAs(flagship), "AI groups still merge as before");
+            Assert.That(escort.Leader, Is.SameAs(flown), "nothing is merged into the player's ship either");
+        }
+
         // ---------------------------------------------------------------- SiegeNeeded
 
         [Test]

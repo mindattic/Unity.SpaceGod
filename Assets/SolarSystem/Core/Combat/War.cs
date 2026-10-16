@@ -638,7 +638,8 @@ namespace SolarSystem.Core
 
         void Join(Battle b, Ship ship, int side, bool late)
         {
-            if (ship.Battle != null || ship.Destroyed) return;
+            // A ship under direct player control enters a fight only through TryStartPlayerBattle.
+            if (ship.Battle != null || ship.Destroyed || ship == world.PilotedShip) return;
             var groupCentre = late ? b.ApproachAxis * (side == 0 ? 30 : -30) : Spot(b, side);
             var jitter = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, (rng.NextDouble() - 0.5) * 0.4) * 6;
             var face = -groupCentre;
@@ -1386,7 +1387,8 @@ namespace SolarSystem.Core
         {
             var groups = new List<Ship>();
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && !s.IsEscort && s.Battle == null && (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Phase == ShipPhase.Parked)
+                // The player's ship is flown by the player: never handed to an AI flagship, nor one itself.
+                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Phase == ShipPhase.Parked)
                     groups.Add(s);
             groups.Sort((a, b) => GroupStrength(b).CompareTo(GroupStrength(a)));
             for (int i = 0; i < groups.Count; i++)
