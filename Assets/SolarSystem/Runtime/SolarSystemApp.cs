@@ -963,7 +963,8 @@ namespace SolarSystem
                 }
             }
             SpaceCamera.ExitFocus();
-            ShowToast("Released manual control");
+            // A hull shot to pieces under the helm ends the session as a loss, not as a release the player chose.
+            ShowToast(ship != null && ship.Destroyed ? "The " + ship.Name + " has been destroyed" : "Released manual control");
         }
 
         /// <summary>Whether the piloted ship can trade at <paramref name="s"/> right now: piloting is a local
