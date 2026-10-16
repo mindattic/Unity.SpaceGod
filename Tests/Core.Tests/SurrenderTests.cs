@@ -99,6 +99,21 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void NoGunFiresOnAHullWaitingOnTerms()
+        {
+            // A player captor holds the hailing window open; an AI wingman of theirs stands by with its guns.
+            var (b, merchant, _) = BatteredMerchant(18, playerPirate: true);
+            b.AddShip(Hull(ShipClass.Destroyer, Pirates, 2), 1, new DVec3(-4, 3, 0), DVec3.UnitX);
+            for (int i = 0; i < 40 && !merchant.Surrendering; i++) b.Advance(0.1);
+            Assert.That(merchant.Surrendering, Is.True);
+            // Anything already in flight lands first; then nothing new is fired before terms are settled.
+            b.Advance(3);
+            double hull = merchant.Combat.Hull;
+            for (int i = 0; i < 100 && merchant.SurrenderOutcome == null; i++) b.Advance(0.1);
+            Assert.That(merchant.Combat.Hull, Is.EqualTo(hull).Within(1e-9), "a hull that has struck its colours is not shot at");
+        }
+
+        [Test]
         public void AnAiCaptorSettlesTermsAndAReleasedHullLeaves()
         {
             var (b, merchant, _) = BatteredMerchant(12);

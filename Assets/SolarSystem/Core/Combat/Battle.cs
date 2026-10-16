@@ -981,7 +981,7 @@ namespace SolarSystem.Core
                 double best = w.RangeKm;
                 foreach (var o in Units)
                 {
-                    if (!Hostile(u, o)) continue;
+                    if (!Hostile(u, o) || o.Captured || o.Surrendering) continue;
                     double d = (o.Pos - origin).Length - o.Radius;
                     if (d < best && (o.Kind == UnitKind.Fighter || near == null || near.Kind != UnitKind.Fighter))
                     {
@@ -998,7 +998,7 @@ namespace SolarSystem.Core
             double nearest = w.RangeKm;
             foreach (var o in Units)
             {
-                if (!Hostile(u, o) || (o.Kind == UnitKind.Fighter && (w.Missile || u.Kind != UnitKind.Fighter))) continue;
+                if (!Hostile(u, o) || o.Captured || o.Surrendering || (o.Kind == UnitKind.Fighter && (w.Missile || u.Kind != UnitKind.Fighter))) continue;
                 double d = (o.Pos - origin).Length - o.Radius;
                 if (d < nearest)
                 {
