@@ -1041,8 +1041,10 @@ namespace SolarSystem
         void ToggleLockTarget()
         {
             if (!pilotLockTarget.IsNone) { pilotLockTarget = Target.None; return; }
-            var t = Selected.IsShip ? Selected : Hovered.IsShip ? Hovered : Target.None;
-            if (t.IsShip && t.Ship != Piloted.Ship) pilotLockTarget = t;
+            // The piloted ship is itself the selection while piloting, so it can't stand in the way of the hovered one.
+            bool Other(Target c) => c.IsShip && c.Ship != Piloted.Ship;
+            var t = Other(Selected) ? Selected : Other(Hovered) ? Hovered : Target.None;
+            if (t.IsShip) pilotLockTarget = t;
         }
 
         /// <summary>Camera elevation of the system overview, degrees.</summary>
