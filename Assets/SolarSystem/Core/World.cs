@@ -46,6 +46,10 @@ namespace SolarSystem.Core
         /// (see <see cref="Fleet.IsHeld"/>) and a pilot-flight controller owns its position instead.</summary>
         public Ship PilotedShip;
 
+        /// <summary>The dynamic event system: adventures near the player drawn from what the sim is doing
+        /// (see <see cref="EventDirector"/>), advanced by <see cref="UpdateAdventures"/>.</summary>
+        public EventDirector Adventures { get; private set; }
+
         /// <summary>Raised when a ship joins the fleet after the start (a yard finished it).</summary>
         public event Action<Ship> ShipAdded;
 
@@ -56,6 +60,10 @@ namespace SolarSystem.Core
             Ephemeris = ephemeris;
             Fleet = new Fleet(ephemeris, seed);
             Economy = new Economy(Diplomacy, startJd, seed + 1);
+            Adventures = new EventDirector(seed + 5);
+            Adventures.Spawned += op => Log(op.SpawnJd, op.MarkerLabel + ": " + op.Hook, WorldEventKind.Opportunity, op.Ship?.Orbit?.Body ?? op.Body);
+            Adventures.Resolved += op => Log(op.ResolvedJd, op.MarkerLabel + (op.State == OpportunityState.Completed ? " done: " : " lost: ") + op.Outcome,
+                WorldEventKind.Opportunity, op.Ship?.Orbit?.Body ?? op.Body);
         }
 
         double nextRecountJd;
@@ -70,6 +78,17 @@ namespace SolarSystem.Core
                 Economy.RecountInbound(Fleet.Ships);
                 nextRecountJd = jd + 1;
             }
+        }
+
+        /// <summary>
+        /// Advances the dynamic event system to <paramref name="jd"/> around the player, who is at
+        /// <paramref name="playerHelioKm"/> (the piloted ship, or the camera when only watching); only a
+        /// piloted ship (<see cref="PilotedShip"/>) can arrive on the scene and collect.
+        /// </summary>
+        public void UpdateAdventures(double jd, DVec3 playerHelioKm)
+        {
+            if (War == null) return;
+            Adventures.Update(jd, EventSources.Of(this, jd), playerHelioKm, PilotedShip);
         }
 
         public void NotifyAdded(Ship ship) => ShipAdded?.Invoke(ship);
@@ -664,6 +683,9 @@ namespace SolarSystem.Core
         Capture,
         Diplomacy,
         Loss,
+
+        /// <summary>An adventure offered to the player, or how one ended (see <see cref="EventDirector"/>).</summary>
+        Opportunity,
     }
 
     public readonly struct WorldEvent

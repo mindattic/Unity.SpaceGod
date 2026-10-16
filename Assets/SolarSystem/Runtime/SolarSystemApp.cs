@@ -437,6 +437,7 @@ namespace SolarSystem
             UpdatePiloting(dt);
             UpdateShips(dt);
             Structures.Layout();
+            if (!Travel.Active) World.UpdateAdventures(Clock.Jd, PlayerHelioKm());
 
             DropLostTargets();
             BattleTime();
@@ -731,6 +732,26 @@ namespace SolarSystem
         }
 
         int spawnedCount;
+
+        /// <summary>Where the player is, true heliocentric km: the piloted ship, else the camera (an observer
+        /// still has adventures offered around them, but only a piloted ship can answer one).</summary>
+        public DVec3 PlayerHelioKm()
+        {
+            if (IsPiloting) return Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
+            int frame = SpaceCamera.FrameBody;
+            return Ephemeris.Helio(frame) + Scale.InverseLocalOffset(Catalog[frame], SpaceCamera.ScenePosition - BodyScene(frame));
+        }
+
+        /// <summary>Scene position of an opportunity's HUD marker: on its ship or wreck, else its point in its body's frame.</summary>
+        public bool OpportunityScene(Opportunity op, out DVec3 scene)
+        {
+            scene = default;
+            if (op.Ship != null && !op.Ship.Destroyed && op.Ship.Id < shipScene.Length) scene = shipScene[op.Ship.Id];
+            else if (op.Wreck != null) scene = WreckScene(op.Wreck);
+            else if (op.Body >= 0 && op.Body < bodyScene.Length) scene = bodyScene[op.Body] + Scale.LocalOffset(Catalog[op.Body], op.OffsetKm);
+            else return false;
+            return true;
+        }
 
         /// <summary>Points the free-look quaternion at a facing (ecliptic, unit), level unless that
         /// facing is itself near-vertical -- shared by <see cref="TogglePiloting"/> and a jump gate

@@ -61,6 +61,7 @@ namespace SolarSystem.UI
             DrawNavigator();
             DrawSelection();
             DrawStatus();
+            if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
             if (app.ShowCargo) DrawCargo();
             if (app.ShowHelp) DrawHelp();
@@ -151,6 +152,7 @@ namespace SolarSystem.UI
 
             DrawTargetMarker(app.Hovered, false);
             DrawTargetMarker(app.Selected, true);
+            DrawOpportunityMarkers();
 
             if (app.ShowLabels)
             {
@@ -247,6 +249,60 @@ namespace SolarSystem.UI
             var color = selected ? Accent : new Color(1, 1, 1, 0.55f);
             DrawBrackets(new Rect(p.x - half, p.y - half, half * 2, half * 2), color, selected ? 2f : 1f);
         }
+
+        // ---------------------------------------------------------------- opportunities (U.SPC-T44)
+
+        static Color OpportunityColor(Opportunity op, float alpha = 1)
+        {
+            var c = op.MarkerColor;
+            return new Color(c.R, c.G, c.B, alpha);
+        }
+
+        /// <summary>Every open adventure is bracketed where it is, in its kind's colour, with its tag and how far it is.</summary>
+        void DrawOpportunityMarkers()
+        {
+            var director = app.World.Adventures;
+            if (director == null || director.Active.Count == 0) return;
+            var player = app.PlayerHelioKm();
+            foreach (var op in director.Active)
+            {
+                if (!app.OpportunityScene(op, out var scene) || !app.ToGui(scene, out var p, out _)) continue;
+                if (p.x < 0 || p.x > Screen.width || p.y < 0 || p.y > Screen.height) continue;
+                var color = OpportunityColor(op, 0.95f);
+                DrawBrackets(new Rect(p.x - 11, p.y - 11, 22, 22), color, 1.5f);
+                DrawLabel(op.MarkerLabel + "  " + Km((op.HelioKm - player).Length), p + new Vector2(14, 6), color, true);
+            }
+        }
+
+        /// <summary>The open adventures near the player, most urgent first: tag, title, distance, time left and the hook.</summary>
+        void DrawOpportunityBoard()
+        {
+            var director = app.World.Adventures;
+            if (director == null || director.Active.Count == 0) return;
+            var list = new List<Opportunity>(director.Active);
+            double jd = app.Clock.Jd;
+            list.Sort((a, b) => a.ExpiresJd.CompareTo(b.ExpiresJd));
+            int n = Mathf.Min(5, list.Count);
+            float w = 380, rowH = 40;
+            var r = Panel(new Rect(Screen.width - w - 10, 72, w, 30 + n * rowH));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 18), "OPPORTUNITIES" + (app.IsPiloting ? "" : "   (pilot a ship to answer)"), small);
+            var player = app.PlayerHelioKm();
+            var old = GUI.contentColor;
+            opportunityHook ??= new GUIStyle(small) { wordWrap = true, clipping = TextClipping.Clip };
+            for (int i = 0; i < n; i++)
+            {
+                var op = list[i];
+                float y = r.y + 26 + i * rowH;
+                GUI.contentColor = OpportunityColor(op);
+                GUI.Label(new Rect(r.x + 12, y, w - 24, 16), op.MarkerLabel + "   " + op.Title + "   " + Km((op.HelioKm - player).Length) + "   " +
+                    Duration(op.DaysLeft(jd)) + " left" + (op.Engaged ? "   · on scene" : ""), small);
+                GUI.contentColor = Dim;
+                GUI.Label(new Rect(r.x + 12, y + 15, w - 24, rowH - 16), op.Hook, opportunityHook);
+            }
+            GUI.contentColor = old;
+        }
+
+        GUIStyle opportunityHook;
 
         void DrawBrackets(Rect r, Color color, float thickness)
         {
@@ -1097,6 +1153,7 @@ namespace SolarSystem.UI
             {
                 var e = events[events.Count - n + i];
                 GUI.contentColor = e.Kind == WorldEventKind.Battle ? new Color(1f, 0.7f, 0.6f) : e.Kind == WorldEventKind.Capture ? new Color(1f, 0.85f, 0.4f)
+                    : e.Kind == WorldEventKind.Opportunity ? new Color(0.65f, 1f, 0.75f)
                     : e.Kind == WorldEventKind.Diplomacy ? new Color(0.7f, 0.9f, 1f) : Dim;
                 tickerStyle ??= new GUIStyle(small) { wordWrap = false, clipping = TextClipping.Clip };
                 GUI.Label(new Rect(r.x + 10, r.y + 5 + i * rowH, w - 20, rowH), app.Clock.Utc.Year == Astro.ToDateTime(e.Jd).Year
