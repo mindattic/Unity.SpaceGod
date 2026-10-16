@@ -112,6 +112,31 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ACargoCarriedThroughTheGateKeepsNoBookingWithTheSystemItLeft()
+        {
+            var g = Create();
+            var sol = g.Systems[0];
+            var ac = g.Systems[1];
+            var ship = sol.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort);
+            var booked = sol.World.Economy.Settlements[0];
+            ship.HasCargo = true;
+            ship.CargoGood = Good.Food;
+            ship.CargoTonnes = 100;
+            ship.CargoDestination = booked;
+            ship.CargoBonus = 5000;
+
+            Assert.That(GateTransit.TryPerform(sol.Gate, sol.Gate.PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
+
+            Assert.That(arrived.HasCargo, Is.True, "the goods themselves come along");
+            Assert.That(arrived.CargoTonnes, Is.EqualTo(100));
+            Assert.That(arrived.CargoDestination, Is.Null, "a market in the other system can't be delivered to from here");
+            Assert.That(arrived.CargoBonus, Is.EqualTo(0));
+            double before = booked.Inbound[(int)Good.Food];
+            ac.World.Economy.RecountInbound(ac.World.Fleet.Ships);
+            Assert.That(booked.Inbound[(int)Good.Food], Is.EqualTo(before), "the far system's books reached into this one");
+        }
+
+        [Test]
         public void TransitFailsWhenTheShipIsOutOfRange()
         {
             var g = Create();

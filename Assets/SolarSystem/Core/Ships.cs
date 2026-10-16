@@ -318,7 +318,8 @@ namespace SolarSystem.Core
         /// everything that makes it feel like the same ship to the player -- name, hull class, combat
         /// state (hull, shields, hardpoints), cargo and the personal hold, credits -- but none of the
         /// origin system's scheduling state (orbit, route, journey), which the caller sets fresh for
-        /// wherever the ship actually arrives.
+        /// wherever the ship actually arrives. Nor the cargo's booking: that market (and the contract
+        /// bonus it posted) belongs to the origin system's economy, so the goods arrive unbooked.
         /// </summary>
         internal Ship CloneForGateArrival() => new Ship
         {
@@ -331,8 +332,6 @@ namespace SolarSystem.Core
             CargoGood = CargoGood,
             CargoTonnes = CargoTonnes,
             CargoCost = CargoCost,
-            CargoDestination = CargoDestination,
-            CargoBonus = CargoBonus,
             Cargo = Cargo,
             Credits = Credits,
             TripsCompleted = TripsCompleted,
