@@ -186,6 +186,22 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APlayerFlownHullNeverPicksABoardingTargetItCannotFlyTo()
+        {
+            // The AI would close in and latch; a player-flown hull is flown by the player, so a
+            // boarding target would only hold its own guns off the prize and keep the battle open.
+            var b = NewBattle(19);
+            var player = b.AddShip(Hull(ShipClass.Destroyer, Pirates, 0), 0, new DVec3(-3, 0, 0), DVec3.UnitX);
+            player.PlayerControlled = true;
+            var wreck = b.AddShip(Hull(ShipClass.Freighter, Traders, 1), 1, new DVec3(3, 0, 0), -DVec3.UnitX);
+            wreck.Combat.Hull = wreck.Combat.Spec.Hull * 0.1;
+            Assert.That(wreck.Combat.Disabled, Is.True);
+            Assert.That(player.Combat.MarinesAvailable >= 15, Is.True);
+            b.Advance(5);
+            Assert.That(player.BoardTarget, Is.Null);
+        }
+
+        [Test]
         public void PiratesDemandAPlayersCargoAndComplyingBuysAWayOut()
         {
             var b = NewBattle(16);

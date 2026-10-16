@@ -544,7 +544,10 @@ namespace SolarSystem.Core
                 if (c.Disabled) u.Fleeing = false;
                 else if (!u.Fleeing && (merchant || c.HullFraction < 0.25 || (!c.Armed && !CanBoard(u)) || Routed(u.Side)))
                     u.Fleeing = true;
-                ChooseBoarding(u);
+                // Only the AI flies a boarding approach (Move leaves a player-flown hull alone), so a
+                // player-flown hull never holds a boarding target it would never close on.
+                if (u.PlayerControlled) u.BoardTarget = null;
+                else ChooseBoarding(u);
             }
             u.RetargetIn -= dt;
             if (u.Target == null || !u.Target.Present || u.RetargetIn <= 0)
