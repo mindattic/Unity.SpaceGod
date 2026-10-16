@@ -12,10 +12,11 @@ namespace SolarSystem.Views
     /// </summary>
     public sealed class AsteroidBelt : MonoBehaviour
     {
-        /// <summary>Asteroids labelled by name (the largest and best known; Ceres is a full body).</summary>
+        /// <summary>Asteroids labelled by name (the largest and best known; Ceres and Psyche are full bodies,
+        /// labelled as such).</summary>
         static readonly (int Number, string Name)[] Named =
         {
-            (4, "Vesta"), (2, "Pallas"), (10, "Hygiea"), (3, "Juno"), (704, "Interamnia"), (16, "Psyche"),
+            (4, "Vesta"), (2, "Pallas"), (10, "Hygiea"), (3, "Juno"), (704, "Interamnia"),
             (624, "Hektor"), (588, "Achilles"), (617, "Patroclus"),
         };
 
