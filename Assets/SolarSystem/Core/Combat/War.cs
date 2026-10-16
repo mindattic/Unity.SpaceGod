@@ -140,13 +140,15 @@ namespace SolarSystem.Core
             var seen = new Dictionary<Ship, double>();
             foreach (var v in Fleet.Ships)
             {
-                if (v.Destroyed || v.IsEscort || v.Phase != ShipPhase.Lane || v.Battle != null) continue;
+                // The player's ship is never an ambush's victim or lurker: its phase is a frozen leftover
+                // from wherever the helm was taken, not what the player is doing.
+                if (v.Destroyed || v.IsEscort || v.Phase != ShipPhase.Lane || v.Battle != null || v == world.PilotedShip) continue;
                 double p = Fleet.LaneProgress(v, jd);
                 seen[v] = v.LaneLeg.From == v.LaneLeg.Lane.A ? p : 1 - p;
             }
             foreach (var lurker in Fleet.Ships)
             {
-                if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Phase != ShipPhase.Lurk || lurker.Battle != null) continue;
+                if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Phase != ShipPhase.Lurk || lurker.Battle != null || lurker == world.PilotedShip) continue;
                 if (pulseReady.TryGetValue(lurker, out double ready) && jd < ready) continue;
                 var lane = lurker.LaneLeg.Lane;
                 double station = lurker.LaneLeg.From == lane.A ? lurker.LaneHold : 1 - lurker.LaneHold;
