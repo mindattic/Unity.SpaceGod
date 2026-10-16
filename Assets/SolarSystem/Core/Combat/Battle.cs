@@ -1170,6 +1170,8 @@ namespace SolarSystem.Core
             foreach (var o in Units)
             {
                 if (!Hostile(u, o) || o.Captured || o.Kind == UnitKind.Fighter) continue;
+                // A hull waiting on terms isn't fired on, pods included -- unless the terms are to take it.
+                if (o.Surrendering && !o.SurrenderOpenToBoarding) continue;
                 if (o.Combat.Shield > o.Combat.Spec.Shield * 0.05 && o.Combat.HasShieldGenerator) continue;
                 if (o.Combat.Interior.Boarder != null && o.Combat.Interior.Boarder != u.Faction) continue;
                 double d = (o.Pos - u.Pos).Length;

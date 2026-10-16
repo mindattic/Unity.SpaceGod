@@ -168,6 +168,20 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void PodsAreNotFiredAtAHullWaitingOnTerms()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(25, playerPirate: true);
+            // A second raider, AI-flown and carrying pods, standing by while the player decides.
+            var podder = b.AddShip(Hull(ShipClass.Destroyer, Pirates, 3), 1, new DVec3(-4, 2, 0), DVec3.UnitX);
+            Assert.That(podder.Combat.Subsystems.Any(s => s.Kind == SubsystemKind.BoardingPods), Is.True, "the test needs a pod launcher");
+            b.Surrender(merchant); // before any pod is away
+            int pods = podder.Combat.Subsystems.Where(s => s.Kind == SubsystemKind.BoardingPods).Sum(s => s.Ammo);
+            for (int i = 0; i < 12; i++) b.Advance(1);
+            Assert.That(merchant.SurrenderOutcome, Is.Null, "still inside the hailing window");
+            Assert.That(podder.Combat.Subsystems.Where(s => s.Kind == SubsystemKind.BoardingPods).Sum(s => s.Ammo), Is.EqualTo(pods));
+        }
+
+        [Test]
         public void TheAiDoesNotDecideToRunForAPlayerFlownHull()
         {
             var b = NewBattle(24);
