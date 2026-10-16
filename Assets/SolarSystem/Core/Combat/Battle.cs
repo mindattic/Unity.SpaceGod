@@ -1352,11 +1352,11 @@ namespace SolarSystem.Core
         {
             foreach (var u in Units)
             {
-                if (!u.Present) continue;
+                if (!u.Present || u.Captured) continue;
                 var interior = u.Combat.Interior;
                 if (interior.Boarder == null) continue;
                 var boarder = interior.Boarder;
-                if (u.SurrenderOpenToBoarding && !u.Captured) Capture(u, boarder);
+                if (u.SurrenderOpenToBoarding) Capture(u, boarder);
                 else if (interior.Step(dt, Seconds, rng)) Capture(u, boarder);
             }
             foreach (var u in Units)
@@ -1382,6 +1382,8 @@ namespace SolarSystem.Core
             u.Side = side;
             u.Fleeing = false;
             u.Target = null;
+            // A surrendered hull is taken without a fight aboard: mark it held so the fight stops there too.
+            u.Combat.Interior.Captured = true;
             u.Combat.Interior.Settle();
             Emit(FxKind.Captured, u.Pos, u.Pos, u.LengthKm, side, u, -1);
             UnitCaptured?.Invoke(this, u, captor);

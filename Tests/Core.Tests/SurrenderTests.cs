@@ -153,6 +153,24 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ASurrenderedShipIsTakenOnceAndStaysWithItsCaptor()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(15, playerPirate: true);
+            int captures = 0;
+            b.UnitCaptured += (_, u, captor) => captures++;
+            b.Advance(2);
+            pirate.PlayerControlled = false;
+            Assert.That(b.OfferSurrenderTerms(merchant, SurrenderTerms.TakeShip), Is.True);
+            for (int i = 0; i < 1200 && !merchant.Captured; i++) b.Advance(1);
+            Assert.That(merchant.Captured, Is.True);
+            int side = merchant.Side;
+            for (int i = 0; i < 600; i++) b.Advance(1);
+            Assert.That(captures, Is.EqualTo(1), "the prize must be captured exactly once");
+            Assert.That(merchant.Side, Is.EqualTo(side), "the prize must not flip back to its old side");
+            Assert.That(merchant.Combat.Interior.UnderBoarding, Is.False, "no fight goes on aboard a ship already taken");
+        }
+
+        [Test]
         public void PiratesDemandAPlayersCargoAndComplyingBuysAWayOut()
         {
             var b = NewBattle(16);
