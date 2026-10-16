@@ -39,7 +39,10 @@ namespace SolarSystem.Views
             public Transform[] Ribs;
             public GameObject Hull;
             public ShipClass? HullClass;
+            public Faction HullOwner;
             public float Spin;
+            public MeshFilter Model;
+            public Faction Owner;
         }
 
         sealed class RingView
@@ -47,6 +50,8 @@ namespace SolarSystem.Views
             public DockingRing Ring;
             public GameObject Root;
             public Renderer Renderer;
+            public MeshFilter Filter;
+            public Faction Owner;
         }
 
         /// <summary>A docking ring is drawn this many km across (fiction: the size of a city district).</summary>
@@ -62,11 +67,12 @@ namespace SolarSystem.Views
             {
                 var go = new GameObject(r.Name);
                 go.transform.SetParent(parent, false);
-                go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetDockingRing(r.Owner);
+                var filter = go.AddComponent<MeshFilter>();
+                filter.sharedMesh = ShipMeshFactory.GetDockingRing(r.Owner);
                 var mr = go.AddComponent<MeshRenderer>();
                 mr.sharedMaterial = ShipModels.ProceduralMaterial;
                 mr.shadowCastingMode = ShadowCastingMode.Off;
-                rings.Add(new RingView { Ring = r, Root = go, Renderer = mr });
+                rings.Add(new RingView { Ring = r, Root = go, Renderer = mr, Filter = filter, Owner = r.Owner });
             }
         }
 
@@ -74,17 +80,10 @@ namespace SolarSystem.Views
         {
             var root = new GameObject(s.Name);
             root.transform.SetParent(parent, false);
-            var v = new View { S = s, Root = root, Spin = Random.value * 360 };
-            Mesh mesh;
-            switch (s.Kind)
-            {
-                case StructureKind.Shipyard: mesh = ShipMeshFactory.GetShipyard(s.Owner); break;
-                case StructureKind.Factory: mesh = ShipMeshFactory.GetFactory(s.Owner, s.Industry); break;
-                case StructureKind.Habitat: mesh = ShipMeshFactory.GetHabitat(s.Owner); break;
-                case StructureKind.CrewedStation: mesh = ShipMeshFactory.GetCrewedStation(s.Name == "Tiangong"); break;
-                default: mesh = ShipMeshFactory.GetSpacecraft(s.Name); break;
-            }
-            var list = new List<Renderer> { Part(root.transform, mesh, "Model") };
+            var v = new View { S = s, Root = root, Spin = Random.value * 360, Owner = s.Owner };
+            var model = Part(root.transform, ModelMesh(s), "Model");
+            v.Model = model.GetComponent<MeshFilter>();
+            var list = new List<Renderer> { model };
             if (s.Kind == StructureKind.Shipyard)
             {
                 // The cradle holds a hull about 80% of its length, nose along +Z.
@@ -103,6 +102,19 @@ namespace SolarSystem.Views
             }
             v.Renderers = list.ToArray();
             return v;
+        }
+
+        /// <summary>A structure's model, in its owner's livery.</summary>
+        static Mesh ModelMesh(OrbitalStructure s)
+        {
+            switch (s.Kind)
+            {
+                case StructureKind.Shipyard: return ShipMeshFactory.GetShipyard(s.Owner);
+                case StructureKind.Factory: return ShipMeshFactory.GetFactory(s.Owner, s.Industry);
+                case StructureKind.Habitat: return ShipMeshFactory.GetHabitat(s.Owner);
+                case StructureKind.CrewedStation: return ShipMeshFactory.GetCrewedStation(s.Name == "Tiangong");
+                default: return ShipMeshFactory.GetSpacecraft(s.Name);
+            }
         }
 
         static Renderer Part(Transform parent, Mesh mesh, string name)
@@ -156,6 +168,12 @@ namespace SolarSystem.Views
                 bool show = visible && size / System.Math.Max(rel.magnitude, 1e-9) * ppu >= 4;
                 if (v.Root.activeSelf != show) v.Root.SetActive(show);
                 if (!show) continue;
+                // Taken in a siege: repainted in the new owner's livery.
+                if (v.Owner != s.Owner)
+                {
+                    v.Owner = s.Owner;
+                    v.Model.sharedMesh = ModelMesh(s);
+                }
 
                 var t = v.Root.transform;
                 t.localPosition = rel;
@@ -199,6 +217,11 @@ namespace SolarSystem.Views
                 bool show = visible && size / System.Math.Max(rel.magnitude, 1e-9) * ppu >= 3;
                 rv.Renderer.enabled = show;
                 if (!show) continue;
+                if (rv.Owner != r.Owner)
+                {
+                    rv.Owner = r.Owner;
+                    rv.Filter.sharedMesh = ShipMeshFactory.GetDockingRing(r.Owner);
+                }
                 var t = rv.Root.transform;
                 t.localPosition = rel;
                 t.localScale = Vector3.one * (float)size;
@@ -224,7 +247,7 @@ namespace SolarSystem.Views
             int ribs = cls == null ? 0 : Mathf.Clamp(Mathf.CeilToInt((float)(progress / 0.6 * v.Ribs.Length)), 0, v.Ribs.Length);
             for (int i = 0; i < v.Ribs.Length; i++) v.Ribs[i].gameObject.SetActive(i < ribs && progress < 0.97);
             bool plated = cls != null && progress >= 0.6;
-            if (plated && (v.Hull == null || v.HullClass != cls))
+            if (plated && (v.Hull == null || v.HullClass != cls || v.HullOwner != settlement.Owner))
             {
                 if (v.Hull != null) Object.Destroy(v.Hull);
                 v.Hull = new GameObject("Hull on the slip");
@@ -232,6 +255,7 @@ namespace SolarSystem.Views
                 // The whole hull, bow included (a warship's Stern section alone is only its after half).
                 var mr = Part(v.Hull.transform, ShipMeshFactory.GetSection(cls.Value, settlement.Owner, ShipMeshFactory.WholeHull), "Hull");
                 v.HullClass = cls;
+                v.HullOwner = settlement.Owner;
             }
             if (v.Hull != null)
             {

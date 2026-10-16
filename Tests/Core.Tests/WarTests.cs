@@ -86,6 +86,17 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APortTakenInASiegeTakesItsYardsStationsAndRingsWithIt()
+        {
+            var w = CreateWorld();
+            var port = w.Economy.Settlements.First(s => w.Infrastructure.Structures.Any(st => st.Settlement == s));
+            var taker = MakeFaction(w, "New Masters");
+            w.Economy.Capture(port, taker);
+            Assert.That(w.Infrastructure.Structures.Where(st => st.Settlement == port).All(st => st.Owner == taker), Is.True);
+            Assert.That(w.Infrastructure.Rings.Where(r => r.Settlement == port).All(r => r.Owner == taker), Is.True);
+        }
+
+        [Test]
         public void APortsPlatformsAreNotRefittedInTheMiddleOfAFight()
         {
             var w = CreateWorld();

@@ -34,9 +34,18 @@ namespace SolarSystem.Core
         public StructureKind Kind;
         public int Body;
         public ParkingOrbit Orbit;
-        public Faction Owner;
         public Settlement Settlement;
         public IndustryKind Industry;
+
+        Faction owner;
+
+        /// <summary>Its settlement's owner, whoever that is now (a port taken in a siege takes its yards
+        /// and stations with it); its own for a structure with no settlement, such as a real spacecraft.</summary>
+        public Faction Owner
+        {
+            get => Settlement?.Owner ?? owner;
+            set => owner = value;
+        }
 
         /// <summary>Real size (km), for drawing at the ship scale.</summary>
         public double LengthKm;
@@ -173,7 +182,15 @@ namespace SolarSystem.Core
         public double DescentDays;
 
         public Settlement Settlement;
-        public Faction Owner;
+
+        Faction owner;
+
+        /// <summary>The city's settlement's owner, whoever that is now (it changes hands with the port).</summary>
+        public Faction Owner
+        {
+            get => Settlement?.Owner ?? owner;
+            set => owner = value;
+        }
 
         /// <summary>How far out along the holding line arriving ships wait (km past the ring).</summary>
         public double HoldKm => Math.Max(RadiusKm * 0.05, SurfaceKm * 0.3);
