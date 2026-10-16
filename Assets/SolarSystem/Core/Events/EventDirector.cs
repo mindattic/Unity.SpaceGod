@@ -89,6 +89,7 @@ namespace SolarSystem.Core
                 {
                     op.Engaged = true;
                     op.EngagedBy = playerShip;
+                    op.EngagedFaction = playerShip.Faction;
                 }
                 Settle(op, jd, src, playerShip);
             }
@@ -509,12 +510,18 @@ namespace SolarSystem.Core
         void Pay(Opportunity op, Ship player)
         {
             var r = op.Reward;
-            // Whoever saw it through, even if nobody is at the helm when it resolves.
-            player ??= op.EngagedBy;
-            if (player != null && player.Faction != null) player.Faction.Treasury += r.Credits;
-            // Cargo only into a hold that still exists to take it.
-            if (player != null && !player.Destroyed && r.CargoCrates > 0)
+            // Paid to whoever saw it through, as they were when they came: not whoever holds the helm
+            // when it resolves (another ship, another faction), nor the captor of a ship since lost.
+            var purse = op.EngagedFaction ?? player?.Faction;
+            if (purse != null) purse.Treasury += r.Credits;
+            // Cargo into the hold of the ship that came, while it still exists and is still theirs; else
+            // into the ship they fly now, if it is their own.
+            Ship hold = op.EngagedBy != null && !op.EngagedBy.Destroyed && op.EngagedBy.Faction == purse ? op.EngagedBy
+                : player != null && !player.Destroyed && player.Faction == purse ? player : null;
+            if (hold == null) op.Reward.CargoCrates = 0;
+            else if (r.CargoCrates > 0)
             {
+                player = hold;
                 int stored = 0;
                 for (int i = 0; i < r.CargoCrates; i++)
                     if (player.PersonalHold.AddFirstFit(r.CargoGood) != null) stored++;

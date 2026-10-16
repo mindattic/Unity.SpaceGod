@@ -132,6 +132,9 @@ namespace SolarSystem.Core
         /// the helm (or lost the ship) by the time the situation resolves.</summary>
         public Ship EngagedBy;
 
+        /// <summary>That ship's faction when it came (the player's purse), kept in case the ship later changes hands.</summary>
+        public Faction EngagedFaction;
+
         /// <summary>A distress call from a ship actually in a fight (rather than one drifting after interdiction).</summary>
         public bool UnderAttack;
 

@@ -405,6 +405,23 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void TheRewardGoesToWhoeverCameNotWhoeverFliesWhenItResolves()
+        {
+            var helped = Add(ShipClass.Freighter, traders, Near);
+            Fight(helped);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            Tick(Jd + 0.01, player, Near); // the navy pilot comes
+            double navyBefore = navy.Treasury, piratesBefore = pirates.Treasury;
+            var raider = new Ship { Id = 998, Name = "Sandbox raider", Spec = ShipClassSpec.Of(ShipClass.Destroyer), Faction = pirates };
+            helped.Battle = null; // resolves while the player is flying a pirate hull far away
+            Tick(Jd + 0.02, raider, Far);
+            Assert.That(op.State, Is.EqualTo(OpportunityState.Completed));
+            Assert.That(navy.Treasury - navyBefore, Is.EqualTo(op.Reward.Credits));
+            Assert.That(pirates.Treasury, Is.EqualTo(piratesBefore), "paid to the faction of whatever hull was flown at the time");
+        }
+
+        [Test]
         public void TakingTheHelmOfTheShipInTroubleIsNotSeeingItThrough()
         {
             var adrift = Add(ShipClass.Freighter, traders, Near);
