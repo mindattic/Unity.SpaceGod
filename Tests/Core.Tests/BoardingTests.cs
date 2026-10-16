@@ -41,6 +41,23 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void RearGuardsLeftWithoutAFrontPressOnRatherThanHoldForever()
+        {
+            var freighter = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
+            var interior = freighter.Interior;
+            var rng = new Random(5);
+            interior.Board(Red, 1.1, 30, interior.Of(CompartmentKind.Hold), true, 0, rng);
+            int s = 0;
+            for (; s < 3600 && interior.TakenCount < 2; s++) interior.Step(1, s, rng);
+            Assert.That(interior.TakenCount >= 2, Is.True);
+            // The party at the front falls; only the rear guards in what was taken are left.
+            foreach (var c in interior.Compartments) c.Boarders = c.Taken ? 2 : 0;
+            Assert.That(interior.UnderBoarding, Is.True);
+            for (int end = s + 3600; s < end && interior.UnderBoarding; s++) interior.Step(1, s, rng);
+            Assert.That(interior.UnderBoarding, Is.False, "the boarding stalled: neither taken nor repelled");
+        }
+
+        [Test]
         public void AFewBoardersAgainstACruisersMarinesAreRepelled()
         {
             var cruiser = new ShipCombat(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser);

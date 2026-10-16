@@ -369,15 +369,20 @@ namespace SolarSystem.Core
 
         void Advance(double dt)
         {
+            // With nobody left fighting at the front, the rear guards have nothing to cover: they
+            // gather and press on instead of holding what was taken for ever.
+            bool front = false;
+            foreach (var c in Compartments)
+                if (c.Boarders > 0.01 && !c.Taken) front = true;
             foreach (var c in Compartments)
             {
-                if (!c.Taken || c.Boarders <= 1) continue;
+                if (!c.Taken || c.Boarders <= (front ? 1 : 0.01)) continue;
                 int next = NextToward(c.Index);
                 if (next < 0) continue;
                 var n = Compartments[next];
                 // Most of the party moves on; a rear guard holds what was taken.
                 double move = c.Boarders * Math.Min(1, 0.08 * dt);
-                if (c.Boarders - move < 2) move = Math.Max(0, c.Boarders - 2);
+                if (front && c.Boarders - move < 2) move = Math.Max(0, c.Boarders - 2);
                 c.Boarders -= move;
                 n.Boarders += move;
             }
