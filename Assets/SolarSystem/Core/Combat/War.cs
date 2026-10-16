@@ -721,10 +721,11 @@ namespace SolarSystem.Core
                 if (u.Dead && u.Kind != UnitKind.Fighter) lost[u.Side]++;
                 if (u.Fled) fled[u.Side]++;
                 if (u.Kind == UnitKind.Platform && u.Dead) u.Platform.Platforms.Remove(u.Combat);
+                // Boarders still fighting aboard anything that wasn't taken (a platform too) are gone with the battle.
+                if (!u.Captured && !left.Contains(u)) u.Combat.Interior.BoardersGone();
                 if (u.Ship == null || left.Contains(u)) continue;
                 var ship = u.Ship;
                 ship.Battle = null;
-                if (!u.Captured) ship.Combat.Interior.BoardersGone();
                 if (u.Dead)
                 {
                     if (ship.HasCargo)
