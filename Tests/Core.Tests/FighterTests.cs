@@ -55,6 +55,25 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APlayerFlownHullsPointDefenceEngagesFightersOnItsOwn()
+        {
+            var b = CarrierAction(5);
+            var flown = b.Units.First(u => u.Kind == UnitKind.Ship && u.Side == 1 && u.Combat.Subsystems.Any(s => s.Kind == SubsystemKind.PointDefense));
+            flown.PlayerControlled = true;
+            flown.PlayerFireHeld = false; // the trigger is never pulled
+            bool fired = false;
+            for (int i = 0; i < 600 && !fired && !b.Over; i++)
+            {
+                b.Advance(1);
+                // Point-defence fire at a fighter (not a missile intercept, which never waited on the trigger)
+                // from this hull's own mounts.
+                fired = b.Fx.Any(f => f.Kind == FxKind.PointDefense && f.Unit != null && f.Unit.Kind == UnitKind.Fighter
+                    && (f.A - flown.Pos).Length < flown.LengthKm);
+            }
+            Assert.That(fired, Is.True, "point defence waited on the player's trigger to engage fighters");
+        }
+
+        [Test]
         public void FightersBreakOffAHullThatStrikesItsColours()
         {
             var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };

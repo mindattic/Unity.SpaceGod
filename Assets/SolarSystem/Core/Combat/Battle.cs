@@ -943,7 +943,9 @@ namespace SolarSystem.Core
 
         /// <summary>A mount the player can personally aim by pointing the hull's own nose at something --
         /// a forward-centred hardpoint, as opposed to a side or aft battery a crew works autonomously.</summary>
-        static bool IsPlayerAimable(SubsystemDef d) => Math.Abs(Astro.WrapDegrees360(d.ArcCenterDeg)) < 0.01;
+        // Point defence is never the player's to aim: it keeps engaging missiles and small craft on its own.
+        static bool IsPlayerAimable(SubsystemDef d) =>
+            !(d.Weapon != null && d.Weapon.AntiSmall) && Math.Abs(Astro.WrapDegrees360(d.ArcCenterDeg)) < 0.01;
 
         /// <summary>Boresight aim-assist for a player's direct-fire guns: the most dead-ahead hostile
         /// within a forgiving cone (real flight sticks aren't pixel-perfect) and the weapon's range.
