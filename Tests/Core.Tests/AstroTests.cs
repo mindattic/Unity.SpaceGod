@@ -1,158 +1,154 @@
 using System;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class AstroTests
     {
-        [Theory]
-        [InlineData(-0.5)]
-        [InlineData(0.5)]
-        [InlineData(3.0)]
-        [InlineData(-3.0)]
+        [TestCase(-0.5)]
+        [TestCase(0.5)]
+        [TestCase(3.0)]
+        [TestCase(-3.0)]
         public void WrapRadiansIsIdentityWithinRange(double a)
         {
-            Assert.Equal(a, Astro.WrapRadians(a), 12);
+            Assert.That(Astro.WrapRadians(a), Is.EqualTo(a).Within(1e-12));
         }
 
-        [Fact]
+        [Test]
         public void WrapRadiansWrapsMultipleTurns()
         {
-            Assert.Equal(1.0, Astro.WrapRadians(1.0 + 4 * Math.PI), 9);
-            Assert.Equal(-1.0, Astro.WrapRadians(-1.0 - 4 * Math.PI), 9);
-            Assert.Equal(Math.PI, Astro.WrapRadians(5 * Math.PI), 9);
-            Assert.Equal(-Math.PI, Astro.WrapRadians(-5 * Math.PI), 9);
+            Assert.That(Astro.WrapRadians(1.0 + 4 * Math.PI), Is.EqualTo(1.0).Within(1e-9));
+            Assert.That(Astro.WrapRadians(-1.0 - 4 * Math.PI), Is.EqualTo(-1.0).Within(1e-9));
+            Assert.That(Astro.WrapRadians(5 * Math.PI), Is.EqualTo(Math.PI).Within(1e-9));
+            Assert.That(Astro.WrapRadians(-5 * Math.PI), Is.EqualTo(-Math.PI).Within(1e-9));
         }
 
-        [Theory]
-        [InlineData(-30, 330)]
-        [InlineData(-765, 315)]
-        [InlineData(360, 0)]
-        [InlineData(720.5, 0.5)]
-        [InlineData(-0.5, 359.5)]
-        [InlineData(0, 0)]
+        [TestCase(-30, 330)]
+        [TestCase(-765, 315)]
+        [TestCase(360, 0)]
+        [TestCase(720.5, 0.5)]
+        [TestCase(-0.5, 359.5)]
+        [TestCase(0, 0)]
         public void WrapDegrees360WrapsIntoZeroTo360(double input, double expected)
         {
-            Assert.Equal(expected, Astro.WrapDegrees360(input), 9);
+            Assert.That(Astro.WrapDegrees360(input), Is.EqualTo(expected).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void DmsCombinesDegreesMinutesAndSeconds()
         {
-            Assert.Equal(45.5, Astro.Dms(45, 30, 0), 9);
-            Assert.Equal(-45.5, Astro.Dms(45, 30, 0, south: true), 9);
+            Assert.That(Astro.Dms(45, 30, 0), Is.EqualTo(45.5).Within(1e-9));
+            Assert.That(Astro.Dms(45, 30, 0, south: true), Is.EqualTo(-45.5).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void DmsSouthFlagControlsSignRegardlessOfDegreesSign()
         {
             // Only the `south` flag decides sign; a negative degrees argument is just a magnitude.
-            Assert.Equal(45.5, Astro.Dms(-45, 30, 0));
-            Assert.Equal(-45.5, Astro.Dms(-45, 30, 0, south: true));
+            Assert.That(Astro.Dms(-45, 30, 0), Is.EqualTo(45.5));
+            Assert.That(Astro.Dms(-45, 30, 0, south: true), Is.EqualTo(-45.5));
         }
 
-        [Theory]
-        [InlineData(0, 0, 0, 0)]
-        [InlineData(12, 0, 0, 180)]
-        [InlineData(24, 0, 0, 360)]
-        [InlineData(6, 45, 9, 101.2875)]
+        [TestCase(0, 0, 0, 0)]
+        [TestCase(12, 0, 0, 180)]
+        [TestCase(24, 0, 0, 360)]
+        [TestCase(6, 45, 9, 101.2875)]
         public void HmsConvertsHoursMinutesSecondsToDegrees(double h, double m, double s, double expectedDeg)
         {
-            Assert.Equal(expectedDeg, Astro.Hms(h, m, s), 9);
+            Assert.That(Astro.Hms(h, m, s), Is.EqualTo(expectedDeg).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void SmoothStepClampsBelowLowerEdge()
         {
-            Assert.Equal(0.0, Astro.SmoothStep(0, 10, -5));
-            Assert.Equal(0.0, Astro.SmoothStep(0, 10, 0));
+            Assert.That(Astro.SmoothStep(0, 10, -5), Is.EqualTo(0.0));
+            Assert.That(Astro.SmoothStep(0, 10, 0), Is.EqualTo(0.0));
         }
 
-        [Fact]
+        [Test]
         public void SmoothStepClampsAboveUpperEdge()
         {
-            Assert.Equal(1.0, Astro.SmoothStep(0, 10, 15));
-            Assert.Equal(1.0, Astro.SmoothStep(0, 10, 10));
+            Assert.That(Astro.SmoothStep(0, 10, 15), Is.EqualTo(1.0));
+            Assert.That(Astro.SmoothStep(0, 10, 10), Is.EqualTo(1.0));
         }
 
-        [Fact]
+        [Test]
         public void SmoothStepIsOneHalfAtTheMidpoint()
         {
-            Assert.Equal(0.5, Astro.SmoothStep(0, 10, 5), 12);
-            Assert.Equal(0.5, Astro.SmoothStep(-4, 4, 0), 12);
+            Assert.That(Astro.SmoothStep(0, 10, 5), Is.EqualTo(0.5).Within(1e-12));
+            Assert.That(Astro.SmoothStep(-4, 4, 0), Is.EqualTo(0.5).Within(1e-12));
         }
 
-        [Theory]
-        [InlineData(0.3, 0.6, 0.74)]
-        [InlineData(-0.5, 0.2, 0.1)]
-        [InlineData(1, 0, 0)]
-        [InlineData(0, 0, 1)]
+        [TestCase(0.3, 0.6, 0.74)]
+        [TestCase(-0.5, 0.2, 0.1)]
+        [TestCase(1, 0, 0)]
+        [TestCase(0, 0, 1)]
         public void EquatorialEclipticConversionsAreInverses(double x, double y, double z)
         {
             var v = new DVec3(x, y, z);
 
             var toEcliptic = Astro.EquatorialToEcliptic(v);
             var backFromEcliptic = Astro.EclipticToEquatorial(toEcliptic);
-            Assert.True((backFromEcliptic - v).Length < 1e-12);
+            Assert.That((backFromEcliptic - v).Length < 1e-12, Is.True);
 
             var toEquatorial = Astro.EclipticToEquatorial(v);
             var backFromEquatorial = Astro.EquatorialToEcliptic(toEquatorial);
-            Assert.True((backFromEquatorial - v).Length < 1e-12);
+            Assert.That((backFromEquatorial - v).Length < 1e-12, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void EclipticRotationPreservesLengthAndTheXAxis()
         {
             var v = new DVec3(2, 3, -4);
             var e = Astro.EquatorialToEcliptic(v);
-            Assert.Equal(v.X, e.X, 12);
-            Assert.Equal(v.Length, e.Length, 9);
+            Assert.That(e.X, Is.EqualTo(v.X).Within(1e-12));
+            Assert.That(e.Length, Is.EqualTo(v.Length).Within(1e-9));
         }
 
-        [Theory]
-        [InlineData(0, 0)]
-        [InlineData(90, 45)]
-        [InlineData(180, -45)]
-        [InlineData(270, 0)]
-        [InlineData(359.999, 10)]
+        [TestCase(0, 0)]
+        [TestCase(90, 45)]
+        [TestCase(180, -45)]
+        [TestCase(270, 0)]
+        [TestCase(359.999, 10)]
         public void DirectionFromRaDecAndRaDecOfRoundTripAwayFromThePoles(double raDeg, double decDeg)
         {
             var dir = Astro.DirectionFromRaDec(raDeg, decDeg);
             Astro.RaDecOf(dir, out double ra2, out double dec2);
 
-            Assert.Equal(raDeg, ra2, 6);
-            Assert.Equal(decDeg, dec2, 9);
+            Assert.That(ra2, Is.EqualTo(raDeg).Within(1e-6));
+            Assert.That(dec2, Is.EqualTo(decDeg).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void DirectionFromRaDecWrapsOutOfRangeRightAscension()
         {
             var below = Astro.DirectionFromRaDec(-10, 20);
             Astro.RaDecOf(below, out double raBelow, out double decBelow);
-            Assert.Equal(350.0, raBelow, 6);
-            Assert.Equal(20.0, decBelow, 9);
+            Assert.That(raBelow, Is.EqualTo(350.0).Within(1e-6));
+            Assert.That(decBelow, Is.EqualTo(20.0).Within(1e-9));
 
             var above = Astro.DirectionFromRaDec(400, -20);
             Astro.RaDecOf(above, out double raAbove, out double decAbove);
-            Assert.Equal(40.0, raAbove, 6);
-            Assert.Equal(-20.0, decAbove, 9);
+            Assert.That(raAbove, Is.EqualTo(40.0).Within(1e-6));
+            Assert.That(decAbove, Is.EqualTo(-20.0).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void DirectionFromRaDecRoundTripsDeclinationAtTheNorthPole()
         {
             var dir = Astro.DirectionFromRaDec(123.0, 90.0);
             Astro.RaDecOf(dir, out _, out double dec);
-            Assert.Equal(90.0, dec, 6);
+            Assert.That(dec, Is.EqualTo(90.0).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void DirectionFromRaDecRoundTripsDeclinationAtTheSouthPole()
         {
             var dir = Astro.DirectionFromRaDec(50.0, -90.0);
             Astro.RaDecOf(dir, out _, out double dec);
-            Assert.Equal(-90.0, dec, 6);
+            Assert.That(dec, Is.EqualTo(-90.0).Within(1e-6));
         }
     }
 }

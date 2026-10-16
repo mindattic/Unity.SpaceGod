@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
@@ -10,13 +10,14 @@ namespace SolarSystem.Core.Tests
     /// resupply, plus <see cref="SubsystemDef.ContainsYaw"/> and the <see cref="CombatSpec"/> lookup
     /// fallbacks.
     /// </summary>
+    [TestFixture]
     public class CombatStateTests
     {
         static ShipCombat Make(ShipClass c) => new ShipCombat(CombatSpec.Of(c), c);
 
         // ---------------------------------------------------------------- shields
 
-        [Fact]
+        [Test]
         public void ConstructingAShipSplitsItsShieldEvenlyAcrossItsGenerators()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -26,60 +27,60 @@ namespace SolarSystem.Core.Tests
 
             foreach (var g in generators)
             {
-                Assert.Equal(share, g.MaxShield, 9);
-                Assert.Equal(share, g.Shield, 9);
+                Assert.That(g.MaxShield, Is.EqualTo(share).Within(1e-9));
+                Assert.That(g.Shield, Is.EqualTo(share).Within(1e-9));
             }
-            Assert.Equal(spec.Shield, combat.Shield, 6);
+            Assert.That(combat.Shield, Is.EqualTo(spec.Shield).Within(1e-6));
         }
 
         // ---------------------------------------------------------------- ContainsYaw
 
-        [Fact]
+        [Test]
         public void ContainsYawRespectsItsWidthAroundAZeroCenter()
         {
             var def = new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0, arcCenterDeg: 0, arcWidthDeg: 90);
 
-            Assert.True(def.ContainsYaw(0));
-            Assert.True(def.ContainsYaw(45));
-            Assert.False(def.ContainsYaw(46));
-            Assert.True(def.ContainsYaw(315)); // -45, the lower edge, wrapped
-            Assert.False(def.ContainsYaw(314));
-            Assert.False(def.ContainsYaw(180));
+            Assert.That(def.ContainsYaw(0), Is.True);
+            Assert.That(def.ContainsYaw(45), Is.True);
+            Assert.That(def.ContainsYaw(46), Is.False);
+            Assert.That(def.ContainsYaw(315), Is.True); // -45, the lower edge, wrapped
+            Assert.That(def.ContainsYaw(314), Is.False);
+            Assert.That(def.ContainsYaw(180), Is.False);
         }
 
-        [Fact]
+        [Test]
         public void ContainsYawWrapsAcrossTheZeroThreeSixtyBoundary()
         {
             var def = new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0, arcCenterDeg: 350, arcWidthDeg: 60);
 
-            Assert.True(def.ContainsYaw(350));
-            Assert.True(def.ContainsYaw(0));
-            Assert.True(def.ContainsYaw(15));
-            Assert.True(def.ContainsYaw(320)); // lower edge
-            Assert.True(def.ContainsYaw(20));  // upper edge, wrapped past 360
-            Assert.False(def.ContainsYaw(319));
-            Assert.False(def.ContainsYaw(21));
-            Assert.False(def.ContainsYaw(200));
+            Assert.That(def.ContainsYaw(350), Is.True);
+            Assert.That(def.ContainsYaw(0), Is.True);
+            Assert.That(def.ContainsYaw(15), Is.True);
+            Assert.That(def.ContainsYaw(320), Is.True); // lower edge
+            Assert.That(def.ContainsYaw(20), Is.True);  // upper edge, wrapped past 360
+            Assert.That(def.ContainsYaw(319), Is.False);
+            Assert.That(def.ContainsYaw(21), Is.False);
+            Assert.That(def.ContainsYaw(200), Is.False);
         }
 
         // ---------------------------------------------------------------- GeneratorFor
 
-        [Fact]
+        [Test]
         public void GeneratorForReturnsTheLiveGeneratorCoveringAYawAndSkipsDestroyedOnes()
         {
             var combat = Make(ShipClass.Destroyer);
             var bow = combat.Subsystems.Single(s => s.Kind == SubsystemKind.ShieldGenerator && s.Def.ArcCenterDeg == 0);
 
-            Assert.Same(bow, combat.GeneratorFor(0));
-            Assert.Same(bow, combat.GeneratorFor(40));
+            Assert.That(combat.GeneratorFor(0), Is.SameAs(bow));
+            Assert.That(combat.GeneratorFor(40), Is.SameAs(bow));
 
             bow.Hp = 0;
-            Assert.Null(combat.GeneratorFor(0));
+            Assert.That(combat.GeneratorFor(0), Is.Null);
         }
 
         // ---------------------------------------------------------------- RegenShields
 
-        [Fact]
+        [Test]
         public void RegenShieldsDoesNotRegenerateAGeneratorHitWithinTheLast8Seconds()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -88,14 +89,14 @@ namespace SolarSystem.Core.Tests
 
             gen.LastHitSeconds = 92; // nowSeconds - LastHitSeconds == 8, not > 8
             combat.RegenShields(100, 1);
-            Assert.Equal(0, gen.Shield);
+            Assert.That(gen.Shield, Is.EqualTo(0));
 
             gen.LastHitSeconds = 91.9; // just over 8 seconds since the hit
             combat.RegenShields(100, 1);
-            Assert.True(gen.Shield > 0, "a generator unhit for over 8 seconds should have regenerated");
+            Assert.That(gen.Shield > 0, Is.True, "a generator unhit for over 8 seconds should have regenerated");
         }
 
-        [Fact]
+        [Test]
         public void RegenShieldsSharesTheHullsRegenRateEvenlyAcrossItsGenerators()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -105,10 +106,10 @@ namespace SolarSystem.Core.Tests
             combat.RegenShields(100, 1);
 
             double share = combat.Spec.ShieldRegen / generators.Count;
-            foreach (var g in generators) Assert.Equal(share, g.Shield, 9);
+            foreach (var g in generators) Assert.That(g.Shield, Is.EqualTo(share).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void RegenShieldsCapsAtMaxShieldAndNeverRegeneratesADestroyedGenerator()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -118,96 +119,96 @@ namespace SolarSystem.Core.Tests
 
             combat.RegenShields(10000, 10000); // a huge dt that would massively overshoot every cap
 
-            Assert.Equal(0, generators[0].Shield);
-            foreach (var g in generators.Skip(1)) Assert.Equal(g.MaxShield, g.Shield, 9);
+            Assert.That(generators[0].Shield, Is.EqualTo(0));
+            foreach (var g in generators.Skip(1)) Assert.That(g.Shield, Is.EqualTo(g.MaxShield).Within(1e-9));
         }
 
         // ---------------------------------------------------------------- Disabled / EngineFactor / BridgeIntact
 
-        [Fact]
+        [Test]
         public void EngineFactorIsTheShareOfEnginesStillWorking()
         {
             var combat = Make(ShipClass.Cruiser);
             var engines = combat.Subsystems.Where(s => s.Kind == SubsystemKind.Engine).ToList();
-            Assert.Equal(1, combat.EngineFactor);
+            Assert.That(combat.EngineFactor, Is.EqualTo(1));
 
             engines[0].Hp = 0;
-            Assert.Equal((engines.Count - 1.0) / engines.Count, combat.EngineFactor, 9);
+            Assert.That(combat.EngineFactor, Is.EqualTo((engines.Count - 1.0) / engines.Count).Within(1e-9));
 
             foreach (var e in engines) e.Hp = 0;
-            Assert.Equal(0, combat.EngineFactor);
+            Assert.That(combat.EngineFactor, Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void EngineFactorIsOneWhenTheHullHasNoEngines()
         {
             var combat = new ShipCombat(CombatSpec.Platform);
-            Assert.DoesNotContain(combat.Subsystems, s => s.Kind == SubsystemKind.Engine);
-            Assert.Equal(1, combat.EngineFactor);
+            Assert.That((combat.Subsystems).Any(s => s.Kind == SubsystemKind.Engine), Is.False);
+            Assert.That(combat.EngineFactor, Is.EqualTo(1));
         }
 
-        [Fact]
+        [Test]
         public void BridgeIntactIsTrueWhenTheHullHasNoBridgeSubsystem()
         {
             var combat = new ShipCombat(CombatSpec.Platform);
-            Assert.DoesNotContain(combat.Subsystems, s => s.Kind == SubsystemKind.Bridge);
-            Assert.True(combat.BridgeIntact);
+            Assert.That((combat.Subsystems).Any(s => s.Kind == SubsystemKind.Bridge), Is.False);
+            Assert.That(combat.BridgeIntact, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void DisabledWhenNoEnginesAreStillWorking()
         {
             var combat = Make(ShipClass.Cruiser);
             foreach (var e in combat.Subsystems.Where(s => s.Kind == SubsystemKind.Engine)) e.Hp = 0;
-            Assert.True(combat.Disabled);
+            Assert.That(combat.Disabled, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void DisabledWhenHullDropsBelowTwelvePercent()
         {
             var combat = Make(ShipClass.Destroyer);
 
             combat.Hull = combat.Spec.Hull * 0.12;
-            Assert.False(combat.Disabled, "exactly 12% hull should not yet disable the ship");
+            Assert.That(combat.Disabled, Is.False, "exactly 12% hull should not yet disable the ship");
 
             combat.Hull = combat.Spec.Hull * 0.11;
-            Assert.True(combat.Disabled);
+            Assert.That(combat.Disabled, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void DisabledWhenTheBridgeIsLostAndHullIsBelowFortyPercentButNotAboveIt()
         {
             var combat = Make(ShipClass.Destroyer);
             combat.Subsystems.First(s => s.Kind == SubsystemKind.Bridge).Hp = 0;
 
             combat.Hull = combat.Spec.Hull * 0.5;
-            Assert.False(combat.Disabled, "a lost bridge alone shouldn't disable a mostly-healthy hull");
+            Assert.That(combat.Disabled, Is.False, "a lost bridge alone shouldn't disable a mostly-healthy hull");
 
             combat.Hull = combat.Spec.Hull * 0.3;
-            Assert.True(combat.Disabled);
+            Assert.That(combat.Disabled, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void DisabledIsFalseForAShipThatHasAlreadyBeenDestroyed()
         {
             var combat = Make(ShipClass.Destroyer);
             combat.Hull = 0;
-            Assert.False(combat.Alive);
-            Assert.False(combat.Disabled);
+            Assert.That(combat.Alive, Is.False);
+            Assert.That(combat.Disabled, Is.False);
         }
 
         // ---------------------------------------------------------------- Armed
 
-        [Fact]
+        [Test]
         public void ArmedIsFalseWhenTheOnlyWeaponsArePointDefense()
         {
             var combat = Make(ShipClass.Freighter);
-            Assert.Contains(combat.Subsystems, s => s.Kind == SubsystemKind.PointDefense);
-            Assert.DoesNotContain(combat.Subsystems, s => s.Def.IsWeapon && s.Kind != SubsystemKind.PointDefense);
-            Assert.False(combat.Armed);
+            Assert.That((combat.Subsystems).Any(s => s.Kind == SubsystemKind.PointDefense), Is.True);
+            Assert.That((combat.Subsystems).Any(s => s.Def.IsWeapon && s.Kind != SubsystemKind.PointDefense), Is.False);
+            Assert.That(combat.Armed, Is.False);
         }
 
-        [Fact]
+        [Test]
         public void ArmedIsFalseWhenTheOnlyLiveWeaponIsAnEmptyMissileLauncher()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -216,22 +217,22 @@ namespace SolarSystem.Core.Tests
             var launcher = combat.Subsystems.Single(s => s.Kind == SubsystemKind.MissileLauncher);
 
             launcher.Ammo = 0;
-            Assert.False(combat.Armed);
+            Assert.That(combat.Armed, Is.False);
 
             launcher.Ammo = 1;
-            Assert.True(combat.Armed);
+            Assert.That(combat.Armed, Is.True);
         }
 
         // ---------------------------------------------------------------- Damage / Strength
 
-        [Fact]
+        [Test]
         public void DamageIsZeroForAPristineShip()
         {
             var combat = Make(ShipClass.Cruiser);
-            Assert.Equal(0, combat.Damage);
+            Assert.That(combat.Damage, Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void DamageScalesWithBothHullLossAndSubsystemWear()
         {
             var combat = Make(ShipClass.Cruiser);
@@ -241,18 +242,18 @@ namespace SolarSystem.Core.Tests
 
             double missing = 0.5 + (1 - sub.Health) * 0.1;
             double expected = missing / (1 + combat.Subsystems.Count * 0.1);
-            Assert.Equal(expected, combat.Damage, 9);
+            Assert.That(combat.Damage, Is.EqualTo(expected).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void StrengthIsZeroForAShipThatHasBeenDestroyed()
         {
             var combat = Make(ShipClass.Cruiser);
             combat.Hull = 0;
-            Assert.Equal(0, combat.Strength);
+            Assert.That(combat.Strength, Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void StrengthScalesWithHullFraction()
         {
             var combat = Make(ShipClass.Cruiser);
@@ -261,10 +262,10 @@ namespace SolarSystem.Core.Tests
             combat.Hull = combat.Spec.Hull * 0.5;
             double half = combat.Strength;
 
-            Assert.Equal(full * 0.65, half, 6); // 0.3 + 0.7 * 0.5
+            Assert.That(half, Is.EqualTo(full * 0.65).Within(1e-6)); // 0.3 + 0.7 * 0.5
         }
 
-        [Fact]
+        [Test]
         public void StrengthDropsWhenAWeaponIsDestroyed()
         {
             var combat = Make(ShipClass.Cruiser);
@@ -272,12 +273,12 @@ namespace SolarSystem.Core.Tests
             combat.Subsystems.First(s => s.Def.IsWeapon).Hp = 0;
             double after = combat.Strength;
 
-            Assert.True(after < before, "destroying a weapon should reduce fighting strength");
+            Assert.That(after < before, Is.True, "destroying a weapon should reduce fighting strength");
         }
 
         // ---------------------------------------------------------------- Repair
 
-        [Fact]
+        [Test]
         public void RepairRestoresHullAndHardpointsByTheGivenShare()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -288,21 +289,21 @@ namespace SolarSystem.Core.Tests
 
             combat.Repair(0.3);
 
-            Assert.Equal(Math.Min(spec.Hull, spec.Hull * 0.2 + spec.Hull * 0.3), combat.Hull, 6);
-            Assert.Equal(Math.Min(sub.Def.MaxHp, sub.Def.MaxHp * 0.1 + sub.Def.MaxHp * 0.3 * 1.5), sub.Hp, 6);
+            Assert.That(combat.Hull, Is.EqualTo(Math.Min(spec.Hull, spec.Hull * 0.2 + spec.Hull * 0.3)).Within(1e-6));
+            Assert.That(sub.Hp, Is.EqualTo(Math.Min(sub.Def.MaxHp, sub.Def.MaxHp * 0.1 + sub.Def.MaxHp * 0.3 * 1.5)).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void RepairCapsHullAndHardpointsAtTheirMaximum()
         {
             var combat = Make(ShipClass.Destroyer);
             combat.Repair(1.0); // already pristine; a full repair must not overshoot
 
-            Assert.Equal(combat.Spec.Hull, combat.Hull);
-            foreach (var s in combat.Subsystems) Assert.Equal(s.Def.MaxHp, s.Hp);
+            Assert.That(combat.Hull, Is.EqualTo(combat.Spec.Hull));
+            foreach (var s in combat.Subsystems) Assert.That(s.Hp, Is.EqualTo(s.Def.MaxHp));
         }
 
-        [Fact]
+        [Test]
         public void RepairRefillsShieldsButDoesNotRestockAmmo()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -313,13 +314,13 @@ namespace SolarSystem.Core.Tests
             combat.Repair(0.1);
 
             foreach (var g in combat.Subsystems.Where(s => s.Kind == SubsystemKind.ShieldGenerator))
-                Assert.Equal(g.MaxShield, g.Shield);
-            Assert.Equal(0, launcher.Ammo);
+                Assert.That(g.Shield, Is.EqualTo(g.MaxShield));
+            Assert.That(launcher.Ammo, Is.EqualTo(0));
         }
 
         // ---------------------------------------------------------------- FreeResupply / RestoreFighters
 
-        [Fact]
+        [Test]
         public void FreeResupplyRestocksAmmoAndMustersCrewAndMarinesBackToSpec()
         {
             var combat = Make(ShipClass.Destroyer);
@@ -329,12 +330,12 @@ namespace SolarSystem.Core.Tests
             combat.FreeResupply();
 
             foreach (var s in combat.Subsystems.Where(s => s.Def.Weapon != null))
-                Assert.Equal(s.Def.Weapon.Ammo, s.Ammo);
-            Assert.Equal(combat.Spec.Crew, combat.Interior.Crew, 6);
-            Assert.Equal(combat.Spec.Marines, combat.Interior.Marines, 6);
+                Assert.That(s.Ammo, Is.EqualTo(s.Def.Weapon.Ammo));
+            Assert.That(combat.Interior.Crew, Is.EqualTo(combat.Spec.Crew).Within(1e-6));
+            Assert.That(combat.Interior.Marines, Is.EqualTo(combat.Spec.Marines).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void RestoreFightersCapsAtSixPerSquadron()
         {
             var combat = Make(ShipClass.Carrier);
@@ -342,27 +343,27 @@ namespace SolarSystem.Core.Tests
             combat.Fighters = 0;
 
             combat.RestoreFighters(max - 2);
-            Assert.Equal(max - 2, combat.Fighters);
+            Assert.That(combat.Fighters, Is.EqualTo(max - 2));
 
             combat.RestoreFighters(1000);
-            Assert.Equal(max, combat.Fighters);
+            Assert.That(combat.Fighters, Is.EqualTo(max));
         }
 
         // ---------------------------------------------------------------- CombatSpec fallbacks
 
-        [Fact]
+        [Test]
         public void OfFallsBackToDestroyerForAnUnknownShipClass()
         {
             var fallback = CombatSpec.Of((ShipClass)999);
-            Assert.Same(CombatSpec.Of(ShipClass.Destroyer), fallback);
-            Assert.Equal("Destroyer", fallback.DesignName);
+            Assert.That(fallback, Is.SameAs(CombatSpec.Of(ShipClass.Destroyer)));
+            Assert.That(fallback.DesignName, Is.EqualTo("Destroyer"));
         }
 
-        [Fact]
+        [Test]
         public void RandomOfFallsBackToADestroyerDesignForAnUnknownShipClass()
         {
             var spec = CombatSpec.RandomOf((ShipClass)999, new Random(1));
-            Assert.Equal("Destroyer", spec.DesignName);
+            Assert.That(spec.DesignName, Is.EqualTo("Destroyer"));
         }
     }
 }

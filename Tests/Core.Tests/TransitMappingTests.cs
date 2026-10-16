@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class TransitMappingTests
     {
         const double StartJd = 2461324.0;
@@ -48,11 +49,11 @@ namespace SolarSystem.Core.Tests
             return scene;
         }
 
-        [Fact]
+        [Test]
         public void TransitsLeaveAndJoinTheParkingSlotsExactly()
         {
             var (eph, legs) = Legs();
-            Assert.True(legs.Count > 50);
+            Assert.That(legs.Count > 50, Is.True);
             var scale = new ScaleModel { Blend = 1 };
             foreach (var leg in legs)
             {
@@ -60,13 +61,13 @@ namespace SolarSystem.Core.Tests
                 var origin = eph.Catalog[leg.OriginBody];
                 var parked = scene[origin.Index] + scale.LocalOffset(origin, leg.DepartureOrbit.OffsetAt(leg.PhaseStartJd));
                 var start = scale.TransitScene(eph, scene, leg, 0, out _);
-                Assert.True((start - parked).Length < 1e-3, $"{leg.Name} leaves {(start - parked).Length:G3} units off its slot");
+                Assert.That((start - parked).Length < 1e-3, Is.True, $"{leg.Name} leaves {(start - parked).Length:G3} units off its slot");
 
                 scene = LayoutAt(eph, scale, leg.PhaseEndJd);
                 var destination = eph.Catalog[leg.Orbit.Body];
                 parked = scene[destination.Index] + scale.LocalOffset(destination, leg.Orbit.OffsetAt(leg.PhaseEndJd));
                 var end = scale.TransitScene(eph, scene, leg, 1, out _);
-                Assert.True((end - parked).Length < 1e-3, $"{leg.Name} arrives {(end - parked).Length:G3} units off its slot");
+                Assert.That((end - parked).Length < 1e-3, Is.True, $"{leg.Name} arrives {(end - parked).Length:G3} units off its slot");
             }
         }
 
@@ -74,7 +75,7 @@ namespace SolarSystem.Core.Tests
         // the far end's neighbourhood (a parked ship shows the same). What the mapping promises is
         // clearance from the origin while leaving, the destination while arriving, and the planets
         // they orbit throughout.
-        [Fact]
+        [Test]
         public void TransitsNeverEnterTheirEndpointBodiesOrJump()
         {
             var (eph, legs) = Legs();
@@ -96,11 +97,11 @@ namespace SolarSystem.Core.Tests
                     double progress = tau < half ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u);
                     var scene = LayoutAt(eph, scale, leg.PhaseStartJd + tau);
                     var p = scale.TransitScene(eph, scene, leg, progress, out var dir);
-                    Assert.False(double.IsNaN(p.X + p.Y + p.Z + dir.X), leg.Name);
+                    Assert.That(double.IsNaN(p.X + p.Y + p.Z + dir.X), Is.False, leg.Name);
                     foreach (int b in parents.Append(progress < 0.5 ? leg.OriginBody : leg.Orbit.Body))
                     {
                         double clearance = (p - scene[b]).Length / scale.DisplayRadius(eph.Catalog[b]);
-                        Assert.True(clearance > 1.0, $"{leg.Name} passes inside {eph.Catalog[b].Name} at progress {progress:0.000}");
+                        Assert.That(clearance > 1.0, Is.True, $"{leg.Name} passes inside {eph.Catalog[b].Name} at progress {progress:0.000}");
                     }
                     if (k > 0)
                     {
@@ -110,11 +111,11 @@ namespace SolarSystem.Core.Tests
                     }
                     previous = p;
                 }
-                Assert.True(biggestStep < 0.08 * travelled, $"{leg.Name} jumps {biggestStep / travelled:P0} of its drawn path in one step");
+                Assert.That(biggestStep < 0.08 * travelled, Is.True, $"{leg.Name} jumps {biggestStep / travelled:P0} of its drawn path in one step");
             }
         }
 
-        [Fact]
+        [Test]
         public void BetweenPlanetsShipsFlyTheTrueLineAsDrawn()
         {
             var (eph, legs) = Legs();
@@ -132,11 +133,11 @@ namespace SolarSystem.Core.Tests
                 checkedLegs++;
                 if ((p - drawn).Length < 1e-6 * drawn.Length) onLine++;
             }
-            Assert.True(checkedLegs > 20);
-            Assert.True(onLine >= checkedLegs * 0.9, $"{onLine} of {checkedLegs} interplanetary legs are on the heliocentric line at midpoint");
+            Assert.That(checkedLegs > 20, Is.True);
+            Assert.That(onLine >= checkedLegs * 0.9, Is.True, $"{onLine} of {checkedLegs} interplanetary legs are on the heliocentric line at midpoint");
         }
 
-        [Fact]
+        [Test]
         public void RealisticScaleIsTheTrueInertialLine()
         {
             var (eph, legs) = Legs();
@@ -149,7 +150,7 @@ namespace SolarSystem.Core.Tests
                     var helio = eph.Helio(leg.FrameBody) + Fleet.TransitOffset(leg, u);
                     var p = scale.TransitScene(eph, scene, leg, u, out _);
                     var truth = helio.SwapYZ / ScaleModel.KmPerUnit;
-                    Assert.True((p - truth).Length < 1e-6 * truth.Length + 1e-6, $"{leg.Name} at {u}");
+                    Assert.That((p - truth).Length < 1e-6 * truth.Length + 1e-6, Is.True, $"{leg.Name} at {u}");
                 }
             }
         }

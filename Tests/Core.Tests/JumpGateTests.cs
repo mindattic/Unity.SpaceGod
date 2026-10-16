@@ -1,67 +1,65 @@
 using System;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
-using Xunit.Abstractions;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class JumpGateTests
     {
         const double StartJd = 2461324.0;
-        readonly ITestOutputHelper output;
 
-        public JumpGateTests(ITestOutputHelper output) => this.output = output;
 
         static Galaxy Create() => Galaxy.CreateDefault(StartJd);
 
-        [Fact]
+        [Test]
         public void EachSystemGetsAGatePairedWithTheOther()
         {
             var g = Create();
             var sol = g.Systems[0];
             var ac = g.Systems[1];
 
-            Assert.NotNull(sol.Gate);
-            Assert.NotNull(ac.Gate);
-            Assert.Same(ac, sol.Gate.Destination);
-            Assert.Same(sol, ac.Gate.Destination);
+            Assert.That(sol.Gate, Is.Not.Null);
+            Assert.That(ac.Gate, Is.Not.Null);
+            Assert.That(sol.Gate.Destination, Is.SameAs(ac));
+            Assert.That(ac.Gate.Destination, Is.SameAs(sol));
         }
 
-        [Fact]
+        [Test]
         public void GatesSitAtTheSystemsOwnOuterEdgeFacingTheOtherSystem()
         {
             var g = Create();
             var sol = g.Systems[0];
             var ac = g.Systems[1];
 
-            Assert.Equal(JumpGate.RadiusKm, sol.Gate.PositionKm.Length, 6);
-            Assert.Equal(JumpGate.RadiusKm, ac.Gate.PositionKm.Length, 6);
+            Assert.That(sol.Gate.PositionKm.Length, Is.EqualTo(JumpGate.RadiusKm).Within(1e-6));
+            Assert.That(ac.Gate.PositionKm.Length, Is.EqualTo(JumpGate.RadiusKm).Within(1e-6));
 
             // Each gate points (in its own system's frame) toward the real direction of the other star.
             double towardAc = DVec3.Dot(sol.Gate.PositionKm.Normalized, Galaxy.Direction(sol, ac));
             double towardSol = DVec3.Dot(ac.Gate.PositionKm.Normalized, Galaxy.Direction(ac, sol));
-            output.WriteLine($"Sol gate alignment {towardAc:0.000}, Centauri gate alignment {towardSol:0.000}");
-            Assert.InRange(towardAc, 0.9999, 1.0001);
-            Assert.InRange(towardSol, 0.9999, 1.0001);
+            TestContext.Out.WriteLine($"Sol gate alignment {towardAc:0.000}, Centauri gate alignment {towardSol:0.000}");
+            Assert.That(towardAc, Is.InRange(0.9999, 1.0001));
+            Assert.That(towardSol, Is.InRange(0.9999, 1.0001));
         }
 
-        [Fact]
+        [Test]
         public void OnlyInRangeOfItsOwnGateCanAShipActivateIt()
         {
             var g = Create();
             var sol = g.Systems[0];
             var gate = sol.Gate;
 
-            Assert.True(gate.CanActivate(gate.PositionKm));
+            Assert.That(gate.CanActivate(gate.PositionKm), Is.True);
             var justInside = gate.PositionKm + new DVec3(JumpGate.ActivationRangeKm * 0.5, 0, 0);
             var farAway = gate.PositionKm + new DVec3(JumpGate.ActivationRangeKm * 50, 0, 0);
-            Assert.True(gate.CanActivate(justInside));
-            Assert.False(gate.CanActivate(farAway));
-            Assert.False(gate.CanActivate(DVec3.Zero));
+            Assert.That(gate.CanActivate(justInside), Is.True);
+            Assert.That(gate.CanActivate(farAway), Is.False);
+            Assert.That(gate.CanActivate(DVec3.Zero), Is.False);
         }
 
-        [Fact]
+        [Test]
         public void ArrivalLandsJustInsideTheFarGateFacingItsSystemsCentre()
         {
             var g = Create();
@@ -70,15 +68,15 @@ namespace SolarSystem.Core.Tests
 
             var arrival = sol.Gate.ArrivalOffsetKm;
             double distanceFromAcRoot = arrival.Length;
-            Assert.True(distanceFromAcRoot < ac.Gate.PositionKm.Length, "arrival should be closer to the destination's root than its gate");
-            Assert.Equal(JumpGate.RadiusKm - JumpGate.ArrivalInsetKm, distanceFromAcRoot, 6);
+            Assert.That(distanceFromAcRoot < ac.Gate.PositionKm.Length, Is.True, "arrival should be closer to the destination's root than its gate");
+            Assert.That(distanceFromAcRoot, Is.EqualTo(JumpGate.RadiusKm - JumpGate.ArrivalInsetKm).Within(1e-6));
 
             // Facing back toward the destination's own root (into the system, not out past the gate).
             double facingInward = DVec3.Dot(sol.Gate.ArrivalForward, -ac.Gate.PositionKm.Normalized);
-            Assert.InRange(facingInward, 0.9999, 1.0001);
+            Assert.That(facingInward, Is.InRange(0.9999, 1.0001));
         }
 
-        [Fact]
+        [Test]
         public void TransitRetiresTheOriginHullAndAppendsAnArrivedCopyToTheDestinationFleet()
         {
             var g = Create();
@@ -92,28 +90,28 @@ namespace SolarSystem.Core.Tests
 
             bool ok = GateTransit.TryPerform(sol.Gate, sol.Gate.PositionKm, ship, sol.World.Fleet, StartJd, out var arrived);
 
-            Assert.True(ok);
-            Assert.NotNull(arrived);
+            Assert.That(ok, Is.True);
+            Assert.That(arrived, Is.Not.Null);
             // The origin hull stays in its fleet at its own id (ids are fixed indices -- see Fleet.Receive),
             // just retired in place rather than actually removed.
-            Assert.Contains(ship, sol.World.Fleet.Ships);
-            Assert.True(ship.Destroyed);
-            Assert.True(ship.GateDeparted);
-            Assert.Equal(solCountBefore, sol.World.Fleet.Ships.Count);
+            Assert.That(sol.World.Fleet.Ships, Does.Contain(ship));
+            Assert.That(ship.Destroyed, Is.True);
+            Assert.That(ship.GateDeparted, Is.True);
+            Assert.That(sol.World.Fleet.Ships.Count, Is.EqualTo(solCountBefore));
 
-            Assert.Contains(arrived, ac.World.Fleet.Ships);
-            Assert.Equal(acCountBefore + 1, ac.World.Fleet.Ships.Count);
-            Assert.Equal(name, arrived.Name);
-            Assert.Equal(credits, arrived.Credits);
-            Assert.False(arrived.Destroyed);
-            Assert.Equal(ShipRole.Free, arrived.Role);
-            Assert.Equal(ac.Catalog.Root.Index, arrived.Orbit.Body);
-            Assert.True((sol.Gate.ArrivalOffsetKm - arrived.Orbit.Center).Length < 1e-6, "the ship should land exactly at the arrival offset the activated gate computes");
-            Assert.NotNull(arrived.Ports);
-            Assert.NotEmpty(arrived.Ports);
+            Assert.That(ac.World.Fleet.Ships, Does.Contain(arrived));
+            Assert.That(ac.World.Fleet.Ships.Count, Is.EqualTo(acCountBefore + 1));
+            Assert.That(arrived.Name, Is.EqualTo(name));
+            Assert.That(arrived.Credits, Is.EqualTo(credits));
+            Assert.That(arrived.Destroyed, Is.False);
+            Assert.That(arrived.Role, Is.EqualTo(ShipRole.Free));
+            Assert.That(arrived.Orbit.Body, Is.EqualTo(ac.Catalog.Root.Index));
+            Assert.That((sol.Gate.ArrivalOffsetKm - arrived.Orbit.Center).Length < 1e-6, Is.True, "the ship should land exactly at the arrival offset the activated gate computes");
+            Assert.That(arrived.Ports, Is.Not.Null);
+            Assert.That(arrived.Ports, Is.Not.Empty);
         }
 
-        [Fact]
+        [Test]
         public void TransitFailsWhenTheShipIsOutOfRange()
         {
             var g = Create();
@@ -125,11 +123,11 @@ namespace SolarSystem.Core.Tests
 
             bool ok = GateTransit.TryPerform(sol.Gate, DVec3.Zero, ship, sol.World.Fleet, StartJd, out var arrived);
 
-            Assert.False(ok);
-            Assert.Null(arrived);
-            Assert.False(ship.Destroyed);
-            Assert.Equal(solBefore, sol.World.Fleet.Ships.Count);
-            Assert.Equal(acBefore, ac.World.Fleet.Ships.Count);
+            Assert.That(ok, Is.False);
+            Assert.That(arrived, Is.Null);
+            Assert.That(ship.Destroyed, Is.False);
+            Assert.That(sol.World.Fleet.Ships.Count, Is.EqualTo(solBefore));
+            Assert.That(ac.World.Fleet.Ships.Count, Is.EqualTo(acBefore));
         }
     }
 }

@@ -2,10 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class AsteroidFieldTests
     {
         static readonly Lazy<AsteroidField> Field = new Lazy<AsteroidField>(() => AsteroidField.Parse(File.ReadAllBytes(DataPath())));
@@ -22,40 +23,39 @@ namespace SolarSystem.Core.Tests
             throw new FileNotFoundException("asteroids.bytes not found above " + AppContext.BaseDirectory);
         }
 
-        [Fact]
+        [Test]
         public void LoadsTheWholeCatalogueBrightestFirst()
         {
             var f = Field.Value;
-            Assert.True(f.Count > 110000, $"count {f.Count}");
-            Assert.Equal(2461200.5, f.EpochJd);
-            Assert.Equal(-1, f.IndexOfNumber(1)); // Ceres is a catalogue body, not part of the field
-            for (int i = 1; i < f.Count; i++) Assert.True(f.H[i] >= f.H[i - 1]);
-            Assert.True(f.Group.Count(g => g == 1) > 10000, "Jupiter Trojans");
-            Assert.True(f.H.Max() < 15.5f);
+            Assert.That(f.Count > 110000, Is.True, $"count {f.Count}");
+            Assert.That(f.EpochJd, Is.EqualTo(2461200.5));
+            Assert.That(f.IndexOfNumber(1), Is.EqualTo(-1)); // Ceres is a catalogue body, not part of the field
+            for (int i = 1; i < f.Count; i++) Assert.That(f.H[i] >= f.H[i - 1], Is.True);
+            Assert.That(f.Group.Count(g => g == 1) > 10000, Is.True, "Jupiter Trojans");
+            Assert.That(f.H.Max() < 15.5f, Is.True);
         }
 
         // JPL Horizons heliocentric ecliptic J2000 vectors (AU), TDB.
-        [Theory]
-        [InlineData(4, 2460676.5, -2.250582048106207, -0.1756708258072572, 0.2792640768981432, 0.02)]
-        [InlineData(4, 2461200.5, 2.269028147398455, -0.5440517025183874, -0.2601452414717795, 1e-5)]
-        [InlineData(4, 2461771.5, -1.365102708786166, 2.081026133722101, 0.1044633876987572, 0.02)]
-        [InlineData(2, 2460676.5, 0.5975712077927406, -2.706753523684491, 1.823787653783709, 0.02)]
-        [InlineData(2, 2461200.5, 3.050646479459978, -0.2813127239735989, -0.06888493781935071, 1e-5)]
-        [InlineData(2, 2461771.5, -1.907905166527341, 0.9244043548062137, -0.4757384319000333, 0.02)]
-        [InlineData(624, 2460676.5, -4.270956709465083, 2.844522827440896, 0.4768431351966363, 0.03)]
-        [InlineData(624, 2461200.5, -5.044328953969506, -0.8021940405268528, -0.7400262379720891, 1e-5)]
-        [InlineData(624, 2461771.5, -2.692622679814912, -4.206394870926072, -1.577932517733574, 0.03)]
+        [TestCase(4, 2460676.5, -2.250582048106207, -0.1756708258072572, 0.2792640768981432, 0.02)]
+        [TestCase(4, 2461200.5, 2.269028147398455, -0.5440517025183874, -0.2601452414717795, 1e-5)]
+        [TestCase(4, 2461771.5, -1.365102708786166, 2.081026133722101, 0.1044633876987572, 0.02)]
+        [TestCase(2, 2460676.5, 0.5975712077927406, -2.706753523684491, 1.823787653783709, 0.02)]
+        [TestCase(2, 2461200.5, 3.050646479459978, -0.2813127239735989, -0.06888493781935071, 1e-5)]
+        [TestCase(2, 2461771.5, -1.907905166527341, 0.9244043548062137, -0.4757384319000333, 0.02)]
+        [TestCase(624, 2460676.5, -4.270956709465083, 2.844522827440896, 0.4768431351966363, 0.03)]
+        [TestCase(624, 2461200.5, -5.044328953969506, -0.8021940405268528, -0.7400262379720891, 1e-5)]
+        [TestCase(624, 2461771.5, -2.692622679814912, -4.206394870926072, -1.577932517733574, 0.03)]
         public void MatchesHorizons(int number, double jd, double x, double y, double z, double toleranceAu)
         {
             var f = Field.Value;
             int i = f.IndexOfNumber(number);
-            Assert.True(i >= 0);
+            Assert.That(i >= 0, Is.True);
             var p = f.PositionAu(i, jd);
             double err = (p - new DVec3(x, y, z)).Length;
-            Assert.True(err < toleranceAu, $"#{number} at {jd}: {err:G4} AU");
+            Assert.That(err < toleranceAu, Is.True, $"#{number} at {jd}: {err:G4} AU");
         }
 
-        [Fact]
+        [Test]
         public void BatchAndGpuPathsAgreeWithDoublePrecision()
         {
             var f = Field.Value;
@@ -73,14 +73,13 @@ namespace SolarSystem.Core.Tests
                 AsteroidField.GpuPosition(packed, i, (float)(jd - f.EpochJd), out var gx, out var gy, out var gz);
                 worstGpu = Math.Max(worstGpu, (p - new DVec3(gx, gy, gz)).Length);
             }
-            Assert.True(worstBatch < 1e-5, $"batch {worstBatch:G3}");
-            Assert.True(worstGpu < 2e-4, $"gpu {worstGpu:G3}");
+            Assert.That(worstBatch < 1e-5, Is.True, $"batch {worstBatch:G3}");
+            Assert.That(worstGpu < 2e-4, Is.True, $"gpu {worstGpu:G3}");
         }
 
-        [Theory]
-        [InlineData(2.502, 2.455, 0.25)] // 3:1 resonance with Jupiter
-        [InlineData(2.825, 2.78, 0.25)] // 5:2
-        [InlineData(2.958, 3.02, 0.5)] // 7:3, a narrower, shallower gap
+        [TestCase(2.502, 2.455, 0.25)] // 3:1 resonance with Jupiter
+        [TestCase(2.825, 2.78, 0.25)] // 5:2
+        [TestCase(2.958, 3.02, 0.5)] // 7:3, a narrower, shallower gap
         public void KirkwoodGapsComeFromTheData(double gapAu, double neighbourAu, double maxRatio)
         {
             var f = Field.Value;
@@ -92,10 +91,10 @@ namespace SolarSystem.Core.Tests
                 if (Math.Abs(f.A[i] - gapAu) < half) inGap++;
                 if (Math.Abs(f.A[i] - neighbourAu) < half) beside++;
             }
-            Assert.True(inGap < beside * maxRatio, $"gap {inGap} vs neighbour {beside}");
+            Assert.That(inGap < beside * maxRatio, Is.True, $"gap {inGap} vs neighbour {beside}");
         }
 
-        [Fact]
+        [Test]
         public void TrojansLeadAndTrailJupiterBySixtyDegrees()
         {
             var f = Field.Value;
@@ -114,14 +113,13 @@ namespace SolarSystem.Core.Tests
                 if (Math.Abs(Math.Abs(d) - 60) < 35) near++;
                 if (d > 0) l4++;
             }
-            Assert.True(near > total * 0.9, $"{near}/{total} near L4/L5");
-            Assert.InRange(l4, total / 4, total * 3 / 4); // both clouds populated
+            Assert.That(near > total * 0.9, Is.True, $"{near}/{total} near L4/L5");
+            Assert.That(l4, Is.InRange(total / 4, total * 3 / 4)); // both clouds populated
         }
 
-        [Theory]
-        [InlineData(0.0)]
-        [InlineData(0.37)]
-        [InlineData(1.0)]
+        [TestCase(0.0)]
+        [TestCase(0.37)]
+        [TestCase(1.0)]
         public void ShaderSunMappingMatchesScaleModel(double blend)
         {
             var catalog = BodyCatalog.CreateSolSystem();
@@ -131,7 +129,7 @@ namespace SolarSystem.Core.Tests
             {
                 double expect = scale.LocalDistance(catalog.Sun, au * Astro.AuKm);
                 double got = AsteroidField.SceneDistanceFromSun(c0, c1, (float)au);
-                Assert.True(Math.Abs(got - expect) / expect < 1e-4, $"blend {blend}, {au} AU: {got} vs {expect}");
+                Assert.That(Math.Abs(got - expect) / expect < 1e-4, Is.True, $"blend {blend}, {au} AU: {got} vs {expect}");
             }
         }
     }

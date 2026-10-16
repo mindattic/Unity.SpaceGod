@@ -1,121 +1,122 @@
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class CargoHoldTests
     {
-        [Fact]
+        [Test]
         public void AnItemThatFitsInsideTheGridIsAccepted()
         {
             var hold = new CargoHold(4, 4);
 
             var item = hold.Add(Good.Electronics, 0, 0, false);
 
-            Assert.NotNull(item);
-            Assert.Single(hold.Items);
-            Assert.Equal(Good.Electronics, item.Good);
+            Assert.That(item, Is.Not.Null);
+            Assert.That(hold.Items, Has.Exactly(1).Items);
+            Assert.That(item.Good, Is.EqualTo(Good.Electronics));
         }
 
-        [Fact]
+        [Test]
         public void FitsReturnsFalseWhenTheFootprintRunsPastTheGridEdge()
         {
             var hold = new CargoHold(3, 3);
 
             // NickelIron is a 3x3 footprint; it only fits at the single (0, 0) origin of a 3x3 grid.
-            Assert.True(hold.Fits(Good.NickelIron, 0, 0, false));
-            Assert.False(hold.Fits(Good.NickelIron, 1, 0, false));
-            Assert.False(hold.Fits(Good.NickelIron, 0, 1, false));
+            Assert.That(hold.Fits(Good.NickelIron, 0, 0, false), Is.True);
+            Assert.That(hold.Fits(Good.NickelIron, 1, 0, false), Is.False);
+            Assert.That(hold.Fits(Good.NickelIron, 0, 1, false), Is.False);
         }
 
-        [Fact]
+        [Test]
         public void OutOfBoundsPlacementIsRejectedAndNothingIsAdded()
         {
             var hold = new CargoHold(2, 2);
 
             var item = hold.Add(Good.NickelIron, 0, 0, false);
 
-            Assert.Null(item);
-            Assert.Empty(hold.Items);
+            Assert.That(item, Is.Null);
+            Assert.That(hold.Items, Is.Empty);
         }
 
-        [Fact]
+        [Test]
         public void NegativeCoordinatesAreOutOfBounds()
         {
             var hold = new CargoHold(4, 4);
 
-            Assert.False(hold.Fits(Good.Electronics, -1, 0, false));
-            Assert.False(hold.Fits(Good.Electronics, 0, -1, false));
+            Assert.That(hold.Fits(Good.Electronics, -1, 0, false), Is.False);
+            Assert.That(hold.Fits(Good.Electronics, 0, -1, false), Is.False);
         }
 
-        [Fact]
+        [Test]
         public void RotatingAFootprintSwapsItsWidthAndHeight()
         {
             var footprint = CargoFootprint.Of(Good.HeliumThree);
-            Assert.Equal(2, footprint.Width);
-            Assert.Equal(1, footprint.Height);
+            Assert.That(footprint.Width, Is.EqualTo(2));
+            Assert.That(footprint.Height, Is.EqualTo(1));
 
             var hold = new CargoHold(1, 2);
 
             // Unrotated (2 wide, 1 tall) cannot stand in a 1-wide grid; rotated (1 wide, 2 tall) can.
-            Assert.False(hold.Fits(Good.HeliumThree, 0, 0, false));
-            Assert.True(hold.Fits(Good.HeliumThree, 0, 0, true));
+            Assert.That(hold.Fits(Good.HeliumThree, 0, 0, false), Is.False);
+            Assert.That(hold.Fits(Good.HeliumThree, 0, 0, true), Is.True);
 
             var item = hold.Add(Good.HeliumThree, 0, 0, true);
-            Assert.NotNull(item);
-            Assert.Equal(1, item.Width);
-            Assert.Equal(2, item.Height);
+            Assert.That(item, Is.Not.Null);
+            Assert.That(item.Width, Is.EqualTo(1));
+            Assert.That(item.Height, Is.EqualTo(2));
         }
 
-        [Fact]
+        [Test]
         public void TwoItemsCannotOccupyOverlappingCells()
         {
             var hold = new CargoHold(4, 4);
             hold.Add(Good.Food, 0, 0, false); // 2x2 at (0,0)-(1,1)
 
-            Assert.False(hold.Fits(Good.Electronics, 1, 1, false));
+            Assert.That(hold.Fits(Good.Electronics, 1, 1, false), Is.False);
             var overlapping = hold.Add(Good.Electronics, 1, 1, false);
-            Assert.Null(overlapping);
+            Assert.That(overlapping, Is.Null);
 
             // Just past the first crate, with no shared cells, still fits.
-            Assert.True(hold.Fits(Good.Electronics, 2, 0, false));
+            Assert.That(hold.Fits(Good.Electronics, 2, 0, false), Is.True);
         }
 
-        [Fact]
+        [Test]
         public void AdjacentNonOverlappingItemsBothFit()
         {
             var hold = new CargoHold(4, 4);
             var a = hold.Add(Good.Food, 0, 0, false); // 2x2
             var b = hold.Add(Good.Food, 2, 0, false); // 2x2, touching a's right edge
 
-            Assert.NotNull(a);
-            Assert.NotNull(b);
-            Assert.Equal(2, hold.Items.Count);
+            Assert.That(a, Is.Not.Null);
+            Assert.That(b, Is.Not.Null);
+            Assert.That(hold.Items.Count, Is.EqualTo(2));
         }
 
-        [Fact]
+        [Test]
         public void RemovingAnItemFreesItsCellsForReuse()
         {
             var hold = new CargoHold(2, 2);
             var item = hold.Add(Good.Food, 0, 0, false);
-            Assert.NotNull(item);
-            Assert.False(hold.Fits(Good.Food, 0, 0, false));
+            Assert.That(item, Is.Not.Null);
+            Assert.That(hold.Fits(Good.Food, 0, 0, false), Is.False);
 
-            Assert.True(hold.Remove(item));
-            Assert.Empty(hold.Items);
-            Assert.True(hold.Fits(Good.Food, 0, 0, false));
+            Assert.That(hold.Remove(item), Is.True);
+            Assert.That(hold.Items, Is.Empty);
+            Assert.That(hold.Fits(Good.Food, 0, 0, false), Is.True);
         }
 
-        [Fact]
+        [Test]
         public void RemovingAnItemNotInTheHoldReturnsFalse()
         {
             var hold = new CargoHold(2, 2);
             var neverAdded = new CargoItem(Good.Food, 0, 0, false);
 
-            Assert.False(hold.Remove(neverAdded));
+            Assert.That(hold.Remove(neverAdded), Is.False);
         }
 
-        [Fact]
+        [Test]
         public void AddFirstFitPlacesAtTheFirstOpenCellInRowMajorOrder()
         {
             var hold = new CargoHold(4, 2);
@@ -123,12 +124,12 @@ namespace SolarSystem.Core.Tests
 
             var placed = hold.AddFirstFit(Good.Electronics); // 1x1, should land at (1,0), not (0,1)
 
-            Assert.NotNull(placed);
-            Assert.Equal(1, placed.X);
-            Assert.Equal(0, placed.Y);
+            Assert.That(placed, Is.Not.Null);
+            Assert.That(placed.X, Is.EqualTo(1));
+            Assert.That(placed.Y, Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void AddFirstFitRotatesWhenOnlyARotatedOrientationFits()
         {
             // A 1-wide, 3-tall hold: a 2x1 crate (HeliumThree) only fits rotated to 1x2.
@@ -136,58 +137,58 @@ namespace SolarSystem.Core.Tests
 
             var placed = hold.AddFirstFit(Good.HeliumThree);
 
-            Assert.NotNull(placed);
-            Assert.True(placed.Rotated);
-            Assert.Equal(1, placed.Width);
-            Assert.Equal(2, placed.Height);
+            Assert.That(placed, Is.Not.Null);
+            Assert.That(placed.Rotated, Is.True);
+            Assert.That(placed.Width, Is.EqualTo(1));
+            Assert.That(placed.Height, Is.EqualTo(2));
         }
 
-        [Fact]
+        [Test]
         public void AddFirstFitReturnsNullWhenTheHoldHasNoRoomLeft()
         {
             var hold = new CargoHold(1, 1);
             var first = hold.AddFirstFit(Good.Electronics);
-            Assert.NotNull(first);
+            Assert.That(first, Is.Not.Null);
 
             var second = hold.AddFirstFit(Good.Electronics);
 
-            Assert.Null(second);
-            Assert.Single(hold.Items);
+            Assert.That(second, Is.Null);
+            Assert.That(hold.Items, Has.Exactly(1).Items);
         }
 
-        [Fact]
+        [Test]
         public void HoldCapacityIsBoundedByItsGridNotAnUnlimitedList()
         {
             var hold = new CargoHold(2, 2);
-            Assert.NotNull(hold.AddFirstFit(Good.Electronics));
-            Assert.NotNull(hold.AddFirstFit(Good.Electronics));
-            Assert.NotNull(hold.AddFirstFit(Good.Electronics));
-            Assert.NotNull(hold.AddFirstFit(Good.Electronics));
+            Assert.That(hold.AddFirstFit(Good.Electronics), Is.Not.Null);
+            Assert.That(hold.AddFirstFit(Good.Electronics), Is.Not.Null);
+            Assert.That(hold.AddFirstFit(Good.Electronics), Is.Not.Null);
+            Assert.That(hold.AddFirstFit(Good.Electronics), Is.Not.Null);
 
             // All four 1x1 cells are now full.
-            Assert.Null(hold.AddFirstFit(Good.Electronics));
-            Assert.Null(hold.Add(Good.Electronics, 0, 0, false));
-            Assert.Equal(4, hold.Items.Count);
+            Assert.That(hold.AddFirstFit(Good.Electronics), Is.Null);
+            Assert.That(hold.Add(Good.Electronics, 0, 0, false), Is.Null);
+            Assert.That(hold.Items.Count, Is.EqualTo(4));
         }
 
-        [Fact]
+        [Test]
         public void MoveRelocatesAnItemToAnOpenPositionAndRotation()
         {
             var hold = new CargoHold(4, 4);
             var item = hold.Add(Good.HeliumThree, 0, 0, false); // 2x1
-            Assert.NotNull(item);
+            Assert.That(item, Is.Not.Null);
 
             bool moved = hold.Move(item, 2, 2, true);
 
-            Assert.True(moved);
-            Assert.Equal(2, item.X);
-            Assert.Equal(2, item.Y);
-            Assert.True(item.Rotated);
+            Assert.That(moved, Is.True);
+            Assert.That(item.X, Is.EqualTo(2));
+            Assert.That(item.Y, Is.EqualTo(2));
+            Assert.That(item.Rotated, Is.True);
             // The old cells are free again.
-            Assert.True(hold.Fits(Good.HeliumThree, 0, 0, false));
+            Assert.That(hold.Fits(Good.HeliumThree, 0, 0, false), Is.True);
         }
 
-        [Fact]
+        [Test]
         public void MoveRejectsOverlapWithAnotherItemAndLeavesTheItemWhereItWas()
         {
             var hold = new CargoHold(4, 4);
@@ -196,12 +197,12 @@ namespace SolarSystem.Core.Tests
 
             bool moved = hold.Move(b, 0, 0, false);
 
-            Assert.False(moved);
-            Assert.Equal(2, b.X);
-            Assert.Equal(2, b.Y);
+            Assert.That(moved, Is.False);
+            Assert.That(b.X, Is.EqualTo(2));
+            Assert.That(b.Y, Is.EqualTo(2));
         }
 
-        [Fact]
+        [Test]
         public void MoveRejectsGoingOutOfBoundsAndLeavesTheItemWhereItWas()
         {
             var hold = new CargoHold(3, 3);
@@ -209,12 +210,12 @@ namespace SolarSystem.Core.Tests
 
             bool moved = hold.Move(item, 5, 5, false);
 
-            Assert.False(moved);
-            Assert.Equal(0, item.X);
-            Assert.Equal(0, item.Y);
+            Assert.That(moved, Is.False);
+            Assert.That(item.X, Is.EqualTo(0));
+            Assert.That(item.Y, Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void MoveOntoAnItemsOwnCurrentCellsSucceeds()
         {
             var hold = new CargoHold(3, 3);
@@ -223,34 +224,35 @@ namespace SolarSystem.Core.Tests
             // Rotating in place would overlap "itself" under a naive check; Move must exclude it.
             bool moved = hold.Move(item, 0, 0, true);
 
-            Assert.True(moved);
-            Assert.True(item.Rotated);
+            Assert.That(moved, Is.True);
+            Assert.That(item.Rotated, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void CargoHoldSpecSizesAreSensibleAndClassSpecific()
         {
             var fighter = CargoHoldSpec.Of(ShipClass.Courier);
             var hauler = CargoHoldSpec.Of(ShipClass.Freighter);
 
-            Assert.True(fighter.Width > 0 && fighter.Height > 0);
-            Assert.True(hauler.Width * hauler.Height > fighter.Width * fighter.Height);
+            Assert.That(fighter.Width > 0 && fighter.Height > 0, Is.True);
+            Assert.That(hauler.Width * hauler.Height > fighter.Width * fighter.Height, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void ShipsPersonalHoldIsSizedOffItsOwnClass()
         {
             var courier = new Ship { Spec = ShipClassSpec.Of(ShipClass.Courier) };
             var freighter = new Ship { Spec = ShipClassSpec.Of(ShipClass.Freighter) };
 
-            Assert.Equal(CargoHoldSpec.Of(ShipClass.Courier).Width, courier.PersonalHold.Width);
-            Assert.Equal(CargoHoldSpec.Of(ShipClass.Freighter).Width, freighter.PersonalHold.Width);
+            Assert.That(courier.PersonalHold.Width, Is.EqualTo(CargoHoldSpec.Of(ShipClass.Courier).Width));
+            Assert.That(freighter.PersonalHold.Width, Is.EqualTo(CargoHoldSpec.Of(ShipClass.Freighter).Width));
 
             // Repeated access returns the same hold, not a fresh one each time (so placed cargo sticks).
-            Assert.Same(courier.PersonalHold, courier.PersonalHold);
+            var first = courier.PersonalHold;
+            Assert.That(courier.PersonalHold, Is.SameAs(first));
         }
 
-        [Fact]
+        [Test]
         public void TheAiEconomysSingleSlotCargoFieldsAreUntouchedByThePersonalHold()
         {
             var ship = new Ship { Spec = ShipClassSpec.Of(ShipClass.Freighter) };
@@ -260,9 +262,9 @@ namespace SolarSystem.Core.Tests
 
             ship.PersonalHold.Add(Good.Electronics, 0, 0, false);
 
-            Assert.True(ship.HasCargo);
-            Assert.Equal(Good.Titanium, ship.CargoGood);
-            Assert.Equal(42, ship.CargoTonnes);
+            Assert.That(ship.HasCargo, Is.True);
+            Assert.That(ship.CargoGood, Is.EqualTo(Good.Titanium));
+            Assert.That(ship.CargoTonnes, Is.EqualTo(42));
         }
     }
 }

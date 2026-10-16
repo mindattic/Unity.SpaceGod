@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
@@ -12,6 +12,7 @@ namespace SolarSystem.Core.Tests
     /// built directly (no <see cref="Economy.Initialise"/>) so each test starts from known stock and
     /// population, isolated from trading and the production tick where that is not under test.
     /// </summary>
+    [TestFixture]
     public class EconomyPopulationAndReviewTests
     {
         /// <summary>Stock large enough that a tick never meaningfully depletes it.</summary>
@@ -47,25 +48,25 @@ namespace SolarSystem.Core.Tests
 
         // ---------------------------------------------------------------- Consume: satisfaction
 
-        [Fact]
+        [Test]
         public void Consume_PartialStock_SatisfactionIsShareOfNeedMet()
         {
             var (economy, s, _) = CreateMarket(population: 100000);
             double dt = 0.1;
             StockAllNeeds(s, Ample);
             double needFood = Settlement.PersonNeeds[0].perPersonDay * s.Population * dt;
-            Assert.Equal(Good.Food, Settlement.PersonNeeds[0].good);
+            Assert.That(Settlement.PersonNeeds[0].good, Is.EqualTo(Good.Food));
             s.Stock[(int)Good.Food] = needFood * 0.5; // only half of what the colony needs this tick
 
             economy.AdvanceTo(dt);
 
-            Assert.Equal(0.5, s.Satisfaction[(int)Good.Food], 6);
-            Assert.Equal(0, s.Stock[(int)Good.Food], 9); // everything on hand was eaten
-            Assert.Equal(1.0, s.Satisfaction[(int)Good.Water], 9); // ample, untouched by the shortage
-            Assert.Equal(1.0, s.Satisfaction[(int)Good.Alloys], 9); // not a person need: always 1
+            Assert.That(s.Satisfaction[(int)Good.Food], Is.EqualTo(0.5).Within(1e-6));
+            Assert.That(s.Stock[(int)Good.Food], Is.EqualTo(0).Within(1e-9)); // everything on hand was eaten
+            Assert.That(s.Satisfaction[(int)Good.Water], Is.EqualTo(1.0).Within(1e-9)); // ample, untouched by the shortage
+            Assert.That(s.Satisfaction[(int)Good.Alloys], Is.EqualTo(1.0).Within(1e-9)); // not a person need: always 1
         }
 
-        [Fact]
+        [Test]
         public void Consume_NoNeedThisTick_SatisfactionStaysAtOne()
         {
             var (economy, s, _) = CreateMarket(population: 0); // nobody to feed
@@ -73,12 +74,12 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(0.1);
 
-            Assert.Equal(1.0, s.Satisfaction[(int)Good.Food], 9);
+            Assert.That(s.Satisfaction[(int)Good.Food], Is.EqualTo(1.0).Within(1e-9));
         }
 
         // ---------------------------------------------------------------- Consume: population growth
 
-        [Fact]
+        [Test]
         public void Consume_FedWateredAndMedicated_GrowsAtTheFullFourPercentAnnualRate()
         {
             var (economy, s, _) = CreateMarket(population: 100000);
@@ -90,13 +91,13 @@ namespace SolarSystem.Core.Tests
 
             double expectedRate = 0.00011; // health = 1: 0.00011 * (0.5 + 0.5) - 0
             double expected = initial * (1 + expectedRate * dt);
-            Assert.Equal(expected, s.Population, 3);
-            Assert.True(s.Population > initial);
+            Assert.That(s.Population, Is.EqualTo(expected).Within(1e-3));
+            Assert.That(s.Population > initial, Is.True);
             // Roughly 4%/year: 0.00011 * 365 ~= 0.0402.
-            Assert.InRange(expectedRate * 365, 0.039, 0.041);
+            Assert.That(expectedRate * 365, Is.InRange(0.039, 0.041));
         }
 
-        [Fact]
+        [Test]
         public void Consume_FedAndWateredButNoMedicine_SlowlyDeclines()
         {
             var (economy, s, _) = CreateMarket(population: 100000);
@@ -109,13 +110,13 @@ namespace SolarSystem.Core.Tests
 
             double expectedRate = 0.00011 * 0.5 - 0.0002; // health = 0
             double expected = initial * (1 + expectedRate * dt);
-            Assert.Equal(expected, s.Population, 3);
-            Assert.True(s.Population < initial);
+            Assert.That(s.Population, Is.EqualTo(expected).Within(1e-3));
+            Assert.That(s.Population < initial, Is.True);
             // Roughly a 5%/year decline: 0.000145 * 365 ~= 0.053.
-            Assert.InRange(-expectedRate * 365, 0.05, 0.056);
+            Assert.That(-expectedRate * 365, Is.InRange(0.05, 0.056));
         }
 
-        [Fact]
+        [Test]
         public void Consume_Starving_ShrinksMuchFasterThanMissingMedicineAlone()
         {
             var (economy, s, _) = CreateMarket(population: 100000);
@@ -126,10 +127,10 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(dt);
 
-            Assert.True(s.Satisfaction[(int)Good.Food] < 0.98);
+            Assert.That(s.Satisfaction[(int)Good.Food] < 0.98, Is.True);
             double expectedRate = (0 - 0.98) * 0.004; // sustenance = 0 (no food at all this tick)
             double expected = initial * (1 + expectedRate * dt);
-            Assert.Equal(expected, s.Population, 3);
+            Assert.That(s.Population, Is.EqualTo(expected).Within(1e-3));
             double starvingDrop = initial - s.Population;
 
             // Compare against the no-medicine decline from the same starting population.
@@ -139,10 +140,10 @@ namespace SolarSystem.Core.Tests
             economy2.AdvanceTo(dt);
             double noMedicineDrop = initial - s2.Population;
 
-            Assert.True(starvingDrop > noMedicineDrop * 10, "hunger should shrink population far faster than missing medicine alone");
+            Assert.That(starvingDrop > noMedicineDrop * 10, Is.True, "hunger should shrink population far faster than missing medicine alone");
         }
 
-        [Fact]
+        [Test]
         public void Consume_PopulationNeverFallsBelowAQuarterOfInitial()
         {
             var (economy, s, _) = CreateMarket(population: 100000);
@@ -155,10 +156,10 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(5000);
 
-            Assert.Equal(s.InitialPopulation * 0.25, s.Population, 3);
+            Assert.That(s.Population, Is.EqualTo(s.InitialPopulation * 0.25).Within(1e-3));
         }
 
-        [Fact]
+        [Test]
         public void Consume_PopulationNeverRisesAboveFourTimesInitial()
         {
             var (economy, s, _) = CreateMarket(population: 100000);
@@ -166,12 +167,12 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(20000); // far more than enough years at ~4%/year to hit the cap
 
-            Assert.Equal(s.InitialPopulation * 4, s.Population, 3);
+            Assert.That(s.Population, Is.EqualTo(s.InitialPopulation * 4).Within(1e-3));
         }
 
         // ---------------------------------------------------------------- Fence (haven smuggling)
 
-        [Fact]
+        [Test]
         public void Fence_DrainsStockAboveTargetAndPaysOwnerHalfBasePrice()
         {
             var (economy, s, owner) = CreateMarket(kind: SettlementKind.Haven);
@@ -185,11 +186,11 @@ namespace SolarSystem.Core.Tests
 
             double expectedShare = 1 - Math.Exp(-0.03 * dt);
             double expectedMoved = 1000 * expectedShare;
-            Assert.Equal(target + 1000 - expectedMoved, s.Stock[(int)Good.Food], 6);
-            Assert.Equal(expectedMoved * GoodInfo.Of(Good.Food).BasePrice * 0.5, owner.Treasury, 6);
+            Assert.That(s.Stock[(int)Good.Food], Is.EqualTo(target + 1000 - expectedMoved).Within(1e-6));
+            Assert.That(owner.Treasury, Is.EqualTo(expectedMoved * GoodInfo.Of(Good.Food).BasePrice * 0.5).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void Fence_StockAtOrBelowTarget_DoesNotDrainOrPay()
         {
             var (economy, s, owner) = CreateMarket(kind: SettlementKind.Haven);
@@ -200,11 +201,11 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(0.1);
 
-            Assert.Equal(target, s.Stock[(int)Good.Food], 6);
-            Assert.Equal(0, owner.Treasury, 9);
+            Assert.That(s.Stock[(int)Good.Food], Is.EqualTo(target).Within(1e-6));
+            Assert.That(owner.Treasury, Is.EqualTo(0).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void Fence_NonHavenSettlements_NeverFence()
         {
             var (economy, s, owner) = CreateMarket(kind: SettlementKind.Colony);
@@ -215,13 +216,13 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(0.1);
 
-            Assert.Equal(target + 1000, s.Stock[(int)Good.Food], 6);
-            Assert.Equal(0, owner.Treasury, 9);
+            Assert.That(s.Stock[(int)Good.Food], Is.EqualTo(target + 1000).Within(1e-6));
+            Assert.That(owner.Treasury, Is.EqualTo(0).Within(1e-9));
         }
 
         // ---------------------------------------------------------------- Review: facility level drift
 
-        [Fact]
+        [Test]
         public void Review_HighMarginAndUtilisation_GrowsFacilityLevelByThreePercent()
         {
             var (economy, s, _) = CreateMarket();
@@ -231,10 +232,10 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(10); // exactly one 10-day review cycle
 
-            Assert.Equal(f.BaseLevel * 1.03, f.Level, 6);
+            Assert.That(f.Level, Is.EqualTo(f.BaseLevel * 1.03).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void Review_GlutStockFullWarehouseZerosUtilisation_ShrinksFacilityLevelByTwoPercent()
         {
             var (economy, s, _) = CreateMarket();
@@ -247,10 +248,10 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(10);
 
-            Assert.Equal(f.BaseLevel * 0.98, f.Level, 6);
+            Assert.That(f.Level, Is.EqualTo(f.BaseLevel * 0.98).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void Review_SustainedHighMargin_LevelClampsAtThreeTimesBaseLevel()
         {
             var (economy, s, _) = CreateMarket();
@@ -261,10 +262,10 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(1000); // many review cycles: far more than needed to reach the cap
 
-            Assert.Equal(f.BaseLevel * 3, f.Level, 6);
+            Assert.That(f.Level, Is.EqualTo(f.BaseLevel * 3).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void Review_SustainedGlut_LevelClampsAtFourTenthsOfBaseLevel()
         {
             var (economy, s, _) = CreateMarket();
@@ -276,10 +277,10 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(1000); // many review cycles: far more than needed to reach the floor
 
-            Assert.Equal(f.BaseLevel * 0.4, f.Level, 6);
+            Assert.That(f.Level, Is.EqualTo(f.BaseLevel * 0.4).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void Review_ShipyardFacility_IsNeverGrownOrShrunkByTheLevelDriftRule()
         {
             var (economy, s, owner) = CreateMarket();
@@ -288,12 +289,12 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(10);
 
-            Assert.Equal(yard.BaseLevel, yard.Level, 9);
+            Assert.That(yard.Level, Is.EqualTo(yard.BaseLevel).Within(1e-9));
         }
 
         // ---------------------------------------------------------------- Review: shipyard builds
 
-        [Fact]
+        [Test]
         public void Review_ChooseBuildReturnsNull_NeverBuilds()
         {
             var (economy, s, owner) = CreateMarket();
@@ -306,13 +307,13 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(10);
 
-            Assert.False(built);
-            Assert.Null(s.OnSlip);
-            Assert.Equal(400000, s.BuildPoints, 3);
-            Assert.Equal(1e12, owner.Treasury, 3);
+            Assert.That(built, Is.False);
+            Assert.That(s.OnSlip, Is.Null);
+            Assert.That(s.BuildPoints, Is.EqualTo(400000).Within(1e-3));
+            Assert.That(owner.Treasury, Is.EqualTo(1e12).Within(1e-3));
         }
 
-        [Fact]
+        [Test]
         public void Review_BuildPointsBelowHullCost_DoesNotBuildButStillTracksTheSlip()
         {
             var (economy, s, owner) = CreateMarket();
@@ -325,12 +326,12 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(10);
 
-            Assert.False(built);
-            Assert.Equal(ShipClass.Freighter, s.OnSlip);
-            Assert.Equal(Economy.HullCost(ShipClass.Freighter) - 1, s.BuildPoints, 3);
+            Assert.That(built, Is.False);
+            Assert.That(s.OnSlip, Is.EqualTo(ShipClass.Freighter));
+            Assert.That(s.BuildPoints, Is.EqualTo(Economy.HullCost(ShipClass.Freighter) - 1).Within(1e-3));
         }
 
-        [Fact]
+        [Test]
         public void Review_TreasuryBelowHullPrice_DoesNotBuildOrSpendBuildPoints()
         {
             var (economy, s, owner) = CreateMarket();
@@ -344,11 +345,11 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(10);
 
-            Assert.False(built);
-            Assert.Equal(cost + 1000, s.BuildPoints, 3); // untouched: points are only spent once the build commits
+            Assert.That(built, Is.False);
+            Assert.That(s.BuildPoints, Is.EqualTo(cost + 1000).Within(1e-3)); // untouched: points are only spent once the build commits
         }
 
-        [Fact]
+        [Test]
         public void Review_PointsAndTreasurySuffice_BuildsSpendsBothAndFiresShipBuilt()
         {
             var (economy, s, owner) = CreateMarket(startJd: 1000);
@@ -365,17 +366,17 @@ namespace SolarSystem.Core.Tests
 
             economy.AdvanceTo(1010); // one review cycle past startJd
 
-            Assert.Same(s, builtAt);
-            Assert.Equal(ShipClass.Freighter, builtClass);
-            Assert.Equal(1010, builtJd, 6);
-            Assert.Equal(ShipClass.Freighter, s.OnSlip);
-            Assert.Equal(500, s.BuildPoints, 3);
-            Assert.Equal(2_000_000, owner.Treasury, 3);
+            Assert.That(builtAt, Is.SameAs(s));
+            Assert.That(builtClass, Is.EqualTo(ShipClass.Freighter));
+            Assert.That(builtJd, Is.EqualTo(1010).Within(1e-6));
+            Assert.That(s.OnSlip, Is.EqualTo(ShipClass.Freighter));
+            Assert.That(s.BuildPoints, Is.EqualTo(500).Within(1e-3));
+            Assert.That(owner.Treasury, Is.EqualTo(2_000_000).Within(1e-3));
         }
 
         // ---------------------------------------------------------------- Capture
 
-        [Fact]
+        [Test]
         public void Capture_ChangesOwnerResetsDaysSinceCaptureAndKeepsThirtyPercentOfBuildPoints()
         {
             var (economy, s, originalOwner) = CreateMarket();
@@ -385,10 +386,10 @@ namespace SolarSystem.Core.Tests
 
             economy.Capture(s, attacker);
 
-            Assert.Same(attacker, s.Owner);
-            Assert.NotSame(originalOwner, s.Owner);
-            Assert.Equal(0, s.DaysSinceCapture, 9);
-            Assert.Equal(3000, s.BuildPoints, 9);
+            Assert.That(s.Owner, Is.SameAs(attacker));
+            Assert.That(s.Owner, Is.Not.SameAs(originalOwner));
+            Assert.That(s.DaysSinceCapture, Is.EqualTo(0).Within(1e-9));
+            Assert.That(s.BuildPoints, Is.EqualTo(3000).Within(1e-9));
         }
     }
 }

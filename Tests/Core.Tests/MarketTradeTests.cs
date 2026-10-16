@@ -1,5 +1,5 @@
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
@@ -7,6 +7,7 @@ namespace SolarSystem.Core.Tests
     /// Covers U.SPC-T6's manual buy/sell: <see cref="Economy.BuyIntoHold"/> and
     /// <see cref="Economy.SellFromHold"/>, the Core-side operations behind the player's market UI.
     /// </summary>
+    [TestFixture]
     public class MarketTradeTests
     {
         // The player's faction and the port's owner are deliberately different factions (not just
@@ -28,7 +29,7 @@ namespace SolarSystem.Core.Tests
 
         static Ship CreateShip(Faction faction, ShipClass cls = ShipClass.Freighter) => new Ship { Spec = ShipClassSpec.Of(cls), Faction = faction };
 
-        [Fact]
+        [Test]
         public void BuyingACrateMovesCreditsFromTheShipsFactionToTheSettlementsOwnerAtThePurchaseCostFormula()
         {
             var (economy, faction, settlement) = CreateMarket();
@@ -40,13 +41,13 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 1, out int bought);
 
-            Assert.Equal(Economy.TradeOutcome.Ok, outcome);
-            Assert.Equal(1, bought);
-            Assert.Equal(ownerBefore - expectedTotal, faction.Treasury, 6);
-            Assert.Equal(expectedBase * Economy.PortTax, settlement.Owner.Treasury, 6);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.Ok));
+            Assert.That(bought, Is.EqualTo(1));
+            Assert.That(faction.Treasury, Is.EqualTo(ownerBefore - expectedTotal).Within(1e-6));
+            Assert.That(settlement.Owner.Treasury, Is.EqualTo(expectedBase * Economy.PortTax).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void BuyingACratePlacesItInThePersonalHoldNotTheAiSingleSlotFields()
         {
             var (economy, faction, settlement) = CreateMarket();
@@ -54,13 +55,13 @@ namespace SolarSystem.Core.Tests
 
             economy.BuyIntoHold(ship, settlement, Good.Electronics, 1, out int bought);
 
-            Assert.Equal(1, bought);
-            Assert.Single(ship.PersonalHold.Items);
-            Assert.Equal(Good.Electronics, ship.PersonalHold.Items[0].Good);
-            Assert.False(ship.HasCargo);
+            Assert.That(bought, Is.EqualTo(1));
+            Assert.That(ship.PersonalHold.Items, Has.Exactly(1).Items);
+            Assert.That(ship.PersonalHold.Items[0].Good, Is.EqualTo(Good.Electronics));
+            Assert.That(ship.HasCargo, Is.False);
         }
 
-        [Fact]
+        [Test]
         public void BuyingACrateDrainsTheSettlementsStockByTheCratesTonnage()
         {
             var (economy, faction, settlement) = CreateMarket(stock: 500);
@@ -69,10 +70,10 @@ namespace SolarSystem.Core.Tests
 
             economy.BuyIntoHold(ship, settlement, Good.Electronics, 1, out _);
 
-            Assert.Equal(500 - unitTonnes, settlement.Stock[(int)Good.Electronics], 6);
+            Assert.That(settlement.Stock[(int)Good.Electronics], Is.EqualTo(500 - unitTonnes).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void BuyingWithoutEnoughStockOnHandIsRejectedAndNothingChanges()
         {
             var (economy, faction, settlement) = CreateMarket(stock: 1, demand: 0);
@@ -81,14 +82,14 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 1, out int bought);
 
-            Assert.Equal(Economy.TradeOutcome.NoStock, outcome);
-            Assert.Equal(0, bought);
-            Assert.Empty(ship.PersonalHold.Items);
-            Assert.Equal(treasuryBefore, faction.Treasury);
-            Assert.Equal(stockBefore, settlement.Stock[(int)Good.Electronics]);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.NoStock));
+            Assert.That(bought, Is.EqualTo(0));
+            Assert.That(ship.PersonalHold.Items, Is.Empty);
+            Assert.That(faction.Treasury, Is.EqualTo(treasuryBefore));
+            Assert.That(settlement.Stock[(int)Good.Electronics], Is.EqualTo(stockBefore));
         }
 
-        [Fact]
+        [Test]
         public void BuyingWithoutEnoughCreditsIsRejectedAndNothingChanges()
         {
             var (economy, faction, settlement) = CreateMarket(treasury: 0);
@@ -97,45 +98,45 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 1, out int bought);
 
-            Assert.Equal(Economy.TradeOutcome.CantAfford, outcome);
-            Assert.Equal(0, bought);
-            Assert.Empty(ship.PersonalHold.Items);
-            Assert.Equal(stockBefore, settlement.Stock[(int)Good.Electronics]);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.CantAfford));
+            Assert.That(bought, Is.EqualTo(0));
+            Assert.That(ship.PersonalHold.Items, Is.Empty);
+            Assert.That(settlement.Stock[(int)Good.Electronics], Is.EqualTo(stockBefore));
         }
 
-        [Fact]
+        [Test]
         public void BuyingWhenTheHoldHasNoRoomLeftIsRejectedAndNothingChanges()
         {
             var (economy, faction, settlement) = CreateMarket();
             var ship = CreateShip(faction, ShipClass.Courier); // 3x3 hold
             for (int i = 0; i < ship.PersonalHold.Width * ship.PersonalHold.Height; i++)
-                Assert.NotNull(ship.PersonalHold.AddFirstFit(Good.Electronics));
+                Assert.That(ship.PersonalHold.AddFirstFit(Good.Electronics), Is.Not.Null);
             double treasuryBefore = faction.Treasury, stockBefore = settlement.Stock[(int)Good.Electronics];
 
             var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 1, out int bought);
 
-            Assert.Equal(Economy.TradeOutcome.NoRoom, outcome);
-            Assert.Equal(0, bought);
-            Assert.Equal(treasuryBefore, faction.Treasury);
-            Assert.Equal(stockBefore, settlement.Stock[(int)Good.Electronics]);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.NoRoom));
+            Assert.That(bought, Is.EqualTo(0));
+            Assert.That(faction.Treasury, Is.EqualTo(treasuryBefore));
+            Assert.That(settlement.Stock[(int)Good.Electronics], Is.EqualTo(stockBefore));
         }
 
-        [Fact]
+        [Test]
         public void BuyingMoreCratesThanFitStopsAtTheHoldsLimitButKeepsWhatAlreadyWentThrough()
         {
             var (economy, faction, settlement) = CreateMarket();
             var ship = CreateShip(faction, ShipClass.Courier); // 3x3 = 9 cells
             int cells = ship.PersonalHold.Width * ship.PersonalHold.Height;
-            for (int i = 0; i < cells - 2; i++) Assert.NotNull(ship.PersonalHold.AddFirstFit(Good.Electronics));
+            for (int i = 0; i < cells - 2; i++) Assert.That(ship.PersonalHold.AddFirstFit(Good.Electronics), Is.Not.Null);
 
             var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 5, out int bought);
 
-            Assert.Equal(Economy.TradeOutcome.Ok, outcome);
-            Assert.Equal(2, bought);
-            Assert.Equal(cells, ship.PersonalHold.Items.Count);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.Ok));
+            Assert.That(bought, Is.EqualTo(2));
+            Assert.That(ship.PersonalHold.Items.Count, Is.EqualTo(cells));
         }
 
-        [Fact]
+        [Test]
         public void BuyingWhereDiplomacyForbidsDockingIsRejectedAndNothingChanges()
         {
             var diplomacy = new Diplomacy();
@@ -152,12 +153,12 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 1, out int bought);
 
-            Assert.Equal(Economy.TradeOutcome.CannotDock, outcome);
-            Assert.Equal(0, bought);
-            Assert.Empty(ship.PersonalHold.Items);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.CannotDock));
+            Assert.That(bought, Is.EqualTo(0));
+            Assert.That(ship.PersonalHold.Items, Is.Empty);
         }
 
-        [Fact]
+        [Test]
         public void BuyingZeroCratesIsANoOp()
         {
             var (economy, faction, settlement) = CreateMarket();
@@ -166,12 +167,12 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 0, out int bought);
 
-            Assert.Equal(Economy.TradeOutcome.Ok, outcome);
-            Assert.Equal(0, bought);
-            Assert.Equal(treasuryBefore, faction.Treasury);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.Ok));
+            Assert.That(bought, Is.EqualTo(0));
+            Assert.That(faction.Treasury, Is.EqualTo(treasuryBefore));
         }
 
-        [Fact]
+        [Test]
         public void SellingACrateMovesCreditsFromTheSettlementsOwnerToTheShipsFactionAtTheSaleValueFormula()
         {
             var (economy, faction, settlement) = CreateMarket();
@@ -184,13 +185,13 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.SellFromHold(ship, settlement, Good.Electronics, 1, out int sold);
 
-            Assert.Equal(Economy.TradeOutcome.Ok, outcome);
-            Assert.Equal(1, sold);
-            Assert.Equal(treasuryBefore + expectedValue - expectedTax, faction.Treasury, 6);
-            Assert.Equal(ownerBefore + expectedTax, settlement.Owner.Treasury, 6);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.Ok));
+            Assert.That(sold, Is.EqualTo(1));
+            Assert.That(faction.Treasury, Is.EqualTo(treasuryBefore + expectedValue - expectedTax).Within(1e-6));
+            Assert.That(settlement.Owner.Treasury, Is.EqualTo(ownerBefore + expectedTax).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void SellingACrateRemovesItFromThePersonalHoldAndRestocksTheSettlement()
         {
             var (economy, faction, settlement) = CreateMarket();
@@ -201,12 +202,12 @@ namespace SolarSystem.Core.Tests
 
             economy.SellFromHold(ship, settlement, Good.Electronics, 1, out int sold);
 
-            Assert.Equal(1, sold);
-            Assert.Empty(ship.PersonalHold.Items);
-            Assert.Equal(stockBefore + unitTonnes, settlement.Stock[(int)Good.Electronics], 6);
+            Assert.That(sold, Is.EqualTo(1));
+            Assert.That(ship.PersonalHold.Items, Is.Empty);
+            Assert.That(settlement.Stock[(int)Good.Electronics], Is.EqualTo(stockBefore + unitTonnes).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void SellingWithNoneOfThatGoodInTheHoldIsRejected()
         {
             var (economy, faction, settlement) = CreateMarket();
@@ -214,11 +215,11 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.SellFromHold(ship, settlement, Good.Electronics, 1, out int sold);
 
-            Assert.Equal(Economy.TradeOutcome.NothingToSell, outcome);
-            Assert.Equal(0, sold);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.NothingToSell));
+            Assert.That(sold, Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void SellingMoreCratesThanAreInTheHoldStopsAtWhatsThereButKeepsWhatAlreadySold()
         {
             var (economy, faction, settlement) = CreateMarket();
@@ -228,12 +229,12 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.SellFromHold(ship, settlement, Good.Electronics, 5, out int sold);
 
-            Assert.Equal(Economy.TradeOutcome.Ok, outcome);
-            Assert.Equal(2, sold);
-            Assert.Empty(ship.PersonalHold.Items);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.Ok));
+            Assert.That(sold, Is.EqualTo(2));
+            Assert.That(ship.PersonalHold.Items, Is.Empty);
         }
 
-        [Fact]
+        [Test]
         public void SellingWhereDiplomacyForbidsDockingIsRejectedAndTheCrateStays()
         {
             var diplomacy = new Diplomacy();
@@ -250,9 +251,9 @@ namespace SolarSystem.Core.Tests
 
             var outcome = economy.SellFromHold(ship, settlement, Good.Electronics, 1, out int sold);
 
-            Assert.Equal(Economy.TradeOutcome.CannotDock, outcome);
-            Assert.Equal(0, sold);
-            Assert.Single(ship.PersonalHold.Items);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.CannotDock));
+            Assert.That(sold, Is.EqualTo(0));
+            Assert.That(ship.PersonalHold.Items, Has.Exactly(1).Items);
         }
     }
 }

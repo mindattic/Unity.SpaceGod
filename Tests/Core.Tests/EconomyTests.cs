@@ -1,17 +1,15 @@
 using System;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
-using Xunit.Abstractions;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class EconomyTests
     {
         const double StartJd = 2461324.0;
-        readonly ITestOutputHelper output;
 
-        public EconomyTests(ITestOutputHelper output) => this.output = output;
 
         static World Create()
         {
@@ -30,7 +28,7 @@ namespace SolarSystem.Core.Tests
             }
         }
 
-        [Fact]
+        [Test]
         public void EveryGoodIsProducedSomewhereInRoughlyTheAmountUsed()
         {
             var w = Create();
@@ -38,13 +36,13 @@ namespace SolarSystem.Core.Tests
             {
                 double supply = w.Economy.Settlements.Sum(s => s.Supply[g]);
                 double demand = w.Economy.Settlements.Sum(s => s.Demand[g]);
-                output.WriteLine($"{(Good)g,-16} supply {supply,10:N0}  demand {demand,10:N0}  ratio {supply / Math.Max(demand, 1e-9),6:0.00}");
-                if (demand > 0) Assert.True(supply >= demand * 0.95, $"{(Good)g}: {supply:N0} t/day made, {demand:N0} used");
-                Assert.True(supply > 0, $"{(Good)g} is never produced");
+                TestContext.Out.WriteLine($"{(Good)g,-16} supply {supply,10:N0}  demand {demand,10:N0}  ratio {supply / Math.Max(demand, 1e-9),6:0.00}");
+                if (demand > 0) Assert.That(supply >= demand * 0.95, Is.True, $"{(Good)g}: {supply:N0} t/day made, {demand:N0} used");
+                Assert.That(supply > 0, Is.True, $"{(Good)g} is never produced");
             }
         }
 
-        [Fact]
+        [Test]
         public void PricesRiseWhenStockRunsShort()
         {
             var w = Create();
@@ -52,12 +50,12 @@ namespace SolarSystem.Core.Tests
             double normal = mars.PriceAt(Good.Food, mars.Target(Good.Food));
             double scarce = mars.PriceAt(Good.Food, mars.Target(Good.Food) * 0.1);
             double glut = mars.PriceAt(Good.Food, mars.Target(Good.Food) * 3);
-            Assert.InRange(normal / GoodInfo.Of(Good.Food).BasePrice, 0.85, 1.25);
-            Assert.True(scarce > normal * 2.5);
-            Assert.True(glut < normal * 0.6);
+            Assert.That(normal / GoodInfo.Of(Good.Food).BasePrice, Is.InRange(0.85, 1.25));
+            Assert.That(scarce > normal * 2.5, Is.True);
+            Assert.That(glut < normal * 0.6, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void TwoYearsOfTradeKeepEveryoneFedAndTradersInProfit()
         {
             var w = Create();
@@ -70,8 +68,8 @@ namespace SolarSystem.Core.Tests
                     var s = settlements[i];
                     for (int g = 0; g < GoodInfo.Count; g++)
                     {
-                        Assert.False(double.IsNaN(s.Stock[g]) || s.Stock[g] < -1e-6, $"{s.Name} {(Good)g} stock {s.Stock[g]}");
-                        Assert.False(double.IsNaN(s.Price[g]));
+                        Assert.That(double.IsNaN(s.Stock[g]) || s.Stock[g] < -1e-6, Is.False, $"{s.Name} {(Good)g} stock {s.Stock[g]}");
+                        Assert.That(double.IsNaN(s.Price[g]), Is.False);
                     }
                     if (jd > StartJd + 365 && (s.Satisfaction[(int)Good.Food] < 0.9 || s.Satisfaction[(int)Good.Water] < 0.9)) hungerDays[i] += 0.5;
                 }
@@ -82,24 +80,24 @@ namespace SolarSystem.Core.Tests
                 var prices = string.Join(" ", Enumerable.Range(0, GoodInfo.Count)
                     .Where(g => s.Demand[g] > 0 || s.Supply[g] > 0)
                     .Select(g => $"{(Good)g}:{s.Price[g] / GoodInfo.Of((Good)g).BasePrice:0.00}"));
-                output.WriteLine($"{s.Name,-20} pop {s.Population / 1e3,8:N0}k  hungry {hungerDays[s.Id],5:0}d  {prices}");
+                TestContext.Out.WriteLine($"{s.Name,-20} pop {s.Population / 1e3,8:N0}k  hungry {hungerDays[s.Id],5:0}d  {prices}");
             }
             var traders = w.Fleet.Ships.Where(w.IsTrader).ToList();
             foreach (var t in traders.OrderByDescending(t => t.Credits).Take(5).Concat(traders.OrderBy(t => t.Credits).Take(3)))
-                output.WriteLine($"{t.Name,-24} {t.Spec.DisplayName,-10} trips {t.TripsCompleted,3}  profit {t.Credits / 1e6,8:N1} M");
-            foreach (var f in w.Fleet.Factions) output.WriteLine($"{f.Name,-22} treasury {f.Treasury / 1e9,7:0.00} B");
-            output.WriteLine($"ships {w.Fleet.Ships.Count}, built {w.Events.Count(e => e.Kind == WorldEventKind.Launch)}");
+                TestContext.Out.WriteLine($"{t.Name,-24} {t.Spec.DisplayName,-10} trips {t.TripsCompleted,3}  profit {t.Credits / 1e6,8:N1} M");
+            foreach (var f in w.Fleet.Factions) TestContext.Out.WriteLine($"{f.Name,-22} treasury {f.Treasury / 1e9,7:0.00} B");
+            TestContext.Out.WriteLine($"ships {w.Fleet.Ships.Count}, built {w.Events.Count(e => e.Kind == WorldEventKind.Launch)}");
 
             for (int i = 0; i < settlements.Count; i++)
-                Assert.True(hungerDays[i] < 60, $"{settlements[i].Name} went hungry for {hungerDays[i]} of the last 365 days");
-            Assert.True(traders.Sum(t => t.TripsCompleted) > traders.Count * 3);
-            Assert.True(traders.Count(t => t.Credits > 0) > traders.Count * 0.7, "most traders should be in profit");
+                Assert.That(hungerDays[i] < 60, Is.True, $"{settlements[i].Name} went hungry for {hungerDays[i]} of the last 365 days");
+            Assert.That(traders.Sum(t => t.TripsCompleted) > traders.Count * 3, Is.True);
+            Assert.That(traders.Count(t => t.Credits > 0) > traders.Count * 0.7, Is.True, "most traders should be in profit");
             foreach (var s in settlements)
                 for (int g = 0; g < GoodInfo.Count; g++)
-                    Assert.InRange(s.Price[g] / GoodInfo.Of((Good)g).BasePrice, 0.19, 6.01);
+                    Assert.That(s.Price[g] / GoodInfo.Of((Good)g).BasePrice, Is.InRange(0.19, 6.01));
         }
 
-        [Fact]
+        [Test]
         public void TradersOnlyDockWhereTheyAreWelcome()
         {
             var w = Create();
@@ -107,7 +105,7 @@ namespace SolarSystem.Core.Tests
             foreach (var t in w.Fleet.Ships.Where(w.IsTrader))
             {
                 if (t.Destroyed || t.CargoDestination == null) continue;
-                Assert.True(w.Diplomacy.CanDock(t.Faction, t.CargoDestination.Owner), $"{t.Name} ({t.Faction}) bound for {t.CargoDestination.Name} ({t.CargoDestination.Owner})");
+                Assert.That(w.Diplomacy.CanDock(t.Faction, t.CargoDestination.Owner), Is.True, $"{t.Name} ({t.Faction}) bound for {t.CargoDestination.Name} ({t.CargoDestination.Owner})");
             }
         }
     }

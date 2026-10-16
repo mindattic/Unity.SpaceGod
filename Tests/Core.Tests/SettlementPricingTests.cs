@@ -1,11 +1,12 @@
 using System;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
     /// <summary>Unit tests for the pricing and market-sizing math on <see cref="Settlement"/>, isolated
     /// from the rest of the simulation by setting Demand/Supply/Stock/Inbound directly.</summary>
+    [TestFixture]
     public class SettlementPricingTests
     {
         const Good G = Good.Food;
@@ -13,15 +14,15 @@ namespace SolarSystem.Core.Tests
 
         static Settlement Create() => new Settlement();
 
-        [Fact]
+        [Test]
         public void PriceAt_WhenTargetIsZero_ReturnsQuarterOfBasePrice()
         {
             var s = Create(); // Demand and Supply default to 0, so Flow and Target are both 0.
-            Assert.Equal(BasePrice * 0.25, s.PriceAt(G, 0));
-            Assert.Equal(BasePrice * 0.25, s.PriceAt(G, 500));
+            Assert.That(s.PriceAt(G, 0), Is.EqualTo(BasePrice * 0.25));
+            Assert.That(s.PriceAt(G, 500), Is.EqualTo(BasePrice * 0.25));
         }
 
-        [Fact]
+        [Test]
         public void PriceAt_RisesAsStockFalls()
         {
             var s = Create();
@@ -32,14 +33,14 @@ namespace SolarSystem.Core.Tests
             double atHalf = s.PriceAt(G, target / 2);
             double atTenth = s.PriceAt(G, target / 10);
 
-            Assert.True(atHalf > atTarget, "price should rise as stock drops below target");
-            Assert.True(atTenth > atHalf, "price should keep rising as stock keeps dropping");
+            Assert.That(atHalf > atTarget, Is.True, "price should rise as stock drops below target");
+            Assert.That(atTenth > atHalf, Is.True, "price should keep rising as stock keeps dropping");
 
             double expectedAtTarget = BasePrice * Math.Pow(target / (target + 0.12 * target), 0.75);
-            Assert.Equal(expectedAtTarget, atTarget, 9);
+            Assert.That(atTarget, Is.EqualTo(expectedAtTarget).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void PriceAt_AppliesDiscount_WhenNoLocalDemand()
         {
             var withDemand = Create();
@@ -51,10 +52,10 @@ namespace SolarSystem.Core.Tests
             double priceWithDemand = withDemand.PriceAt(G, stock);
             double priceWithoutDemand = withoutDemand.PriceAt(G, stock);
 
-            Assert.Equal(priceWithDemand * 0.6, priceWithoutDemand, 9);
+            Assert.That(priceWithoutDemand, Is.EqualTo(priceWithDemand * 0.6).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void PriceAt_ClampsToLowerBound_WhenStockIsHugelyInExcess()
         {
             var s = Create();
@@ -62,10 +63,10 @@ namespace SolarSystem.Core.Tests
             double target = s.Target(G);
 
             double price = s.PriceAt(G, target * 50); // ratio tiny enough to breach the floor
-            Assert.Equal(BasePrice * 0.2, price, 9);
+            Assert.That(price, Is.EqualTo(BasePrice * 0.2).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void PriceAt_StaysWithinClampBounds_AcrossStockLevels()
         {
             var s = Create();
@@ -75,32 +76,32 @@ namespace SolarSystem.Core.Tests
             foreach (double stock in new[] { 0, target / 100, target / 2, target, target * 5, target * 1000 })
             {
                 double price = s.PriceAt(G, stock);
-                Assert.InRange(price, BasePrice * 0.2, BasePrice * 6);
+                Assert.That(price, Is.InRange(BasePrice * 0.2, BasePrice * 6));
             }
         }
 
-        [Fact]
+        [Test]
         public void TargetAndCapacity_DeriveFromTheLargerOfDemandAndSupply()
         {
             var s = Create();
             s.Demand[(int)G] = 5;
             s.Supply[(int)G] = 12;
 
-            Assert.Equal(12, s.Flow(G));
-            Assert.Equal(12 * Settlement.CoverDays, s.Target(G));
-            Assert.Equal(12 * Settlement.StorageDays, s.Capacity(G));
+            Assert.That(s.Flow(G), Is.EqualTo(12));
+            Assert.That(s.Target(G), Is.EqualTo(12 * Settlement.CoverDays));
+            Assert.That(s.Capacity(G), Is.EqualTo(12 * Settlement.StorageDays));
         }
 
-        [Fact]
+        [Test]
         public void Capacity_HasAFloorOfOne_WhenNothingFlows()
         {
             var s = Create(); // Demand and Supply both default to 0
-            Assert.Equal(0, s.Flow(G));
-            Assert.Equal(0, s.Target(G));
-            Assert.Equal(1, s.Capacity(G));
+            Assert.That(s.Flow(G), Is.EqualTo(0));
+            Assert.That(s.Target(G), Is.EqualTo(0));
+            Assert.That(s.Capacity(G), Is.EqualTo(1));
         }
 
-        [Fact]
+        [Test]
         public void Available_ReservesThirtyFivePercentOfTarget_WhenDemandExists()
         {
             var s = Create();
@@ -108,23 +109,23 @@ namespace SolarSystem.Core.Tests
             double reserve = s.Target(G) * 0.35;
 
             s.Stock[(int)G] = 150;
-            Assert.Equal(150 - reserve, s.Available(G));
+            Assert.That(s.Available(G), Is.EqualTo(150 - reserve));
 
             s.Stock[(int)G] = reserve - 20; // below the reserve
-            Assert.Equal(0, s.Available(G));
+            Assert.That(s.Available(G), Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void Available_KeepsNoReserve_WhenThereIsNoLocalDemand()
         {
             var s = Create();
             s.Supply[(int)G] = 10; // Flow > 0, but Demand is 0
             s.Stock[(int)G] = 150;
 
-            Assert.Equal(150, s.Available(G));
+            Assert.That(s.Available(G), Is.EqualTo(150));
         }
 
-        [Fact]
+        [Test]
         public void Absorb_IsZero_WithoutLocalDemand()
         {
             var s = Create();
@@ -132,10 +133,10 @@ namespace SolarSystem.Core.Tests
             s.Stock[(int)G] = 1;
             s.Inbound[(int)G] = 1;
 
-            Assert.Equal(0, s.Absorb(G));
+            Assert.That(s.Absorb(G), Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void Absorb_SubtractsStockAndInbound_FromOneSixtyPercentOfTarget()
         {
             var s = Create();
@@ -143,10 +144,10 @@ namespace SolarSystem.Core.Tests
             s.Stock[(int)G] = 100;
             s.Inbound[(int)G] = 50;
 
-            Assert.Equal(320 - 100 - 50, s.Absorb(G));
+            Assert.That(s.Absorb(G), Is.EqualTo(320 - 100 - 50));
         }
 
-        [Fact]
+        [Test]
         public void Absorb_ClampsToZero_WhenStockAndInboundAlreadyCoverIt()
         {
             var s = Create();
@@ -154,10 +155,10 @@ namespace SolarSystem.Core.Tests
             s.Stock[(int)G] = 300;
             s.Inbound[(int)G] = 100; // sum exceeds 320
 
-            Assert.Equal(0, s.Absorb(G));
+            Assert.That(s.Absorb(G), Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void SaleValue_MatchesPriceTimesSpread_ForTinyQuantities()
         {
             var s = Create();
@@ -168,11 +169,10 @@ namespace SolarSystem.Core.Tests
             double expected = s.PriceAt(G, 1000) * tonnes * 0.97;
             double actual = s.SaleValue(G, tonnes);
 
-            Assert.True(Math.Abs(actual - expected) < Math.Abs(expected) * 1e-3,
-                $"expected ~{expected}, got {actual}");
+            Assert.That(Math.Abs(actual - expected) < Math.Abs(expected) * 1e-3, Is.True, $"expected ~{expected}, got {actual}");
         }
 
-        [Fact]
+        [Test]
         public void PurchaseCost_MatchesPriceTimesSpread_ForTinyQuantities()
         {
             var s = Create();
@@ -183,11 +183,10 @@ namespace SolarSystem.Core.Tests
             double expected = s.PriceAt(G, 1000) * tonnes * 1.03;
             double actual = s.PurchaseCost(G, tonnes);
 
-            Assert.True(Math.Abs(actual - expected) < Math.Abs(expected) * 1e-3,
-                $"expected ~{expected}, got {actual}");
+            Assert.That(Math.Abs(actual - expected) < Math.Abs(expected) * 1e-3, Is.True, $"expected ~{expected}, got {actual}");
         }
 
-        [Fact]
+        [Test]
         public void SaleValue_WalksPriceDownAsStockRises()
         {
             var s = Create();
@@ -199,11 +198,11 @@ namespace SolarSystem.Core.Tests
             double priceAfter = s.PriceAt(G, stock + tonnes);
             double avgPricePaid = s.SaleValue(G, tonnes) / tonnes / 0.97;
 
-            Assert.True(priceAfter < priceBefore, "selling should be raising stock and lowering price");
-            Assert.InRange(avgPricePaid, priceAfter, priceBefore);
+            Assert.That(priceAfter < priceBefore, Is.True, "selling should be raising stock and lowering price");
+            Assert.That(avgPricePaid, Is.InRange(priceAfter, priceBefore));
         }
 
-        [Fact]
+        [Test]
         public void PurchaseCost_WalksPriceUpAsStockFalls()
         {
             var s = Create();
@@ -215,19 +214,19 @@ namespace SolarSystem.Core.Tests
             double priceAfter = s.PriceAt(G, stock - tonnes);
             double avgPricePaid = s.PurchaseCost(G, tonnes) / tonnes / 1.03;
 
-            Assert.True(priceAfter > priceBefore, "buying should be lowering stock and raising price");
-            Assert.InRange(avgPricePaid, priceBefore, priceAfter);
+            Assert.That(priceAfter > priceBefore, Is.True, "buying should be lowering stock and raising price");
+            Assert.That(avgPricePaid, Is.InRange(priceBefore, priceAfter));
         }
 
-        [Fact]
+        [Test]
         public void SaleValueAndPurchaseCost_AreZero_ForZeroTonnes()
         {
             var s = Create();
             s.Demand[(int)G] = 10;
             s.Stock[(int)G] = 200;
 
-            Assert.Equal(0, s.SaleValue(G, 0));
-            Assert.Equal(0, s.PurchaseCost(G, 0));
+            Assert.That(s.SaleValue(G, 0), Is.EqualTo(0));
+            Assert.That(s.PurchaseCost(G, 0), Is.EqualTo(0));
         }
     }
 }

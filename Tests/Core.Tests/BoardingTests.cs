@@ -1,17 +1,15 @@
 using System;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
-using Xunit.Abstractions;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class BoardingTests
     {
         const double StartJd = 2461324.0;
-        readonly ITestOutputHelper output;
 
-        public BoardingTests(ITestOutputHelper output) => this.output = output;
 
         static readonly Faction Blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true, MarineQuality = 1.2 };
         static readonly Faction Red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsPirate = true, MarineQuality = 1.1 };
@@ -25,7 +23,7 @@ namespace SolarSystem.Core.Tests
             FighterStep = FighterAI.Step,
         };
 
-        [Fact]
+        [Test]
         public void BoardersFightThroughToTheBridgeAndEngineeringAndTakeTheShip()
         {
             var freighter = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
@@ -35,14 +33,14 @@ namespace SolarSystem.Core.Tests
             double crewBefore = interior.Crew;
             bool taken = false;
             for (int s = 0; s < 3600 && !taken; s++) taken = interior.Step(1, s, rng);
-            foreach (var note in interior.Log) output.WriteLine($"{note.Seconds,5:0}s  {note.Text}");
-            Assert.True(taken, "thirty marines failed to take a freighter");
-            Assert.True(interior.Of(CompartmentKind.Bridge).Taken && interior.Of(CompartmentKind.Engineering).Taken);
-            Assert.True(interior.CrewLost > 0 && interior.Crew < crewBefore);
-            Assert.Contains(interior.Log, n => n.Text.Contains("sealed") || n.Text.Contains("seal"));
+            foreach (var note in interior.Log) TestContext.Out.WriteLine($"{note.Seconds,5:0}s  {note.Text}");
+            Assert.That(taken, Is.True, "thirty marines failed to take a freighter");
+            Assert.That(interior.Of(CompartmentKind.Bridge).Taken && interior.Of(CompartmentKind.Engineering).Taken, Is.True);
+            Assert.That(interior.CrewLost > 0 && interior.Crew < crewBefore, Is.True);
+            Assert.That((interior.Log).Any(n => n.Text.Contains("sealed") || n.Text.Contains("seal")), Is.True);
         }
 
-        [Fact]
+        [Test]
         public void AFewBoardersAgainstACruisersMarinesAreRepelled()
         {
             var cruiser = new ShipCombat(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser);
@@ -50,12 +48,12 @@ namespace SolarSystem.Core.Tests
             var rng = new Random(2);
             interior.Board(Red, 1.0, 12, interior.Of(CompartmentKind.Bow), true, 0, rng);
             for (int s = 0; s < 3600 && interior.Boarder != null; s++) interior.Step(1, s, rng);
-            Assert.Null(interior.Boarder);
-            Assert.False(interior.Captured);
-            Assert.True(interior.BoardersLost > 11);
+            Assert.That(interior.Boarder, Is.Null);
+            Assert.That(interior.Captured, Is.False);
+            Assert.That(interior.BoardersLost > 11, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void VacuumKillsCrewOnlyUntilTheBulkheadsSeal()
         {
             var battleship = new ShipCombat(CombatSpec.Of(ShipClass.Battleship), ShipClass.Battleship);
@@ -67,12 +65,12 @@ namespace SolarSystem.Core.Tests
             for (int s = 0; s < 20; s++) interior.Step(1, s, rng);
             double afterSeal = bow.Crew;
             for (int s = 20; s < 60; s++) interior.Step(1, s, rng);
-            Assert.True(afterSeal < before * 0.95, "venting killed nobody");
+            Assert.That(afterSeal < before * 0.95, Is.True, "venting killed nobody");
             // After sealing, only the (tiny) fight goes on: no more mass casualties.
-            Assert.True(bow.Crew > afterSeal * 0.8 || interior.Boarder == null);
+            Assert.That(bow.Crew > afterSeal * 0.8 || interior.Boarder == null, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void PodsBounceOffShieldsAndBoardOnceTheyAreDown()
         {
             var b = NewBattle(4);
@@ -91,12 +89,12 @@ namespace SolarSystem.Core.Tests
                 bounced |= b.Fx.Any(f => f.Kind == FxKind.PodBounce);
                 boarded |= target.Combat.Interior.Boarder != null || target.Captured;
             }
-            output.WriteLine($"shield {target.Combat.Shield:0}, embedded {b.Embedded.Count}, boarded {boarded}, captured {target.Captured}, dead {target.Dead}");
-            Assert.True(boarded || target.Dead, "the cruiser never put marines aboard");
-            Assert.All(b.Embedded, e => Assert.Equal(target, e.Unit));
+            TestContext.Out.WriteLine($"shield {target.Combat.Shield:0}, embedded {b.Embedded.Count}, boarded {boarded}, captured {target.Captured}, dead {target.Dead}");
+            Assert.That(boarded || target.Dead, Is.True, "the cruiser never put marines aboard");
+            Expect.All(b.Embedded, e => Assert.That(e.Unit, Is.EqualTo(target)));
         }
 
-        [Fact]
+        [Test]
         public void ABreacherRamsItsDrillHomeAndTakesTheShip()
         {
             var b = NewBattle(5);
@@ -110,14 +108,14 @@ namespace SolarSystem.Core.Tests
                 b.Advance(1);
                 latched |= breacher.Latched == freighter;
             }
-            foreach (var note in freighter.Combat.Interior.Log) output.WriteLine(note.Text);
-            Assert.True(latched, "the breacher never rammed home");
-            Assert.True(freighter.Captured, "the freighter was not taken");
-            Assert.Contains(b.Embedded, e => e.Breacher && e.Unit == freighter);
-            Assert.Equal(0, freighter.Side);
+            foreach (var note in freighter.Combat.Interior.Log) TestContext.Out.WriteLine(note.Text);
+            Assert.That(latched, Is.True, "the breacher never rammed home");
+            Assert.That(freighter.Captured, Is.True, "the freighter was not taken");
+            Assert.That((b.Embedded).Any(e => e.Breacher && e.Unit == freighter), Is.True);
+            Assert.That(freighter.Side, Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void AWarshipLinesUpAlongsideADisabledShipAndBoardsIt()
         {
             var b = NewBattle(6);
@@ -126,7 +124,7 @@ namespace SolarSystem.Core.Tests
             foreach (var s in hulk.Combat.Subsystems) if (s.Kind == SubsystemKind.Engine) s.Hp = 0;
             // No pods: this is about lining up alongside and going in through the airlock.
             foreach (var s in raider.Combat.Subsystems) if (s.Kind == SubsystemKind.BoardingPods) s.Hp = 0;
-            Assert.True(hulk.Combat.Disabled);
+            Assert.That(hulk.Combat.Disabled, Is.True);
             bool latched = false;
             int steps = 0;
             for (int i = 0; i < 3000 && !b.Over; i++, steps++)
@@ -134,13 +132,13 @@ namespace SolarSystem.Core.Tests
                 b.Advance(1);
                 latched |= raider.Latched == hulk;
             }
-            output.WriteLine($"steps {steps}, over {b.Over}, target {(raider.BoardTarget != null)}, distance {(raider.Pos - hulk.Pos).Length:0.000} km, hulk dead {hulk.Dead}, raider fled {raider.Fled}, marines {raider.Combat.MarinesAvailable:0}");
-            Assert.True(latched, "the raider never latched on");
-            Assert.True(hulk.Captured);
-            Assert.Contains(b.Fx, f => f.Kind == FxKind.Captured);
+            TestContext.Out.WriteLine($"steps {steps}, over {b.Over}, target {(raider.BoardTarget != null)}, distance {(raider.Pos - hulk.Pos).Length:0.000} km, hulk dead {hulk.Dead}, raider fled {raider.Fled}, marines {raider.Combat.MarinesAvailable:0}");
+            Assert.That(latched, Is.True, "the raider never latched on");
+            Assert.That(hulk.Captured, Is.True);
+            Assert.That((b.Fx).Any(f => f.Kind == FxKind.Captured), Is.True);
         }
 
-        [Fact]
+        [Test]
         public void FightersLandBackOnTheirCarrierWhenTheShootingStops()
         {
             var b = NewBattle(7);
@@ -150,13 +148,13 @@ namespace SolarSystem.Core.Tests
             for (int i = 0; i < 4000 && !b.Over; i++) b.Advance(1);
             int landed = b.Units.Count(u => u.Kind == UnitKind.Fighter && u.Docked);
             int lost = b.Units.Count(u => u.Kind == UnitKind.Fighter && u.Dead);
-            output.WriteLine($"launched {launched}, landed {landed}, lost {lost}, aboard {carrier.Combat.Fighters}");
-            Assert.True(b.Over);
-            Assert.True(landed > 0, "no fighter landed");
-            Assert.Equal(landed, carrier.Combat.Fighters);
+            TestContext.Out.WriteLine($"launched {launched}, landed {landed}, lost {lost}, aboard {carrier.Combat.Fighters}");
+            Assert.That(b.Over, Is.True);
+            Assert.That(landed > 0, Is.True, "no fighter landed");
+            Assert.That(carrier.Combat.Fighters, Is.EqualTo(landed));
         }
 
-        [Fact]
+        [Test]
         public void RaidersAmbushHyperlanesAndTakePrizes()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -174,11 +172,11 @@ namespace SolarSystem.Core.Tests
             ambushes = w.Events.Count(e => e.Text.Contains("spring an ambush"));
             int prizes = w.Events.Count(e => e.Kind == WorldEventKind.Capture && e.Text.Contains(" is "));
             foreach (var e in w.Events.Where(e => e.Text.Contains("ambush") || (e.Kind == WorldEventKind.Capture && e.Text.Contains(" is "))).Take(15))
-                output.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd}  {e.Text}");
-            output.WriteLine($"ambushes {ambushes}, lane battles {siteBattles}, prizes {prizes}, traders alive {w.Fleet.Ships.Count(s => !s.Destroyed && !s.Derelict && w.IsTrader(s))}");
-            Assert.True(ambushes > 0, "no lane ambush in a year");
-            Assert.True(siteBattles > 0);
-            Assert.True(prizes > 0, "nobody took a prize in a year");
+                TestContext.Out.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd}  {e.Text}");
+            TestContext.Out.WriteLine($"ambushes {ambushes}, lane battles {siteBattles}, prizes {prizes}, traders alive {w.Fleet.Ships.Count(s => !s.Destroyed && !s.Derelict && w.IsTrader(s))}");
+            Assert.That(ambushes > 0, Is.True, "no lane ambush in a year");
+            Assert.That(siteBattles > 0, Is.True);
+            Assert.That(prizes > 0, Is.True, "nobody took a prize in a year");
         }
     }
 }

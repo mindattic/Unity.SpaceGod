@@ -227,7 +227,7 @@ Assets/SolarSystem/
     Input/InputState.cs   every key binding in one place
   Resources/              shaders, colour maps, Kenney ship models
   Editor/ProjectSetup.cs  scene generation and player build
-Tests/                  xUnit tests over Core (dotnet test)
+Tests/                  NUnit tests over Core (dotnet test)
 ```
 
 ## Tests

@@ -2,20 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
-using Xunit.Abstractions;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class AvoidanceTests
     {
         const double StartJd = 2461324.0;
-        readonly ITestOutputHelper output;
 
-        public AvoidanceTests(ITestOutputHelper output) => this.output = output;
 
         /// <summary>Two ships told to hold the very same spot spread apart instead of sitting inside each other.</summary>
-        [Fact]
+        [Test]
         public void ShipsSharingASpotSpreadApart()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -38,12 +36,12 @@ namespace SolarSystem.Core.Tests
                 if (jd == StartJd) first = sep;
                 last = sep;
             }
-            output.WriteLine($"separation {first:0.000} km -> {last:0.0} km (safe {Fleet.SafeDistanceKm(a, b):0.0} km)");
-            Assert.True(last > Fleet.SafeDistanceKm(a, b) * 0.9, "they stayed on top of each other");
+            TestContext.Out.WriteLine($"separation {first:0.000} km -> {last:0.0} km (safe {Fleet.SafeDistanceKm(a, b):0.0} km)");
+            Assert.That(last > Fleet.SafeDistanceKm(a, b) * 0.9, Is.True, "they stayed on top of each other");
         }
 
         /// <summary>Head-on: two ships burning straight at each other see it coming and pass wide.</summary>
-        [Fact]
+        [Test]
         public void HeadOnShipsTurnAside()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -78,14 +76,14 @@ namespace SolarSystem.Core.Tests
                 evaded |= fleet.EvadingFrom(a) == b;
             }
             double safe = Fleet.SafeDistanceKm(a, b);
-            output.WriteLine($"closest pass {closest:0.00} km with avoidance, {closestWithout:0.00} km without (safe {safe:0.00} km)");
-            Assert.True(evaded, "they never saw each other coming");
-            Assert.True(closestWithout < safe * 0.5, "the test orbits do not actually meet");
-            Assert.True(closest > safe * 0.8, $"they passed {closest:0.00} km apart");
+            TestContext.Out.WriteLine($"closest pass {closest:0.00} km with avoidance, {closestWithout:0.00} km without (safe {safe:0.00} km)");
+            Assert.That(evaded, Is.True, "they never saw each other coming");
+            Assert.That(closestWithout < safe * 0.5, Is.True, "the test orbits do not actually meet");
+            Assert.That(closest > safe * 0.8, Is.True, $"they passed {closest:0.00} km apart");
         }
 
         /// <summary>A month of the whole Sol system: nobody flies through anybody.</summary>
-        [Fact]
+        [Test]
         public void NoTwoShipsCollideInAMonth()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -107,24 +105,23 @@ namespace SolarSystem.Core.Tests
                     {
                         double d = (at[i] - at[j]).Length;
                         // A third of the safe distance is a collision course nobody turned away from.
-                        Assert.True(d > Fleet.SafeDistanceKm(flying[i], flying[j]) / 3,
-                            $"{flying[i].Name} and {flying[j].Name} pass {d:0.00} km apart at JD {jd:0.000}");
+                        Assert.That(d > Fleet.SafeDistanceKm(flying[i], flying[j]) / 3, Is.True, $"{flying[i].Name} and {flying[j].Name} pass {d:0.00} km apart at JD {jd:0.000}");
                         checks++;
                     }
                 }
             }
-            output.WriteLine($"{checks:N0} pair checks, {evasions:N0} ship-steps spent giving way");
+            TestContext.Out.WriteLine($"{checks:N0} pair checks, {evasions:N0} ship-steps spent giving way");
         }
 
         /// <summary>Free ships go where they please: out to open space near a world, and on to others.</summary>
-        [Fact]
+        [Test]
         public void FreeShipsRoamOnTheirOwn()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
             eph.Update(StartJd);
             var w = World.CreateDefault(eph, StartJd);
             var free = w.Fleet.Ships.Where(s => s.Role == ShipRole.Free).ToList();
-            Assert.True(free.Count >= 8);
+            Assert.That(free.Count >= 8, Is.True);
             int hops = 0, voyages = 0;
             var visited = new HashSet<int>();
             var seen = new HashSet<(int, double)>();
@@ -139,16 +136,16 @@ namespace SolarSystem.Core.Tests
                     else voyages++;
                     visited.Add(s.Orbit.Body);
                     var st = w.Fleet.StateOf(s, jd);
-                    Assert.False(double.IsNaN(st.HelioKm.X), s.Name);
+                    Assert.That(double.IsNaN(st.HelioKm.X), Is.False, s.Name);
                 }
             }
-            output.WriteLine($"{hops} hops out to open space, {voyages} trips between worlds, {visited.Count} worlds visited");
-            Assert.True(hops > 20, "free ships never wandered");
-            Assert.True(voyages > 10, "free ships never left home");
-            Assert.True(visited.Count > 6);
+            TestContext.Out.WriteLine($"{hops} hops out to open space, {voyages} trips between worlds, {visited.Count} worlds visited");
+            Assert.That(hops > 20, Is.True, "free ships never wandered");
+            Assert.That(voyages > 10, Is.True, "free ships never left home");
+            Assert.That(visited.Count > 6, Is.True);
         }
             /// <summary>A merchant changing course mid-flight carries on from exactly where it is, moving as it was.</summary>
-        [Fact]
+        [Test]
         public void ADivertedShipTurnsFromWhereItIs()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -171,18 +168,18 @@ namespace SolarSystem.Core.Tests
                     if (!w.Fleet.Divert(s, other, jd)) continue;
                     var after = w.Fleet.StateOf(s, jd).HelioKm;
                     var vAfter = (w.Fleet.StateOf(s, jd + h).HelioKm - after) / h;
-                    Assert.True((after - before).Length < 1, $"{s.Name} jumped {(after - before).Length:N0} km changing course");
-                    Assert.True((vAfter - vBefore).Length < 0.02 * Math.Max(vBefore.Length, 1000), $"{s.Name}'s velocity jumped changing course");
+                    Assert.That((after - before).Length < 1, Is.True, $"{s.Name} jumped {(after - before).Length:N0} km changing course");
+                    Assert.That((vAfter - vBefore).Length < 0.02 * Math.Max(vBefore.Length, 1000), Is.True, $"{s.Name}'s velocity jumped changing course");
                     diverted++;
                     break;
                 }
             }
-            output.WriteLine($"{diverted} course changes checked");
-            Assert.True(diverted > 0);
+            TestContext.Out.WriteLine($"{diverted} course changes checked");
+            Assert.That(diverted > 0, Is.True);
         }
 
         /// <summary>When fighting breaks out at a port, merchants on their way there turn aside.</summary>
-        [Fact]
+        [Test]
         public void MerchantsTurnAsideFromFreshBattles()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -194,9 +191,9 @@ namespace SolarSystem.Core.Tests
                 w.Update(jd);
             }
             var turns = w.Events.Where(e => e.Text.Contains("turns aside")).ToList();
-            foreach (var e in turns.Take(5)) output.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd}  {e.Text}");
-            output.WriteLine($"{turns.Count} diversions in 120 days");
-            Assert.NotEmpty(turns);
+            foreach (var e in turns.Take(5)) TestContext.Out.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd}  {e.Text}");
+            TestContext.Out.WriteLine($"{turns.Count} diversions in 120 days");
+            Assert.That(turns, Is.Not.Empty);
         }
     }
 }

@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
@@ -13,6 +13,7 @@ namespace SolarSystem.Core.Tests
     /// <see cref="EconomyTests.TwoYearsOfTradeKeepEveryoneFedAndTradersInProfit"/> and
     /// <see cref="EconomyTests.TradersOnlyDockWhereTheyAreWelcome"/>.
     /// </summary>
+    [TestFixture]
     public class TradeLogisticsTests
     {
         static Faction MakeFaction(string name, double treasury = 1_000_000_000, bool pirate = false) =>
@@ -53,93 +54,88 @@ namespace SolarSystem.Core.Tests
 
         // ---------------------------------------------------------------- Carries
 
-        [Theory]
-        [InlineData(Good.NickelIron, true)]
-        [InlineData(Good.Copper, true)]
-        [InlineData(Good.Platinum, true)]
-        [InlineData(Good.Water, true)]
-        [InlineData(Good.Nitrogen, true)]
-        [InlineData(Good.Hydrocarbons, true)]
-        [InlineData(Good.HeliumThree, false)] // volatile, but reserved for couriers, not miners
-        [InlineData(Good.Food, false)]
-        [InlineData(Good.Electronics, false)]
-        [InlineData(Good.Munitions, false)]
+        [TestCase(Good.NickelIron, true)]
+        [TestCase(Good.Copper, true)]
+        [TestCase(Good.Platinum, true)]
+        [TestCase(Good.Water, true)]
+        [TestCase(Good.Nitrogen, true)]
+        [TestCase(Good.Hydrocarbons, true)]
+        [TestCase(Good.HeliumThree, false)] // volatile, but reserved for couriers, not miners
+        [TestCase(Good.Food, false)]
+        [TestCase(Good.Electronics, false)]
+        [TestCase(Good.Munitions, false)]
         public void CarriesForAMinerIsMineralsPlusWaterNitrogenAndHydrocarbonsOnly(Good good, bool expected) =>
-            Assert.Equal(expected, Economy.Carries(ShipClass.Miner, good));
+            Assert.That(Economy.Carries(ShipClass.Miner, good), Is.EqualTo(expected));
 
-        [Theory]
-        [InlineData(Good.MedicalSupplies, true)]
-        [InlineData(Good.Electronics, true)]
-        [InlineData(Good.Platinum, true)]
-        [InlineData(Good.RareEarths, true)]
-        [InlineData(Good.HeliumThree, true)]
-        [InlineData(Good.NickelIron, false)]
-        [InlineData(Good.Food, false)]
-        [InlineData(Good.Water, false)]
-        [InlineData(Good.Munitions, false)]
-        [InlineData(Good.Machinery, false)]
+        [TestCase(Good.MedicalSupplies, true)]
+        [TestCase(Good.Electronics, true)]
+        [TestCase(Good.Platinum, true)]
+        [TestCase(Good.RareEarths, true)]
+        [TestCase(Good.HeliumThree, true)]
+        [TestCase(Good.NickelIron, false)]
+        [TestCase(Good.Food, false)]
+        [TestCase(Good.Water, false)]
+        [TestCase(Good.Munitions, false)]
+        [TestCase(Good.Machinery, false)]
         public void CarriesForACourierIsOnlyTheNamedHighValueGoods(Good good, bool expected) =>
-            Assert.Equal(expected, Economy.Carries(ShipClass.Courier, good));
+            Assert.That(Economy.Carries(ShipClass.Courier, good), Is.EqualTo(expected));
 
-        [Theory]
-        [InlineData(Good.Food)]
-        [InlineData(Good.NickelIron)]
-        [InlineData(Good.Electronics)]
-        [InlineData(Good.Munitions)]
+        [TestCase(Good.Food)]
+        [TestCase(Good.NickelIron)]
+        [TestCase(Good.Electronics)]
+        [TestCase(Good.Munitions)]
         public void CarriesForAFreighterIsTrueForEveryGood(Good good) =>
-            Assert.True(Economy.Carries(ShipClass.Freighter, good));
+            Assert.That(Economy.Carries(ShipClass.Freighter, good), Is.True);
 
-        [Theory]
-        [InlineData(ShipClass.Carrier)]
-        [InlineData(ShipClass.Battleship)]
-        [InlineData(ShipClass.Cruiser)]
-        [InlineData(ShipClass.Destroyer)]
-        [InlineData(ShipClass.Breacher)]
-        [InlineData(ShipClass.Fighter)]
+        [TestCase(ShipClass.Carrier)]
+        [TestCase(ShipClass.Battleship)]
+        [TestCase(ShipClass.Cruiser)]
+        [TestCase(ShipClass.Destroyer)]
+        [TestCase(ShipClass.Breacher)]
+        [TestCase(ShipClass.Fighter)]
         public void CarriesIsFalseForEveryGoodOnWarshipsAndCombatCraft(ShipClass cls) =>
-            Assert.All(Enum.GetValues(typeof(Good)).Cast<Good>(), g => Assert.False(Economy.Carries(cls, g)));
+            Expect.All(Enum.GetValues(typeof(Good)).Cast<Good>(), g => Assert.That(Economy.Carries(cls, g), Is.False));
 
         // ---------------------------------------------------------------- CapacityOf
 
-        [Theory]
-        [InlineData(ShipClass.Freighter, 20000)]
-        [InlineData(ShipClass.Miner, 30000)]
-        [InlineData(ShipClass.Courier, 400)]
-        [InlineData(ShipClass.Carrier, 0)]
-        [InlineData(ShipClass.Battleship, 0)]
-        [InlineData(ShipClass.Fighter, 0)]
+        [TestCase(ShipClass.Freighter, 20000)]
+        [TestCase(ShipClass.Miner, 30000)]
+        [TestCase(ShipClass.Courier, 400)]
+        [TestCase(ShipClass.Carrier, 0)]
+        [TestCase(ShipClass.Battleship, 0)]
+        [TestCase(ShipClass.Fighter, 0)]
         public void CapacityOfReturnsEachHullsHoldSize(ShipClass cls, double expected) =>
-            Assert.Equal(expected, Economy.CapacityOf(cls));
+            Assert.That(Economy.CapacityOf(cls), Is.EqualTo(expected));
 
         // ---------------------------------------------------------------- CargoText
 
-        [Fact]
+        [Test]
         public void CargoTextIsNullWhenTheShipIsNotCarryingAnything()
         {
             var ship = new Ship { HasCargo = false };
-            Assert.Null(Economy.CargoText(ship));
+            Assert.That(Economy.CargoText(ship), Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void CargoTextNamesTheGoodTonnageAndDestinationWhenBooked()
         {
             var destination = new Settlement { Name = "Ceres Station" };
             var ship = new Ship { HasCargo = true, CargoGood = Good.Electronics, CargoTonnes = 2500, CargoDestination = destination };
 
-            Assert.Equal("2,500 t Electronics for Ceres Station", Economy.CargoText(ship));
+            Assert.That(Economy.CargoText(ship), Is.EqualTo("2,500 t Electronics for Ceres Station"));
         }
 
-        [Fact]
+        [Test]
         public void CargoTextOmitsTheDestinationWhenNoneIsBooked()
         {
             var ship = new Ship { HasCargo = true, CargoGood = Good.Electronics, CargoTonnes = 2500, CargoDestination = null };
 
-            Assert.Equal("2,500 t Electronics", Economy.CargoText(ship));
+            Assert.That(Economy.CargoText(ship), Is.EqualTo("2,500 t Electronics"));
         }
 
         // ---------------------------------------------------------------- Release
 
-        [Fact]
+        [Test]
         public void ReleaseReducesTheBookedDestinationsInboundByTheCargoTonnes()
         {
             var economy = new Economy(new Diplomacy(), startJd: 0);
@@ -149,10 +145,10 @@ namespace SolarSystem.Core.Tests
 
             economy.Release(ship);
 
-            Assert.Equal(300, destination.Inbound[(int)Good.Food], 6);
+            Assert.That(destination.Inbound[(int)Good.Food], Is.EqualTo(300).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void ReleaseClampsToZeroRatherThanGoingNegative()
         {
             var economy = new Economy(new Diplomacy(), startJd: 0);
@@ -162,10 +158,10 @@ namespace SolarSystem.Core.Tests
 
             economy.Release(ship);
 
-            Assert.Equal(0, destination.Inbound[(int)Good.Food]);
+            Assert.That(destination.Inbound[(int)Good.Food], Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void ReleaseIsANoOpWhenTheShipIsNotActuallyCarryingCargo()
         {
             var economy = new Economy(new Diplomacy(), startJd: 0);
@@ -175,23 +171,21 @@ namespace SolarSystem.Core.Tests
 
             economy.Release(ship);
 
-            Assert.Equal(800, destination.Inbound[(int)Good.Food]);
+            Assert.That(destination.Inbound[(int)Good.Food], Is.EqualTo(800));
         }
 
-        [Fact]
+        [Test]
         public void ReleaseIsANoOpWhenNothingIsBooked()
         {
             var economy = new Economy(new Diplomacy(), startJd: 0);
             var ship = new Ship { HasCargo = true, CargoGood = Good.Food, CargoTonnes = 500, CargoDestination = null };
 
-            var ex = Record.Exception(() => economy.Release(ship));
-
-            Assert.Null(ex);
+            Assert.DoesNotThrow(() => economy.Release(ship));
         }
 
         // ---------------------------------------------------------------- RecountInbound
 
-        [Fact]
+        [Test]
         public void RecountInboundClearsStaleBookingsThatNoShipStillCarries()
         {
             var economy = new Economy(new Diplomacy(), startJd: 0);
@@ -200,10 +194,10 @@ namespace SolarSystem.Core.Tests
 
             economy.RecountInbound(Array.Empty<Ship>());
 
-            Assert.Equal(0, destination.Inbound[(int)Good.Food]);
+            Assert.That(destination.Inbound[(int)Good.Food], Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void RecountInboundSumsTonnesFromEveryShipBoundForTheSameGoodAndDestination()
         {
             var economy = new Economy(new Diplomacy(), startJd: 0);
@@ -214,10 +208,10 @@ namespace SolarSystem.Core.Tests
 
             economy.RecountInbound(new[] { shipA, shipB });
 
-            Assert.Equal(750, destination.Inbound[(int)Good.Food], 6);
+            Assert.That(destination.Inbound[(int)Good.Food], Is.EqualTo(750).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void RecountInboundIgnoresDestroyedShipsAndShipsWithoutABookedDestination()
         {
             var economy = new Economy(new Diplomacy(), startJd: 0);
@@ -229,12 +223,12 @@ namespace SolarSystem.Core.Tests
 
             economy.RecountInbound(new[] { destroyed, noCargo, noDestination });
 
-            Assert.Equal(0, destination.Inbound[(int)Good.Food]);
+            Assert.That(destination.Inbound[(int)Good.Food], Is.EqualTo(0));
         }
 
         // ---------------------------------------------------------------- PlanTrade
 
-        [Fact]
+        [Test]
         public void PlanTradeOnlyLoadsGoodsTheHullIsFittedToCarry()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -251,12 +245,12 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(miner, here: 1, jd: 1000);
 
-            Assert.Equal(2, to);
-            Assert.True(miner.HasCargo);
-            Assert.Equal(Good.NickelIron, miner.CargoGood);
+            Assert.That(to, Is.EqualTo(2));
+            Assert.That(miner.HasCargo, Is.True);
+            Assert.That(miner.CargoGood, Is.EqualTo(Good.NickelIron));
         }
 
-        [Fact]
+        [Test]
         public void PlanTradeSkipsOriginPortsDiplomacyForbidsEvenWhenNothingElseIsProfitable()
         {
             var diplomacy = new Diplomacy();
@@ -269,11 +263,11 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(-1, to);
-            Assert.False(freighter.HasCargo);
+            Assert.That(to, Is.EqualTo(-1));
+            Assert.That(freighter.HasCargo, Is.False);
         }
 
-        [Fact]
+        [Test]
         public void PlanTradeSkipsDestinationsDiplomacyForbidsEvenWhenTheyWouldPayBest()
         {
             var diplomacy = new Diplomacy();
@@ -292,11 +286,11 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(3, to);
-            Assert.Equal(allowedDestination, freighter.CargoDestination);
+            Assert.That(to, Is.EqualTo(3));
+            Assert.That(freighter.CargoDestination, Is.EqualTo(allowedDestination));
         }
 
-        [Fact]
+        [Test]
         public void PlanTradeBooksInboundAtTheChosenDestinationAndLoadsTheShip()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -310,17 +304,17 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(2, to);
-            Assert.True(freighter.HasCargo);
-            Assert.Equal(Good.NickelIron, freighter.CargoGood);
-            Assert.True(freighter.CargoTonnes > 0);
-            Assert.Equal(destination, freighter.CargoDestination);
-            Assert.Equal(inboundBefore + freighter.CargoTonnes, destination.Inbound[(int)Good.NickelIron], 6);
-            Assert.Equal(Economy.CargoText(freighter), freighter.Cargo);
-            Assert.True(freighter.CargoCost > 0);
+            Assert.That(to, Is.EqualTo(2));
+            Assert.That(freighter.HasCargo, Is.True);
+            Assert.That(freighter.CargoGood, Is.EqualTo(Good.NickelIron));
+            Assert.That(freighter.CargoTonnes > 0, Is.True);
+            Assert.That(freighter.CargoDestination, Is.EqualTo(destination));
+            Assert.That(destination.Inbound[(int)Good.NickelIron], Is.EqualTo(inboundBefore + freighter.CargoTonnes).Within(1e-6));
+            Assert.That(freighter.Cargo, Is.EqualTo(Economy.CargoText(freighter)));
+            Assert.That(freighter.CargoCost > 0, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void PlanTradeRepositionsEmptyToWhereTheTradesAreWhenNothingPaysHere()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -334,12 +328,12 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(2, to); // reposition to the supplier, not straight to the buyer
-            Assert.False(freighter.HasCargo);
-            Assert.Equal("Empty, repositioning to " + supplier.Name, freighter.Cargo);
+            Assert.That(to, Is.EqualTo(2)); // reposition to the supplier, not straight to the buyer
+            Assert.That(freighter.HasCargo, Is.False);
+            Assert.That(freighter.Cargo, Is.EqualTo("Empty, repositioning to " + supplier.Name));
         }
 
-        [Fact]
+        [Test]
         public void PlanTradeReturnsNegativeOneWhenNothingIsWorthDoingAnywhere()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -350,12 +344,12 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(-1, to);
-            Assert.False(freighter.HasCargo);
-            Assert.Null(freighter.Cargo);
+            Assert.That(to, Is.EqualTo(-1));
+            Assert.That(freighter.HasCargo, Is.False);
+            Assert.That(freighter.Cargo, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void PlanTradeDiscountsDestinationsByDangerAndCanExcludeAnUnsafeOneEntirely()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -372,11 +366,11 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(3, to);
-            Assert.Equal(safe, freighter.CargoDestination);
+            Assert.That(to, Is.EqualTo(3));
+            Assert.That(freighter.CargoDestination, Is.EqualTo(safe));
         }
 
-        [Fact]
+        [Test]
         public void PlanTradePaysAnEssentialShortageContractBonusAtTheDestination()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -389,12 +383,12 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(2, to);
+            Assert.That(to, Is.EqualTo(2));
             double expectedBonus = 600000 + freighter.CargoTonnes * GoodInfo.Of(Good.Food).BasePrice * 1.5;
-            Assert.Equal(expectedBonus, freighter.CargoBonus, 2);
+            Assert.That(freighter.CargoBonus, Is.EqualTo(expectedBonus).Within(1e-2));
         }
 
-        [Fact]
+        [Test]
         public void PlanTradeWithCargoAlreadyLoadedReroutesToWhereItSellsBestAndRebooksInbound()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -415,16 +409,16 @@ namespace SolarSystem.Core.Tests
 
             int to = economy.PlanTrade(freighter, here: 1, jd: 1000);
 
-            Assert.Equal(3, to); // the scarcer, higher-paying market
-            Assert.Equal(better, freighter.CargoDestination);
-            Assert.Equal(0, oldDestination.Inbound[(int)Good.NickelIron], 6); // released
-            Assert.Equal(200, better.Inbound[(int)Good.NickelIron], 6);      // rebooked
-            Assert.Equal(0, freighter.CargoBonus);
+            Assert.That(to, Is.EqualTo(3)); // the scarcer, higher-paying market
+            Assert.That(freighter.CargoDestination, Is.EqualTo(better));
+            Assert.That(oldDestination.Inbound[(int)Good.NickelIron], Is.EqualTo(0).Within(1e-6)); // released
+            Assert.That(better.Inbound[(int)Good.NickelIron], Is.EqualTo(200).Within(1e-6));      // rebooked
+            Assert.That(freighter.CargoBonus, Is.EqualTo(0));
         }
 
         // ---------------------------------------------------------------- OnArrive
 
-        [Fact]
+        [Test]
         public void OnArriveSellsAtTheHighestWillingMarketAtTheBody()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -437,12 +431,12 @@ namespace SolarSystem.Core.Tests
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.False(ship.HasCargo);
-            Assert.Equal(200, richBuyer.Stock[(int)Good.NickelIron], 6);
-            Assert.Equal(95000, cheapBuyer.Stock[(int)Good.NickelIron], 6);
+            Assert.That(ship.HasCargo, Is.False);
+            Assert.That(richBuyer.Stock[(int)Good.NickelIron], Is.EqualTo(200).Within(1e-6));
+            Assert.That(cheapBuyer.Stock[(int)Good.NickelIron], Is.EqualTo(95000).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void OnArrivePrefersTheBookedDestinationWithinA5PercentMargin()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -454,16 +448,16 @@ namespace SolarSystem.Core.Tests
             const double tonnes = 100;
             double bookedRaw = booked.SaleValue(Good.Food, tonnes);
             double otherRaw = other.SaleValue(Good.Food, tonnes);
-            Assert.True(otherRaw > bookedRaw && otherRaw < bookedRaw * 1.05, "setup must keep the raw gap inside the 5% preference band");
+            Assert.That(otherRaw > bookedRaw && otherRaw < bookedRaw * 1.05, Is.True, "setup must keep the raw gap inside the 5% preference band");
             var ship = LoadedShip(MakeFaction("Trader"), ShipClass.Freighter, Good.Food, tonnes, cost: 100, booked);
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.Equal(tonnes, booked.Stock[(int)Good.Food] - 4000, 6);
-            Assert.Equal(0, other.Stock[(int)Good.Food] - 3800, 6);
+            Assert.That(booked.Stock[(int)Good.Food] - 4000, Is.EqualTo(tonnes).Within(1e-6));
+            Assert.That(other.Stock[(int)Good.Food] - 3800, Is.EqualTo(0).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void OnArriveLosesTheBookedDestinationWhenAnotherMarketPaysMoreThan5PercentBetter()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -475,16 +469,16 @@ namespace SolarSystem.Core.Tests
             const double tonnes = 100;
             double bookedRaw = booked.SaleValue(Good.Food, tonnes);
             double otherRaw = other.SaleValue(Good.Food, tonnes);
-            Assert.True(otherRaw > bookedRaw * 1.05, "setup must put the raw gap outside the 5% preference band");
+            Assert.That(otherRaw > bookedRaw * 1.05, Is.True, "setup must put the raw gap outside the 5% preference band");
             var ship = LoadedShip(MakeFaction("Trader"), ShipClass.Freighter, Good.Food, tonnes, cost: 100, booked);
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.Equal(tonnes, other.Stock[(int)Good.Food] - 500, 6);
-            Assert.Equal(0, booked.Stock[(int)Good.Food] - 4000, 6);
+            Assert.That(other.Stock[(int)Good.Food] - 500, Is.EqualTo(tonnes).Within(1e-6));
+            Assert.That(booked.Stock[(int)Good.Food] - 4000, Is.EqualTo(0).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void OnArriveAppliesPortTaxToTheSettlementOwnerOnSale()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -500,10 +494,10 @@ namespace SolarSystem.Core.Tests
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.Equal(ownerTreasuryBefore + expectedTax, portOwner.Treasury, 4);
+            Assert.That(portOwner.Treasury, Is.EqualTo(ownerTreasuryBefore + expectedTax).Within(1e-4));
         }
 
-        [Fact]
+        [Test]
         public void OnArriveSettlesBonusCreditsAndTreasuryAndClearsCargoWhenSellingAtTheBookedDestination()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -524,19 +518,19 @@ namespace SolarSystem.Core.Tests
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.Equal(stockBefore + tonnes, destination.Stock[(int)Good.Food], 6);
-            Assert.Equal(ownerTreasuryBefore + tax - bonus, portOwner.Treasury, 4);
-            Assert.Equal(traderTreasuryBefore + finalValue - tax, traderFaction.Treasury, 4);
-            Assert.Equal(expectedProfit, ship.Credits, 4);
-            Assert.False(ship.HasCargo);
-            Assert.Equal(0, ship.CargoTonnes);
-            Assert.Equal(0, ship.CargoCost);
-            Assert.Equal(0, ship.CargoBonus);
-            Assert.Null(ship.CargoDestination);
-            Assert.Null(ship.Cargo);
+            Assert.That(destination.Stock[(int)Good.Food], Is.EqualTo(stockBefore + tonnes).Within(1e-6));
+            Assert.That(portOwner.Treasury, Is.EqualTo(ownerTreasuryBefore + tax - bonus).Within(1e-4));
+            Assert.That(traderFaction.Treasury, Is.EqualTo(traderTreasuryBefore + finalValue - tax).Within(1e-4));
+            Assert.That(ship.Credits, Is.EqualTo(expectedProfit).Within(1e-4));
+            Assert.That(ship.HasCargo, Is.False);
+            Assert.That(ship.CargoTonnes, Is.EqualTo(0));
+            Assert.That(ship.CargoCost, Is.EqualTo(0));
+            Assert.That(ship.CargoBonus, Is.EqualTo(0));
+            Assert.That(ship.CargoDestination, Is.Null);
+            Assert.That(ship.Cargo, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void OnArriveCarriesTheCargoOnWhenNobodyAtTheBodyWillBuyButReleasesTheOldBooking()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -550,13 +544,13 @@ namespace SolarSystem.Core.Tests
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.True(ship.HasCargo);
-            Assert.Equal(500, ship.CargoTonnes);
-            Assert.Null(ship.CargoDestination);
-            Assert.Equal(0, bookedDestination.Inbound[(int)Good.Food], 6);
+            Assert.That(ship.HasCargo, Is.True);
+            Assert.That(ship.CargoTonnes, Is.EqualTo(500));
+            Assert.That(ship.CargoDestination, Is.Null);
+            Assert.That(bookedDestination.Inbound[(int)Good.Food], Is.EqualTo(0).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void OnArriveSkipsAPortDiplomacyForbidsEvenIfItWouldPayBest()
         {
             var diplomacy = new Diplomacy();
@@ -572,12 +566,12 @@ namespace SolarSystem.Core.Tests
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.False(ship.HasCargo);
-            Assert.Equal(95200, allowed.Stock[(int)Good.NickelIron], 6);
-            Assert.Equal(0, forbidden.Stock[(int)Good.NickelIron], 6);
+            Assert.That(ship.HasCargo, Is.False);
+            Assert.That(allowed.Stock[(int)Good.NickelIron], Is.EqualTo(95200).Within(1e-6));
+            Assert.That(forbidden.Stock[(int)Good.NickelIron], Is.EqualTo(0).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void OnArriveIsANoOpWhenTheShipHasNoCargo()
         {
             var economy = new Economy(new Diplomacy(), startJd: 1000);
@@ -587,8 +581,8 @@ namespace SolarSystem.Core.Tests
 
             economy.OnArrive(ship, body: 5, jd: 1000);
 
-            Assert.Equal(1000, port.Stock[(int)Good.NickelIron]);
-            Assert.False(ship.HasCargo);
+            Assert.That(port.Stock[(int)Good.NickelIron], Is.EqualTo(1000));
+            Assert.That(ship.HasCargo, Is.False);
         }
     }
 }

@@ -1,132 +1,133 @@
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class DVec3Tests
     {
-        [Fact]
+        [Test]
         public void CrossOfUnitAxesFollowsTheRightHandRule()
         {
-            Assert.Equal(DVec3.UnitZ, DVec3.Cross(DVec3.UnitX, DVec3.UnitY));
-            Assert.Equal(DVec3.UnitX, DVec3.Cross(DVec3.UnitY, DVec3.UnitZ));
-            Assert.Equal(DVec3.UnitY, DVec3.Cross(DVec3.UnitZ, DVec3.UnitX));
+            Assert.That(DVec3.Cross(DVec3.UnitX, DVec3.UnitY), Is.EqualTo(DVec3.UnitZ));
+            Assert.That(DVec3.Cross(DVec3.UnitY, DVec3.UnitZ), Is.EqualTo(DVec3.UnitX));
+            Assert.That(DVec3.Cross(DVec3.UnitZ, DVec3.UnitX), Is.EqualTo(DVec3.UnitY));
         }
 
-        [Fact]
+        [Test]
         public void CrossIsAntiCommutative()
         {
             var a = new DVec3(1, 2, 3);
             var b = new DVec3(-4, 0, 2);
-            Assert.Equal(-DVec3.Cross(a, b), DVec3.Cross(b, a));
+            Assert.That(DVec3.Cross(b, a), Is.EqualTo(-DVec3.Cross(a, b)));
         }
 
-        [Fact]
+        [Test]
         public void CrossOfParallelVectorsIsZero()
         {
             var a = new DVec3(2, -3, 5);
             var b = a * 4;
-            Assert.Equal(DVec3.Zero, DVec3.Cross(a, b));
+            Assert.That(DVec3.Cross(a, b), Is.EqualTo(DVec3.Zero));
         }
 
-        [Fact]
+        [Test]
         public void DotOfOrthogonalUnitAxesIsZero()
         {
-            Assert.Equal(0, DVec3.Dot(DVec3.UnitX, DVec3.UnitY));
+            Assert.That(DVec3.Dot(DVec3.UnitX, DVec3.UnitY), Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void DotWithSelfEqualsLengthSquared()
         {
             var v = new DVec3(3, -4, 12);
-            Assert.Equal(v.LengthSquared, DVec3.Dot(v, v), 9);
+            Assert.That(DVec3.Dot(v, v), Is.EqualTo(v.LengthSquared).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void DotMatchesItsDefinition()
         {
             var a = new DVec3(1, 2, 3);
             var b = new DVec3(4, -5, 6);
-            Assert.Equal(1 * 4 + 2 * -5 + 3 * 6, DVec3.Dot(a, b));
+            Assert.That(DVec3.Dot(a, b), Is.EqualTo(1 * 4 + 2 * -5 + 3 * 6));
         }
 
-        [Fact]
+        [Test]
         public void LerpAtZeroAndOneReturnsTheEndpoints()
         {
             var a = new DVec3(1, 2, 3);
             var b = new DVec3(10, 20, 30);
-            Assert.Equal(a, DVec3.Lerp(a, b, 0));
-            Assert.Equal(b, DVec3.Lerp(a, b, 1));
+            Assert.That(DVec3.Lerp(a, b, 0), Is.EqualTo(a));
+            Assert.That(DVec3.Lerp(a, b, 1), Is.EqualTo(b));
         }
 
-        [Fact]
+        [Test]
         public void LerpAtOneHalfReturnsTheMidpoint()
         {
             var a = new DVec3(0, 0, 0);
             var b = new DVec3(10, -20, 30);
-            Assert.Equal(new DVec3(5, -10, 15), DVec3.Lerp(a, b, 0.5));
+            Assert.That(DVec3.Lerp(a, b, 0.5), Is.EqualTo(new DVec3(5, -10, 15)));
         }
 
-        [Fact]
+        [Test]
         public void SwapYZExchangesTheComponents()
         {
             var v = new DVec3(1, 2, 3);
-            Assert.Equal(new DVec3(1, 3, 2), v.SwapYZ);
+            Assert.That(v.SwapYZ, Is.EqualTo(new DVec3(1, 3, 2)));
         }
 
-        [Fact]
+        [Test]
         public void SwapYZIsItsOwnInverse()
         {
             var v = new DVec3(5, -7, 11);
-            Assert.Equal(v, v.SwapYZ.SwapYZ);
+            Assert.That(v.SwapYZ.SwapYZ, Is.EqualTo(v));
         }
 
-        [Fact]
+        [Test]
         public void DistanceMatchesTheDifferenceVectorsLength()
         {
             var a = new DVec3(1, 2, 3);
             var b = new DVec3(4, 6, 3);
-            Assert.Equal(5.0, DVec3.Distance(a, b), 9);
+            Assert.That(DVec3.Distance(a, b), Is.EqualTo(5.0).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void DistanceToSelfIsZero()
         {
             var a = new DVec3(7, -2, 9);
-            Assert.Equal(0, DVec3.Distance(a, a));
+            Assert.That(DVec3.Distance(a, a), Is.EqualTo(0));
         }
 
-        [Fact]
+        [Test]
         public void NormalizedProducesAUnitLengthVector()
         {
             var v = new DVec3(3, 4, 0);
             var n = v.Normalized;
-            Assert.Equal(0.6, n.X, 12);
-            Assert.Equal(0.8, n.Y, 12);
-            Assert.Equal(0.0, n.Z, 12);
+            Assert.That(n.X, Is.EqualTo(0.6).Within(1e-12));
+            Assert.That(n.Y, Is.EqualTo(0.8).Within(1e-12));
+            Assert.That(n.Z, Is.EqualTo(0.0).Within(1e-12));
         }
 
-        [Fact]
+        [Test]
         public void NormalizedOfTheZeroVectorIsZero()
         {
-            Assert.Equal(DVec3.Zero, DVec3.Zero.Normalized);
+            Assert.That(DVec3.Zero.Normalized, Is.EqualTo(DVec3.Zero));
         }
 
-        [Fact]
+        [Test]
         public void NormalizedOfAVectorThatUnderflowsToZeroLengthIsZero()
         {
             // 1e-200 squared underflows below the smallest subnormal double, so LengthSquared
             // rounds to exactly 0 even though the vector itself is not the zero vector.
             var tiny = new DVec3(1e-200, 0, 0);
-            Assert.Equal(0.0, tiny.LengthSquared);
-            Assert.Equal(DVec3.Zero, tiny.Normalized);
+            Assert.That(tiny.LengthSquared, Is.EqualTo(0.0));
+            Assert.That(tiny.Normalized, Is.EqualTo(DVec3.Zero));
         }
 
-        [Fact]
+        [Test]
         public void NormalizedOfASmallButRepresentableVectorHasUnitLength()
         {
             var small = new DVec3(1e-150, 1e-150, 1e-150);
-            Assert.Equal(1.0, small.Normalized.Length, 9);
+            Assert.That(small.Normalized.Length, Is.EqualTo(1.0).Within(1e-9));
         }
     }
 }

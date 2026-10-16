@@ -1,6 +1,6 @@
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
@@ -12,6 +12,7 @@ namespace SolarSystem.Core.Tests
     /// <see cref="War.ChooseWarship"/> -- none of which is exercised directly elsewhere (only reached
     /// incidentally via CombatTests' two-year simulation).
     /// </summary>
+    [TestFixture]
     public class WarTests
     {
         const double StartJd = 2461324.0;
@@ -52,18 +53,18 @@ namespace SolarSystem.Core.Tests
 
         // ---------------------------------------------------------------- SiegeNeeded
 
-        [Fact]
+        [Test]
         public void SiegeNeededIsFourDaysPlusOnePerTwoHundredThousandPeopleCappedAtTwenty()
         {
-            Assert.Equal(4, War.SiegeNeeded(new Settlement { Population = 0 }), 9);
-            Assert.Equal(9, War.SiegeNeeded(new Settlement { Population = 1_000_000 }), 9);
-            Assert.Equal(20, War.SiegeNeeded(new Settlement { Population = 3_200_000 }), 9); // exactly at the cap
-            Assert.Equal(20, War.SiegeNeeded(new Settlement { Population = 1_000_000_000 }), 9); // would be 5004 uncapped
+            Assert.That(War.SiegeNeeded(new Settlement { Population = 0 }), Is.EqualTo(4).Within(1e-9));
+            Assert.That(War.SiegeNeeded(new Settlement { Population = 1_000_000 }), Is.EqualTo(9).Within(1e-9));
+            Assert.That(War.SiegeNeeded(new Settlement { Population = 3_200_000 }), Is.EqualTo(20).Within(1e-9)); // exactly at the cap
+            Assert.That(War.SiegeNeeded(new Settlement { Population = 1_000_000_000 }), Is.EqualTo(20).Within(1e-9)); // would be 5004 uncapped
         }
 
         // ---------------------------------------------------------------- the siege-to-capture flow
 
-        [Fact]
+        [Test]
         public void UndefendedPortFallsExactlyAfterSiegeNeededDaysViaCapture()
         {
             var w = CreateWorld();
@@ -82,18 +83,18 @@ namespace SolarSystem.Core.Tests
             {
                 jd += 1;
                 w.War.Update(jd);
-                Assert.Equal(owner, port.Owner);
-                Assert.Equal((double)day, w.War.SiegeDays(port), 9);
+                Assert.That(port.Owner, Is.EqualTo(owner));
+                Assert.That(w.War.SiegeDays(port), Is.EqualTo((double)day).Within(1e-9));
             }
 
             jd += 1;
             w.War.Update(jd);
-            Assert.Equal(besieger, port.Owner);
-            Assert.Equal(0, port.DaysSinceCapture, 9);
-            Assert.Equal(0, w.War.SiegeDays(port), 9);
+            Assert.That(port.Owner, Is.EqualTo(besieger));
+            Assert.That(port.DaysSinceCapture, Is.EqualTo(0).Within(1e-9));
+            Assert.That(w.War.SiegeDays(port), Is.EqualTo(0).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void CaptureRevokesATradersBookingOnceItCanNoLongerDockThere()
         {
             var w = CreateWorld();
@@ -117,18 +118,18 @@ namespace SolarSystem.Core.Tests
             {
                 jd += 1;
                 w.War.Update(jd);
-                Assert.Same(port, trader.CargoDestination); // still welcome while the port holds out
+                Assert.That(trader.CargoDestination, Is.SameAs(port)); // still welcome while the port holds out
             }
 
             jd += 1;
             w.War.Update(jd);
-            Assert.Equal(besieger, port.Owner);
-            Assert.Null(trader.CargoDestination); // the new owner is at war with this trade house
+            Assert.That(port.Owner, Is.EqualTo(besieger));
+            Assert.That(trader.CargoDestination, Is.Null); // the new owner is at war with this trade house
         }
 
         // ---------------------------------------------------------------- what blocks or resets a siege
 
-        [Fact]
+        [Test]
         public void PlatformsAtThePortBlockTheSiegeEvenUnderSustainedBlockade()
         {
             var w = CreateWorld();
@@ -148,12 +149,12 @@ namespace SolarSystem.Core.Tests
             {
                 jd += 1;
                 w.War.Update(jd);
-                Assert.Equal(owner, port.Owner);
-                Assert.Equal(0, w.War.SiegeDays(port), 9);
+                Assert.That(port.Owner, Is.EqualTo(owner));
+                Assert.That(w.War.SiegeDays(port), Is.EqualTo(0).Within(1e-9));
             }
         }
 
-        [Fact]
+        [Test]
         public void AnActiveBattleAtThePortBlocksTheSiegeWhileItLasts()
         {
             var w = CreateWorld();
@@ -172,15 +173,15 @@ namespace SolarSystem.Core.Tests
 
             jd += 1;
             w.War.Update(jd);
-            Assert.Equal(owner, port.Owner);
-            Assert.Equal(0, w.War.SiegeDays(port), 9); // the active battle holds the siege clock at zero
+            Assert.That(port.Owner, Is.EqualTo(owner));
+            Assert.That(w.War.SiegeDays(port), Is.EqualTo(0).Within(1e-9)); // the active battle holds the siege clock at zero
 
             jd += 1;
             w.War.Update(jd); // the empty battle resolves itself this tick, clearing the way
-            Assert.Equal(1, w.War.SiegeDays(port), 9);
+            Assert.That(w.War.SiegeDays(port), Is.EqualTo(1).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void TheNinetyDayCaptureGraceGarrisonBlocksAnotherSiegeUntilItExpires()
         {
             var w = CreateWorld();
@@ -199,17 +200,17 @@ namespace SolarSystem.Core.Tests
             {
                 jd += 1;
                 w.War.Update(jd);
-                Assert.Equal(owner, port.Owner);
-                Assert.Equal(0, w.War.SiegeDays(port), 9);
+                Assert.That(port.Owner, Is.EqualTo(owner));
+                Assert.That(w.War.SiegeDays(port), Is.EqualTo(0).Within(1e-9));
             }
 
             port.DaysSinceCapture = War.CaptureGraceDays; // the grace period has just elapsed
             jd += 1;
             w.War.Update(jd);
-            Assert.Equal(1, w.War.SiegeDays(port), 9);
+            Assert.That(w.War.SiegeDays(port), Is.EqualTo(1).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void AParkedFriendlyWarshipDefendsThePortAndResetsAnyAccumulatedSiege()
         {
             var w = CreateWorld();
@@ -226,17 +227,17 @@ namespace SolarSystem.Core.Tests
 
             jd += 1; w.War.Update(jd);
             jd += 1; w.War.Update(jd);
-            Assert.Equal(2, w.War.SiegeDays(port), 9); // two days of unopposed siege accrue normally
+            Assert.That(w.War.SiegeDays(port), Is.EqualTo(2).Within(1e-9)); // two days of unopposed siege accrue normally
 
             var defender = ParkWarship(w, owner, ShipClass.Destroyer, body);
             Disarm(defender);
             jd += 1;
             w.War.Update(jd);
-            Assert.Equal(owner, port.Owner);
-            Assert.Equal(0, w.War.SiegeDays(port), 9);
+            Assert.That(port.Owner, Is.EqualTo(owner));
+            Assert.That(w.War.SiegeDays(port), Is.EqualTo(0).Within(1e-9));
         }
 
-        [Fact]
+        [Test]
         public void HavenSettlementsAreNeverSieged()
         {
             var w = CreateWorld();
@@ -254,28 +255,28 @@ namespace SolarSystem.Core.Tests
                 w.War.Update(jd);
             }
 
-            Assert.Equal(w.Pirates, haven.Owner);
-            Assert.Equal(0, w.War.SiegeDays(haven), 9);
+            Assert.That(haven.Owner, Is.EqualTo(w.Pirates));
+            Assert.That(w.War.SiegeDays(haven), Is.EqualTo(0).Within(1e-9));
         }
 
         // ---------------------------------------------------------------- AtWar
 
-        [Fact]
+        [Test]
         public void AtWarIsTrueForALawfulEnemyButIgnoresAWarRelationWithPirates()
         {
             var w = CreateWorld();
             var f = MakeFaction(w, "LawfulFaction");
             w.Diplomacy.Set(f, w.Pirates, Relation.War);
-            Assert.False(w.War.AtWar(f));
+            Assert.That(w.War.AtWar(f), Is.False);
 
             var enemy = MakeFaction(w, "LawfulEnemy");
             w.Diplomacy.Set(f, enemy, Relation.War);
-            Assert.True(w.War.AtWar(f));
+            Assert.That(w.War.AtWar(f), Is.True);
         }
 
         // ---------------------------------------------------------------- DefenceAt
 
-        [Fact]
+        [Test]
         public void DefenceAtSumsOnlyHostilePlatformsAndParkedHostileWarships()
         {
             var w = CreateWorld();
@@ -303,12 +304,12 @@ namespace SolarSystem.Core.Tests
             var friendlyToAttacker = ParkWarship(w, attacker, ShipClass.Destroyer, body);
 
             double expected = port.Platforms.Sum(p => p.Strength) + leader.Combat.Strength + escort.Combat.Strength;
-            Assert.Equal(expected, w.War.DefenceAt(body, attacker), 6);
+            Assert.That(w.War.DefenceAt(body, attacker), Is.EqualTo(expected).Within(1e-6));
         }
 
         // ---------------------------------------------------------------- GroupStrength
 
-        [Fact]
+        [Test]
         public void GroupStrengthSumsTheLeaderPlusOnlyItsLivingEscorts()
         {
             var w = CreateWorld();
@@ -326,21 +327,21 @@ namespace SolarSystem.Core.Tests
             w.Fleet.AddEscort(otherLeader, otherEscort, new DVec3(0, 1, 0));
 
             double expected = leader.Combat.Strength + escortAlive.Combat.Strength;
-            Assert.Equal(expected, w.War.GroupStrength(leader), 6);
+            Assert.That(w.War.GroupStrength(leader), Is.EqualTo(expected).Within(1e-6));
         }
 
         // ---------------------------------------------------------------- ChooseWarship
 
-        [Fact]
+        [Test]
         public void ChooseWarshipReturnsNullForANonMilitaryOwner()
         {
             var w = CreateWorld();
             int body = w.Catalog["Pluto"].Index;
             var yard = w.Economy.Add("Civvie Yard", body, SettlementKind.Station, w.Independents, population: 1000);
-            Assert.Null(w.War.ChooseWarship(yard));
+            Assert.That(w.War.ChooseWarship(yard), Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void ChooseWarshipReturnsNullAtTheNavyCapInPeacetime()
         {
             var w = CreateWorld();
@@ -351,11 +352,11 @@ namespace SolarSystem.Core.Tests
             w.Fleet.AddShip("A", ShipClass.Destroyer, f, ShipRole.Patrol);
             w.Fleet.AddShip("B", ShipClass.Destroyer, f, ShipRole.Patrol);
 
-            Assert.False(w.War.AtWar(f)); // sanity: the peacetime cap is the one that should apply here
-            Assert.Null(w.War.ChooseWarship(yard));
+            Assert.That(w.War.AtWar(f), Is.False); // sanity: the peacetime cap is the one that should apply here
+            Assert.That(w.War.ChooseWarship(yard), Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void ChooseWarshipUsesTheHigherWartimeCapNotThePeacetimeOne()
         {
             var w = CreateWorld();
@@ -369,14 +370,14 @@ namespace SolarSystem.Core.Tests
             w.Fleet.AddShip("A", ShipClass.Destroyer, f, ShipRole.Patrol);
             w.Fleet.AddShip("B", ShipClass.Destroyer, f, ShipRole.Patrol);
 
-            Assert.True(w.War.AtWar(f));
-            Assert.NotNull(w.War.ChooseWarship(yard)); // 2 built, under the wartime cap of 3
+            Assert.That(w.War.AtWar(f), Is.True);
+            Assert.That(w.War.ChooseWarship(yard), Is.Not.Null); // 2 built, under the wartime cap of 3
 
             w.Fleet.AddShip("C", ShipClass.Destroyer, f, ShipRole.Patrol);
-            Assert.Null(w.War.ChooseWarship(yard)); // 3 built, at the wartime cap
+            Assert.That(w.War.ChooseWarship(yard), Is.Null); // 3 built, at the wartime cap
         }
 
-        [Fact]
+        [Test]
         public void ChooseWarshipOtherwiseStepsThroughARepeatingSevenHullCycle()
         {
             var w = CreateWorld();
@@ -394,8 +395,8 @@ namespace SolarSystem.Core.Tests
             }
             var eighth = w.War.ChooseWarship(yard);
 
-            Assert.Equal(seen[0], eighth); // the cycle repeats every 7 hulls laid down
-            Assert.True(seen.Distinct().Count() > 1, "ChooseWarship returned the same class every time -- the cycle was never actually exercised");
+            Assert.That(eighth, Is.EqualTo(seen[0])); // the cycle repeats every 7 hulls laid down
+            Assert.That(seen.Distinct().Count() > 1, Is.True, "ChooseWarship returned the same class every time -- the cycle was never actually exercised");
         }
     }
 }

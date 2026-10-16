@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class SurrenderTests
     {
         const double StartJd = 2461324.0;
@@ -40,103 +41,103 @@ namespace SolarSystem.Core.Tests
 
         // ---------------------------------------------------------------- the morale model
 
-        [Fact]
+        [Test]
         public void ANavyCrewHoldsOnLongerThanPiratesOrMerchants()
         {
-            Assert.True(Morale.Resolve(Navy, true) > Morale.Resolve(Pirates, false));
-            Assert.True(Morale.Resolve(Navy, true) > Morale.Resolve(Traders, false));
-            Assert.Equal(0, Morale.DamageToll(1, 1), 6);
-            Assert.Equal(1, Morale.DamageToll(0, 0), 6);
-            Assert.True(Morale.DamageToll(0.5, 1) > Morale.DamageToll(1, 0.5), "hull loss should weigh more than a dropped screen");
-            Assert.Equal(0, Morale.Outgunned(10, 5), 6);
-            Assert.Equal(1, Morale.Outgunned(0, 5), 6);
+            Assert.That(Morale.Resolve(Navy, true) > Morale.Resolve(Pirates, false), Is.True);
+            Assert.That(Morale.Resolve(Navy, true) > Morale.Resolve(Traders, false), Is.True);
+            Assert.That(Morale.DamageToll(1, 1), Is.EqualTo(0).Within(1e-6));
+            Assert.That(Morale.DamageToll(0, 0), Is.EqualTo(1).Within(1e-6));
+            Assert.That(Morale.DamageToll(0.5, 1) > Morale.DamageToll(1, 0.5), Is.True, "hull loss should weigh more than a dropped screen");
+            Assert.That(Morale.Outgunned(10, 5), Is.EqualTo(0).Within(1e-6));
+            Assert.That(Morale.Outgunned(0, 5), Is.EqualTo(1).Within(1e-6));
         }
 
-        [Fact]
+        [Test]
         public void AnUnhurtShipNeverStrikesItsColoursHoweverBadTheOdds()
         {
-            Assert.False(Morale.StrikesColours(0.1, 1, 0.5, 0.55));
-            Assert.True(Morale.StrikesColours(0.5, 1, 0.5, 1.05));
-            Assert.False(Morale.StrikesColours(0.5, 0.2, Morale.Resolve(Navy, true), 0.55), "a navy crew a little behind should fight on");
+            Assert.That(Morale.StrikesColours(0.1, 1, 0.5, 0.55), Is.False);
+            Assert.That(Morale.StrikesColours(0.5, 1, 0.5, 1.05), Is.True);
+            Assert.That(Morale.StrikesColours(0.5, 0.2, Morale.Resolve(Navy, true), 0.55), Is.False, "a navy crew a little behind should fight on");
         }
 
-        [Fact]
+        [Test]
         public void PiratesRansomCargoOrTakeTheShipAndNaviesTakeOnlyWarships()
         {
-            Assert.Equal(SurrenderTerms.RansomCargo, Morale.ChooseTerms(true, false, true, true, 0.1));
-            Assert.Equal(SurrenderTerms.TakeShip, Morale.ChooseTerms(true, false, true, true, 0.9));
-            Assert.Equal(SurrenderTerms.TakeShip, Morale.ChooseTerms(false, true, false, true, 0.5));
-            Assert.Equal(SurrenderTerms.LetGo, Morale.ChooseTerms(false, false, true, true, 0.1));
+            Assert.That(Morale.ChooseTerms(true, false, true, true, 0.1), Is.EqualTo(SurrenderTerms.RansomCargo));
+            Assert.That(Morale.ChooseTerms(true, false, true, true, 0.9), Is.EqualTo(SurrenderTerms.TakeShip));
+            Assert.That(Morale.ChooseTerms(false, true, false, true, 0.5), Is.EqualTo(SurrenderTerms.TakeShip));
+            Assert.That(Morale.ChooseTerms(false, false, true, true, 0.1), Is.EqualTo(SurrenderTerms.LetGo));
             // Nobody to board with: settle for the cargo, or let it go.
-            Assert.Equal(SurrenderTerms.RansomCargo, Morale.ChooseTerms(true, false, true, false, 0.9));
-            Assert.Equal(SurrenderTerms.LetGo, Morale.ChooseTerms(false, true, false, false, 0.5));
+            Assert.That(Morale.ChooseTerms(true, false, true, false, 0.9), Is.EqualTo(SurrenderTerms.RansomCargo));
+            Assert.That(Morale.ChooseTerms(false, true, false, false, 0.5), Is.EqualTo(SurrenderTerms.LetGo));
         }
 
-        [Fact]
+        [Test]
         public void PiratesDemandCargoOnlyWithTheUpperHand()
         {
-            Assert.True(Morale.ShouldDemandCargo(0.5, 0));
-            Assert.True(Morale.ShouldDemandCargo(0.15, 0.5));
-            Assert.False(Morale.ShouldDemandCargo(0.15, 0.1));
-            Assert.False(Morale.ShouldDemandCargo(0, 0.9));
+            Assert.That(Morale.ShouldDemandCargo(0.5, 0), Is.True);
+            Assert.That(Morale.ShouldDemandCargo(0.15, 0.5), Is.True);
+            Assert.That(Morale.ShouldDemandCargo(0.15, 0.1), Is.False);
+            Assert.That(Morale.ShouldDemandCargo(0, 0.9), Is.False);
         }
 
         // ---------------------------------------------------------------- in a battle
 
-        [Fact]
+        [Test]
         public void ABatteredMerchantStrikesItsColoursAndIsNoLongerShotAt()
         {
             var (b, merchant, pirate) = BatteredMerchant(11);
             var hailed = new List<BattleUnit>();
             b.UnitSurrendered += (_, u) => hailed.Add(u);
             b.Advance(2);
-            Assert.True(merchant.Surrendering, "a half-wrecked, outgunned freighter should strike its colours");
-            Assert.Equal(new[] { merchant }, hailed);
-            Assert.Contains(b.Fx, f => f.Kind == FxKind.Hail && f.Unit == merchant);
-            Assert.NotSame(merchant, b.PickTarget(pirate));
-            Assert.False(b.Over, "the battle waits on the captor's terms");
+            Assert.That(merchant.Surrendering, Is.True, "a half-wrecked, outgunned freighter should strike its colours");
+            Assert.That(hailed, Is.EqualTo(new[] { merchant }));
+            Assert.That((b.Fx).Any(f => f.Kind == FxKind.Hail && f.Unit == merchant), Is.True);
+            Assert.That(b.PickTarget(pirate), Is.Not.SameAs(merchant));
+            Assert.That(b.Over, Is.False, "the battle waits on the captor's terms");
         }
 
-        [Fact]
+        [Test]
         public void AnAiCaptorSettlesTermsAndAReleasedHullLeaves()
         {
             var (b, merchant, _) = BatteredMerchant(12);
             var decided = new List<(Faction, SurrenderTerms)>();
             b.SurrenderDecided += (_, u, captor, terms) => decided.Add((captor, terms));
             b.Advance(Battle.SurrenderAiDecisionSeconds + 3);
-            Assert.Single(decided);
-            Assert.Same(Pirates, decided[0].Item1);
-            Assert.NotNull(merchant.SurrenderOutcome);
-            if (merchant.SurrenderOutcome != SurrenderTerms.TakeShip) Assert.True(merchant.Fled);
-            else Assert.True(merchant.SurrenderOpenToBoarding);
+            Assert.That(decided, Has.Exactly(1).Items);
+            Assert.That(decided[0].Item1, Is.SameAs(Pirates));
+            Assert.That(merchant.SurrenderOutcome, Is.Not.Null);
+            if (merchant.SurrenderOutcome != SurrenderTerms.TakeShip) Assert.That(merchant.Fled, Is.True);
+            else Assert.That(merchant.SurrenderOpenToBoarding, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void APlayerCaptorChoosesTheTermsWithinTheHailingWindow()
         {
             var (b, merchant, _) = BatteredMerchant(13, playerPirate: true);
             SurrenderTerms? chosen = null;
             b.SurrenderDecided += (_, u, captor, terms) => chosen = terms;
             b.Advance(Battle.SurrenderAiDecisionSeconds + 3);
-            Assert.True(merchant.Surrendering);
-            Assert.Null(merchant.SurrenderOutcome);
-            Assert.Same(merchant, b.AwaitingTermsFrom(1));
+            Assert.That(merchant.Surrendering, Is.True);
+            Assert.That(merchant.SurrenderOutcome, Is.Null);
+            Assert.That(b.AwaitingTermsFrom(1), Is.SameAs(merchant));
 
-            Assert.True(b.OfferSurrenderTerms(merchant, SurrenderTerms.RansomCargo));
-            Assert.Equal(SurrenderTerms.RansomCargo, chosen);
-            Assert.True(merchant.Fled);
-            Assert.False(b.OfferSurrenderTerms(merchant, SurrenderTerms.LetGo), "terms are settled once");
+            Assert.That(b.OfferSurrenderTerms(merchant, SurrenderTerms.RansomCargo), Is.True);
+            Assert.That(chosen, Is.EqualTo(SurrenderTerms.RansomCargo));
+            Assert.That(merchant.Fled, Is.True);
+            Assert.That(b.OfferSurrenderTerms(merchant, SurrenderTerms.LetGo), Is.False, "terms are settled once");
         }
 
-        [Fact]
+        [Test]
         public void AnUnansweredHailIsDecidedByTheBattleOnceTheWindowCloses()
         {
             var (b, merchant, _) = BatteredMerchant(14, playerPirate: true);
             b.Advance(Battle.SurrenderDecisionSeconds + 3);
-            Assert.NotNull(merchant.SurrenderOutcome);
+            Assert.That(merchant.SurrenderOutcome, Is.Not.Null);
         }
 
-        [Fact]
+        [Test]
         public void TakingASurrenderedShipSendsBoardersAndTheCrewYields()
         {
             var (b, merchant, pirate) = BatteredMerchant(15, playerPirate: true);
@@ -144,14 +145,14 @@ namespace SolarSystem.Core.Tests
             b.UnitCaptured += (_, u, captor) => takenBy = captor;
             b.Advance(2);
             pirate.PlayerControlled = false;
-            Assert.True(pirate.Combat.MarinesAvailable >= 15, "the test destroyer needs marines to board with");
-            Assert.True(b.OfferSurrenderTerms(merchant, SurrenderTerms.TakeShip));
+            Assert.That(pirate.Combat.MarinesAvailable >= 15, Is.True, "the test destroyer needs marines to board with");
+            Assert.That(b.OfferSurrenderTerms(merchant, SurrenderTerms.TakeShip), Is.True);
             for (int i = 0; i < 1200 && !merchant.Captured; i++) b.Advance(1);
-            Assert.True(merchant.Captured, "the boarders never took the surrendered freighter");
-            Assert.Same(Pirates, takenBy);
+            Assert.That(merchant.Captured, Is.True, "the boarders never took the surrendered freighter");
+            Assert.That(takenBy, Is.SameAs(Pirates));
         }
 
-        [Fact]
+        [Test]
         public void PiratesDemandAPlayersCargoAndComplyingBuysAWayOut()
         {
             var b = NewBattle(16);
@@ -169,14 +170,14 @@ namespace SolarSystem.Core.Tests
             b.SurrenderDecided += (_, u, captor, terms) => paid = terms;
 
             b.Advance(2);
-            Assert.Equal(new[] { Pirates }, demands);
-            Assert.Same(Pirates, player.CargoDemandedBy);
-            Assert.True(b.AnswerCargoDemand(player, true));
-            Assert.Equal(SurrenderTerms.RansomCargo, paid);
-            Assert.True(player.Fled);
+            Assert.That(demands, Is.EqualTo(new[] { Pirates }));
+            Assert.That(player.CargoDemandedBy, Is.SameAs(Pirates));
+            Assert.That(b.AnswerCargoDemand(player, true), Is.True);
+            Assert.That(paid, Is.EqualTo(SurrenderTerms.RansomCargo));
+            Assert.That(player.Fled, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void RefusingOrIgnoringACargoDemandMeansAFightAndPiratesAskOnce()
         {
             var b = NewBattle(17);
@@ -191,12 +192,12 @@ namespace SolarSystem.Core.Tests
             b.CargoDemanded += (_, u, p) => demands++;
 
             b.Advance(2);
-            Assert.Equal(1, demands);
+            Assert.That(demands, Is.EqualTo(1));
             b.Advance(Battle.SurrenderDecisionSeconds + 2);
-            Assert.Null(player.CargoDemandedBy);
-            Assert.Null(player.SurrenderOutcome);
-            Assert.Equal(1, demands);
-            Assert.False(b.AnswerCargoDemand(player, true), "a lapsed demand can't be answered");
+            Assert.That(player.CargoDemandedBy, Is.Null);
+            Assert.That(player.SurrenderOutcome, Is.Null);
+            Assert.That(demands, Is.EqualTo(1));
+            Assert.That(b.AnswerCargoDemand(player, true), Is.False, "a lapsed demand can't be answered");
         }
     }
 }

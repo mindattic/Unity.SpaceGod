@@ -2,17 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
-using Xunit.Abstractions;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class HyperlaneTests
     {
         const double StartJd = 2461324.0;
-        readonly ITestOutputHelper output;
 
-        public HyperlaneTests(ITestOutputHelper output) => this.output = output;
 
         static World Create(out Ephemeris eph)
         {
@@ -21,7 +19,7 @@ namespace SolarSystem.Core.Tests
             return World.CreateDefault(eph, StartJd);
         }
 
-        [Fact]
+        [Test]
         public void EveryLaneSystemCanReachEveryOther()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -30,12 +28,12 @@ namespace SolarSystem.Core.Tests
             var systems = lanes.Lanes.SelectMany(l => new[] { l.A, l.B }).Distinct().ToList();
             foreach (int a in systems)
                 foreach (int b in systems)
-                    if (a != b) Assert.NotNull(lanes.Route(a, b, StartJd));
+                    if (a != b) Assert.That(lanes.Route(a, b, StartJd), Is.Not.Null);
             var earthSaturn = lanes.Route(eph.Catalog["Earth"].Index, eph.Catalog["Saturn"].Index, StartJd);
-            output.WriteLine("Earth to Saturn: " + string.Join(", ", earthSaturn.Select(h => h.Lane.Name)));
+            TestContext.Out.WriteLine("Earth to Saturn: " + string.Join(", ", earthSaturn.Select(h => h.Lane.Name)));
         }
 
-        [Fact]
+        [Test]
         public void LanesSwingWideOfTheSun()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -51,13 +49,13 @@ namespace SolarSystem.Core.Tests
                     {
                         var p = Hyperlanes.Curve(a, b, lane.Bend, Hyperlanes.SunKeepOutKm, i / 50.0, DVec3.UnitZ);
                         // Near Mercury a lane may run inside 0.3 AU, but never near the Sun keep-out ships respect.
-                        Assert.True(p.Length > Fleet.SunKeepOutKm * 1.2, $"{lane.Name} passes {p.Length / Astro.AuKm:0.00} AU from the Sun");
+                        Assert.That(p.Length > Fleet.SunKeepOutKm * 1.2, Is.True, $"{lane.Name} passes {p.Length / Astro.AuKm:0.00} AU from the Sun");
                     }
                 }
             }
         }
 
-        [Fact]
+        [Test]
         public void InterplanetaryTripsRideLanesAndTakeHoursToDaysNotWeeks()
         {
             var w = Create(out var eph);
@@ -67,9 +65,9 @@ namespace SolarSystem.Core.Tests
             double lanes = w.Fleet.EstimateTravelDays(freighter, earth, mars, StartJd);
             double accel = freighter.Spec.AccelG * Astro.GravityKmPerDay2;
             double direct = 2 * Math.Sqrt((eph.HelioAt(mars, StartJd) - eph.HelioAt(earth, StartJd)).Length / accel);
-            output.WriteLine($"Earth to Mars for a 0.1 g freighter: {lanes:0.0} days by lane, {direct:0.0} days by brachistochrone");
-            Assert.True(lanes < direct * 0.5);
-            Assert.True(lanes < 3.5);
+            TestContext.Out.WriteLine($"Earth to Mars for a 0.1 g freighter: {lanes:0.0} days by lane, {direct:0.0} days by brachistochrone");
+            Assert.That(lanes < direct * 0.5, Is.True);
+            Assert.That(lanes < 3.5, Is.True);
 
             int laneRides = 0;
             for (double jd = StartJd; jd < StartJd + 60; jd += 0.1)
@@ -78,11 +76,11 @@ namespace SolarSystem.Core.Tests
                 w.Update(jd);
                 laneRides += w.Fleet.Ships.Count(s => !s.Destroyed && s.Phase == ShipPhase.Lane);
             }
-            Assert.True(laneRides > 100, "nobody rode a lane");
+            Assert.That(laneRides > 100, Is.True, "nobody rode a lane");
         }
 
         /// <summary>Every leg change (ramp, lane, ramp, arrival) is seamless in true space.</summary>
-        [Fact]
+        [Test]
         public void PositionIsContinuousAcrossEveryLegChange()
         {
             var w = Create(out var eph);
@@ -104,18 +102,18 @@ namespace SolarSystem.Core.Tests
                         // own orbital speed (under 50 km/s) for one step; a jump would be far more.
                         double speed = (Math.Max(fleet.StateOf(s, jd).SpeedKmS, 1) + 50) * Astro.SecondsPerDay;
                         double moved = (pos - prev.pos).Length;
-                        Assert.True(moved < speed * step * 3 + 2000, $"{s.Name} jumped {moved:N0} km changing from {prev.phase} to {s.Phase}");
+                        Assert.That(moved < speed * step * 3 + 2000, Is.True, $"{s.Name} jumped {moved:N0} km changing from {prev.phase} to {s.Phase}");
                         checkedBoundaries++;
                     }
                     last[s] = (jd, pos, s.Phase, s.JourneyIndex);
                 }
             }
-            output.WriteLine($"{checkedBoundaries} leg changes checked");
-            Assert.True(checkedBoundaries > 20);
+            TestContext.Out.WriteLine($"{checkedBoundaries} leg changes checked");
+            Assert.That(checkedBoundaries > 20, Is.True);
         }
 
         /// <summary>The drawn ship meets the drawn ramps: burn end equals lane start, lane end equals the next burn's start.</summary>
-        [Fact]
+        [Test]
         public void DrawnLanesMeetTheBurnsAtTheRamps()
         {
             var w = Create(out var eph);
@@ -136,17 +134,17 @@ namespace SolarSystem.Core.Tests
                     scale.Layout(eph, scene);
                     var laneStart = scale.LaneScene(eph, scene, w.Fleet.Lanes, s, 0, out _);
                     var ramp = scale.MapNear(eph, scene, s.LaneLeg.From, eph.Helio(s.LaneLeg.From) + s.DepartureOrbit.OffsetAt(t0));
-                    Assert.True((laneStart - ramp).Length < 1e-3 * Math.Max(1, ramp.Length * 1e-6), $"{s.Name} lane starts {(laneStart - ramp).Length:G3} units off its ramp");
+                    Assert.That((laneStart - ramp).Length < 1e-3 * Math.Max(1, ramp.Length * 1e-6), Is.True, $"{s.Name} lane starts {(laneStart - ramp).Length:G3} units off its ramp");
                     var tail = scale.LaneScene(eph, scene, w.Fleet.Lanes, s, 0.002, out _);
-                    Assert.True((tail - laneStart).Length < 0.05 * scale.LocalDistance(eph.Catalog.Sun, s.LaneLengthKm), $"{s.Name} jumps leaving the ramp");
+                    Assert.That((tail - laneStart).Length < 0.05 * scale.LocalDistance(eph.Catalog.Sun, s.LaneLengthKm), Is.True, $"{s.Name} jumps leaving the ramp");
                     checkedRamps++;
                     eph.Update(jd);
                 }
             }
-            Assert.True(checkedRamps > 5);
+            Assert.That(checkedRamps > 5, Is.True);
         }
             /// <summary>A raider leaving its lurk, or a ship climbing back in after an interdiction, eases back onto the lane.</summary>
-        [Fact]
+        [Test]
         public void ShipsRejoinTheLaneWithoutJumping()
         {
             var w = Create(out var eph);
@@ -163,16 +161,16 @@ namespace SolarSystem.Core.Tests
                     var before = fleet.StateOf(s, jd).HelioKm;
                     fleet.ResumeLane(s, jd);
                     var after = fleet.StateOf(s, jd).HelioKm;
-                    Assert.True((after - before).Length < 1, $"{s.Name} jumped {(after - before).Length:N0} km rejoining the lane");
+                    Assert.That((after - before).Length < 1, Is.True, $"{s.Name} jumped {(after - before).Length:N0} km rejoining the lane");
                     resumed++;
                 }
             }
-            output.WriteLine($"{resumed} lurkers sent back into their lanes");
-            Assert.True(resumed > 0, "nobody lurked");
+            TestContext.Out.WriteLine($"{resumed} lurkers sent back into their lanes");
+            Assert.That(resumed > 0, Is.True, "nobody lurked");
         }
 
         /// <summary>An ambushed lane looks dangerous to the very next planner, not just after the route cache expires.</summary>
-        [Fact]
+        [Test]
         public void DangerReroutesTrafficAtOnce()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -180,10 +178,10 @@ namespace SolarSystem.Core.Tests
             var lanes = Hyperlanes.CreateDefault(eph);
             int earth = eph.Catalog["Earth"].Index, ceres = eph.Catalog["Ceres"].Index;
             var direct = lanes.Route(earth, ceres, StartJd);
-            Assert.Single(direct);
+            Assert.That(direct, Has.Exactly(1).Items);
             lanes.SetDanger(direct[0].Lane, 100);
             var around = lanes.Route(earth, ceres, StartJd);
-            Assert.DoesNotContain(around, hop => hop.Lane == direct[0].Lane);
+            Assert.That((around).Any(hop => hop.Lane == direct[0].Lane), Is.False);
         }
     }
 }

@@ -1,17 +1,15 @@
 using System;
 using System.Linq;
 using SolarSystem.Core;
-using Xunit;
-using Xunit.Abstractions;
+using NUnit.Framework;
 
 namespace SolarSystem.Core.Tests
 {
+    [TestFixture]
     public class CombatTests
     {
         const double StartJd = 2461324.0;
-        readonly ITestOutputHelper output;
 
-        public CombatTests(ITestOutputHelper output) => this.output = output;
 
         static Ship Hull(ShipClass c, Faction f, int id) => new Ship
         {
@@ -33,7 +31,7 @@ namespace SolarSystem.Core.Tests
             return (b, blue, red);
         }
 
-        [Fact]
+        [Test]
         public void TheStrongerGroupWinsAndHardpointsTakeTheDamage()
         {
             int blueWins = 0;
@@ -46,22 +44,22 @@ namespace SolarSystem.Core.Tests
                     (ShipClass.Destroyer, 1), (ShipClass.Destroyer, 1),
                 });
                 for (int i = 0; i < 20000 && !b.Over; i++) b.Advance(1);
-                Assert.True(b.Over, "battle never ended");
+                Assert.That(b.Over, Is.True, "battle never ended");
                 if (b.Winner == 0) blueWins++;
                 var subsHit = b.Units.SelectMany(u => u.Combat.Subsystems).Count(s => s.Hp < s.Def.MaxHp);
-                Assert.True(subsHit > 0, "no hardpoint was ever damaged");
+                Assert.That(subsHit > 0, Is.True, "no hardpoint was ever damaged");
                 // A single fast-resolving seed can end (e.g. via an early boarding) before slower, longer-
                 // cooldown beam weapons ever get a turn; only require beam fire somewhere across the sample.
                 anyBeam |= b.Fx.Any(f => f.Kind == FxKind.Beam);
                 anyMissileOrImpact |= b.Fx.Any(f => f.Kind == FxKind.MissileLaunch || f.Kind == FxKind.Impact);
-                output.WriteLine($"seed {seed}: winner {b.Winner} after {b.Seconds / 60:0} min, dead {b.Units.Count(u => u.Dead)}, fled {b.Units.Count(u => u.Fled)}");
+                TestContext.Out.WriteLine($"seed {seed}: winner {b.Winner} after {b.Seconds / 60:0} min, dead {b.Units.Count(u => u.Dead)}, fled {b.Units.Count(u => u.Fled)}");
             }
-            Assert.True(blueWins >= 5, $"the battleship group won only {blueWins} of 6");
-            Assert.True(anyBeam, "no beam weapon ever fired across any seed");
-            Assert.True(anyMissileOrImpact, "no missile or impact ever happened across any seed");
+            Assert.That(blueWins >= 5, Is.True, $"the battleship group won only {blueWins} of 6");
+            Assert.That(anyBeam, Is.True, "no beam weapon ever fired across any seed");
+            Assert.That(anyMissileOrImpact, Is.True, "no missile or impact ever happened across any seed");
         }
 
-        [Fact]
+        [Test]
         public void ABattleshipWithItsForwardBatteryKnockedOutTurnsBroadsideInstead()
         {
             var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };
@@ -78,11 +76,11 @@ namespace SolarSystem.Core.Tests
             for (int i = 0; i < 200; i++) b.Advance(1);
 
             double angleToTarget = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(bu.Forward, (tu.Pos - bu.Pos).Normalized)))) * Astro.Rad2Deg;
-            output.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");
-            Assert.True(angleToTarget > 30, "the battleship still pointed its bow at the target instead of presenting a broadside");
+            TestContext.Out.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");
+            Assert.That(angleToTarget > 30, Is.True, "the battleship still pointed its bow at the target instead of presenting a broadside");
         }
 
-        [Fact]
+        [Test]
         public void AHealthyBattleshipStillNosesInBecauseItsSpinalBatteryIsStrongest()
         {
             var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };
@@ -96,11 +94,11 @@ namespace SolarSystem.Core.Tests
             for (int i = 0; i < 200; i++) b.Advance(1);
 
             double angleToTarget = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(bu.Forward, (tu.Pos - bu.Pos).Normalized)))) * Astro.Rad2Deg;
-            output.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");
-            Assert.True(angleToTarget < 20, "a fully healthy battleship should still point its strongest (spinal) battery at the target");
+            TestContext.Out.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");
+            Assert.That(angleToTarget < 20, Is.True, "a fully healthy battleship should still point its strongest (spinal) battery at the target");
         }
 
-        [Fact]
+        [Test]
         public void LosingTheReactorDestroysTheShipAndLosingAGeneratorDropsItsOwnShields()
         {
             var (b, _, _) = Skirmish(3, new[] { (ShipClass.Cruiser, 0), (ShipClass.Cruiser, 1) });
@@ -108,36 +106,36 @@ namespace SolarSystem.Core.Tests
             var gen = target.Combat.Subsystems.First(s => s.Kind == SubsystemKind.ShieldGenerator);
             gen.Shield = 0;
             b.ApplyDamage(target, gen, 5000, target.Pos);
-            Assert.True(gen.Destroyed);
-            Assert.Equal(0, gen.Shield);
+            Assert.That(gen.Destroyed, Is.True);
+            Assert.That(gen.Shield, Is.EqualTo(0));
 
             var reactor = target.Combat.Subsystems.First(s => s.Kind == SubsystemKind.Reactor);
             target.Combat.Hull = target.Combat.Spec.Hull;
             b.ApplyDamage(target, reactor, 5000, target.Pos);
-            Assert.True(target.Dead);
-            Assert.Contains(b.Fx, f => f.Kind == FxKind.UnitDestroyed);
+            Assert.That(target.Dead, Is.True);
+            Assert.That((b.Fx).Any(f => f.Kind == FxKind.UnitDestroyed), Is.True);
         }
 
-        [Fact]
+        [Test]
         public void HardpointsSitOnTheHull()
         {
             var u = new BattleUnit { Pos = new DVec3(1, 2, 3), Forward = new DVec3(0, 1, 0), LengthKm = 2 };
             var nose = new SubsystemDef(SubsystemKind.Engine, 0, 0, 0.5);
             var top = new SubsystemDef(SubsystemKind.Engine, 0, 0.5, 0);
-            Assert.True((u.PointOf(nose) - new DVec3(1, 3, 3)).Length < 1e-9);
+            Assert.That((u.PointOf(nose) - new DVec3(1, 3, 3)).Length < 1e-9, Is.True);
             // "Up" on a level hull is ecliptic north.
-            Assert.True((u.PointOf(top) - new DVec3(1, 2, 4)).Length < 1e-9);
+            Assert.That((u.PointOf(top) - new DVec3(1, 2, 4)).Length < 1e-9, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void CoarseStepsAtHighWarpStillFinishTheBattle()
         {
             var (b, _, _) = Skirmish(9, new[] { (ShipClass.Battleship, 0), (ShipClass.Destroyer, 1), (ShipClass.Destroyer, 1) });
             b.Advance(3 * 86400);
-            Assert.True(b.Over);
+            Assert.That(b.Over, Is.True);
         }
 
-        [Fact]
+        [Test]
         public void TwoYearsOfWarHaveBattlesLossesAndAStillWorkingEconomy()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -153,27 +151,27 @@ namespace SolarSystem.Core.Tests
                 {
                     if (s.Destroyed) continue;
                     var st = w.Fleet.StateOf(s, jd);
-                    Assert.False(double.IsNaN(st.HelioKm.X), s.Name);
-                    if (s.Battle != null) Assert.False(s.Battle.Over, $"{s.Name} still held by a finished battle");
+                    Assert.That(double.IsNaN(st.HelioKm.X), Is.False, s.Name);
+                    if (s.Battle != null) Assert.That(s.Battle.Over, Is.False, $"{s.Name} still held by a finished battle");
                 }
             }
             foreach (var e in w.Events.Where(e => e.Kind != WorldEventKind.Launch).TakeLast(40))
-                output.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd}  {e.Text}");
+                TestContext.Out.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd}  {e.Text}");
             foreach (var f in w.Fleet.Factions)
-                output.WriteLine($"{f.Name,-22} losses {w.War.Losses(f),3}  ships {w.Fleet.Ships.Count(s => s.Faction == f && !s.Destroyed),3}  treasury {f.Treasury / 1e9:0.00} B");
-            output.WriteLine($"launches {w.Events.Count(e => e.Kind == WorldEventKind.Launch)}, battles {w.Events.Count(e => e.Kind == WorldEventKind.Battle) / 2}, peak concurrent {maxBattles}");
-            foreach (var s in w.Economy.Settlements) output.WriteLine($"{s.Name,-20} {s.Owner.Prefix,-4} pop {s.Population / 1e3,7:N0}k platforms {s.Platforms.Count}/{s.MaxPlatforms}");
+                TestContext.Out.WriteLine($"{f.Name,-22} losses {w.War.Losses(f),3}  ships {w.Fleet.Ships.Count(s => s.Faction == f && !s.Destroyed),3}  treasury {f.Treasury / 1e9:0.00} B");
+            TestContext.Out.WriteLine($"launches {w.Events.Count(e => e.Kind == WorldEventKind.Launch)}, battles {w.Events.Count(e => e.Kind == WorldEventKind.Battle) / 2}, peak concurrent {maxBattles}");
+            foreach (var s in w.Economy.Settlements) TestContext.Out.WriteLine($"{s.Name,-20} {s.Owner.Prefix,-4} pop {s.Population / 1e3,7:N0}k platforms {s.Platforms.Count}/{s.MaxPlatforms}");
 
-            Assert.True(w.Events.Count(e => e.Kind == WorldEventKind.Battle) >= 4, "hardly any fighting in two years");
-            Assert.True(w.Fleet.Ships.Count(s => s.Destroyed) > 0, "nobody ever died");
-            Assert.True(w.Fleet.Ships.Count(s => !s.Destroyed && w.IsTrader(s)) > 20, "the merchant fleet was wiped out");
-            Assert.True(w.Fleet.Ships.Count(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == w.Sol) > 0);
-            Assert.True(w.Fleet.Ships.Count(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == w.Reach) > 0);
+            Assert.That(w.Events.Count(e => e.Kind == WorldEventKind.Battle) >= 4, Is.True, "hardly any fighting in two years");
+            Assert.That(w.Fleet.Ships.Count(s => s.Destroyed) > 0, Is.True, "nobody ever died");
+            Assert.That(w.Fleet.Ships.Count(s => !s.Destroyed && w.IsTrader(s)) > 20, Is.True, "the merchant fleet was wiped out");
+            Assert.That(w.Fleet.Ships.Count(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == w.Sol) > 0, Is.True);
+            Assert.That(w.Fleet.Ships.Count(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == w.Reach) > 0, Is.True);
             foreach (var s in w.Economy.Settlements)
-                Assert.True(s.Population >= s.InitialPopulation * 0.5, $"{s.Name} collapsed to {s.Population:N0}");
+                Assert.That(s.Population >= s.InitialPopulation * 0.5, Is.True, $"{s.Name} collapsed to {s.Population:N0}");
         }
 
-        [Fact]
+        [Test]
         public void WrecksAppearWhereShipsDieAndClearAwayAfterTheirLifetime()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
@@ -189,28 +187,27 @@ namespace SolarSystem.Core.Tests
                 lastJd = jd;
             }
 
-            Assert.True(w.Fleet.Ships.Count(s => s.Destroyed) > 0, "nobody ever died, so this proves nothing");
-            Assert.True(maxWrecks > 0, "a ship died but no wreck was ever left behind");
+            Assert.That(w.Fleet.Ships.Count(s => s.Destroyed) > 0, Is.True, "nobody ever died, so this proves nothing");
+            Assert.That(maxWrecks > 0, Is.True, "a ship died but no wreck was ever left behind");
             foreach (var wreck in w.War.Wrecks.Items)
-                Assert.True(lastJd - wreck.CreatedJd <= wreck.LifetimeDays, $"{wreck.Name}'s wreck outlived its own lifetime and should have been cleared away");
+                Assert.That(lastJd - wreck.CreatedJd <= wreck.LifetimeDays, Is.True, $"{wreck.Name}'s wreck outlived its own lifetime and should have been cleared away");
         }
 
-        [Fact]
+        [Test]
         public void TheDestroyersRailgunIsAFixedSpinalGunThatHitsHarderThanAnyTurret()
         {
             var layout = CombatSpec.Of(ShipClass.Destroyer).Layout;
-            var rail = Assert.Single(layout, s => s.Kind == SubsystemKind.Railgun);
-            Assert.True(rail.ArcWidthDeg < 360, "a railgun should be a fixed spinal mount, not omnidirectional");
+            var rail = Expect.Single(layout, s => s.Kind == SubsystemKind.Railgun);
+            Assert.That(rail.ArcWidthDeg < 360, Is.True, "a railgun should be a fixed spinal mount, not omnidirectional");
 
             var w = rail.Weapon;
-            Assert.NotNull(w);
-            Assert.True(w.RangeKm > WeaponSpec.Heavy.RangeKm, "a railgun should outrange even a heavy laser");
-            Assert.True(w.Damage > WeaponSpec.Heavy.Damage && w.Damage < WeaponSpec.Torpedo.Damage,
-                "a railgun should hit harder than a heavy laser but softer than a torpedo");
-            Assert.False(w.Missile, "a railgun is a direct-fire kinetic weapon, not a missile");
+            Assert.That(w, Is.Not.Null);
+            Assert.That(w.RangeKm > WeaponSpec.Heavy.RangeKm, Is.True, "a railgun should outrange even a heavy laser");
+            Assert.That(w.Damage > WeaponSpec.Heavy.Damage && w.Damage < WeaponSpec.Torpedo.Damage, Is.True, "a railgun should hit harder than a heavy laser but softer than a torpedo");
+            Assert.That(w.Missile, Is.False, "a railgun is a direct-fire kinetic weapon, not a missile");
         }
 
-        [Fact]
+        [Test]
         public void ARailgunHitIsDrawnDifferentlyFromALaserBeam()
         {
             var (b, blue, red) = Skirmish(1, new[] { (ShipClass.Destroyer, 0), (ShipClass.Destroyer, 1) });
@@ -221,10 +218,10 @@ namespace SolarSystem.Core.Tests
                 b.Advance(1);
                 sawRailgunFx = b.Fx.Any(f => f.Kind == FxKind.Railgun || f.Kind == FxKind.RailgunMiss);
             }
-            Assert.True(sawRailgunFx, "the Destroyer's railgun never fired a visible shot");
+            Assert.That(sawRailgunFx, Is.True, "the Destroyer's railgun never fired a visible shot");
         }
 
-        [Fact]
+        [Test]
         public void APlayerControlledHullsForwardGunsOnlyFireOnCommandWhileSideBatteriesStayAutonomous()
         {
             var (b, blue, red) = Skirmish(5, new[] { (ShipClass.Battleship, 0), (ShipClass.Battleship, 1) });
@@ -250,11 +247,11 @@ namespace SolarSystem.Core.Tests
                 forwardCooldown = forwardGun.Cooldown;
                 sideCooldown = sideGun.Cooldown;
             }
-            Assert.False(forwardFiredWithoutTheTrigger, "a player-controlled forward gun fired without the trigger held");
-            Assert.True(sideFiredAutonomously, "side/aft batteries should keep fighting on their own while piloting");
+            Assert.That(forwardFiredWithoutTheTrigger, Is.False, "a player-controlled forward gun fired without the trigger held");
+            Assert.That(sideFiredAutonomously, Is.True, "side/aft batteries should keep fighting on their own while piloting");
         }
 
-        [Fact]
+        [Test]
         public void HoldingFireAimedAtAHostileFiresThePlayerControlledForwardGun()
         {
             var (b, blue, red) = Skirmish(6, new[] { (ShipClass.Battleship, 0), (ShipClass.Battleship, 1) });
@@ -278,10 +275,10 @@ namespace SolarSystem.Core.Tests
                 if (forwardGun.Cooldown > cooldown + 1e-9) fired = true;
                 cooldown = forwardGun.Cooldown;
             }
-            Assert.True(fired, "the player's forward gun never fired despite holding the trigger aimed at a hostile");
+            Assert.That(fired, Is.True, "the player's forward gun never fired despite holding the trigger aimed at a hostile");
         }
 
-        [Fact]
+        [Test]
         public void APlayerControlledUnitKeepsTheHullExactlyWhereThePilotLoopPutIt()
         {
             var (b, blue, red) = Skirmish(7, new[] { (ShipClass.Battleship, 0), (ShipClass.Battleship, 1) });
@@ -291,9 +288,9 @@ namespace SolarSystem.Core.Tests
             player.Pos = pinned;
             player.Vel = DVec3.Zero;
             for (int i = 0; i < 50 && !b.Over; i++) b.Advance(1);
-            Assert.Equal(pinned.X, player.Pos.X, 6);
-            Assert.Equal(pinned.Y, player.Pos.Y, 6);
-            Assert.Equal(pinned.Z, player.Pos.Z, 6);
+            Assert.That(player.Pos.X, Is.EqualTo(pinned.X).Within(1e-6));
+            Assert.That(player.Pos.Y, Is.EqualTo(pinned.Y).Within(1e-6));
+            Assert.That(player.Pos.Z, Is.EqualTo(pinned.Z).Within(1e-6));
         }
     }
 }
