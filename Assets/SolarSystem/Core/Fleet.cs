@@ -1279,6 +1279,10 @@ namespace SolarSystem.Core
             };
             ship.Phase = ShipPhase.Parked;
             ship.PhaseStartJd = jd;
+            // Holding here: if nothing holds it (no pilot, no battle), the next update picks a real trip
+            // rather than departing for no destination at all.
+            ship.DestinationBody = frameBody;
+            ship.PhaseEndJd = jd;
             return ship;
         }
 

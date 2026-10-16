@@ -187,5 +187,20 @@ namespace SolarSystem.Core.Tests
             Assert.That(ship.Ports, Does.Contain(earth));
             fleet.ScheduleNext(ship, StartJd);
         }
+
+        [Test]
+        public void ASpawnedShipLeftToItselfPicksItsOwnNextTrip()
+        {
+            var (fleet, eph) = Create();
+            int earth = eph.Catalog["Earth"].Index;
+            var ship = fleet.SpawnAt("Test Hull", ShipClass.Courier, fleet.Factions[0], earth, new DVec3(5000, 0, 0), DVec3.UnitX, StartJd);
+            // Nobody pilots it and no battle holds it: the fleet's own schedule takes it from here.
+            for (double jd = StartJd; jd < StartJd + 20; jd += 0.5)
+            {
+                eph.Update(jd);
+                Assert.DoesNotThrow(() => fleet.Update(jd));
+            }
+            Assert.That(ship.DestinationBody >= 0, Is.True);
+        }
     }
 }
