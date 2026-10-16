@@ -541,7 +541,8 @@ namespace SolarSystem.Core
             if (u.Kind == UnitKind.Ship)
             {
                 bool merchant = u.Ship != null && !u.Ship.Spec.IsMilitary && !u.Faction.IsPirate;
-                if (c.Disabled) u.Fleeing = false;
+                // Whether to run is the player's call when the player is flying it.
+                if (c.Disabled || u.PlayerControlled) u.Fleeing = false;
                 else if (!u.Fleeing && (merchant || c.HullFraction < 0.25 || (!c.Armed && !CanBoard(u)) || Routed(u.Side)))
                     u.Fleeing = true;
                 // Only the AI flies a boarding approach (Move leaves a player-flown hull alone), so a

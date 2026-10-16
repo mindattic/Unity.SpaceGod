@@ -168,6 +168,18 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void TheAiDoesNotDecideToRunForAPlayerFlownHull()
+        {
+            var b = NewBattle(24);
+            var freighter = Hull(ShipClass.Freighter, Traders, 0);
+            var player = b.AddShip(freighter, 0, new DVec3(6, 0, 0), -DVec3.UnitX);
+            player.PlayerControlled = true;
+            b.AddShip(Hull(ShipClass.Destroyer, Pirates, 1), 1, new DVec3(-6, 0, 0), DVec3.UnitX);
+            b.Advance(2);
+            Assert.That(player.Fleeing, Is.False, "a merchant hull the player flies was set running by the AI");
+        }
+
+        [Test]
         public void APlayerAloneCannotOrderBoardersAwayItHasNoWayToSend()
         {
             var (b, merchant, pirate) = BatteredMerchant(21, playerPirate: true);
