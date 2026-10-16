@@ -683,7 +683,9 @@ namespace SolarSystem
                 return;
             }
             var ship = t.Ship;
-            if (ship.Destroyed || ship.Derelict)
+            // Nor a prize already taken in a fight still on: it is its captors' to dispose of when it ends.
+            bool taken = ship.Battle?.UnitOf(ship)?.Captured ?? false;
+            if (ship.Destroyed || ship.Derelict || taken)
             {
                 ShowToast("Can't take the helm of that ship right now");
                 return;
