@@ -52,6 +52,29 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ABattleEndingLeavesThePlayersShipToThePlayer()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy 2");
+            var enemy = MakeFaction(w, "Enemy Navy 2");
+            w.Diplomacy.Set(player, enemy, Relation.War);
+            int here = w.Catalog["Pluto"].Index;
+            var foe = ParkWarship(w, enemy, ShipClass.Destroyer, here);
+            var flown = ParkWarship(w, player, ShipClass.Battleship, here);
+            flown.PhaseEndJd = StartJd - 1; // its own schedule ran out while it was being flown
+            flown.DestinationBody = here;
+            w.PilotedShip = flown;
+            var b = w.War.TryStartPlayerBattle(flown, here, new DVec3(3000, 0, 0), DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+            var foeUnit = b.UnitOf(foe);
+            b.ApplyDamage(foeUnit, null, 1e9, foeUnit.Pos);
+            double jd = StartJd;
+            for (int i = 0; i < 200 && w.War.Battles.Contains(b); i++) w.War.Update(jd += 1.0 / 1440);
+            Assert.That(w.War.Battles, Does.Not.Contain(b));
+            Assert.That(flown.PhaseEndJd, Is.EqualTo(StartJd - 1), "the AI rescheduled a ship the player is flying");
+        }
+
+        [Test]
         public void AnAmbushOutOnALaneIsNotTheBattleAtTheSystemRoot()
         {
             var w = CreateWorld();

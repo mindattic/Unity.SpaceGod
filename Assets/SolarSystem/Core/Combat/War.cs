@@ -731,6 +731,8 @@ namespace SolarSystem.Core
             foreach (var u in b.Units)
             {
                 if (u.Ship == null || u.Dead || u.Ship.IsEscort || u.Ship.Destroyed || u.Ship.Derelict) continue;
+                // The player's ship stays the player's: its schedule is set again only on release.
+                if (u.Ship == world.PilotedShip) continue;
                 bool beaten = u.Fled || (b.Winner >= 0 && u.Side != b.Winner);
                 // Pulled out of a lane: back in and on their way. Raiders who won take the loot home;
                 // beaten ones run.
