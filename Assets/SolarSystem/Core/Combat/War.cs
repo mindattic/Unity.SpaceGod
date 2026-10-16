@@ -217,6 +217,13 @@ namespace SolarSystem.Core
             b.UnitCaptured = (battle, u, captor) =>
             {
                 captures[u] = captor;
+                // The player's ship taken: it is the captor's prize now, no longer the player's to fly
+                // (the Runtime sees PilotedShip go and ends the session).
+                if (u.Ship != null && u.Ship == world.PilotedShip)
+                {
+                    world.PilotedShip = null;
+                    u.PlayerControlled = false;
+                }
                 if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
                     $"{battle.Name}: {captor.Name} marines take the {u.Ship.Name}", WorldEventKind.Capture, battle.Body);
             };

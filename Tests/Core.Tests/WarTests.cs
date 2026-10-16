@@ -113,6 +113,32 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APlayerShipBoardedAndTakenIsNoLongerThePlayers()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy 5");
+            int here = w.Catalog["Pluto"].Index;
+            ParkWarship(w, w.Pirates, ShipClass.Destroyer, here);
+            var flown = ParkWarship(w, player, ShipClass.Destroyer, here);
+            w.Diplomacy.Set(player, w.Pirates, Relation.War);
+            w.PilotedShip = flown;
+            var b = w.War.TryStartPlayerBattle(flown, here, new DVec3(5000, 0, 0), DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+            var interior = flown.Combat.Interior;
+            interior.Board(w.Pirates, 1.2, 40, interior.Nearest(0, 0), false, 0, new System.Random(1));
+            foreach (var c in interior.Compartments)
+            {
+                c.Crew = c.Marines = 0;
+                c.Boarders = 5;
+            }
+            double jd = StartJd;
+            for (int i = 0; i < 20 && !b.UnitOf(flown).Captured; i++) w.War.Update(jd += 1.0 / 86400);
+            Assert.That(b.UnitOf(flown).Captured, Is.True);
+            Assert.That(w.PilotedShip, Is.Null, "the player kept flying a ship the pirates had taken");
+            Assert.That(b.UnitOf(flown).PlayerControlled, Is.False);
+        }
+
+        [Test]
         public void APlayerWhoLeavesAFightIsFreeOfItAtOnce()
         {
             var w = CreateWorld();

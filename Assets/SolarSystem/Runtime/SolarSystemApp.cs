@@ -472,6 +472,7 @@ namespace SolarSystem
             if (Selected.IsShip && Selected.Ship.Destroyed) Select(Target.None);
             if (Hovered.IsShip && Hovered.Ship.Destroyed) Hovered = Target.None;
             if (IsPiloting && Piloted.Ship.Destroyed) ExitPiloting();
+            else if (IsPiloting && World.PilotedShip != Piloted.Ship) LoseHelm();
             else if (SpaceCamera.FocusTarget.IsShip && SpaceCamera.FocusTarget.Ship.Destroyed) SpaceCamera.ExitFocus();
         }
 
@@ -836,6 +837,20 @@ namespace SolarSystem
             pilotLook = Quaternion.LookRotation(
                 Vector3.Dot(facingUnity, upReference) > 0.999f ? SpaceCamera.UpFrame * Vector3.forward : facingUnity,
                 upReference);
+        }
+
+        /// <summary>The piloted ship was taken from the player (boarded and captured): the session ends with
+        /// nothing handed back, since the hull is its captor's now and the war disposes of it.</summary>
+        void LoseHelm()
+        {
+            var ship = Piloted.Ship;
+            Piloted = Target.None;
+            pilotLockTarget = Target.None;
+            pilotBoosting = false;
+            pilotCruise = default;
+            SpaceCamera.PilotLockTarget = Target.None;
+            SpaceCamera.ExitFocus();
+            ShowToast("The " + ship.Name + " has been boarded and taken");
         }
 
         void ExitPiloting()
