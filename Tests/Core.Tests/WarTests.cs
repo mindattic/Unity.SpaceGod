@@ -86,6 +86,33 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APlayerWhoFliesIntoAFightStaysInIt()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy 3");
+            var enemy = MakeFaction(w, "Enemy Navy 3");
+            w.Diplomacy.Set(player, enemy, Relation.War);
+            int here = w.Catalog["Pluto"].Index;
+            ParkWarship(w, enemy, ShipClass.Destroyer, here);
+            var flown = ParkWarship(w, player, ShipClass.Battleship, here);
+            w.PilotedShip = flown;
+            var at = new DVec3(5000, 0, 0);
+            var b = w.War.TryStartPlayerBattle(flown, here, at, DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+            var unit = b.UnitOf(flown);
+            b.Advance(1);
+            Assert.That(unit.Fled, Is.False, "the player was counted as escaped the moment it joined");
+            Assert.That(unit.Pos.Length, Is.LessThan(Battle.EscapeKm));
+
+            // Far out from the fight (still near Pluto): not pulled into it from there.
+            var second = ParkWarship(w, player, ShipClass.Destroyer, here);
+            w.PilotedShip = second;
+            Assert.That(w.War.TryStartPlayerBattle(second, here, b.Anchor + new DVec3(0, 20000, 0), DVec3.UnitX, StartJd), Is.Null);
+            // And nowhere near Pluto at all: no fight there either.
+            Assert.That(w.War.TryStartPlayerBattle(second, here, new DVec3(5e8, 0, 0), DVec3.UnitX, StartJd), Is.Null);
+        }
+
+        [Test]
         public void AnAmbushOutOnALaneIsNotTheBattleAtTheSystemRoot()
         {
             var w = CreateWorld();

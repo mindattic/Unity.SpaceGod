@@ -520,7 +520,13 @@ namespace SolarSystem.Core
         public Battle TryStartPlayerBattle(Ship ship, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
         {
             if (ship.Destroyed || ship.Battle != null || ship.Planetside) return null;
-            var b = BattleAt(body) ?? TryStartBattle(body, ship.Faction, jd);
+            // Only in the body's own neighbourhood (the frame body never changes mid-flight, however far the
+            // pilot goes), and only into a fight it has actually reached: one placed beyond the battle's
+            // edge would be counted as escaped on the very next step. A fight it starts is fought where it is.
+            if (offsetFromBodyKm.Length > ScaleModel.NeighbourhoodKm(Catalog[body])) return null;
+            var b = BattleAt(body);
+            if (b != null && (offsetFromBodyKm - b.Anchor).Length > Battle.EscapeKm * 0.8) return null;
+            b ??= TryStartBattle(body, ship.Faction, jd, offsetFromBodyKm);
             if (b == null) return null;
             bool h0 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[0]);
             bool h1 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[1]);
@@ -532,7 +538,7 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Starts a battle at <paramref name="body"/> if <paramref name="aggressor"/> has a quarrel with anyone there.</summary>
-        public Battle TryStartBattle(int body, Faction aggressor, double jd)
+        public Battle TryStartBattle(int body, Faction aggressor, double jd, DVec3? anchor = null)
         {
             var present = PresentGroups(body);
             var hostile = new HashSet<Faction>();
@@ -563,7 +569,7 @@ namespace SolarSystem.Core
                 if (st.Platforms.Count > 0 && hostile.Contains(st.Owner)) defenderArmed = true;
             if (!aggressorArmed && !defenderArmed) return null;
 
-            var b = NewBattle(body, jd, present);
+            var b = NewBattle(body, jd, present, anchor);
             foreach (var s in present)
             {
                 int side = SideFor(s.Faction, aggressor, hostile);
@@ -617,14 +623,14 @@ namespace SolarSystem.Core
             return list;
         }
 
-        Battle NewBattle(int body, double jd, List<Ship> present)
+        Battle NewBattle(int body, double jd, List<Ship> present, DVec3? at = null)
         {
             var b0 = Catalog[body];
             DVec3 dir = DVec3.Zero;
             foreach (var s in present)
                 if (s.Controller.Orbit != null) dir += s.Controller.Orbit.OffsetAt(jd).Normalized;
             if (dir.LengthSquared < 1e-6) dir = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, 0.2);
-            var anchor = dir.Normalized * Battle.AnchorDistanceKm(b0);
+            var anchor = at ?? dir.Normalized * Battle.AnchorDistanceKm(b0);
             battleCount.TryGetValue(body, out int n);
             battleCount[body] = n + 1;
             string name = (n == 0 ? "Battle of " : Ordinal(n + 1) + " Battle of ") + b0.Name;
