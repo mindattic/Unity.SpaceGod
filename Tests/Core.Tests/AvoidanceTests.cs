@@ -40,6 +40,30 @@ namespace SolarSystem.Core.Tests
             Assert.That(last > Fleet.SafeDistanceKm(a, b) * 0.9, Is.True, "they stayed on top of each other");
         }
 
+        /// <summary>The ship the player is flying isn't at its scheduled spot: nobody gives way to that ghost.</summary>
+        [Test]
+        public void NobodySteersRoundTheScheduledSpotOfAHeldShip()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var fleet = new Fleet(eph, 7) { Dwell = (s, d) => 30 };
+            var f = fleet.AddFaction("Test", "TS", new Rgb(1, 1, 1));
+            int earth = eph.Catalog["Earth"].Index;
+            var a = fleet.AddShip("A", ShipClass.Freighter, f, ShipRole.Trader);
+            var b = fleet.AddShip("B", ShipClass.Freighter, f, ShipRole.Trader);
+            a.Ports = b.Ports = new[] { earth, eph.Catalog["Moon"].Index };
+            var spot = Infrastructure.EquatorialOrbit(eph.Catalog[earth], 20000, 0, 0, 0, StartJd);
+            fleet.Station(a, earth, StartJd, spot);
+            fleet.Station(b, earth, StartJd, spot);
+            fleet.IsHeld = s => s == a;
+            for (double jd = StartJd; jd < StartJd + 0.05; jd += 0.0005)
+            {
+                eph.Update(jd);
+                fleet.Update(jd);
+                Assert.That(fleet.EvadingFrom(b), Is.Not.SameAs(a));
+            }
+        }
+
         /// <summary>A parked ship moves with its world round the Sun, as a ship in flight beside it does.</summary>
         [Test]
         public void AParkedShipsVelocityIncludesItsWorldsMotion()

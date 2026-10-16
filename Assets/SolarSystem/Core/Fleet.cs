@@ -135,7 +135,8 @@ namespace SolarSystem.Core
             lastAvoidanceJd = jd;
             if (!AvoidCollisions || dt <= 0) return;
             var list = new List<Ship>();
-            foreach (var s in ships) if (Manoeuvrable(s)) list.Add(s);
+            // A held ship (the one the player is flying) isn't where its schedule says: nobody steers round that ghost.
+            foreach (var s in ships) if (Manoeuvrable(s) && (IsHeld == null || !IsHeld(s))) list.Add(s);
             int n = list.Count;
             var pos = new DVec3[n];
             var vel = new DVec3[n];
