@@ -113,6 +113,28 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APlayerWhoLeavesAFightIsFreeOfItAtOnce()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy 4");
+            var enemy = MakeFaction(w, "Enemy Navy 4");
+            w.Diplomacy.Set(player, enemy, Relation.War);
+            int here = w.Catalog["Pluto"].Index;
+            ParkWarship(w, enemy, ShipClass.Battleship, here);
+            ParkWarship(w, player, ShipClass.Battleship, here); // stays on, so the fight goes on without the pilot
+            var flown = ParkWarship(w, player, ShipClass.Destroyer, here);
+            w.PilotedShip = flown;
+            var b = w.War.TryStartPlayerBattle(flown, here, new DVec3(5000, 0, 0), DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+            b.UnitOf(flown).Pos = new DVec3(Battle.EscapeKm * 1.5, 0, 0); // flown clear of the fight
+            w.War.Update(StartJd + 1.0 / 1440);
+            w.War.Update(StartJd + 2.0 / 1440);
+            Assert.That(b.Over, Is.False);
+            Assert.That(flown.Battle, Is.Null, "the pilot stayed locked to a fight it had left");
+            Assert.That(w.War.TryStartPlayerBattle(flown, here, b.Anchor, DVec3.UnitX, StartJd + 2.0 / 1440), Is.Null, "not back into the same fight");
+        }
+
+        [Test]
         public void AnAmbushOutOnALaneIsNotTheBattleAtTheSystemRoot()
         {
             var w = CreateWorld();

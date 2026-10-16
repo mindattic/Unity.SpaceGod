@@ -111,6 +111,10 @@ namespace SolarSystem.Core
                     continue;
                 }
                 b.Advance(seconds);
+                // The player who has left the fight (flown out of it, or let go for the cargo) is free of it
+                // now, not when the rest have finished: free to cruise, take the gate or engage elsewhere.
+                foreach (var u in b.Units)
+                    if (u.Fled && u.PlayerControlled && u.Ship != null && u.Ship.Battle == b) u.Ship.Battle = null;
                 if (b.Over) Resolve(b, jd);
             }
             Interdictions(jd);
@@ -526,6 +530,8 @@ namespace SolarSystem.Core
             if (offsetFromBodyKm.Length > ScaleModel.NeighbourhoodKm(Catalog[body])) return null;
             var b = BattleAt(body);
             if (b != null && (offsetFromBodyKm - b.Anchor).Length > Battle.EscapeKm * 0.8) return null;
+            // Already left this one: not back in until it is over.
+            if (b != null && b.UnitOf(ship) != null) return null;
             b ??= TryStartBattle(body, ship.Faction, jd, offsetFromBodyKm);
             if (b == null) return null;
             bool h0 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[0]);
