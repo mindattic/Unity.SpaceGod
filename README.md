@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 467 passing](https://img.shields.io/badge/core%20tests-467%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 494 passing](https://img.shields.io/badge/core%20tests-494%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -303,7 +303,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-467 NUnit tests, run in parallel in under two minutes, cover the following:
+494 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -335,6 +335,7 @@ dotnet test
 - Infrastructure: rings staying over their cities (latitude and longitude to a millionth of a degree, velocity = ω × r); FIFO queues clearing at most one ship per interval; no position jumps through queue, descent, landing and climb; only merchants landing; yards launching from their slips; constellations at their real altitudes and inclinations; JWST at L2
 - Piloting: cruise spooling up and dropping out, forward guns firing only on the trigger, the piloted hull staying where the pilot loop puts it
 - Cargo hold and trade: crate footprints and rotation, no overlaps or out-of-bounds placement, buying and selling at the AI's prices and taxes, docking rules
+- Adventures: each kind offered only from real sim state (a ship actually in a fight or adrift, a derelict, a wreck with salvage, raiders lurking on a lane past the danger threshold, a merchant on a dangerous lane with time left, a raider captain), within range, never twice at once, capped, rested after it ends; ignored ones failing at expiry or when the situation settles without the player; completed ones paying credits, cargo and standing; and twenty days of the live system where every offer traces to something real
 - Jump gates: a gate pair per system at its outer edge, activation range, arrival inside the far gate, and the ship moving between fleets
 
 ## Limitations
@@ -359,7 +360,6 @@ Planned, from the open tickets in [docs/USER_STORIES.md](docs/USER_STORIES.md):
 - Shield bubbles that ripple where a hit lands.
 - The piloted ship riding hyperlanes, with warning of and a response to lane ambushes.
 - Hidden pirate bases on real belt asteroids.
-- Dynamic events near the player (distress calls, derelicts) driven by the simulation.
 - Salvaging and boarding derelicts and wrecks from the piloted ship.
 
 ## Documentation
