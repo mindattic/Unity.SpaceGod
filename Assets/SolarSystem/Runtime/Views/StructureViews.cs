@@ -229,8 +229,8 @@ namespace SolarSystem.Views
                 if (v.Hull != null) Object.Destroy(v.Hull);
                 v.Hull = new GameObject("Hull on the slip");
                 v.Hull.transform.SetParent(v.Slip, false);
-                var section = ShipMeshFactory.IsWarship(cls.Value) ? ShipMeshFactory.Stern : ShipMeshFactory.WholeHull;
-                var mr = Part(v.Hull.transform, ShipMeshFactory.GetSection(cls.Value, settlement.Owner, section), "Stern");
+                // The whole hull, bow included (a warship's Stern section alone is only its after half).
+                var mr = Part(v.Hull.transform, ShipMeshFactory.GetSection(cls.Value, settlement.Owner, ShipMeshFactory.WholeHull), "Hull");
                 v.HullClass = cls;
             }
             if (v.Hull != null)
