@@ -1753,6 +1753,14 @@ namespace SolarSystem.Core
             return f?.Prefix is string p && p.Length > 0 ? p : side == 0 ? "attackers" : "defenders";
         }
 
-        static string Ordinal(int n) => n == 2 ? "Second" : n == 3 ? "Third" : n + "th";
+        /// <summary>The ordinal a repeat battle is named with: Second, Third, then 4th, ... 21st, 22nd, 23rd, 111th.</summary>
+        public static string Ordinal(int n)
+        {
+            if (n == 2) return "Second";
+            if (n == 3) return "Third";
+            int tens = n % 100;
+            string suffix = tens >= 11 && tens <= 13 ? "th" : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
+            return n + suffix;
+        }
     }
 }

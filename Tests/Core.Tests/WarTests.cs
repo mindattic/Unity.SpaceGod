@@ -51,6 +51,21 @@ namespace SolarSystem.Core.Tests
                 if (sub.Def.Weapon != null) sub.Hp = 0;
         }
 
+        [Test]
+        public void RepeatBattlesAreNumberedWithTheRightOrdinal()
+        {
+            Assert.That(War.Ordinal(2), Is.EqualTo("Second"));
+            Assert.That(War.Ordinal(3), Is.EqualTo("Third"));
+            Assert.That(War.Ordinal(4), Is.EqualTo("4th"));
+            Assert.That(War.Ordinal(11), Is.EqualTo("11th"));
+            Assert.That(War.Ordinal(12), Is.EqualTo("12th"));
+            Assert.That(War.Ordinal(13), Is.EqualTo("13th"));
+            Assert.That(War.Ordinal(21), Is.EqualTo("21st"));
+            Assert.That(War.Ordinal(22), Is.EqualTo("22nd"));
+            Assert.That(War.Ordinal(23), Is.EqualTo("23rd"));
+            Assert.That(War.Ordinal(111), Is.EqualTo("111th"));
+        }
+
         // ---------------------------------------------------------------- the player's own ship
 
         [Test]
