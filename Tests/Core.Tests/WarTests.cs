@@ -66,6 +66,22 @@ namespace SolarSystem.Core.Tests
             Assert.That(War.Ordinal(111), Is.EqualTo("111th"));
         }
 
+        [Test]
+        public void ARaiderReplannedBeforeItsAmbushForgetsTheAmbush()
+        {
+            var w = CreateWorld();
+            int body = w.Catalog["Mars"].Index;
+            var raider = ParkWarship(w, w.Pirates, ShipClass.Destroyer, body);
+            raider.LurkLane = w.Fleet.Lanes.Lanes[0];
+            raider.LurkAt = 0.5;
+            raider.LurkDays = 3;
+            // Badly hurt before it ever got to the lane: off to repair instead.
+            raider.Combat.Hull = raider.Combat.Spec.Hull * 0.3;
+            w.War.ChooseNext(raider, body, StartJd);
+            Assert.That(w.War.Orders[raider].Kind, Is.EqualTo(OrderKind.Repair));
+            Assert.That(raider.LurkLane, Is.Null, "a stale ambush would stop the trip to repair on that lane for days");
+        }
+
         // ---------------------------------------------------------------- the player's own ship
 
         [Test]

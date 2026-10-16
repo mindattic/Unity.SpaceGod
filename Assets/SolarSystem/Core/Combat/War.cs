@@ -930,6 +930,8 @@ namespace SolarSystem.Core
 
         GroupOrder DecidePirate(Ship leader, int here, double jd, bool withdrawing)
         {
+            // A fresh plan: an ambush planned earlier and not yet reached no longer stands.
+            leader.LurkLane = null;
             var home = HomeHaven(leader);
             // A group whose haven has been taken or destroyed is out of the game: it lies low where it is,
             // no raids and no ambushes, until the haven is rebuilt.
