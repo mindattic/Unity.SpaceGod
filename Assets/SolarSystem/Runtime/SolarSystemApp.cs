@@ -915,6 +915,13 @@ namespace SolarSystem
                 ExitPiloting();
                 return;
             }
+            // Taken this very frame (the war let go of it on capture): the session ends before anything
+            // here hands the captured hull back to the player's controls.
+            if (World.PilotedShip != ship)
+            {
+                LoseHelm();
+                return;
+            }
 
             // Free look: rotate around the look quaternion's own local axes each frame (not a
             // world-space yaw/pitch pair), so there's no gimbal clamp -- the nose can be pointed
