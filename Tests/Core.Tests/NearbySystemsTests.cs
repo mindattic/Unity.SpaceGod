@@ -48,7 +48,11 @@ namespace SolarSystem.Core.Tests
                 Assert.That(b.MassIsMinimum, Is.EqualTo(p.MassIsMinimum), p.Name);
 
                 // The ellipse the ephemeris traces: periapsis a(1-e), apoapsis a(1+e), and it closes after one period.
-                eph.SampleOrbit(b.Index, Astro.J2000, samples);
+                for (int k = 0; k < samples.Length; k++)
+                {
+                    double jd = Astro.J2000 + p.PeriodDays * k / samples.Length;
+                    samples[k] = eph.HelioAt(b.Index, jd) - eph.HelioAt(b.ParentIndex, jd);
+                }
                 double min = samples.Min(v => v.Length) / Astro.AuKm, max = samples.Max(v => v.Length) / Astro.AuKm;
                 Assert.That(min, Is.EqualTo(p.AAu * (1 - p.E)).Within(0.2).Percent, p.Name + " periapsis");
                 Assert.That(max, Is.EqualTo(p.AAu * (1 + p.E)).Within(0.2).Percent, p.Name + " apoapsis");
