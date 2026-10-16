@@ -107,3 +107,7 @@ if ($Launch) {
     Write-Host '  Launching...' -ForegroundColor Cyan
     Start-Process $exe
 }
+
+# An explicit success code: nothing above sets $LASTEXITCODE (Unity runs via Start-Process), so a
+# caller checking it (launch.ps1) would otherwise read an empty value as a failure.
+exit 0
