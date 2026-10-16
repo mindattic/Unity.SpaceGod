@@ -115,7 +115,7 @@ namespace SolarSystem
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowMarket || ShowCargo || ShowSpawn;
+        bool ClickPanelOpen => ShowSpawn || (ShowHud && (ShowMarket || ShowCargo)); // market and cargo are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
