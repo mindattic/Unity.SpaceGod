@@ -55,6 +55,21 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void FightersRecalledToACarrierAdriftFarOutStillLand()
+        {
+            var b = CarrierAction(5);
+            var carrier = b.Units[0];
+            var fighter = b.Units.First(u => u.Kind == UnitKind.Fighter);
+            // The carrier has drifted out past where fighters are kept in the fight, and calls them home.
+            carrier.Pos = new DVec3(Battle.EscapeKm * 0.9, 0, 0);
+            carrier.Vel = DVec3.Zero;
+            carrier.Fleeing = true;
+            fighter.Pos = carrier.Pos + new DVec3(-3, 0, 0);
+            for (int i = 0; i < 2000 && !fighter.Docked; i++) FighterAI.Step(b, fighter, 0.5);
+            Assert.That(fighter.Docked, Is.True, "the fighter bounced off the edge of the battle and never got home");
+        }
+
+        [Test]
         public void APlayerFlownHullsPointDefenceEngagesFightersOnItsOwn()
         {
             var b = CarrierAction(5);

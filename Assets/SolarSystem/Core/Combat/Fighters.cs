@@ -308,7 +308,7 @@ namespace SolarSystem.Core
             var approach = deck - carrier.Forward * 0.4;
             double toDeck = (deck - u.Pos).Length;
             var goal = toDeck < 0.6 ? deck : approach;
-            Steer(b, u, goal + carrier.Vel * 2, u.Combat.Spec.MaxSpeed, dt, carrier.Vel);
+            Steer(b, u, goal + carrier.Vel * 2, u.Combat.Spec.MaxSpeed, dt, carrier.Vel, homing: true);
             if (toDeck < Math.Max(0.12, u.Vel.Length * dt * 1.5))
             {
                 u.Docked = true;
@@ -353,13 +353,13 @@ namespace SolarSystem.Core
         // ---------------------------------------------------------------- flying
 
         /// <summary>Flies toward a point: the nose turns at the craft's rate and the craft goes where it points.</summary>
-        static void Steer(Battle b, BattleUnit u, DVec3 goal, double speed, double dt, DVec3 match = default)
+        static void Steer(Battle b, BattleUnit u, DVec3 goal, double speed, double dt, DVec3 match = default, bool homing = false)
         {
             var spec = u.Combat.Spec;
             var to = goal - u.Pos;
             double dist = to.Length;
-            // Stay inside the battle.
-            if (u.Pos.Length > Battle.EscapeKm * 0.8) to = -u.Pos;
+            // Stay inside the battle -- except homing on its carrier, wherever that has drifted to.
+            if (!homing && u.Pos.Length > Battle.EscapeKm * 0.8) to = -u.Pos;
             double toLength = to.Length;
             var desiredDir = toLength > 1e-6 ? to / toLength : u.Forward;
             double turn = spec.TurnRateDegS * Astro.Deg2Rad * dt;
