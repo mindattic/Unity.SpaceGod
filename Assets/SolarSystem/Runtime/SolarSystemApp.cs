@@ -402,7 +402,11 @@ namespace SolarSystem
         void BuildShipViews()
         {
             if (shipViews != null)
-                foreach (var v in shipViews) Destroy(v.Root);
+                foreach (var v in shipViews)
+                {
+                    Materials.DestroyOwned(v.Root.transform);
+                    Destroy(v.Root);
+                }
             var ships = Fleet.Ships;
             shipViews = new ShipView[ships.Count];
             shipScene = new DVec3[ships.Count];
@@ -1486,7 +1490,8 @@ namespace SolarSystem
                 if (viewFaction[i] == null) viewFaction[i] = ship.Faction;
                 if (viewFaction[i] != ship.Faction)
                 {
-                    // Taken as a prize: repaint in the captor's livery.
+                    // Taken as a prize: repaint in the captor's livery (freeing the old view's own meshes and materials).
+                    Materials.DestroyOwned(shipViews[i].Root.transform);
                     Destroy(shipViews[i].Root);
                     shipViews[i] = new ShipView(ship, systemRoot);
                     viewFaction[i] = ship.Faction;
