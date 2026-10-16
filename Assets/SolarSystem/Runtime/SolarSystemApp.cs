@@ -430,7 +430,7 @@ namespace SolarSystem
         {
             float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
             bool overUi = IsPointerOverUi();
-            Input.Poll(overUi);
+            Input.Poll(overUi, ModelViewer.CapturesInput);
             HandleCommands();
 
             Clock.Advance(dt);
@@ -455,8 +455,9 @@ namespace SolarSystem
             HandleSelectionClicks();
 
             ToastAge += dt;
-            Cursor.lockState = Input.LookHeld || IsPiloting ? CursorLockMode.Locked : CursorLockMode.None;
-            Cursor.visible = !(Input.LookHeld || IsPiloting);
+            bool lockCursor = (Input.LookHeld || IsPiloting) && !ModelViewer.CapturesInput;
+            Cursor.lockState = lockCursor ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !lockCursor;
         }
 
         /// <summary>A ship destroyed while selected or followed: let go of it.</summary>

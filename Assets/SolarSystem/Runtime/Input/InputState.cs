@@ -79,12 +79,14 @@ namespace SolarSystem.Input
         /// <summary>True on the frame the right button was released without dragging (a "right click").</summary>
         public bool RightClicked;
 
-        public void Poll(bool pointerOverUi)
+        /// <summary>Reads this frame's input; with <paramref name="suspended"/> (another screen has the
+        /// keyboard and mouse, such as the model viewer) everything reads as idle instead.</summary>
+        public void Poll(bool pointerOverUi, bool suspended = false)
         {
             var kb = Keyboard.current;
             var mouse = Mouse.current;
             Reset();
-            if (kb == null || mouse == null) return;
+            if (suspended || kb == null || mouse == null) return;
 
             Move = new Vector3(
                 Axis(kb.dKey, kb.aKey),

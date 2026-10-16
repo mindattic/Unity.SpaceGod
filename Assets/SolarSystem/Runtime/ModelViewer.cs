@@ -41,6 +41,15 @@ namespace SolarSystem
         Camera viewCamera;
         readonly List<Camera> disabledCameras = new List<Camera>();
         bool open;
+        static bool isOpen;
+        static int closedFrame = -1;
+
+        /// <summary>
+        /// The viewer has the keyboard and mouse this frame, so the game underneath must ignore them:
+        /// while it is open, and on the frame it closes (the Esc that closes it is not also the game's Esc,
+        /// whichever of the two components updates first).
+        /// </summary>
+        public static bool CapturesInput => isOpen || closedFrame == Time.frameCount;
 
         float orbitYaw = 30f, orbitPitch = 15f, zoom = 3f;
         Bounds instanceBounds;
@@ -163,12 +172,13 @@ namespace SolarSystem
             viewCamera.enabled = true;
 
             SelectModel(index);
-            open = true;
+            open = isOpen = true;
         }
 
         void Close()
         {
-            open = false;
+            open = isOpen = false;
+            closedFrame = Time.frameCount;
             if (viewCamera != null) viewCamera.enabled = false;
             foreach (var cam in disabledCameras) if (cam != null) cam.enabled = true;
             disabledCameras.Clear();
