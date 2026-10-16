@@ -83,7 +83,11 @@ namespace SolarSystem.Core
             {
                 var op = Active[i];
                 Refresh(op, src);
-                if (playerShip != null && !playerShip.Destroyed && (op.HelioKm - playerHelio).Length <= ArriveKm) op.Engaged = true;
+                if (playerShip != null && !playerShip.Destroyed && (op.HelioKm - playerHelio).Length <= ArriveKm)
+                {
+                    op.Engaged = true;
+                    op.EngagedBy = playerShip;
+                }
                 Settle(op, jd, src, playerShip);
             }
             if (jd < nextScanJd) return;
@@ -503,8 +507,11 @@ namespace SolarSystem.Core
         void Pay(Opportunity op, Ship player)
         {
             var r = op.Reward;
+            // Whoever saw it through, even if nobody is at the helm when it resolves.
+            player ??= op.EngagedBy;
             if (player != null && player.Faction != null) player.Faction.Treasury += r.Credits;
-            if (player != null && r.CargoCrates > 0)
+            // Cargo only into a hold that still exists to take it.
+            if (player != null && !player.Destroyed && r.CargoCrates > 0)
             {
                 int stored = 0;
                 for (int i = 0; i < r.CargoCrates; i++)

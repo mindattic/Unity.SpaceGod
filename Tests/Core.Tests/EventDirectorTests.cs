@@ -405,6 +405,22 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AFightSeenThroughIsPaidEvenAfterThePlayerLetsGoOfTheHelm()
+        {
+            var helped = Add(ShipClass.Freighter, traders, Near);
+            Fight(helped);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            double before = navy.Treasury;
+            Tick(Jd + 0.01, player, Near); // on the scene
+            Assert.That(op.Engaged, Is.True);
+            helped.Battle = null;          // the fight ends after the player has released the helm
+            Tick(Jd + 0.02, pilot: null, at: Far);
+            Assert.That(op.State, Is.EqualTo(OpportunityState.Completed));
+            Assert.That(navy.Treasury - before, Is.EqualTo(op.Reward.Credits), "the outcome said paid, but no credits arrived");
+        }
+
+        [Test]
         public void ADistressCallFailsWhenTheShipIsLost()
         {
             var s = Add(ShipClass.Freighter, traders, Near);

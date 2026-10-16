@@ -128,6 +128,10 @@ namespace SolarSystem.Core
         /// <summary>The player has been on the scene (within <see cref="EventDirector.ArriveKm"/>) at least once.</summary>
         public bool Engaged;
 
+        /// <summary>The piloted ship that reached it: paid on completion even if the player has let go of
+        /// the helm (or lost the ship) by the time the situation resolves.</summary>
+        public Ship EngagedBy;
+
         /// <summary>A distress call from a ship actually in a fight (rather than one drifting after interdiction).</summary>
         public bool UnderAttack;
 
