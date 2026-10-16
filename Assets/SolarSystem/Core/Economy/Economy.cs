@@ -288,14 +288,16 @@ namespace SolarSystem.Core
         {
             if (!ship.HasCargo) return;
             Settlement best = null;
-            double bestValue = 0;
+            double bestScore = 0, bestValue = 0;
             foreach (var s in At(body))
             {
                 if (!CanTrade(ship, s) || s.Demand[(int)ship.CargoGood] <= 0) continue;
                 double v = s.SaleValue(ship.CargoGood, ship.CargoTonnes);
-                if (s == ship.CargoDestination) v *= 1.05;
-                if (v > bestValue)
+                // The booked market wins a near tie; it still pays only what the cargo is worth there.
+                double score = s == ship.CargoDestination ? v * 1.05 : v;
+                if (score > bestScore)
                 {
+                    bestScore = score;
                     bestValue = v;
                     best = s;
                 }

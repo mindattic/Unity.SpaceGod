@@ -508,7 +508,7 @@ namespace SolarSystem.Core.Tests
             const double tonnes = 500, cargoCost = 20000, bonus = 50000;
             var ship = LoadedShip(traderFaction, ShipClass.Freighter, Good.Food, tonnes, cargoCost, destination, bonus);
             double rawValue = destination.SaleValue(Good.Food, tonnes);
-            double bestValue = rawValue * 1.05; // the booked-destination preference
+            double bestValue = rawValue; // the booked-destination preference ranks markets; it isn't paid out
             double tax = bestValue * Economy.PortTax;
             double finalValue = bestValue + bonus;
             double expectedProfit = finalValue - tax - cargoCost;
