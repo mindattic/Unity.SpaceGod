@@ -174,6 +174,28 @@ namespace SolarSystem.Core.Tests
         }
 
         [Fact]
+        public void WrecksAppearWhereShipsDieAndClearAwayAfterTheirLifetime()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var w = World.CreateDefault(eph, StartJd);
+            int maxWrecks = 0;
+            double lastJd = StartJd;
+            for (double jd = StartJd; jd <= StartJd + 200; jd += 0.25)
+            {
+                eph.Update(jd);
+                w.Update(jd);
+                maxWrecks = Math.Max(maxWrecks, w.War.Wrecks.Items.Count);
+                lastJd = jd;
+            }
+
+            Assert.True(w.Fleet.Ships.Count(s => s.Destroyed) > 0, "nobody ever died, so this proves nothing");
+            Assert.True(maxWrecks > 0, "a ship died but no wreck was ever left behind");
+            foreach (var wreck in w.War.Wrecks.Items)
+                Assert.True(lastJd - wreck.CreatedJd <= wreck.LifetimeDays, $"{wreck.Name}'s wreck outlived its own lifetime and should have been cleared away");
+        }
+
+        [Fact]
         public void TheDestroyersRailgunIsAFixedSpinalGunThatHitsHarderThanAnyTurret()
         {
             var layout = CombatSpec.Of(ShipClass.Destroyer).Layout;

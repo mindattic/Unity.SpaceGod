@@ -153,8 +153,8 @@ namespace SolarSystem
 
         // Wrecks burn out where the ship died, in its battle's frame.
         float[] wreckStart;
-        DVec3[] wreckLocal;
         BattleFx battleFx;
+        DebrisFields debrisFields;
         FighterViews fighterViews;
         LaneView laneView;
         GateView gateView;
@@ -172,10 +172,14 @@ namespace SolarSystem
         public DVec3 BattleScene(Battle b, DVec3 localKm) => BattleAnchorScene(b) + localKm.SwapYZ * BattleKmScale;
 
         /// <summary>Where a battle is drawn: in orbit of its body, or beside the drawn hyperlane for an ambush.</summary>
-        DVec3 BattleAnchorScene(Battle b)
+        DVec3 BattleAnchorScene(Battle b) => AnchorScene(b.Site, b.Body, b.Anchor);
+
+        /// <summary>Scene position of a lasting wreck: where its battle was drawn, at the spot its unit died.</summary>
+        public DVec3 WreckScene(Wreck w) => AnchorScene(w.Site, w.Body, w.Anchor) + w.Local.SwapYZ * BattleKmScale;
+
+        DVec3 AnchorScene(LaneSite site, int body, DVec3 anchor)
         {
-            var site = b.Site;
-            if (site == null) return bodyScene[b.Body] + Scale.LocalOffset(Catalog[b.Body], b.Anchor);
+            if (site == null) return bodyScene[body] + Scale.LocalOffset(Catalog[body], anchor);
             var hop = site.Hop;
             var aKm = Ephemeris.Helio(hop.From) + site.FromOffset;
             var cKm = Ephemeris.Helio(hop.To) + site.ToOffset;
@@ -294,6 +298,7 @@ namespace SolarSystem
             BuildShipViews();
             pathLine = new LineStrip("Flight path", systemRoot) { Visible = false };
             battleFx = new BattleFx(this, systemRoot);
+            debrisFields = new DebrisFields(this, systemRoot);
             fighterViews = new FighterViews(this, systemRoot);
             laneView = new LaneView(this, systemRoot);
             gateView = new GateView(this, systemRoot);
@@ -378,7 +383,6 @@ namespace SolarSystem
             Array.Resize(ref shipBlendT, ships.Count);
             Array.Resize(ref shipLastBattle, ships.Count);
             Array.Resize(ref wreckStart, ships.Count);
-            Array.Resize(ref wreckLocal, ships.Count);
             for (int i = have; i < ships.Count; i++)
             {
                 shipViews[i] = new ShipView(ships[i], systemRoot);
@@ -403,7 +407,6 @@ namespace SolarSystem
             shipBlendT = new float[ships.Count];
             shipLastBattle = new Battle[ships.Count];
             wreckStart = new float[ships.Count];
-            wreckLocal = new DVec3[ships.Count];
             for (int i = 0; i < ships.Count; i++)
             {
                 shipViews[i] = new ShipView(ships[i], systemRoot);
@@ -1388,6 +1391,7 @@ namespace SolarSystem
             fighterViews.Update();
             embeddedPods.Update();
             battleFx.Update();
+            debrisFields.Update();
             Structures.Update(true);
             swarm.Update(ShowSatellites);
             UpdateOrbitLines(dt);
@@ -1428,30 +1432,29 @@ namespace SolarSystem
             material.SetFloat("_Intensity", 0.35f + 0.9f * heat);
         }
 
-        /// <summary>A ship lost in battle breaks up and burns out where it died.</summary>
+        /// <summary>
+        /// A ship lost in battle breaks up and burns out where it died, then lingers as a slowly
+        /// tumbling wreck (<see cref="World.War"/>'s persistent <see cref="Wreck"/>, not just the
+        /// transient burn-out) until its own configurable lifetime runs out and the Core clears it away.
+        /// </summary>
         void DrawWreck(int i, Ship ship)
         {
-            var battle = shipLastBattle[i];
-            if (wreckStart[i] < 0)
-            {
-                var unit = battle?.UnitOf(ship);
-                if (unit == null)
-                {
-                    wreckStart[i] = float.MaxValue;
-                    shipViews[i].SetVisible(false);
-                    return;
-                }
-                wreckStart[i] = Time.unscaledTime;
-                wreckLocal[i] = unit.Pos;
-            }
-            if (wreckStart[i] == float.MaxValue || battle == null)
+            var wreck = World.War.Wrecks.Of(ship);
+            if (wreck == null)
             {
                 shipViews[i].SetVisible(false);
                 return;
             }
-            var scene = BattleScene(battle, wreckLocal[i]);
-            if (!shipViews[i].Wreck(Relative(scene), shipRotation[i], (float)Scale.ShipLength(ship.LengthKm), Time.unscaledTime - wreckStart[i], Time.unscaledTime))
+            if (wreckStart[i] < 0) wreckStart[i] = Time.unscaledTime;
+            var rel = Relative(WreckScene(wreck));
+            float length = (float)Scale.ShipLength(ship.LengthKm);
+            bool stillBurning = wreckStart[i] != float.MaxValue
+                && shipViews[i].Wreck(rel, shipRotation[i], length, Time.unscaledTime - wreckStart[i], Time.unscaledTime);
+            if (!stillBurning)
+            {
                 wreckStart[i] = float.MaxValue;
+                shipViews[i].Derelict(rel, shipRotation[i], length, Time.unscaledTime + ship.Id);
+            }
         }
 
         /// <summary>Defence platforms are drawn while they fight.</summary>

@@ -38,6 +38,9 @@ namespace SolarSystem.Core
         readonly World world;
         public readonly List<Battle> Battles = new List<Battle>();
         public readonly List<Battle> Ended = new List<Battle>();
+
+        /// <summary>Lasting wrecks left where ships have died, cleared away once each has run its lifetime.</summary>
+        public readonly Wrecks Wrecks = new Wrecks();
         public readonly Dictionary<Ship, GroupOrder> Orders = new Dictionary<Ship, GroupOrder>();
         readonly Dictionary<int, double> danger = new Dictionary<int, double>();
         readonly Dictionary<Settlement, double> siegeDays = new Dictionary<Settlement, double>();
@@ -608,6 +611,7 @@ namespace SolarSystem.Core
                 u.Ship.Destroyed = true;
                 losses.TryGetValue(u.Faction, out int n);
                 losses[u.Faction] = n + 1;
+                Wrecks.Add(u, b.Body, b.Anchor, b.StartJd + b.Seconds / Astro.SecondsPerDay, site: b.Site);
             }
             BumpDanger(b.Body, u.Ship != null && !u.Ship.Spec.IsMilitary ? 2.0 : 0.6);
         }
@@ -1066,6 +1070,7 @@ namespace SolarSystem.Core
 
             foreach (var s in Fleet.Ships)
                 if (s.Derelict && !s.Destroyed && jd - s.DerelictSinceJd > 25) s.Destroyed = true;
+            Wrecks.AdvanceTo(jd);
             if (Fleet.Lanes != null)
                 foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.SetDanger(lane, Fleet.Lanes.Danger[lane] * 0.85);
             MergeGroups();
