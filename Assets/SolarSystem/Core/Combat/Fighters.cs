@@ -356,11 +356,12 @@ namespace SolarSystem.Core
             double dist = to.Length;
             // Stay inside the battle.
             if (u.Pos.Length > Battle.EscapeKm * 0.8) to = -u.Pos;
-            var desiredDir = dist > 1e-6 ? to / dist : u.Forward;
+            double toLength = to.Length;
+            var desiredDir = toLength > 1e-6 ? to / toLength : u.Forward;
             double turn = spec.TurnRateDegS * Astro.Deg2Rad * dt;
             double cos = Math.Max(-1, Math.Min(1, DVec3.Dot(u.Forward, desiredDir)));
             double angle = Math.Acos(cos);
-            u.Forward = angle <= turn ? desiredDir : DVec3.Lerp(u.Forward, desiredDir, turn / angle).Normalized;
+            u.Forward = angle <= turn ? desiredDir : DVec3.TurnStep(u.Forward, desiredDir, turn / angle);
             // Throttle back when closing on a slot so wingmen do not overshoot.
             double want = speed;
             if (match.LengthSquared > 0) want = Math.Min(speed, match.Length + dist * 1.2);

@@ -55,6 +55,21 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ACraftTurningBackIntoTheBattleKeepsAUnitHeading()
+        {
+            var b = CarrierAction(5);
+            var wingman = b.Units.First(u => u.Kind == UnitKind.Fighter && u.Fighter.Lead != null);
+            // Far out at the edge, nose already pointing back in, with its station close by.
+            wingman.Pos = new DVec3(Battle.EscapeKm * 0.82, 0, 0);
+            wingman.Forward = -DVec3.UnitX;
+            wingman.Fighter.Lead.Pos = wingman.Pos + new DVec3(-0.5, 0.5, 0);
+            wingman.Fighter.Lead.Vel = DVec3.Zero;
+            FighterAI.Step(b, wingman, 0.1);
+            Assert.That(wingman.Forward.Length, Is.EqualTo(1.0).Within(1e-9));
+            Assert.That(wingman.Vel.Length <= wingman.Combat.Spec.MaxSpeed * 1.3 + 1e-9, Is.True);
+        }
+
+        [Test]
         public void WingmenHoldALooseFormationThatBreathes()
         {
             var b = CarrierAction(11);
