@@ -1,8 +1,8 @@
 # UnitySolarSystem
 
-Swim through the real solar system like Quake, select anything and press **F** to focus on it Homeworld 3 style, and flip the whole system between navigable **gameplay** proportions and true **realistic** scale while it keeps moving. Built in Unity 6 (URP).
+The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 112 passing](https://img.shields.io/badge/core%20tests-112%20passing-2ea44f) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 467 passing](https://img.shields.io/badge/core%20tests-467%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -15,6 +15,7 @@ A ground-up rebuild of [ExperimentSolarSystem](https://github.com/mindattic/Expe
 - **Gameplay and realistic scale, live.** Press G and everything eases between a compressed, playable layout and true proportions (1 unit = 1,000 km) over about 2.5 seconds. Whatever you are looking at stays framed.
 - **Billboards when things get small.** Anything under a few pixels, ships and planets alike, turns into a class-shaped icon in its faction colour, so you can always see where everything is, even at true scale where Earth is a speck.
 - **A living system.** Eighteen settlements run a supply-and-demand economy that merchants trade on by themselves; three navies and a pirate band fight real battles with lasers, missiles and carrier fighters, losing ships and ports; and traffic between planetary systems rides X3-style hyperlanes. You watch it happen.
+- **Take the helm when you want to.** Press P on any ship to fly it yourself: steer with the mouse, fire its forward guns, cruise across open space, trade crates at a port, answer a pirate's demand, or fly through the jump gate to Alpha Centauri.
 
 ## Gameplay vs realistic
 
@@ -28,22 +29,22 @@ The same moment, focused on Earth, before and after pressing G. At gameplay scal
 
 ## Features
 
-### Simulation (`Assets/SolarSystem/Core`, no UnityEngine dependency)
+### Simulation
 
 - **Ephemeris.** The Sun, 8 planets, Ceres, Pluto, Eris and 14 moons. Earth is offset from the Earth-Moon barycentre by the Moon. The Moon has real nodal regression and apsidal precession. The other moons use JPL's satellite mean elements in their Laplace planes, fitted to JPL Horizons, so each sits within half a degree of its true place on its orbit across 2000-2050 (Phobos and Miranda within 2). Uranus's moons roll with it and Triton goes backwards.
 - **Rotation and orientation.** Real IAU poles (RA/Dec converted to the ecliptic) and sidereal rotation periods, with retrograde rotators handled.
 - **Scale model.** A radial mapping about each parent that sends every surface to its displayed surface at any blend, so orbits keep their true shape and direction in both modes and nothing in low orbit ends up inside a planet. Intermediate blends interpolate in log space.
-- **Fleet.** Around a hundred ships across five factions, growing and shrinking as yards build and battles destroy. Ships park in circular orbits at the real Keplerian rate for the body's GM. They depart when their orbit faces the target, then fly a constant-thrust brachistochrone (accelerate, flip at the midpoint, brake), plus a steady push that takes them from their parking orbit's velocity to the destination's, so they leave and arrive moving with the world. A hop within one planet's system (Earth to the Moon, Io to Europa) is flown in that planet's frame. Each transit is planned once, as an intercept against where the destination will be on arrival, dog-legs around the Sun or planet at the centre of its frame, and is checked against running into the bodies at either end (and steered wide of the planet a moon orbits). Between planetary systems ships take the hyperlanes instead (see below).
+- **Fleet.** Five factions in Sol, with yards building merchants toward a target of 100 traders (capped at 170) plus warships, and battles destroying them. Ships park in circular orbits at the real Keplerian rate for the body's GM. They depart when their orbit faces the target, then fly a constant-thrust brachistochrone (accelerate, flip at the midpoint, brake), plus a steady push that takes them from their parking orbit's velocity to the destination's, so they leave and arrive moving with the world. A hop within one planet's system (Earth to the Moon, Io to Europa) is flown in that planet's frame. Each transit is planned once, as an intercept against where the destination will be on arrival, dog-legs around the Sun or planet at the centre of its frame, and is checked against running into the bodies at either end (and steered wide of the planet a moon orbits). Between planetary systems ships take the hyperlanes instead (see below).
 - **Sim clock.** Real time up to 1 year per second, starting at the current UTC date.
 
-### Rendering (`Assets/SolarSystem/Runtime`)
+### Rendering
 
 - **Floating origin.** The Unity camera never leaves the world origin. Positions are kept in doubles and every renderer is placed at scene position minus camera position, so a 600 m freighter renders cleanly 2.4 million km from Earth. Near and far planes adapt to the nearest surface.
 - **Custom URP shaders** lit by the Sun's camera-relative position rather than a range-limited light: day/night terminator, atmosphere rims, procedural surfaces for bodies with no honest colour map, a granulating Sun with corona, Saturn's rings (C, B, Cassini Division, A, Encke Gap) shadowed by the planet, engine plumes, and a starfield with the Milky Way along the real galactic plane.
-- **Ships.** Procedurally kit-bashed carriers (flight deck, island, hangar glow), battleships (turrets, superstructure), cruisers and destroyers in faction livery. Warship guns, launchers, point defence, shield emitters, sensor masts and hangar bays are separate parts bolted on at the hardpoints the combat model uses. Freighters, ore haulers and couriers use Kenney Space Kit models. Ships face their thrust vector, so you see them flip at the midpoint.
+- **Ships.** Procedurally kit-bashed carriers (flight deck, island, hangar glow), battleships (turrets, superstructure), cruisers and destroyers in faction livery. Warship guns, launchers, point defence, shield emitters, sensor masts and hangar bays are separate parts bolted on at the hardpoints the combat model uses. Fighters are their own small twin-gun hull. Freighters, ore haulers and couriers use Kenney Space Kit models. A ship's nose stays prograde through the whole transit, braking half included, and every hull trails engine embers while it burns.
 - **One-pixel orbit trails** that fade behind each body. Moon orbits fade in as you approach their planet.
 
-### Real surfaces, moving weather and the asteroid belt
+### Real surfaces weather and asteroids
 
 - **Real maps on 19 worlds.** The Moon (LRO LROC colour), Mercury (MESSENGER), Mars (Viking), the four Galilean moons (Galileo and Voyager), Titan, Enceladus, Phobos, Deimos, Ceres (Dawn), Pluto and Charon (New Horizons), Triton, Miranda, Titania and Oberon (Voyager), with relief shading from real elevation data on the Moon (LOLA), Mars (MOLA) and Mercury (MESSENGER DEM). Every map is turned by its IAU prime meridian, or faces its planet for synchronous moons, so the Moon shows Earth its real near side and Pluto keeps its 0° meridian on Charon. Gaps the spacecraft never imaged are a flat neutral grey, and every caveat (Io's muted false colour, Triton's ultraviolet-based colour reduced to brightness, Titan's haze) is listed in [SOURCES.md](Assets/SolarSystem/Resources/Textures/SOURCES.md).
 - **Gas giants that move with their real winds.** Each latitude of Jupiter, Saturn, Uranus and Neptune drifts at its measured zonal wind speed (Cassini, Voyager and Hubble profiles; Jupiter's 23.7°N jet runs 165 m/s, about 13° of longitude a day) through a looping flow map with advected turbulence, on the simulation clock. Jupiter's Great Red Spot sits at its current System III longitude (BAA and JUPOS measurements, drifting 0.31° a day) and turns counter-clockwise, an anticyclone, about once in 6 days. The swirl fades out at time warps where it would strobe.
@@ -58,14 +59,18 @@ The same moment, focused on Earth, before and after pressing G. At gameplay scal
 | --- | --- | --- |
 | ![Mars with MOLA relief shading](docs/images/16-mars.jpg) | ![111,000 real asteroids around the inner system at gameplay scale](docs/images/17-asteroid-belt-gameplay.jpg) | ![The same belt at realistic scale](docs/images/18-asteroid-belt-realistic.jpg) |
 
-### The living system (game layer: `Assets/SolarSystem/Core/Economy`, `Core/Combat`, `Core/Hyperlanes.cs`)
+### The living system
 
 The orbits are real; everything below is fiction, placed on worlds that plausibly hold what they produce.
 
 - **Economy.** Sixteen goods: food, water and medical supplies; helium-3; nickel-iron, copper, zinc, platinum-group metals, rare earths and titanium; hydrocarbons and nitrogen; refined alloys, electronics, machinery and munitions. Eighteen settlements (Earth's orbital industry, Tycho City, Ares Prime, Ceres Hub, Ganymede Union, Kraken Port on Titan and so on) mine what their world has (ice moons sell water, Titan hydrocarbons, Io copper and zinc from its sulphide flows), turn it into goods through production chains (smelters, electronics fabs, machine works, pharmaceutical labs, munitions plants, shipyards), feed their people and price every good from their stock against what they use. Facilities grow when what they make sells dear and shrink when it is glutted; populations grow when fed and shrink when not.
 - **Trade.** Freighters, ore haulers and couriers each pick the cargo and destination that earn the most per day of travel, counting deliveries already on the way, so goods flow from surplus to shortage without a script. Owners post supply contracts for essentials their outposts are short of. Profits go to the ship's faction, ports tax the trade, and traders steer clear of where the fighting has been.
 - **War.** The Sol Federation and the Outer Reach Compact are at war (it cools to ceasefires and flares up again); the Belt Consortium trades with both and hunts pirates; the Black Banner raids busy ports from Blackwater on Deimos. Fleet groups take orders (patrol, attack a weak enemy port, defend one under attack, besiege, refit at a yard). A battle starts wherever hostile forces meet: groups, merchants or a settlement's orbital defence platforms. A port with no platforms left, held by a besieging group for 4 to 20 days, changes hands; refits and new hulls are paid for in alloys, electronics and munitions bought from the yard's market.
-- **Capital ship combat.** Battles run a tactical simulation in a local space tens of km across: ships manoeuvre to their weapons' range, every hardpoint picks its own target, lasers and missiles hit particular subsystems (guns first, then shields, engines and the bridge; a lost reactor takes the ship with it), point defence shoots missiles and fighters down, and damaged ships break off and run. Turrets traverse onto their targets, shot-away hardpoints leave burning scars, breaches open as the hull falls, and a destroyed ship breaks into bow and stern that tumble apart and burn out.
+- **Capital ship combat.** Battles run a tactical simulation in a local space tens of km across: ships manoeuvre to their weapons' range, every hardpoint picks its own target, lasers, railguns and missiles hit particular subsystems (guns first, then shields, engines and the bridge; a lost reactor takes the ship with it), point defence shoots missiles and fighters down, and damaged ships break off and run. Turrets traverse onto their targets, shot-away hardpoints leave burning scars, breaches open as the hull falls, and a destroyed ship breaks into bow and stern that tumble apart and burn out.
+- **Weapons that travel.** Railgun and gun rounds fly a lead-compensated straight line and land only when they arrive; a miss keeps flying and fades, and the miss rate depends on the target's size. Beams sweep onto their target and leave a scorch, with muzzle flash and recoil. Destroyers carry a fixed spinal railgun.
+- **Wrecks.** A ship destroyed in battle leaves a slowly tumbling hull inside a drifting debris field where it died, at a body or beside a hyperlane, carrying its cargo as salvage until it breaks up and is cleared.
+- **Surrender.** An outgunned, battered hull can strike its colours instead of fighting to the last: it breaks off, powers down its weapons and hails. How soon depends on its damage, the odds and its faction's temperament (pirates break first, navy crews last). Its captor ransoms the cargo, takes the ship through the boarding path, or lets it go.
+- **Escort fighters.** Besides carrier squadrons, each of the six navy patrol groups flies two named fighters as escorts.
 - **Fighters.** Carriers launch their squadrons (two of interceptors to one of torpedo bombers) as they enter a battle. Each squadron flies attack runs on capital ships (approach from the side, dive in guns firing or torpedoes away, pass close, break off, swing round from a new side) or dogfights enemy fighters. Wingmen fly a loose vee: each pilot has their own wander, reaction lag and discipline, so formations breathe and stretch, and spread out on the run.
 - **Boarding.** Every hull has an interior: a chain of compartments (bow, holds, quarters, batteries, midships, the bridge, engineering) with its crew and marines in them. A disabled ship (no engines, a lost bridge on a holed hull, or a hull nearly gone) can be boarded: a warship or raider lines up alongside, matches its drift, latches and sends its marines through the airlock; a pirate **breacher** rams its drill prow into the hull and its assault bay opens straight in; and mid-battle, warships fire drill-tipped **boarding pods** that bounce off shields but punch through bare plating and stick there, each with a squad aboard. A breach vents its compartment and kills crew until the emergency bulkheads seal. The fight inside is resolved over time, compartment by compartment: marines rush to the breach, casualties trade on numbers, training (each faction's marine quality, room for upgrades) and a defender's advantage, and the bridge and engineering are fortified for a last stand. Holding both takes the ship. Pirates keep warships they can crew, strip merchant holds and leave the hull adrift (or sell it to the breakers, or scuttle it); navies take serviceable prizes and scuttle pirates. The interior model keeps everything a future deck-by-deck boarding view needs.
 - **Lane ambushes.** Raiders lie in wait just outside a busy hyperlane. When a ship passes, an electromagnetic pulse throws every ship near that point out of the lane, knocking out their drives and shields for a minute or two, and the raiders close in. The fight happens in open space beside the lane; survivors climb back in and carry on. Ambushed lanes look dangerous to route planners for a while, so traffic shifts. Fighters fly back and land on their carriers when the shooting stops, and carriers short of fighters (or groups short of marines) go home to refit.
@@ -74,9 +79,9 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
   - **Diversion:** merchants still on their way to a port where fighting has just broken out change course mid-flight, keeping their momentum, for the nearest safe port.
   - **Free ships:** yachts, survey ships and prospectors go where they please. They hop out to open space near a world to drift, then wander on to its neighbours.
   - **Route planning** steers round every world in the way, not just the trip's two ends.
-- **Hyperlanes.** Twelve lanes link the planetary systems from Mercury to Pluto. Each system has a ramp per lane just outside its moons; a ship flips-and-burns to the ramp, rides the lane at up to 4% of light speed (easing in and out), and flips-and-burns from the far ramp to its destination. Earth to Mars takes a freighter about a day and a half instead of eleven. Lanes bow away from the Sun and route around it.
+- **Hyperlanes.** Twelve lanes link the planetary systems from Mercury to Pluto. Each system has a ramp per lane just outside its moons; a ship flips-and-burns to the ramp, rides the lane at up to 4% of light speed (easing in and out), and flips-and-burns from the far ramp to its destination. Earth to Mars takes a freighter about a day and a half instead of eleven. Lanes bow away from the Sun and route around it. Every ship riding a lane, or lurking off one, shows as a marker in its faction colour.
 
-### Alpha Centauri and the way between the stars (`Core/Systems`)
+### Alpha Centauri and the way between the stars
 
 - **A second star system.** The Sun's nearest neighbour, from published data:
   - **Alpha Centauri A and B** on their real 79.8-year orbit (Akeson et al. 2021), swinging between 11.2 and 35.4 AU apart around their barycentre.
@@ -90,7 +95,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
   2. turns toward the destination and glides 4.34 light-years through a view of the 21 nearest real stars;
   3. falls into the other system's overview.
 
-  Esc skips the trip.
+  Esc skips the trip. A piloted ship can make the crossing itself through the jump gates (see Piloting below).
 - **Seeing the other system:** each system shows the other in its sky. Alpha Centauri is marked from Sol, and the Sun shines in Cassiopeia from Alpha Centauri.
 - **Alpha Centauri's game layer**, thinner and younger than Sol's:
   - **Centauri Accord:** governs the Proxima colonies with a small navy.
@@ -100,7 +105,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Settlements:** New Kentaurus, Ember Station, Far Reach, Rigil Gate, Aurora Skimmer, Toliman Forge and Blackhollow.
 - **Crossing:** two trunk hyperlanes cross the 12,000 AU between the A–B pair and Proxima in five days each.
 
-### In orbit: industry, spacecraft and docking rings (`Core/Infrastructure`)
+### Orbital industry and docking rings
 
 - **Industry in orbit.** Every settlement's industry is now physical, in orbit round its world:
   - its shipyard is an open lattice cradle with the hull it is building framed out rib by rib, then plated as build points accrue, and launched from the yard's orbit;
@@ -126,12 +131,25 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Effect on trade:** route planning counts the queue and the descent.
 - **Hull textures:** hulls, stations and structures are plated with a CC0 sci-fi panel texture (ambientCG MetalPlates015A), projected triplanar. Factions are told apart by the shade of their plating as well as their trim.
 
+### Piloting
+
+- **Any ship, anywhere.** Select a ship and press P to take the helm, whether it is parked, mid-transit, on a hyperlane, queued at a ring, landed or in a battle. An escort leaves its formation; a ship already fighting hands you its place in the battle. The clock drops to real time (press . to speed it up), and P again hands the ship back.
+- **Flight.** The mouse steers, W and S throttle, A, D, Q and E strafe, Shift boosts. Turning has inertia, and each hull class has its own speed and turn rate. The field of view widens under boost and cruise.
+- **Cruise.** Hold J while flying straight at full throttle and the cruise drive spools up to far beyond normal top speed. It drops out the moment you take damage, enter a battle, throttle down or turn hard, and weapons cannot fire while cruising.
+- **Weapons.** Flying near hostiles starts or joins a battle. Left mouse fires the forward guns along the nose (missiles go to the locked target); side and aft batteries and point defence keep fighting on their own. T locks the camera onto the hovered or selected ship.
+- **Hails.** In a battle, the number keys answer: to a pirate demand for your cargo, 1 hands it over and 2 refuses; to an enemy that strikes its colours, 1 demands its cargo, 2 takes the ship and 3 lets it go.
+- **Cargo and trade.** I opens the ship's grid cargo hold (a per-class grid; click a crate, then a cell, to move it). Near a settlement's world, the M market board shows Buy and Sell buttons that trade whole crates at the same prices and port tax the AI traders pay.
+- **Spawn and pilot.** V opens a screen of every ship class with a rendered preview; click one to spawn it at the camera and fly it.
+- **Jump gates.** Sol's Centauri Gate and Alpha Centauri's Sol Gate sit 5,000 km from each system's centre, facing the other star. Fly within 300 km and press Y to come out at the far gate, ship, cargo and credits intact.
+- **Model viewer.** F9 (or `-modelviewer <name>` on the command line) shows any ship model on its own for visual checks.
+
 ### Interface
 
 - A navigator with a **STAR SYSTEMS** switcher, then the tree of bodies, fleets, docking rings (with their queues) and everything in orbit: click to select, double-click to focus.
 - A details panel with live distance, light time, vis-viva orbital speed, period, eccentricity and gravity for bodies. For ships, it shows status, speed, ETA, cargo or patrol orders.
 - Selection brackets, hover highlight, an off-screen pointer to the selected target, and the flight path of the selected ship (lanes included).
 - Body panels show each settlement's exports, shortages and defences; ship panels show cargo and trade profit, or hull, shields, lost hardpoints, fighters aboard and orders. **M** opens a market board, **B** jumps to the biggest battle and drops to battle time (real time), and a ticker reports battles, captures, launches and ceasefires.
+- The market board, cargo hold and controls panel collapse to their title bar with their [-] button.
 
 | Carrier group in formation | Freighter mid-burn | Saturn |
 | --- | --- | --- |
@@ -139,35 +157,56 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 
 ## Quick start
 
-Prerequisites: Unity **6000.4.3f1** (via Unity Hub). Optionally the .NET 10 SDK to run the core tests.
+Prerequisites:
 
-1. Clone: `git clone https://github.com/mindattic/UnitySolarSystem.git`
-2. Open the folder in Unity Hub. The first import takes a few minutes. The editor opens `Assets/Scenes/SolarSystem.unity` automatically (or use **Solar System > Rebuild Main Scene**).
-3. Press Play.
+- Windows and Unity **6000.4.3f1** (via Unity Hub).
+- [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) cloned next to this repo: `Packages/manifest.json` loads its Unity package from `../MindAttic.Capture/unity/com.mindattic.capture`.
+- Optionally the .NET 10 SDK, to run the core tests.
 
-Any scene works, because `Bootstrap` creates the app if the scene does not have one. To build a Windows player, use **Solar System > Build Windows Player**, or run it headless:
+```bash
+git clone https://github.com/mindattic/UnitySolarSystem.git
+git clone https://github.com/mindattic/MindAttic.Capture.git
+```
+
+1. Open the `UnitySolarSystem` folder in Unity Hub. The first import takes a few minutes. The editor opens `Assets/Scenes/SolarSystem.unity` automatically (or use **Solar System > Rebuild Main Scene**).
+2. Press Play. You start in free swim beside Earth, with Earth selected, gameplay scale on and the clock at the current date. The controls panel is open; H hides it.
+
+Any scene works, because `Bootstrap` creates the app if the scene does not have one.
+
+## Building and deployment
+
+In the editor, **Solar System > Build Windows Player** builds `Builds/Windows/UnitySolarSystem.exe`. Headless, with the editor closed:
 
 ```bash
 Unity.exe -batchmode -quit -projectPath . -executeMethod SolarSystem.EditorTools.ProjectSetup.SetupAndBuild
 ```
 
-`-demo` plays the scripted camera tour live and on loop as an unattended showcase, ending each loop by fast-forwarding to the next real fleet action and watching it at battle time; touch any control to stop it and take over.
+`tools/deploy.ps1` does a clean build and publishes it: it stops any running copy, deletes `Builds\Windows` (never `Library\`), builds in batch mode with the Unity version from `ProjectSettings/ProjectVersion.txt`, and copies the player to `C:\Apps\UnitySolarSystem\`. Add `-Launch` to start it afterwards.
 
-Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Production builds leave it off; build a capture-enabled player with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/UnitySolarSystem.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`), then:
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
+```
+
+`tools\launch.bat` (or `tools\launch.ps1`) always redeploys first, then offers Normal Play, Demo + Capture (`-demo -capture video screen 5`) or Quit.
+
+## Command line
+
+| Flag | Result |
+| --- | --- |
+| `-demo` | plays the scripted camera tour once (inner system, ships, Saturn, Earth at both scales, Jupiter, docking rings, Alpha Centauri, real surfaces, battles and three staged combat showcases), then quits |
+| `-modelviewer <name>` | opens straight into the model viewer on that ship model from `Resources/Ships` |
+| `-capture ...` | records the session through MindAttic.Capture (below); independent of `-demo` |
+
+Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Capture is compiled into capture-enabled players only: build one with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/UnitySolarSystem.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`). Capture is off unless `-capture` is on the command line.
 
 | Command | Result |
 | --- | --- |
-| `UnitySolarSystem.exe -capture screen` | runs the tour once, saves a PNG at each stop and quits (how the images above were made) |
-| `UnitySolarSystem.exe -capture video screen` | the same, also filmed |
+| `UnitySolarSystem.exe -demo -capture screen` | runs the tour once, saves a PNG at each stop and quits (how the images above were made) |
+| `UnitySolarSystem.exe -demo -capture video screen 5` | the tour, filmed, with a PNG every 5 seconds as well as at each stop |
 | `UnitySolarSystem.exe -capture video` | films the session from start to exit at native resolution |
-| `UnitySolarSystem.exe -demo -capture screen 5` | the live showcase with a PNG every 5 seconds |
-| `UnitySolarSystem.exe -demo -capture video` | the live showcase, filmed (close the window to finish the video) |
+| `UnitySolarSystem.exe -capture screen 5` | a PNG every 5 seconds until exit |
 
-Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`, named by time (`2026-10-11T14.38.03.577.png`); each image's `.json` sidecar names the tour stop it shows (`\"tag\": \"03-carrier-group\"`). In the editor, **MindAttic > Capture** toggles the same for Play Mode.
-
-MindAttic.Capture also auto-starts in plain Editor Play sessions and dev builds (not gated by
-`-capture`). Currently disabled project-wide: `"enabled": false` in
-`Assets/StreamingAssets/capture.json`. Flip it to `true` (or remove the key) to re-enable.
+Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`; each tour screenshot's `.json` sidecar names the stop it shows (`"tag": "03-carrier-group"`). In the editor, the **MindAttic > Capture** menu records video or screenshots in Play Mode, and F12 takes a screenshot.
 
 ## Controls
 
@@ -185,16 +224,34 @@ MindAttic.Capture also auto-starts in plain Editor Play sessions and dev builds 
 | Toggle gameplay / realistic scale | G or Backquote |
 | Planets: 0 Sun, 1 Mercury to 9 Pluto (in Alpha Centauri: A, B, Proxima, its planets, the stations) | Number keys (press twice to focus) |
 | Cycle ships | Tab (Shift+Tab backwards) |
-| Time warp slower / faster | , and . (or - and =) |
-| Pause: time eases to a stop (x0.99 a step until under 1%), and eases back up when pressed again | Space (or P) |
+| Time warp slower / faster | , and . (or - and =, or numpad - and +) |
+| Pause: time eases to a stop, and eases back up when pressed again | Space (or Pause) |
 | Reset to now | T |
-| Orbits, labels, help, HUD | O, L, H, U |
+| Orbits, labels, help, HUD | O, L, H (or F1), U |
 | Market board | M |
 | Watch the biggest battle (at battle time) | B |
 | Hyperlanes on / off | N |
 | Satellite constellations on / off | K |
 | Level the view to the system's plane (smooth swing: the ecliptic in Sol, the A–B orbit in Alpha Centauri) | R, or the LEVEL button |
 | Fly to another star system | Navigator, STAR SYSTEMS (Esc skips the trip) |
+| Pilot the selected ship / hand it back | P |
+| Spawn and pilot any ship class | V |
+| Model viewer | F9 |
+
+While piloting:
+
+| Action | Input |
+| --- | --- |
+| Steer | Mouse |
+| Throttle / strafe / rise and sink | W S / A D / E Q |
+| Boost | Shift |
+| Cruise drive | Hold J |
+| Fire forward guns | Hold left mouse |
+| Lock a target | T |
+| Cargo hold | I |
+| Buy and sell crates | M, near a settlement's world |
+| Activate the jump gate | Y, within 300 km of it |
+| Answer a hail in battle | 1, 2, 3 |
 
 ## Project layout
 
@@ -203,31 +260,39 @@ Assets/SolarSystem/
   Core/                 engine-free simulation (compiled by Tests/ as plain .NET)
     Kepler.cs             Kepler's equation, perifocal to ecliptic, vis-viva
     OrbitalElements.cs    JPL-style elements with secular rates
+    LunarTheory.cs        the main terms of a lunar theory for the Moon
     BodyCatalog.cs        physical and orbital data for 26 bodies, with sources
     Ephemeris.cs          positions at any Julian date, orbit sampling
     ScaleModel.cs         realistic / gameplay mapping and its inverse
     Fleet.cs, Ships.cs    ship classes, factions, schedules, brachistochrone transits, lane journeys
     Hyperlanes.cs         lane network, ramps, curves, routing
     World.cs              factions, settlements, ships; advances fleet, markets and wars together
-    Systems/              Alpha Centauri's bodies, the Galaxy of star systems and the nearby-star catalogue
+    Systems/              Alpha Centauri, the Galaxy of star systems, nearby stars, jump gates
     Infrastructure/       orbital yards, factories, habitats, real spacecraft, constellations, docking rings
-    Economy/              goods, recipes, settlements and markets, trade planning
-    Combat/               hardpoint specs, battles, fighters, war strategy and diplomacy
+    Economy/              goods, recipes, settlements and markets, trade planning, the player's cargo hold
+    Combat/               hardpoints, battles, fighters, boarding, morale and surrender, wrecks, war, diplomacy, piloted flight
     SimClock.cs           Julian-date clock and time warp
     BodyOrientation.cs    IAU prime meridians and parent-facing moons, so maps face the right way
     GasGiantWeather.cs    zonal wind profiles and the Great Red Spot's position
     AsteroidField.cs      111,267 SBDB asteroids, Kepler propagation (CPU and GPU-mirror)
   Runtime/
-    SolarSystemApp.cs     frame loop, floating origin, picking, ship placement
+    Bootstrap.cs          creates the app in any scene; -demo starts the tour
+    SolarSystemApp.cs     frame loop, floating origin, picking, ship placement, piloting
+    SceneTour.cs          the scripted camera tour; CaptureRunner.cs runs it for -demo
+    ModelViewer.cs        the F9 model viewer
     Camera/SpaceCamera.cs free swim, focus orbit, fly-to, SOI reference frames
     Camera/StarTravel.cs  the camera's trip between star systems
     Views/                bodies, ships (hardpoints, damage, wrecks), fighters, battle effects, hyperlanes, starfield
-    Rendering/            procedural meshes and ship hulls, Kenney loader, shaders
+    Rendering/            procedural meshes and ship hulls, ship models and thumbnails, materials
     UI/                   HUD and procedural icon sprites
     Input/InputState.cs   every key binding in one place
-  Resources/              shaders, colour maps, Kenney ship models
+  Resources/              shaders, colour maps, ship models
   Editor/ProjectSetup.cs  scene generation and player build
-Tests/                  NUnit tests over Core (dotnet test)
+Tests/
+  SolarSystem.Core/       builds Core as a plain .NET library
+  Core.Tests/             NUnit tests over Core (dotnet test)
+tools/                  deploy.ps1, launch.ps1, launch.bat
+docs/                   USER_STORIES.md and the README images
 ```
 
 ## Tests
@@ -237,7 +302,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-158 tests cover the following:
+467 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -245,6 +310,7 @@ dotnet test
 - Lunar perigee and apogee, and the Earth-barycentre offset
 - Every moon's position against JPL Horizons, and the Moon (lunar theory), Phobos, Charon, Ceres and Earth checked at five dates across 2000-2050
 - Moon spin sense
+- Math helpers: angle wrapping, sexagesimal conversion, smoothstep and vector operations
 - Scale-model monotonicity, invertibility and surface continuity
 - No overlapping gameplay orbits
 - Fleet continuity across every departure and arrival
@@ -255,27 +321,56 @@ dotnet test
 - Great Red Spot longitude against the JUPOS track, and wind profiles (anticyclonic shear around the spot, retrograde rotators)
 - Asteroid positions against JPL Horizons (Vesta, Pallas, Hektor), the GPU propagation path, Kirkwood gaps at 3:1, 5:2 and 7:3, both Trojan clouds, and the shader's scale mapping
 - Economy: every good produced in roughly the amount used, prices rising with scarcity, two years of trade with nobody going hungry and most traders in profit, traders only docking where welcome
-- Combat: the stronger group winning and hardpoints taking the damage, reactor and shield-generator losses, hardpoints sitting on the hull, coarse steps at high warp, and two years of war with battles, losses and a working economy
+- Economy internals: market pricing and its clamps, the production tick and limiting inputs, population growth and decline, trader cargo choice and booking
+- Combat: the stronger group winning and hardpoints taking the damage, reactor and shield-generator losses, hardpoints sitting on the hull, shield arcs, coarse steps at high warp, and two years of war with battles, losses and a working economy
+- Weapons: railgun and gun rounds' travel time, lead and size-dependent misses
+- Wrecks and surrender: lasting wrecks with salvage and expiry, hulls striking their colours, ransom, prize-taking and pirate cargo demands
+- War and diplomacy: siege length and port capture, symmetric relations, docking rules
 - Fighters: launch, attack runs, guns and torpedoes, a loose formation that breathes, lead succession, and landing back aboard
 - Boarding: fighting through to the bridge and engineering, a small party repelled, vacuum killing crew only until the bulkheads seal, pods bouncing off shields and boarding once they are down, a breacher ramming home, lining up alongside a disabled ship, and a year of lane ambushes and prizes
 - Hyperlanes: every system reachable, lanes clear of the Sun, trips taking a day or two instead of weeks, continuity across every leg change, and drawn lanes meeting the burns at the ramps
 - Alpha Centauri: the A–B separation (11.2 to 35.4 AU), period, barycentre balance and 2035 periastron; the orbit's 79.2° tilt to the sky; Proxima where the sky puts it and its planets' periods; the Sun in Cassiopeia as seen from there; lanes connecting every port and clearing all three stars; two years of trade, raiding and nobody starving; both systems on one clock
 - Avoidance: head-on ships passing wide, ships sharing a spot spreading out, a month of the whole system with no near-collisions, free ships roaming, a mid-flight course change keeping position and momentum, and merchants turning aside from fresh battles
 - Infrastructure: rings staying over their cities (latitude and longitude to a millionth of a degree, velocity = ω × r); FIFO queues clearing at most one ship per interval; no position jumps through queue, descent, landing and climb; only merchants landing; yards launching from their slips; constellations at their real altitudes and inclinations; JWST at L2
+- Piloting: cruise spooling up and dropping out, forward guns firing only on the trigger, the piloted hull staying where the pilot loop puts it
+- Cargo hold and trade: crate footprints and rotation, no overlaps or out-of-bounds placement, buying and selling at the AI's prices and taxes, docking rules
+- Jump gates: a gate pair per system at its outer edge, activation range, arrival inside the far gate, and the ship moving between fleets
 
 ## Limitations
 
 - **Planet elements are a fit.** The JPL table is accurate to roughly arcminutes across 1800-2050 (measured against Horizons over 2000-2050: Mercury to Neptune within 0.16°), and drifts outside that window.
 - **Moons are mean orbits.** The Moon follows the main terms of a real lunar theory (within 0.01°), and Phobos includes its tidal decay (within 0.07°). Every other moon is an ellipse with steady precession, within 0.5° of JPL Horizons over 2000-2050 except Miranda (1.7°), whose neighbours' pulls a mean orbit cannot follow.
-- **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations.
+- **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations. Piloted flight is arcade flight, tuned for feel rather than physics.
 - **Gameplay scale bends paths.** Ships fly their true path at both scales, but gameplay scale draws it through the same compression as the planets, eased near each end so the ship stays outside the inflated worlds. In a crowded moon system an inflated neighbouring moon can still be drawn over a passing ship.
-- **Alpha Centauri is part guesswork.** The A–B orbit and Proxima's place are measured; the planets' orbital planes and phases, their radii and Proxima's orbital plane are assumed, and two of its worlds may not exist. Ships cannot yet travel between systems (only the camera can), and the trunk lanes across 12,000 AU in days are deep fiction.
-- **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought at bodies and, by pirate interdiction, beside hyperlanes; ships on flip-and-burn transits cannot be intercepted. Marines are not drawn yet (the interior model is ready for a shipboard view). There is no player control or win condition yet; you observe.
+- **Alpha Centauri is part guesswork.** The A–B orbit and Proxima's place are measured; the planets' orbital planes and phases, their radii and Proxima's orbital plane are assumed, and two of its worlds may not exist. AI ships stay in their own system; only a piloted ship crosses, through the jump gates, which sit 5,000 km out so a pilot can reach them, not light-years away. The trunk lanes across 12,000 AU in days are deep fiction.
+- **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought at bodies and, by pirate interdiction, beside hyperlanes; ships on flip-and-burn transits cannot be intercepted. Marines are not drawn yet (the interior model is ready for a shipboard view). There is no campaign or win condition; you observe, or fly one ship at a time.
+- **Piloting is partial.** A piloted ship cannot ride hyperlanes yet, gets no warning of a lane ambush, and cannot salvage wrecks or derelicts. Only ships can be piloted.
 - **Surfaces are wrapped on spheres.** Phobos, Deimos and the other small irregular moons are drawn round. Relief is shading only (exaggerated about 5×), never displacement, and lunar libration is not modelled.
 - **Weather is a model on a 2015 snapshot.** Jupiter's map is Hubble's of January 2015, turned so the Great Red Spot is where it is today; the other storms on it are 2015 weather. The flow map reproduces real band speeds and the spot's rotation, not real storm evolution. The Saturn, Uranus and Neptune maps are stylized (CC BY), so only their motion is data.
 - **Asteroids ignore Jupiter.** They fly two-body orbits from the 2026 osculating elements, drifting from their true places by roughly 0.01 AU a year. Only numbered objects brighter than H 15.5 (about 2 to 5 km) are included, and asteroids are labelled but not selectable.
 
-## Credits and licences
+## Roadmap
+
+Planned, from the open tickets in [docs/USER_STORIES.md](docs/USER_STORIES.md):
+
+- A distinct flight model per ship class, tuned one class at a time.
+- Piloting anything man-made: satellites, stations and single turrets, not just ships.
+- Shield bubbles that ripple where a hit lands.
+- The piloted ship riding hyperlanes, with warning of and a response to lane ambushes.
+- Hidden pirate bases on real belt asteroids.
+- Dynamic events near the player (distress calls, derelicts) driven by the simulation.
+- Salvaging and boarding derelicts and wrecks from the piloted ship.
+
+## Documentation
+
+- [docs/USER_STORIES.md](docs/USER_STORIES.md): every story and ticket, with the test that proves each one. It is generated from the MindAttic.Workflow database; change tickets with the workflow CLI, not by hand.
+- [Assets/SolarSystem/Resources/Textures/SOURCES.md](Assets/SolarSystem/Resources/Textures/SOURCES.md): where every surface map comes from and its caveats.
+- [Assets/SolarSystem/Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md): Alpha Centauri, nearby stars, spacecraft orbits and ring sites, with the assumptions made.
+- [AGENTS.md](AGENTS.md): instructions for coding agents working in this repo.
+
+## License
+
+The code has no LICENSE file yet, so all rights are reserved. Third-party assets keep their own licences:
 
 - Planet colour maps: NASA / USGS (public domain). The Saturn, Uranus and Neptune maps are by [Solar System Scope](https://www.solarsystemscope.com/textures/), **CC BY 4.0**. Details in [Assets/SolarSystem/Resources/Textures/SOURCES.md](Assets/SolarSystem/Resources/Textures/SOURCES.md).
 - Moon colour and LOLA elevation: [NASA SVS CGI Moon Kit](https://svs.gsfc.nasa.gov/4720/) (Ernie Wright; LRO LROC and LOLA teams). Jupiter: Hubble OPAL map via [NASA SVS](https://svs.gsfc.nasa.gov/12021/) (Simon, Wong, Orton). Moon, planet and satellite mosaics and DEMs: USGS Astrogeology, NASA PDS (MOLA MEGDR), and JPL's Solar System Simulator maps (Caltech/JPL/USGS) for Miranda, Titania and Oberon.
@@ -284,6 +379,5 @@ dotnet test
 - Hull plating: [ambientCG MetalPlates015A](https://ambientcg.com/a/MetalPlates015A), CC0.
 - Alpha Centauri, nearby stars, spacecraft orbits and ring sites: see [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md).
 - Orbital data: JPL Solar System Dynamics, the IAU WGCCRE report, and NASA planetary fact sheets.
-- Code: no LICENSE file yet, so all rights are reserved.
 
-Part of [MindAttic](https://mindattic.com). See more projects at [github.com/mindattic](https://github.com/mindattic).
+Part of [MindAttic](https://mindattic.com) — see more projects at [github.com/mindattic](https://github.com/mindattic). Related: [ExperimentSolarSystem](https://github.com/mindattic/ExperimentSolarSystem), the Babylon.js predecessor, and [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture), which records it.
