@@ -877,6 +877,9 @@ namespace SolarSystem
                         unit.PlayerFireHeld = false;
                         unit.PlayerLockTarget = null;
                     }
+                    // And its schedule picks up from here when the fight is over, not from wherever
+                    // the helm was taken (the battle's own pose doesn't move the ship's orbit).
+                    PinWherePiloted(ship);
                 }
                 else
                 {
