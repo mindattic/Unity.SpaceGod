@@ -393,7 +393,7 @@ namespace SolarSystem.Core
             {
                 if (u.Ship == null || u.Dead || u.Ship == ship || u.Ship.Faction != captor) continue;
                 var leader = u.Ship.Controller;
-                if (!leader.Destroyed && leader.Faction == captor && !leader.IsEscort) group = leader;
+                if (!leader.Destroyed && leader.Faction == captor && !leader.IsEscort && leader != world.PilotedShip) group = leader;
             }
             if (ship.Spec.IsMilitary && group != null && ship.Phase == group.Phase && ship.Orbit?.Body == group.Orbit?.Body)
             {
@@ -1699,7 +1699,8 @@ namespace SolarSystem.Core
             Ship group = null;
             foreach (var s in Fleet.Ships)
             {
-                if (s.Destroyed || s.IsEscort || s.Faction != yard.Owner || !s.Spec.IsMilitary || s.Battle != null) continue;
+                // Never the player's ship: escorts would follow a schedule the player isn't flying.
+                if (s.Destroyed || s.IsEscort || s.Faction != yard.Owner || !s.Spec.IsMilitary || s.Battle != null || s == world.PilotedShip) continue;
                 if (s.Phase != ShipPhase.Parked || s.Orbit.Body != yard.Body) continue;
                 int escorts = 0;
                 foreach (var e in Fleet.Ships)

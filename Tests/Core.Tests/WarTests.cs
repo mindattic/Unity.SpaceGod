@@ -52,6 +52,17 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ANewWarshipFromTheYardIsNotMadeAnEscortOfThePlayersShip()
+        {
+            var w = CreateWorld();
+            var yard = w.Economy.Settlements.First(s => s.HasShipyard && s.Owner == w.Sol);
+            var flown = ParkWarship(w, w.Sol, ShipClass.Battleship, yard.Body);
+            w.PilotedShip = flown;
+            var built = w.War.LaunchWarship(yard, ShipClass.Destroyer, StartJd);
+            Assert.That(built.Leader, Is.Not.SameAs(flown));
+        }
+
+        [Test]
         public void ABattleEndingLeavesThePlayersShipToThePlayer()
         {
             var w = CreateWorld();
