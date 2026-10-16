@@ -14,6 +14,9 @@ namespace SolarSystem.Core
 
         /// <summary>A large artificial station on its own orbit about a star (game layer): a port and a lane stop.</summary>
         Station,
+
+        /// <summary>A minor body of the main asteroid belt, smaller than a dwarf planet (Psyche, Lutetia, Ida).</summary>
+        Asteroid,
     }
 
     /// <summary>How sure astronomy is that a body exists.</summary>

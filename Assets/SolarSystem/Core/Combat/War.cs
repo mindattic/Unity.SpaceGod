@@ -15,6 +15,9 @@ namespace SolarSystem.Core
         Repair,
         Raid,
         Hunt,
+
+        /// <summary>Storm a pirate haven: break its garrison, then board and take it or destroy it.</summary>
+        Assault,
     }
 
     /// <summary>What a fleet group (a flagship and its escorts) is doing, and where.</summary>
@@ -50,6 +53,7 @@ namespace SolarSystem.Core
         readonly Dictionary<Ship, double> laneSeen = new Dictionary<Ship, double>();
         readonly Dictionary<Ship, double> pulseReady = new Dictionary<Ship, double>();
         readonly Dictionary<BattleUnit, Faction> captures = new Dictionary<BattleUnit, Faction>();
+        readonly Dictionary<Settlement, double> assaultDays = new Dictionary<Settlement, double>();
 
         /// <summary>An interdiction pulse pulls out every ship within this distance along the lane.</summary>
         public const double PulseRadiusKm = 600000;
@@ -322,6 +326,9 @@ namespace SolarSystem.Core
             }
             else if (ship.Faction.IsPirate || hull < 0.3)
             {
+                // A raider's surviving crew, taken off before it is scuttled, give away where they sail from.
+                if (ship.Faction.IsPirate && HomeHaven(ship.Controller) is Settlement home)
+                    Discover(home, captor, jd, $"prisoners taken off the {ship.Name} give it away");
                 Scuttle(ship);
                 how = "scuttled";
             }
@@ -483,6 +490,10 @@ namespace SolarSystem.Core
             // On the ground (or on the way down or up) a ship is out of the fight.
             if (ship.Destroyed || ship.Battle != null || ship.Planetside) return;
             int body = ship.Orbit.Body;
+            // Anyone who turns up at a hidden haven's rock sees it.
+            if (!ship.Faction.IsPirate)
+                foreach (var st in Economy.At(body))
+                    if (st.Hidden) Discover(st, ship.Faction, jd, $"the {ship.Name} comes upon it");
             var existing = BattleAt(body);
             if (existing != null)
             {
@@ -737,6 +748,14 @@ namespace SolarSystem.Core
                 // The beaten leave at once; everyone else keeps their plans unless the fight overran them.
                 if (beaten || u.Ship.PhaseEndJd <= jd || !(u.Ship.Spec.IsMilitary || u.Ship.Faction.IsPirate)) Fleet.ScheduleNext(u.Ship, jd);
             }
+            // A navy that beats raiders off may follow the survivors back to a hidden haven.
+            var victor = b.Winner >= 0 ? b.SideLeaders[b.Winner] : null;
+            if (victor != null && !victor.IsPirate)
+                foreach (var u in b.Units)
+                {
+                    if (u.Ship == null || u.Dead || u.Ship.IsEscort || !u.Ship.Faction.IsPirate || u.Side == b.Winner) continue;
+                    if (rng.NextDouble() < TrailChance) TrailHome(u.Ship, victor, jd);
+                }
             lastBattleEndJd[b.Body] = jd;
             foreach (var u in b.Units)
                 if (u.Kind == UnitKind.Fighter && u.Fighter?.Carrier?.Combat != null && u.Present)
@@ -751,12 +770,8 @@ namespace SolarSystem.Core
 
         void DeliverLoot(Good g, double tonnes)
         {
-            foreach (var s in Economy.Settlements)
-                if (s.Kind == SettlementKind.Haven)
-                {
-                    s.Stock[(int)g] += tonnes;
-                    return;
-                }
+            var haven = FirstLiveHaven();
+            if (haven != null) haven.Stock[(int)g] += tonnes;
         }
 
         /// <summary>When a flagship is lost its strongest surviving escort takes the group.</summary>
@@ -833,6 +848,7 @@ namespace SolarSystem.Core
             {
                 case OrderKind.Repair:
                 case OrderKind.Siege:
+                case OrderKind.Assault:
                 case OrderKind.Defend: return 1.0;
                 case OrderKind.Raid: return 1.5 + rng.NextDouble();
                 default: return normal;
@@ -867,6 +883,11 @@ namespace SolarSystem.Core
             }
             if (threatened >= 0) return new GroupOrder { Kind = OrderKind.Defend, Body = threatened };
 
+            // At a haven it found, with the garrison broken: stay and finish the job.
+            foreach (var s in Economy.At(here))
+                if (Assailable(s, f) && s.Platforms.Count == 0)
+                    return new GroupOrder { Kind = OrderKind.Assault, Body = here };
+
             // Besieging: stay until the port falls or defenders show up.
             foreach (var s in Economy.At(here))
                 if (Diplomacy.Hostile(f, s.Owner) && !s.Owner.IsPirate && s.Platforms.Count == 0 && s.DaysSinceCapture > CaptureGraceDays && AtWar(f))
@@ -899,14 +920,27 @@ namespace SolarSystem.Core
                 if (s.Owner == f && s.Body != here && PiratesAt(s.Body))
                     return new GroupOrder { Kind = OrderKind.Hunt, Body = s.Body };
 
+            // Strike a hidden haven this navy has found, if the group can take its garrison.
+            if (!IsHomeGuard(leader) && AssaultTarget(leader, here, jd) is Settlement mark)
+                return new GroupOrder { Kind = OrderKind.Assault, Body = mark.Body };
+
             return new GroupOrder { Kind = OrderKind.Patrol, Body = NextPatrol(leader, here) };
         }
 
         GroupOrder DecidePirate(Ship leader, int here, double jd, bool withdrawing)
         {
-            int haven = HavenBody();
+            var home = HomeHaven(leader);
+            // A group whose haven has been taken or destroyed is out of the game: it lies low where it is,
+            // no raids and no ambushes, until the haven is rebuilt.
+            if (home != null && home.Fallen) return new GroupOrder { Kind = OrderKind.Patrol, Body = here };
+            home ??= FirstLiveHaven();
+            int haven = home?.Body ?? -1;
             if (withdrawing || GroupDamage(leader) > 0.3 || MissilesLow(leader) || !leader.Combat.Armed)
                 return new GroupOrder { Kind = OrderKind.Repair, Body = haven >= 0 ? haven : here };
+
+            // Home is under attack: back to defend it.
+            if (haven >= 0 && EnemiesAt(haven, leader.Faction) && (haven == here || Fleet.EstimateTravelDays(leader, here, haven, jd) < 30))
+                return new GroupOrder { Kind = OrderKind.Defend, Body = haven };
 
             // Lie in wait beside a busy hyperlane.
             var lanes = Fleet.Lanes;
@@ -993,19 +1027,221 @@ namespace SolarSystem.Core
             return best;
         }
 
-        int HavenBody()
+        int HavenBody() => FirstLiveHaven()?.Body ?? -1;
+
+        string HavenName() => FirstLiveHaven()?.Name ?? "a pirate haven";
+
+        /// <summary>The first haven still standing (not taken or destroyed), or null.</summary>
+        Settlement FirstLiveHaven()
         {
             foreach (var s in Economy.Settlements)
-                if (s.Kind == SettlementKind.Haven) return s.Body;
-            return -1;
+                if (s.Kind == SettlementKind.Haven && !s.Fallen) return s;
+            return null;
         }
 
-        string HavenName()
+        /// <summary>The haven a raider group sails from (the first stop on its route, if a haven is there), or null.</summary>
+        public Settlement HomeHaven(Ship ship)
         {
-            foreach (var s in Economy.Settlements)
-                if (s.Kind == SettlementKind.Haven) return s.Name;
-            return "a pirate haven";
+            var route = ship?.Controller.Route;
+            if (route == null || route.Length == 0) return null;
+            foreach (var s in Economy.At(route[0]))
+                if (s.Kind == SettlementKind.Haven) return s;
+            return null;
         }
+
+        // ---------------------------------------------------------------- hidden havens
+
+        /// <summary>How far a ship's scanners pick out a hidden haven: its reactors, its traffic, its guns.</summary>
+        public const double ScanRangeKm = 2e6;
+
+        /// <summary>Chance a navy that wins a fight follows each beaten raider group home.</summary>
+        public const double TrailChance = 0.3;
+
+        /// <summary>Days an assaulting group must hold a haven whose garrison is broken before it is boarded or levelled.</summary>
+        public const double HavenAssaultDays = 1;
+
+        /// <summary>Days the pirates take to rebuild a haven that was taken or destroyed.</summary>
+        public const double HavenRebuildDays = 180;
+
+        /// <summary>
+        /// <paramref name="by"/> finds a hidden haven (if it had not already): it is logged, goes on the
+        /// map, and that faction's navy may now strike it. Returns whether this was news to it.
+        /// </summary>
+        public bool Discover(Settlement st, Faction by, double jd, string how)
+        {
+            if (st == null || !st.Hidden || by == null || by.IsPirate || st.KnownTo.Contains(by)) return false;
+            bool first = st.KnownTo.Count == 0;
+            st.KnownTo.Add(by);
+            string text = first
+                ? $"The {by.Name} find a hidden {world.Pirates.Name} haven, {st.Name}, on {Catalog[st.Body].Name}: {how}"
+                : $"The {by.Name} learn where {st.Name} ({Catalog[st.Body].Name}) lies: {how}";
+            world.Log(jd, text, WorldEventKind.Info, st.Body);
+            return true;
+        }
+
+        /// <summary>A ship of <paramref name="by"/> sweeps its scanners from a heliocentric position: every hidden
+        /// haven within <see cref="ScanRangeKm"/> is found. Returns the havens found this time.</summary>
+        public List<Settlement> ScanFrom(Faction by, DVec3 helioKm, double jd, string who = null)
+        {
+            var found = new List<Settlement>();
+            if (by == null || by.IsPirate) return found;
+            foreach (var st in Economy.Settlements)
+            {
+                if (!st.Hidden || st.KnownTo.Contains(by)) continue;
+                if ((world.Ephemeris.HelioAt(st.Body, jd) - helioKm).Length > ScanRangeKm) continue;
+                if (Discover(st, by, jd, (who != null ? "the " + who + "'s" : "a ship's") + " scanners pick it out")) found.Add(st);
+            }
+            return found;
+        }
+
+        /// <summary>A raider beaten by <paramref name="tracker"/> is followed back to its haven, if that haven is hidden.</summary>
+        public bool TrailHome(Ship raider, Faction tracker, double jd)
+        {
+            var home = HomeHaven(raider);
+            if (home == null || tracker == null || tracker.IsPirate) return false;
+            return Discover(home, tracker, jd, $"{tracker.Name} ships follow the beaten {raider.Name} home");
+        }
+
+        /// <summary>Every navy's warships sweep their scanners once a day.</summary>
+        void Scans(double jd)
+        {
+            bool anyHidden = false;
+            foreach (var st in Economy.Settlements) anyHidden |= st.Hidden;
+            if (!anyHidden) return;
+            foreach (var s in Fleet.Ships)
+            {
+                if (s.Destroyed || s.IsEscort || s.Derelict || s == world.PilotedShip || !s.Spec.IsMilitary || s.Faction.IsPirate) continue;
+                ScanFrom(s.Faction, Fleet.StateOf(s, jd).HelioKm, jd, s.Name);
+            }
+        }
+
+        /// <summary>A haven <paramref name="f"/>'s navy would strike on its own: a hidden one it has found, still
+        /// standing. (Blackwater, the haven everyone knows of over Deimos, is an open secret the navies leave
+        /// be; the player can still go in.)</summary>
+        bool Assailable(Settlement s, Faction f) =>
+            s.Kind == SettlementKind.Haven && !s.Fallen && s.Hidden && s.KnownTo.Contains(f) && Diplomacy.Hostile(f, s.Owner);
+
+        /// <summary>The nearest found haven the group is strong enough to storm (half again its garrison and any raiders there), or null.</summary>
+        Settlement AssaultTarget(Ship leader, int here, double jd)
+        {
+            var f = leader.Faction;
+            double strength = GroupStrength(leader);
+            Settlement best = null;
+            double bestDays = 40;
+            foreach (var s in Economy.Settlements)
+            {
+                if (!Assailable(s, f) || strength < DefenceAt(s.Body, f) * 1.5) continue;
+                double days = s.Body == here ? 0 : Fleet.EstimateTravelDays(leader, here, s.Body, jd);
+                if (days < bestDays)
+                {
+                    bestDays = days;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Whether the ship's group carries marines to board with.</summary>
+        public bool HasMarines(Ship ship)
+        {
+            var leader = ship.Controller;
+            if (!leader.Destroyed && leader.Combat.MarinesAvailable > 0) return true;
+            foreach (var e in Fleet.Ships)
+                if (e.Leader == leader && !e.Destroyed && e.Combat.MarinesAvailable > 0) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// A haven is open to be boarded or destroyed by <paramref name="ship"/>: still standing, hostile,
+        /// its garrison platforms all gone, no fight going on there and no raiders parked over it.
+        /// </summary>
+        public bool CanAssault(Settlement st, Ship ship) =>
+            st != null && ship != null && !ship.Destroyed && st.Kind == SettlementKind.Haven && !st.Fallen && st.Platforms.Count == 0 &&
+            BattleAt(st.Body) == null && !PiratesAt(st.Body) && Diplomacy.Hostile(ship.Faction, st.Owner);
+
+        /// <summary>
+        /// The player's (or anyone's) assault on a haven whose defences are broken: board and take it
+        /// (needs marines in the group; the stolen goods are seized) or destroy it (needs guns or
+        /// marines). Either way it is out of action, and its raiders lie low, until the pirates rebuild
+        /// it. Returns false if it can't be done.
+        /// </summary>
+        public bool AssaultHaven(Settlement st, Ship ship, bool capture, double jd)
+        {
+            if (!CanAssault(st, ship)) return false;
+            if (capture ? !HasMarines(ship) : !ship.Controller.Combat.Armed && !HasMarines(ship)) return false;
+            FallHaven(st, ship.Faction, capture, jd);
+            return true;
+        }
+
+        void FallHaven(Settlement st, Faction by, bool capture, double jd)
+        {
+            double value = 0;
+            for (int i = 0; i < GoodInfo.Count; i++)
+            {
+                value += Math.Max(0, st.Stock[i]) * GoodInfo.Of((Good)i).BasePrice;
+                st.Stock[i] = 0;
+            }
+            if (capture) by.Treasury += value * 0.6;
+            st.Platforms.Clear();
+            st.Population = 0;
+            st.Fallen = true;
+            st.RebuildJd = jd + HavenRebuildDays;
+            if (st.Hidden) st.KnownTo.Add(by);
+            assaultDays.Remove(st);
+            string where = $"{st.Name} ({Catalog[st.Body].Name})";
+            world.Log(jd, capture
+                ? $"The {by.Name} board and take {where}, seizing {value / 1e6:N0} M of stolen goods; its raiders scatter"
+                : $"The {by.Name} destroy {where}; its raiders scatter", WorldEventKind.Capture, st.Body);
+            BumpDanger(st.Body, 1);
+        }
+
+        /// <summary>
+        /// Navies storm the havens they have found: once the garrison's platforms are gone and no raiders
+        /// hold the rock, an assaulting group boards it (if it has marines) or levels it after
+        /// <see cref="HavenAssaultDays"/>. Fallen havens rise again after <see cref="HavenRebuildDays"/>.
+        /// </summary>
+        void HavenAssaults(double jd)
+        {
+            foreach (var st in Economy.Settlements)
+            {
+                if (st.Kind != SettlementKind.Haven) continue;
+                if (st.Fallen)
+                {
+                    if (jd >= st.RebuildJd) RebuildHaven(st, jd);
+                    continue;
+                }
+                Ship assailant = null;
+                if (st.Platforms.Count == 0 && BattleAt(st.Body) == null && !PiratesAt(st.Body))
+                    foreach (var s in Fleet.Ships)
+                    {
+                        if (s.Destroyed || s.IsEscort || !s.Spec.IsMilitary || s.Faction.IsPirate || s == world.PilotedShip) continue;
+                        var c = s.Controller;
+                        if (c.Phase != ShipPhase.Parked || c.Orbit.Body != st.Body || !Diplomacy.Hostile(s.Faction, st.Owner)) continue;
+                        if (!Orders.TryGetValue(s, out var o) || o.Kind != OrderKind.Assault) continue;
+                        if (assailant == null || GroupStrength(s) > GroupStrength(assailant)) assailant = s;
+                    }
+                if (assailant == null)
+                {
+                    assaultDays.Remove(st);
+                    continue;
+                }
+                assaultDays.TryGetValue(st, out double days);
+                days += 1;
+                assaultDays[st] = days;
+                if (days >= HavenAssaultDays) FallHaven(st, assailant.Faction, HasMarines(assailant), jd);
+            }
+        }
+
+        void RebuildHaven(Settlement st, double jd)
+        {
+            st.Fallen = false;
+            st.Population = st.InitialPopulation;
+            while (st.Platforms.Count < st.MaxPlatforms) st.Platforms.Add(new ShipCombat(CombatSpec.Platform));
+            world.Log(jd, $"The {world.Pirates.Name} have rebuilt {st.Name} ({Catalog[st.Body].Name})", WorldEventKind.Info, st.Body);
+        }
+
+        /// <summary>Days an assaulting group has held a broken haven (see <see cref="HavenAssaultDays"/>).</summary>
+        public double AssaultDays(Settlement s) => assaultDays.TryGetValue(s, out var d) ? d : 0;
 
         public bool AtWar(Faction f)
         {
@@ -1124,6 +1360,8 @@ namespace SolarSystem.Core
             MergeGroups();
             Refit(jd);
             Sieges(jd);
+            Scans(jd);
+            HavenAssaults(jd);
             RebuildPlatforms(jd);
             PirateRecruiting(jd);
             DiplomacyCycle(jd);
@@ -1310,6 +1548,7 @@ namespace SolarSystem.Core
         {
             foreach (var st in Economy.Settlements)
             {
+                if (st.Fallen) continue;
                 foreach (var p in st.Platforms)
                     if (p.Damage > 0) { p.Repair(0.05); p.FreeResupply(); }
                 if (st.Platforms.Count >= st.MaxPlatforms || BattleAt(st.Body) != null) continue;
@@ -1360,17 +1599,34 @@ namespace SolarSystem.Core
 
         void PirateRecruiting(double jd)
         {
-            int haven = HavenBody();
-            if (haven < 0) return;
+            if (FirstLiveHaven() == null) return;
             int groups = 0;
+            var based = new Dictionary<Settlement, int>();
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate) groups++;
+                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate)
+                {
+                    groups++;
+                    if (HomeHaven(s) is Settlement h) based[h] = (based.TryGetValue(h, out int n) ? n : 0) + 1;
+                }
             // Smuggling and protection rackets keep the Banner afloat between prizes.
             world.Pirates.Treasury += world.PirateIncomePerDay;
             if (groups >= world.PirateGroupCap || world.Pirates.Treasury < 5e7 || rng.NextDouble() > 0.08) return;
+            // The new band sails from the standing haven with the fewest of its own.
+            Settlement from = null;
+            int fewest = int.MaxValue;
+            foreach (var st in Economy.Settlements)
+            {
+                if (st.Kind != SettlementKind.Haven || st.Fallen) continue;
+                int n = based.TryGetValue(st, out int k) ? k : 0;
+                if (n < fewest)
+                {
+                    fewest = n;
+                    from = st;
+                }
+            }
             world.Pirates.Treasury -= 4e7;
-            RaisePirateGroup(jd, haven);
-            world.Log(jd, $"A new {world.Pirates.Name} raider group sails from {HavenName()}", WorldEventKind.Info, haven);
+            RaisePirateGroup(jd, from.Body);
+            world.Log(jd, $"A new {world.Pirates.Name} raider group sails from {(from.Discovered ? from.Name : "somewhere in the dark")}", WorldEventKind.Info, from.Discovered ? from.Body : -1);
         }
 
         /// <summary>Wars wind down to ceasefires when both sides have bled, and flare up again months later.</summary>

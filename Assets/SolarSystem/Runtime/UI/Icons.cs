@@ -64,6 +64,7 @@ namespace SolarSystem.UI
                 case BodyKind.Star: return 30;
                 case BodyKind.Moon: return 10;
                 case BodyKind.DwarfPlanet: return 13;
+                case BodyKind.Asteroid: return 11;
                 default: return 17;
             }
         }

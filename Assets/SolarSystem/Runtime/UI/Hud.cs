@@ -132,7 +132,7 @@ namespace SolarSystem.UI
                     DrawIcon(Icons.ForBody(body), p, iconSize, tint);
 
                 if (app.ShowLabels && (body.Kind != BodyKind.Moon || pxRadius > 1.5f || ParentSeparation(body, p) > 50))
-                    DrawLabel(body.Name + StatusMark(body), p + new Vector2(Mathf.Max(pxRadius, iconSize * 0.5f) + 5, -8), tint, body.Kind == BodyKind.Moon);
+                    DrawLabel(body.Name + StatusMark(body) + HavenMark(body), p + new Vector2(Mathf.Max(pxRadius, iconSize * 0.5f) + 5, -8), tint, body.Kind == BodyKind.Moon);
             }
 
             var ships = app.Fleet.Ships;
@@ -625,7 +625,8 @@ namespace SolarSystem.UI
                 var ringsHere = new List<DockingRing>(app.World.Infrastructure?.RingsAt(t.Body) ?? new DockingRing[0]);
                 if (ringsHere.Count > 0) lines.Add(("Docking rings", ringsHere.Count + ": " + string.Join(", ", ringsHere.ConvertAll(x => x.City))));
                 if (!string.IsNullOrEmpty(b.Summary)) lines.Add(("", b.Summary));
-                foreach (var s in app.Economy.At(t.Body)) AddSettlementLines(lines, s);
+                foreach (var s in app.Economy.At(t.Body))
+                    if (s.Discovered) AddSettlementLines(lines, s);
                 var battleHere = app.World.War.BattleAt(t.Body);
                 if (battleHere != null) lines.Add(("Battle", battleHere.Name + ", " + BattleScore(battleHere) + ", " + Duration(battleHere.Seconds / Astro.SecondsPerDay)));
             }
@@ -852,6 +853,14 @@ namespace SolarSystem.UI
                 (siege > 0 ? "  ·  under siege " + siege.ToString("0", CultureInfo.InvariantCulture) + " of " + War.SiegeNeeded(s).ToString("0", CultureInfo.InvariantCulture) + " days" : "")));
         }
 
+        /// <summary>A found pirate haven is marked on its world's label (a hidden one is not, until found).</summary>
+        string HavenMark(BodyDefinition body)
+        {
+            foreach (var s in app.Economy.At(body.Index))
+                if (s.Kind == SettlementKind.Haven && s.Discovered) return "  · " + s.Name + (s.Fallen ? " (fallen)" : " (pirate haven)");
+            return "";
+        }
+
         static string KindName(SettlementKind k)
         {
             switch (k)
@@ -869,7 +878,7 @@ namespace SolarSystem.UI
         {
             Settlement market = null;
             var t = app.Selected;
-            if (t.IsBody) foreach (var s in app.Economy.At(t.Body)) { market = s; break; }
+            if (t.IsBody) foreach (var s in app.Economy.At(t.Body)) if (s.Discovered) { market = s; break; }
             if (t.IsShip && t.Ship.Controller.CargoDestination != null) market = t.Ship.Controller.CargoDestination;
 
             // Buy/Sell only make sense for a market the player's own ship could actually hand goods
@@ -1270,6 +1279,7 @@ namespace SolarSystem.UI
             {
                 case BodyKind.Star: return b.TeffK < 3900 ? "Red dwarf star" : b.TeffK < 5300 ? "Orange dwarf star" : "Yellow dwarf star";
                 case BodyKind.DwarfPlanet: return "Dwarf planet";
+                case BodyKind.Asteroid: return "Asteroid";
                 case BodyKind.Moon: return "Moon";
                 case BodyKind.Station: return "Free-flying station";
                 case BodyKind.Barycentre: return "Barycentre";

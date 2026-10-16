@@ -11,6 +11,9 @@ namespace SolarSystem.Core
     ///    (valid 1800-2050), E. M. Standish. Earth's entry is the Earth-Moon barycentre.
     ///  - Eris: JPL Small-Body Database osculating elements, epoch JD 2459000.5.
     ///  - Ceres: mean elements least-squares fitted to JPL Horizons positions every 30 days over 2000-2050.
+    ///  - Psyche, Lutetia and Ida (main-belt asteroids, game-layer pirate havens): JPL Small-Body Database
+    ///    osculating elements, epoch JD 2461200.5; sizes, GM and spin periods from the SBDB physical
+    ///    parameters (see Systems/SOURCES.md).
     ///  - The Moon: principal ELP-2000/82 terms (Meeus ch. 47), see LunarTheory; its catalogue elements
     ///    are the mean orbit, used only to draw its path.
     ///  - Other moons: JPL satellite mean elements (ssd.jpl.nasa.gov/sats/elem, epoch J2000), in each
@@ -281,6 +284,37 @@ namespace SolarSystem.Core
                 RotationHours = 378.9,
                 Color = new Rgb(0.92f, 0.92f, 0.9f),
                 Summary = "Most massive known dwarf planet; its discovery got Pluto reclassified.",
+            };
+
+            // Three real main-belt asteroids, appended after everything else so no other body's index moves.
+            // Each hides a pirate haven in the game layer (World.BuildSettlements).
+            yield return Asteroid("Psyche", 111, 1.601, 2.925720466462538, 0.1349324738201893, 3.098749116151128, 149.9753859305033,
+                230.0326782748359, 79.76939505329617, 4.196, new Rgb(0.6f, 0.58f, 0.55f),
+                "Metal-rich M-type asteroid, perhaps an exposed planetary core; NASA's Psyche probe arrives in 2029.");
+            yield return Asteroid("Lutetia", 49, 0.1134, 2.434430742712361, 0.1647703512177245, 3.064452891064415, 80.83855721319993,
+                249.8802780888828, 298.7726414605465, 8.1655, new Rgb(0.52f, 0.5f, 0.48f),
+                "Primitive 100 km asteroid, photographed by Rosetta as it flew past in July 2010.");
+            yield return Asteroid("Ida", 16, 0.00275, 2.863348031699649, 0.04610962795708528, 1.130363094271507, 323.5366609419851,
+                113.2571826848795, 49.64769088009876, 4.634, new Rgb(0.62f, 0.56f, 0.48f),
+                "Koronis-family asteroid; Galileo found the first asteroid moon, Dactyl, orbiting it in 1993.");
+        }
+
+        /// <summary>
+        /// A main-belt asteroid on its JPL Small-Body Database osculating orbit (heliocentric ecliptic
+        /// J2000, epoch JD 2461200.5), with its period from Kepler's third law.
+        /// </summary>
+        static BodyDefinition Asteroid(string name, double radiusKm, double gm, double aAu, double e, double iDeg, double nodeDeg,
+            double argPeriDeg, double meanAnomalyDeg, double rotationHours, Rgb color, string summary)
+        {
+            const double epoch = 2461200.5;
+            return new BodyDefinition
+            {
+                Name = name, Kind = BodyKind.Asteroid, ParentName = "Sun", RadiusKm = radiusKm, Gm = gm,
+                Elements = OrbitalElements.FromClassical(epoch, aAu * Astro.AuKm, e, iDeg, nodeDeg, argPeriDeg, meanAnomalyDeg,
+                    OrbitalElements.PeriodFromGm(aAu * Astro.AuKm, 1.32712440018e11)),
+                RotationHours = rotationHours,
+                Color = color,
+                Summary = summary,
             };
         }
 

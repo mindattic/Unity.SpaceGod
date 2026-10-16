@@ -100,10 +100,30 @@ Orbits are circular, at the published altitude and inclination. Where each craft
   - Proxima b: its terminator, at dawn and dusk longitudes
 - **Entry interface heights:** Earth 120 km, Mars 125 km, Venus 250 km, Titan 600 km. These are typical values.
 
+## Belt asteroids (Sol's hidden pirate havens)
+
+Three real main-belt asteroids, each hiding a game-layer pirate haven (Hollow Iron, Lantern Rock, Dactyl's Rest).
+
+- **Orbits:** JPL Small-Body Database osculating elements (heliocentric ecliptic J2000), epoch JD 2461200.5, period from Kepler's third law. Checked against JPL Horizons heliocentric vectors on 2027-01-01 and 2027-12-31 (within 0.5°; OrbitalMechanicsTests).
+
+| Body | a (AU) | e | i | Ω | ω | M | Solution |
+|---|---|---|---|---|---|---|---|
+| 16 Psyche | 2.925720 | 0.134932 | 3.0987° | 149.9754° | 230.0327° | 79.7694° | JPL, 2025-02-06 |
+| 21 Lutetia | 2.434431 | 0.164770 | 3.0645° | 80.8386° | 249.8803° | 298.7726° | JPL, 2026-06-05 |
+| 243 Ida | 2.863348 | 0.046110 | 1.1304° | 323.5367° | 113.2572° | 49.6477° | JPL, 2026-06-05 |
+
+- **Physical data** (SBDB physical parameters):
+  - Psyche: diameter 222 km (Shepard et al. 2021, PSJ 2, 125); GM 1.601 km³/s² (Farnocchia et al. 2024, AJ 168, 21); rotation 4.196 h (LCDB).
+  - Lutetia: diameter 98 km (Sierks et al. 2011, Science 334, 487); GM 0.1134 km³/s² (Pätzold et al. 2011, Science 334, 491); rotation 8.1655 h (LCDB).
+  - Ida: diameter 32 km (Belton et al. 1995); GM 0.00275 km³/s² (Belton et al. 1996, Icarus 120, 185); rotation 4.634 h (LCDB).
+- **Simplified:** each is drawn as a sphere of its mean diameter, with its spin pole along the ecliptic north (Lutetia's measured pole and Ida's moon Dactyl are not modelled). The osculating orbits drift from the truth over decades as Jupiter perturbs them.
+- **Fiction:** the havens, their garrisons and the scanner range (2 million km) at which a ship picks one out.
+
 ## Factions, settlements, stations
 
 - Everything below is game-layer fiction placed on real (or candidate) worlds:
   - the Centauri Accord, the Toliman Combine, the Kentaurus Free Traders and the Long Dark;
   - New Kentaurus, Ember Station, Far Reach, Rigil Gate, Aurora Skimmer, Toliman Forge and Blackhollow;
-  - every orbital yard, factory and habitat.
+  - every orbital yard, factory and habitat;
+  - in Sol, the Black Banner and its havens: Blackwater on Deimos and the hidden belt bases above.
 - The ore mined at Toliman Forge is fiction: no asteroid belt is known around B.

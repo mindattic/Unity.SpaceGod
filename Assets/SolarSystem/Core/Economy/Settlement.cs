@@ -70,6 +70,27 @@ namespace SolarSystem.Core
 
         public bool HasShipyard => Shipyard != null;
 
+        /// <summary>
+        /// A hidden haven is off every chart: nobody knows it is there until a ship's scanners pass
+        /// within <see cref="War.ScanRangeKm"/> of it or a navy follows raiders home (see
+        /// <see cref="War.Discover"/>). An ordinary settlement is known to all.
+        /// </summary>
+        public bool Hidden;
+
+        /// <summary>The factions that have found this hidden haven.</summary>
+        public readonly HashSet<Faction> KnownTo = new HashSet<Faction>();
+
+        /// <summary>On the map: not hidden, or found by somebody (a find is news across the system).</summary>
+        public bool Discovered => !Hidden || KnownTo.Count > 0;
+
+        /// <summary>Whether <paramref name="f"/> knows where this settlement is.</summary>
+        public bool KnownBy(Faction f) => !Hidden || (f != null && KnownTo.Contains(f));
+
+        /// <summary>A haven that has been taken or destroyed: out of action (no raiders sail from it, its own
+        /// raiders lie low) until the pirates rebuild it at <see cref="RebuildJd"/>.</summary>
+        public bool Fallen;
+        public double RebuildJd;
+
         /// <summary>Days of use a market likes to hold; prices are base at this cover.</summary>
         public const double CoverDays = 20;
 

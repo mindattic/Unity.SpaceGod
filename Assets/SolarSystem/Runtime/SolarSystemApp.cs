@@ -923,9 +923,13 @@ namespace SolarSystem
         {
             if (ship.Battle == null)
             {
+                UpdateHavenAssault(ship);
                 pilotBattleCheckTimer -= dt;
                 if (pilotBattleCheckTimer > 0) return;
                 pilotBattleCheckTimer = PilotBattleCheckIntervalS;
+                // The piloted ship's scanners: a hidden haven within range goes on the map.
+                foreach (var found in World.War.ScanFrom(ship.Faction, Ephemeris.HelioAt(pilotFrameBody, Clock.Jd) + pilotOffsetKm, Clock.Jd, ship.Name))
+                    ShowToast("Scanners pick out a hidden pirate haven: " + found.Name + " on " + Catalog[found.Body].Name);
                 World.War.TryStartPlayerBattle(ship, pilotOffsetKm, pilotForward, Clock.Jd);
                 return;
             }
@@ -941,6 +945,40 @@ namespace SolarSystem
             unit.PlayerLockTarget = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
             UpdateSurrenderPrompts(ship.Battle, unit);
         }
+
+        /// <summary>
+        /// Flying over a pirate haven whose garrison platforms are gone (and with no raiders holding it):
+        /// the number keys finish the assault, 1 to board and take it (the group needs marines), 2 to
+        /// destroy it (see <see cref="War.AssaultHaven"/>).
+        /// </summary>
+        void UpdateHavenAssault(Ship ship)
+        {
+            Settlement haven = null;
+            if (pilotOffsetKm.Length <= ScaleModel.NeighbourhoodKm(Catalog[pilotFrameBody]))
+                foreach (var s in Economy.At(pilotFrameBody))
+                    if (World.War.CanAssault(s, ship)) haven = s;
+            if (haven == null)
+            {
+                havenPrompted = null;
+                return;
+            }
+            bool marines = World.War.HasMarines(ship);
+            if (havenPrompted != haven)
+            {
+                havenPrompted = haven;
+                ShowToast(haven.Name + "'s defences are down:  " + (marines ? "1 board and take it, " : "") + "2 destroy it");
+            }
+            int key = Input.NumberKey;
+            if ((key == 1 && marines) || key == 2)
+            {
+                bool capture = key == 1;
+                if (World.War.AssaultHaven(haven, ship, capture, Clock.Jd))
+                    ShowToast(capture ? "Boarders take " + haven.Name + "; its raiders scatter" : haven.Name + " is destroyed; its raiders scatter");
+                havenPrompted = null;
+            }
+        }
+
+        Settlement havenPrompted;
 
         /// <summary>
         /// While piloting in a battle, the number keys answer hails: a pirate demand for this ship's cargo
@@ -1580,7 +1618,7 @@ namespace SolarSystem
                 else
                 {
                     alpha = 1f;
-                    color = body.Kind == BodyKind.DwarfPlanet ? new Color(0.7f, 0.62f, 0.5f, 0.32f)
+                    color = body.Kind == BodyKind.DwarfPlanet || body.Kind == BodyKind.Asteroid ? new Color(0.7f, 0.62f, 0.5f, 0.32f)
                         : body.Kind == BodyKind.Station ? new Color(0.9f, 0.75f, 0.45f, 0.3f)
                         : body.IsStar ? new Color(1f, 0.85f, 0.55f, 0.35f)
                         : body.Status != BodyStatus.Confirmed ? new Color(0.6f, 0.6f, 0.7f, 0.25f)

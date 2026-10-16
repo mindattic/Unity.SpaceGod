@@ -145,7 +145,9 @@ namespace SolarSystem.Core
                 new[] { "Prospector Nine", "Lucky Strike" });
             int haven = w.Catalog["Deimos"].Index;
             war.RaisePirateGroup(startJd, haven);
-            war.RaisePirateGroup(startJd, haven);
+            // The Banner's second band sails from its biggest belt hideout; recruiting fills the other
+            // havens first (it raises each new band at the standing haven with the fewest).
+            war.RaisePirateGroup(startJd, w.Catalog[BeltHavens[0].body].Index);
 
             w.Update(jd);
             return w;
@@ -379,6 +381,10 @@ namespace SolarSystem.Core
 
             e.Add("Blackwater", B("Deimos"), SettlementKind.Haven, Pirates, 15e3);
 
+            // The Banner's hidden belt bases, off the lanes on real asteroids, unknown until someone finds them.
+            foreach (var (name, body, people) in BeltHavens)
+                e.Add(name, B(body), SettlementKind.Haven, Pirates, people).Hidden = true;
+
             // Belt Consortium: Ceres and the Jovian moons.
             var ceres = e.Add("Ceres Hub", B("Ceres"), SettlementKind.Colony, Belt, 700e3);
             Mine(ceres, Good.Water, 9000);
@@ -448,10 +454,19 @@ namespace SolarSystem.Core
             // Orbital defence platforms: the big colonies are fortresses, outposts have one or none.
             foreach (var s in e.Settlements)
             {
-                s.MaxPlatforms = s.Population >= 5e6 ? 4 : s.Population >= 1e6 ? 3 : s.Population >= 400e3 ? 2 : 1;
+                // A haven's garrison: two gun platforms over the rock.
+                s.MaxPlatforms = s.Kind == SettlementKind.Haven ? 2 : s.Population >= 5e6 ? 4 : s.Population >= 1e6 ? 3 : s.Population >= 400e3 ? 2 : 1;
                 for (int i = 0; i < s.MaxPlatforms; i++) s.Platforms.Add(new ShipCombat(CombatSpec.Platform));
             }
         }
+
+        /// <summary>The hidden pirate havens of Sol's main belt: name, asteroid, people.</summary>
+        public static readonly (string name, string body, double people)[] BeltHavens =
+        {
+            ("Hollow Iron", "Psyche", 6e3),
+            ("Lantern Rock", "Lutetia", 4e3),
+            ("Dactyl's Rest", "Ida", 3e3),
+        };
 
         /// <summary>
         /// Every settlement grows most of its own food and melts most of its own water (a haven all of
@@ -594,9 +609,13 @@ namespace SolarSystem.Core
         /// </summary>
         void AddFreeShips(double jd, string[] yachts, string[] prospectors)
         {
+            // Anywhere, that is, but a hidden haven's rock: nobody knows to go there.
+            var hidden = new HashSet<int>();
+            foreach (var s in Economy.Settlements)
+                if (s.Hidden) hidden.Add(s.Body);
             var anywhere = new List<int>();
             foreach (var b in Catalog.Bodies)
-                if (b.IsVisible && !b.IsStar) anywhere.Add(b.Index);
+                if (b.IsVisible && !b.IsStar && !hidden.Contains(b.Index)) anywhere.Add(b.Index);
             var places = anywhere.ToArray();
             void Add(string name, ShipClass cls)
             {

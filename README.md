@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 494 passing](https://img.shields.io/badge/core%20tests-494%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 511 passing](https://img.shields.io/badge/core%20tests-511%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -14,7 +14,7 @@ A ground-up rebuild of [ExperimentSolarSystem](https://github.com/mindattic/Expe
 - **Homeworld 3 navigation.** Free swim with WASD and mouselook, then select something and press F: the camera flies to it, orbits it, and rides along as it moves. Any movement key drops you straight back into free swim from where you are.
 - **Gameplay and realistic scale, live.** Press G and everything eases between a compressed, playable layout and true proportions (1 unit = 1,000 km) over about 2.5 seconds. Whatever you are looking at stays framed.
 - **Billboards when things get small.** Anything under a few pixels, ships and planets alike, turns into a class-shaped icon in its faction colour, so you can always see where everything is, even at true scale where Earth is a speck.
-- **A living system.** Eighteen settlements run a supply-and-demand economy that merchants trade on by themselves; three navies and a pirate band fight real battles with lasers, missiles and carrier fighters, losing ships and ports; and traffic between planetary systems rides X3-style hyperlanes. You watch it happen.
+- **A living system.** Twenty-one settlements run a supply-and-demand economy that merchants trade on by themselves; three navies and a pirate band fight real battles with lasers, missiles and carrier fighters, losing ships and ports; and traffic between planetary systems rides X3-style hyperlanes. You watch it happen.
 - **Take the helm when you want to.** Press P on any ship to fly it yourself: steer with the mouse, fire its forward guns, cruise across open space, trade crates at a port, answer a pirate's demand, or fly through the jump gate to Alpha Centauri.
 
 ## Gameplay vs realistic
@@ -65,7 +65,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 
 - **Economy.** Sixteen goods: food, water and medical supplies; helium-3; nickel-iron, copper, zinc, platinum-group metals, rare earths and titanium; hydrocarbons and nitrogen; refined alloys, electronics, machinery and munitions. Eighteen settlements (Earth's orbital industry, Tycho City, Ares Prime, Ceres Hub, Ganymede Union, Kraken Port on Titan and so on) mine what their world has (ice moons sell water, Titan hydrocarbons, Io copper and zinc from its sulphide flows), turn it into goods through production chains (smelters, electronics fabs, machine works, pharmaceutical labs, munitions plants, shipyards), feed their people and price every good from their stock against what they use. Facilities grow when what they make sells dear and shrink when it is glutted; populations grow when fed and shrink when not.
 - **Trade.** Freighters, ore haulers and couriers each pick the cargo and destination that earn the most per day of travel, counting deliveries already on the way, so goods flow from surplus to shortage without a script. Owners post supply contracts for essentials their outposts are short of. Profits go to the ship's faction, ports tax the trade, and traders steer clear of where the fighting has been.
-- **War.** The Sol Federation and the Outer Reach Compact are at war (it cools to ceasefires and flares up again); the Belt Consortium trades with both and hunts pirates; the Black Banner raids busy ports from Blackwater on Deimos. Fleet groups take orders (patrol, attack a weak enemy port, defend one under attack, besiege, refit at a yard). A battle starts wherever hostile forces meet: groups, merchants or a settlement's orbital defence platforms. A port with no platforms left, held by a besieging group for 4 to 20 days, changes hands; refits and new hulls are paid for in alloys, electronics and munitions bought from the yard's market.
+- **War.** The Sol Federation and the Outer Reach Compact are at war (it cools to ceasefires and flares up again); the Belt Consortium trades with both and hunts pirates; the Black Banner raids busy ports from Blackwater on Deimos and from three hidden bases on real belt asteroids (Hollow Iron on Psyche, Lantern Rock on Lutetia, Dactyl's Rest on Ida). A hidden haven is off the map until a ship's scanners pass within 2 million km of it, a navy follows beaten raiders home, or captured raiders give it away. A navy that finds one sends a strong group to break its two gun platforms and then board it (seizing its stolen goods) or level it; a pilot who has broken one can do the same (1 board, 2 destroy). A fallen haven's raiders lie low and no new bands sail from it until the pirates rebuild it, 180 days on. Fleet groups take orders (patrol, attack a weak enemy port, defend one under attack, besiege, refit at a yard). A battle starts wherever hostile forces meet: groups, merchants or a settlement's orbital defence platforms. A port with no platforms left, held by a besieging group for 4 to 20 days, changes hands; refits and new hulls are paid for in alloys, electronics and munitions bought from the yard's market.
 - **Capital ship combat.** Battles run a tactical simulation in a local space tens of km across: ships manoeuvre to their weapons' range, every hardpoint picks its own target, lasers, railguns and missiles hit particular subsystems (guns first, then shields, engines and the bridge; a lost reactor takes the ship with it), point defence shoots missiles and fighters down, and damaged ships break off and run. Turrets traverse onto their targets, shot-away hardpoints leave burning scars, breaches open as the hull falls, and a destroyed ship breaks into bow and stern that tumble apart and burn out.
 - **Weapons that travel.** Railgun and gun rounds fly a lead-compensated straight line and land only when they arrive; a miss keeps flying and fades, and the miss rate depends on the target's size. Beams sweep onto their target and leave a scorch, with muzzle flash and recoil. Destroyers carry a fixed spinal railgun.
 - **Wrecks.** A ship destroyed in battle leaves a slowly tumbling hull inside a drifting debris field where it died, at a body or beside a hyperlane, carrying its cargo as salvage until it breaks up and is cleared.
@@ -303,13 +303,13 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-494 NUnit tests, run in parallel in under two minutes, cover the following:
+511 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
 - Planet periods
 - Lunar perigee and apogee, and the Earth-barycentre offset
-- Every moon's position against JPL Horizons, and the Moon (lunar theory), Phobos, Charon, Ceres and Earth checked at five dates across 2000-2050
+- Every moon's position against JPL Horizons, and the Moon (lunar theory), Phobos, Charon, Ceres and Earth checked at five dates across 2000-2050, and the belt asteroids Psyche, Lutetia and Ida at two dates in 2027
 - Moon spin sense
 - Math helpers: angle wrapping, sexagesimal conversion, smoothstep and vector operations
 - Scale-model monotonicity, invertibility and surface continuity
@@ -327,6 +327,7 @@ dotnet test
 - Weapons: railgun and gun rounds' travel time, lead and size-dependent misses
 - Wrecks and surrender: lasting wrecks with salvage and expiry, hulls striking their colours, ransom, prize-taking and pirate cargo demands
 - War and diplomacy: siege length and port capture, symmetric relations, docking rules
+- Pirate havens: the hidden belt havens found by scanner range, by trailing beaten raiders or by a parked warship's sweep, the garrison and raiders blocking an assault, boarding (goods seized) or destroying a haven, its raiders lying low until it is rebuilt, a navy assaulting a haven it has found, and new bands sailing only from standing havens
 - Fighters: launch, attack runs, guns and torpedoes, a loose formation that breathes, lead succession, and landing back aboard
 - Boarding: fighting through to the bridge and engineering, a small party repelled, vacuum killing crew only until the bulkheads seal, pods bouncing off shields and boarding once they are down, a breacher ramming home, lining up alongside a disabled ship, and a year of lane ambushes and prizes
 - Hyperlanes: every system reachable, lanes clear of the Sun, trips taking a day or two instead of weeks, continuity across every leg change, and drawn lanes meeting the burns at the ramps
