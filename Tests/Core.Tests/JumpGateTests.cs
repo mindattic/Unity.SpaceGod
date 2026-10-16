@@ -162,6 +162,19 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AFreeShipInASystemWithNoWorldsHoldsInsteadOfCrashing()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var fleet = new Fleet(eph, 3);
+            var f = fleet.AddFaction("Wanderers", "WN", new Rgb(1, 1, 1));
+            var ship = fleet.SpawnAt("Lonely", ShipClass.Courier, f, 0, new DVec3(2e6, 0, 0), DVec3.UnitX, StartJd);
+            ship.Ports = new int[0]; // as in Luhman 16 or Sirius: no planet or station to visit
+            for (int i = 0; i < 20; i++) Assert.DoesNotThrow(() => fleet.ScheduleNext(ship, StartJd + i));
+            Assert.That(ship.DestinationBody, Is.EqualTo(0));
+        }
+
+        [Test]
         public void TransitFailsWhenTheShipIsOutOfRange()
         {
             var g = Create();

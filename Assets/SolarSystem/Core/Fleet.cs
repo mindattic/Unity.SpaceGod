@@ -937,7 +937,14 @@ namespace SolarSystem.Core
                 ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.05);
                 return;
             }
-            int next = chosen >= 0 ? chosen : ChooseDestination(ship, here, nowJd);
+            // A system with nowhere to go (only stars round a barycentre): hold here rather than pick from no ports.
+            int next = chosen >= 0 ? chosen : ship.Ports == null || ship.Ports.Length == 0 ? here : ChooseDestination(ship, here, nowJd);
+            if (next == here)
+            {
+                ship.DestinationBody = here;
+                ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.05);
+                return;
+            }
             ship.DestinationBody = next;
             if (ChooseNext == null) ship.Cargo = CargoFor(ship, here);
 
