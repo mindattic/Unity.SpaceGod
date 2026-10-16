@@ -74,8 +74,7 @@ namespace SolarSystem
             var mouse = Mouse.current;
             if (kb == null) return;
 
-            // F9, not V: the Spawn & Pilot screen (Hud.DrawSpawn) took V once it grew real rendered
-            // thumbnails of its own (ShipThumbnails) -- the two used to collide on the same key.
+            // F9, not V: V opens the Spawn & Pilot screen (Hud.DrawSpawn).
             if (kb.f9Key.wasPressedThisFrame)
             {
                 if (open) Close();

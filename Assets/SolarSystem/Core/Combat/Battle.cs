@@ -681,8 +681,7 @@ namespace SolarSystem.Core
         /// Which way to point the bow so the hull's strongest ready battery (not on cooldown, with
         /// ammo, its mount not destroyed) bears on the target — a broadside warship turns a flank in,
         /// not its nose. A hull with no real arc spread (every weapon omnidirectional, today's default)
-        /// has a single candidate centred on the bow, so this is a strict generalization of the old
-        /// always-point-the-nose behavior, not a special case.
+        /// has a single candidate centred on the bow, so it simply points its nose at the target.
         /// </summary>
         DVec3 BroadsideFacing(BattleUnit u, DVec3 toTarget)
         {
@@ -1577,8 +1576,5 @@ namespace SolarSystem.Core
             }
             return Math.Max(hi, body.RadiusKm * 6);
         }
-
-        /// <summary>Battle-local offset to true km from the body; the anchor plus the local position.</summary>
-        public DVec3 OffsetFromBody(DVec3 local) => Anchor + local;
     }
 }

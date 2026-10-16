@@ -198,10 +198,6 @@ namespace SolarSystem.Core
             return -1;
         }
 
-        /// <summary>Mean longitude (deg, 0..360) at a date: Ω + ω + M.</summary>
-        public double MeanLongitudeDeg(int i, double jd) =>
-            Astro.WrapDegrees360(NodeDeg[i] + ArgPeriDeg[i] + MeanAnomalyDeg[i] + MeanMotion[i] * (jd - EpochJd) * Astro.Rad2Deg);
-
         /// <summary>
         /// The Sun's gameplay/realistic distance mapping (<see cref="ScaleModel.LocalDistance"/> for the
         /// Sun) reduced to the constants the asteroid shader needs: (blend, units per AU at realistic

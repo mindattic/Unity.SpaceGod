@@ -200,13 +200,6 @@ namespace SolarSystem.Core
             return !((ac + chord * t0).Length > keepOut * 1.5 || t0 <= 0 || t0 >= 1);
         }
 
-        public bool HasLanes(int system)
-        {
-            foreach (var l in Lanes)
-                if (l.A == system || l.B == system) return true;
-            return false;
-        }
-
         /// <summary>How far out a system's ramps sit: past its moons, inside the planet's drawn neighbourhood.</summary>
         public double RampRadiusKm(int system)
         {

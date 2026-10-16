@@ -19,7 +19,7 @@ namespace SolarSystem.Core
         /// <summary>Economic time; advanced in ticks by <see cref="AdvanceTo"/>.</summary>
         public double Jd { get; private set; }
 
-        /// <summary>Estimated days for <paramref name="ship"/> to fly between two bodies, leaving at a date.</summary>
+        /// <summary>Estimated days for a ship to fly between two bodies (ship, from, to, departure date).</summary>
         public Func<Ship, int, int, double, double> EstimateTravelDays;
 
         /// <summary>Extra cost a trader puts on a body (pirates, battles), as a fraction of a trip's value.</summary>
@@ -73,13 +73,6 @@ namespace SolarSystem.Core
         {
             foreach (var s in Settlements)
                 if (s.Body == body) yield return s;
-        }
-
-        public bool IsPort(int body)
-        {
-            foreach (var s in Settlements)
-                if (s.Body == body) return true;
-            return false;
         }
 
         // ---------------------------------------------------------------- production and consumption

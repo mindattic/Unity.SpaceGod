@@ -288,10 +288,6 @@ namespace SolarSystem.Core
             return Hyperlanes.Curve(a, b, lane.Bend, scene[lane.Hub], scene[star], keepOut, progress, up, shape);
         }
 
-        /// <summary>Scene position of a hyperlane ramp (for drawing the network).</summary>
-        public DVec3 RampScene(Ephemeris ephemeris, DVec3[] scene, Hyperlanes lanes, Lane lane, int system) =>
-            MapNear(ephemeris, scene, system, ephemeris.Helio(system) + lanes.RampOffset(lane, system, ephemeris.Jd));
-
         /// <summary>Scene radius of a body's sphere of influence, used for camera reference frames.</summary>
         public double SceneSoi(BodyDefinition body) =>
             double.IsInfinity(body.SoiKm) ? double.PositiveInfinity : LocalDistance(body, body.SoiKm);

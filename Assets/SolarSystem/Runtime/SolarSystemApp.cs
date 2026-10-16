@@ -1049,14 +1049,6 @@ namespace SolarSystem
                 : "REALISTIC SCALE: true proportions, 1 unit = 1,000 km");
         }
 
-        public void SetScaleImmediate(double blend)
-        {
-            ScaleGoal = blend;
-            scaleFrom = blend;
-            Scale.Blend = blend;
-            scaleT = 1;
-        }
-
         void AnimateScale(float dt)
         {
             if (scaleT >= 1f) return;
@@ -1256,7 +1248,6 @@ namespace SolarSystem
         public DVec3 ShipScene(Ship ship) => shipScene[ship.Id];
         public double ShipDisplayLength(Ship ship) => shipLength[ship.Id];
         public ShipState ShipStateOf(Ship ship) => shipStates[ship.Id];
-        public Quaternion ShipRotation(Ship ship) => shipRotation[ship.Id];
 
         // ---------------------------------------------------------------- ICameraWorld
 

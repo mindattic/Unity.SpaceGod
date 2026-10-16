@@ -183,9 +183,6 @@ namespace SolarSystem.Core
         /// <summary>A display name for this specific design, distinct from its class.</summary>
         public string DesignName;
 
-        /// <summary>Which mesh renders this design; null/empty falls back to the class's procedural hull.</summary>
-        public string MeshId;
-
         /// <summary>This design's own length — ships of the same class can be different sizes.</summary>
         public double LengthKm;
 

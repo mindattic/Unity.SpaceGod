@@ -1233,7 +1233,7 @@ namespace SolarSystem.UI
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
                 "K   satellites    R   level the view to the system plane",
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
-                "Enter  or  P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
+                "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "M   market  Buy/Sell appear while piloting near the shown settlement's body",
                 "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",

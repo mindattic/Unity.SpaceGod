@@ -110,21 +110,6 @@ namespace SolarSystem.Core
         DVec3 RelativeAt(int body, double jd) =>
             body == moonIndex ? LunarTheory.Position(jd) : frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd))) * Catalog[body].OrbitScale;
 
-        /// <summary>Samples one full orbit (relative to the parent) with the elements at <paramref name="jd"/>.</summary>
-        public void SampleOrbit(int body, double jd, DVec3[] output)
-        {
-            var b = Catalog[body];
-            var k = b.Elements.At(jd);
-            int n = output.Length;
-            for (int i = 0; i < n; i++)
-            {
-                // Uniform in eccentric anomaly, so eccentric orbits get points where curvature is.
-                double ecc = Astro.TwoPi * i / Math.Max(1, n - 1);
-                double m = ecc - k.E * Math.Sin(ecc);
-                output[i] = frames[body].ToEcliptic(Kepler.Position(k.WithMeanAnomaly(m))) * b.OrbitScale;
-            }
-        }
-
         /// <summary>
         /// Samples one full orbit starting at the body's current position and running backwards
         /// along it, so a fading alpha ramp along the samples reads as a trail behind the body.

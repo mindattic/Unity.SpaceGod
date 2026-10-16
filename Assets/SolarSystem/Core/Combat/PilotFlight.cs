@@ -154,7 +154,7 @@ namespace SolarSystem.Core
         /// ramps toward <paramref name="degPerSec"/> over <paramref name="rampS"/> seconds (the rotational
         /// equivalent of the hull's linear accel cap) rather than snapping straight to the max rate, and
         /// ramps back down as the hull nears alignment so it eases in rather than oscillating around the
-        /// target. A non-positive <paramref name="rampS"/> falls back to the old instant-snap behavior.</summary>
+        /// target. A non-positive <paramref name="rampS"/> turns at the full rate at once.</summary>
         static void TurnToward(ref DVec3 forward, DVec3 dir, double degPerSec, double rampS, ref double angularRateDegS, double dt)
         {
             if (rampS <= 0) { angularRateDegS = degPerSec; }
