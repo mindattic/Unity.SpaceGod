@@ -341,6 +341,8 @@ namespace SolarSystem
         public void TravelTo(StarSystem system)
         {
             if (system == null || system == ActiveSystem || Travel.Active) return;
+            // The pilot session belongs to this system's ship and world: the gate is the way across while flying.
+            if (IsPiloting) { ShowToast("Release the helm (P) before travelling to another system, or fly through the gate"); return; }
             Select(Target.None);
             Travel.Begin(system);
         }
@@ -640,6 +642,8 @@ namespace SolarSystem
 
         public void FocusSelected()
         {
+            // The chase camera belongs to the pilot (the HUD's Focus button lands here too).
+            if (IsPiloting) return;
             if (Selected.IsNone)
             {
                 if (SpaceCamera.Mode != SpaceCamera.CameraMode.Free) SpaceCamera.ExitFocus();
@@ -1150,6 +1154,8 @@ namespace SolarSystem
 
         public void ResetToNow()
         {
+            // A reset can rebuild the galaxy out from under the piloted ship (the HUD's Now button lands here too).
+            if (IsPiloting) { ShowToast("Release the helm (P) before resetting the time"); return; }
             double now = Astro.JulianDate(DateTime.UtcNow);
             bool backwards = now < Clock.Jd;
             // Rebuilding the systems mid-trip would leave the trip pointing at the old ones: land first.
