@@ -405,6 +405,19 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void TakingTheHelmOfTheShipInTroubleIsNotSeeingItThrough()
+        {
+            var adrift = Add(ShipClass.Freighter, traders, Near);
+            adrift.Phase = ShipPhase.Adrift;
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            // The player takes that very ship: its spot is the player's own.
+            Tick(Jd + 0.01, adrift, Near);
+            Assert.That(op.Engaged, Is.False);
+            Assert.That(op.State, Is.Not.EqualTo(OpportunityState.Completed), "paid for taking the helm of the ship it was about");
+        }
+
+        [Test]
         public void AFightSeenThroughIsPaidEvenAfterThePlayerLetsGoOfTheHelm()
         {
             var helped = Add(ShipClass.Freighter, traders, Near);

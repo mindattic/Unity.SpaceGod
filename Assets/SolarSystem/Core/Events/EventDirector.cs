@@ -83,7 +83,9 @@ namespace SolarSystem.Core
             {
                 var op = Active[i];
                 Refresh(op, src);
-                if (playerShip != null && !playerShip.Destroyed && (op.HelioKm - playerHelio).Length <= ArriveKm)
+                // Arriving counts only from another ship: taking the helm of the very ship it is about isn't
+                // seeing it through (its spot is the player's own, so it would read as arrived at once).
+                if (playerShip != null && !playerShip.Destroyed && op.Ship != playerShip && (op.HelioKm - playerHelio).Length <= ArriveKm)
                 {
                     op.Engaged = true;
                     op.EngagedBy = playerShip;
