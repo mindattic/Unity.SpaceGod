@@ -178,14 +178,14 @@ namespace SolarSystem.Core.Tests
             var candidates = AllSpecs().SelectMany(s => s.Planets).Where(p => p.Status == BodyStatus.Candidate).Select(p => p.Name).ToList();
             Assert.That(candidates, Is.SupersetOf(new[]
             {
-                "Wolf 359 b", "Lalande 21185 d", "Tau Ceti g", "Tau Ceti h", "Tau Ceti f", "Luyten d", "Luyten e", "Alpha Centauri Ab",
+                "Wolf 359 b", "Lalande 21185 d", "Luyten d", "Luyten e", "Alpha Centauri Ab",
             }));
             var confirmed = AllSpecs().SelectMany(s => s.Planets).Where(p => p.Status == BodyStatus.Confirmed).Select(p => p.Name).ToList();
             Assert.That(confirmed, Is.SupersetOf(new[]
             {
                 "Barnard b", "Barnard c", "Barnard d", "Barnard e", "Lalande 21185 b", "Lalande 21185 c", "Ross 128 b", "Epsilon Eridani b",
                 "Epsilon Indi Ab", "GJ 1061 b", "GJ 1061 c", "GJ 1061 d", "Teegarden's Star b", "Teegarden's Star c", "Teegarden's Star d",
-                "Luyten b", "Luyten c", "Proxima b", "Proxima d",
+                "Luyten b", "Luyten c", "Proxima b", "Proxima d", "Tau Ceti g", "Tau Ceti h", "Tau Ceti f",
             }));
             // Every candidate says so where the player reads it.
             foreach (var p in AllSpecs().SelectMany(s => s.Planets).Where(p => p.Status != BodyStatus.Confirmed))

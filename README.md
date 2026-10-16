@@ -111,7 +111,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Twelve more systems are visitable** from **STAR SYSTEMS**, each at its real place and distance: Barnard's Star, Luhman 16, Wolf 359, Lalande 21185, Sirius, Epsilon Eridani, Ross 128, Epsilon Indi, Tau Ceti, GJ 1061, Luyten's Star and Teegarden's Star.
 - **One builder:** every system outside Sol, Alpha Centauri included, is a catalogue entry that one builder (`StarSystemBuilder`) turns into bodies.
 - **Stars and binaries:** Sirius A and its white dwarf, and the brown-dwarf pair Luhman 16, move on their measured visual orbits. Epsilon Indi's brown dwarfs Ba and Bb circle each other 1,500 AU from A.
-- **Planets:** the confirmed ones come from the NASA Exoplanet Archive, with their real periods, axes, eccentricities and masses ("at least" where only m sin i is known). Candidates (Tau Ceti's, Wolf 359 b, Lalande 21185 d, Luyten d and e) are labelled as such. Each planet is flagged inside or outside its star's habitable zone (Kopparapu et al. 2013).
+- **Planets:** the confirmed ones come from the NASA Exoplanet Archive, with their real periods, axes, eccentricities and masses ("at least" where only m sin i is known). Candidates (Wolf 359 b, Lalande 21185 d, Luyten d and e) are labelled as such. Each planet is flagged inside or outside its star's habitable zone (Kopparapu et al. 2013).
 - **Debris belts:** Epsilon Eridani's three belts and Tau Ceti's disc are drawn in their measured planes.
 - **Unsettled:** these systems have no settlements, lanes or ships yet. Anything put there later is game-layer fiction.
 - **Sources:** every value is listed in [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md).

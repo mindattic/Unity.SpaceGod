@@ -82,7 +82,7 @@ Every system outside Sol is a catalogue entry (`SystemSpec`, in `AlphaCentauri.c
 
 - **Stars:** position (ICRS J2000), parallax, spectral type, mass, radius, temperature, luminosity and rotation come from each star's Wikipedia article (Gaia DR3 and the papers it cites; fetched 2026-10-16). Where an article gives no luminosity, the NASA Exoplanet Archive's st_lum is used (marked "archive").
 - **Planets:** the NASA Exoplanet Archive composite table `pscomppars` (TAP query of 2026-10-16) gives pl_orbper, pl_orbsmax, pl_orbeccen, pl_bmasse (m sin i where the provenance is Msini), pl_rade (estimated unless transiting), pl_orblper, pl_orbtper and pl_orbincl. The reference named is the archive's default parameter set.
-- **Candidates:** planets the archive does not list come from their discovery papers. Tau Ceti's archive-listed planets come from a single team's detection that nobody has confirmed. Both kinds are flagged **CANDIDATE** in the game.
+- **Candidates:** planets the archive does not list come from their discovery papers and are flagged **CANDIDATE** in the game. Every planet the archive lists as confirmed is confirmed here.
 
 ### Barnard's Star (5.96 ly)
 
@@ -189,7 +189,7 @@ Every system outside Sol is a catalogue entry (`SystemSpec`, in `AlphaCentauri.c
 ### Tau Ceti (11.91 ly)
 
 - **Star:** G8V. RA 01h44m04.083s, Dec −15°56′14.93″, parallax 273.810 mas. 0.800 M☉, 0.793 R☉, 0.488 L☉, 5320 K, rotation 46 d.
-- **Planets: all CANDIDATES.** Feng et al. 2017 reported them. The archive lists them; Wikipedia, and these tables, mark them unconfirmed.
+- **Planets** (archive; Feng et al. 2017), all confirmed: the archive lists exactly these three (query of 2026-10-16).
 
   | Planet | P (d) | a (AU) | e | m sin i (M⊕) | R est. (R⊕) | ω |
   |---|---|---|---|---|---|---|

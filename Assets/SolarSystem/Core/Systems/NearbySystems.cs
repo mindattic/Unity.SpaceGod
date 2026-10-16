@@ -298,20 +298,16 @@ namespace SolarSystem.Core
                     "The nearest single Sun-like star, older and dimmer than the Sun, swaddled in ten times the Sun's cometary debris.")),
                 // The debris disc's tilt to the sky (MacGregor et al. 2016); planets assumed to share it, node assumed.
                 ReferenceIDeg = 35,
-                Summary = "A nearby Sun-like star with a heavy debris disc and three unconfirmed super-Earths.",
+                Summary = "A nearby Sun-like star with a heavy debris disc and three super-Earths.",
             };
-            PlanetSpec Feng(string name, double p, double a, double e, double m, double r, double w, string summary)
-            {
-                var planet = Archive(name, host, p, a, e, m, r, w, 2017, "Feng et al. 2017", summary);
-                planet.Status = BodyStatus.Candidate;
-                return planet;
-            }
+            PlanetSpec Feng(string name, double p, double a, double e, double m, double r, double w, string summary) =>
+                Archive(name, host, p, a, e, m, r, w, 2017, "Feng et al. 2017", summary);
             s.Planets.Add(Feng("Tau Ceti g", 20.00, 0.133, 0.06, 1.75, 1.18, 35.341,
-                "CANDIDATE: a hot super-Earth on a 20-day orbit, one of Feng et al.'s signals at the limit of detection, not independently confirmed."));
+                "A hot super-Earth on a 20-day orbit, the innermost of Tau Ceti's three known planets."));
             s.Planets.Add(Feng("Tau Ceti h", 49.41, 0.243, 0.23, 1.83, 1.19, 7.45,
-                "CANDIDATE: a 1.8-Earth-mass world on a 49-day orbit, unconfirmed."));
+                "A 1.8-Earth-mass world on a 49-day orbit."));
             s.Planets.Add(Feng("Tau Ceti f", 636.13, 1.334, 0.16, 3.93, 1.81, 119.75,
-                "CANDIDATE: a cold super-Earth just beyond the outer edge of the habitable zone, unconfirmed."));
+                "A cold super-Earth just beyond the outer edge of the habitable zone."));
             s.Discs.Add(new DiscSpec
             {
                 Name = "Tau Ceti debris disc", Host = host, InnerAu = 6.2, OuterAu = 52, IDeg = 35, Source = "MacGregor et al. 2016",
