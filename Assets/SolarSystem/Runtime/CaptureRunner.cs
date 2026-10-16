@@ -29,10 +29,28 @@ namespace SolarSystem
                 if (!capturing) Debug.LogError("[SolarSystem] MindAttic.Capture did not start; the tour will not be captured.");
             }
 
-            yield return SceneTour.Run(app, capturing ? Shot : NoShot);
+            // A time reset rebuilds the galaxy under the tour (its ships, bodies and battles are gone):
+            // stop there rather than run on, framing and waiting on objects that no longer exist.
+            bool done = false, rebuilt = false;
+            void OnRebuilt() => rebuilt = true;
+            app.GalaxyRebuilt += OnRebuilt;
+            var tour = StartCoroutine(RunTour(app, capturing, () => done = true));
+            while (!done && !rebuilt) yield return null;
+            app.GalaxyRebuilt -= OnRebuilt;
+            if (!done)
+            {
+                StopCoroutine(tour);
+                Debug.LogWarning("[SolarSystem] The galaxy was rebuilt mid-tour; the tour stops here.");
+            }
 
             if (capturing) Debug.Log("[SolarSystem] Tour captured to " + CaptureUnity.Engine.SessionFolder);
             Application.Quit();
+        }
+
+        static IEnumerator RunTour(SolarSystemApp app, bool capturing, System.Action finished)
+        {
+            yield return SceneTour.Run(app, capturing ? Shot : NoShot);
+            finished();
         }
 
         static IEnumerator NoShot(string name)
