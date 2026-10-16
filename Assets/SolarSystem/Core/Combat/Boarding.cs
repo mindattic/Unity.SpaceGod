@@ -253,6 +253,8 @@ namespace SolarSystem.Core
         {
             if (Captured) return;
             if (Boarder != null && Boarder != boarder) return;
+            // Defenders are roused once per boarding: more boarders landing later don't stand them down again.
+            bool fresh = Boarder == null;
             Boarder = boarder;
             BoarderQuality = quality;
             at.Boarders += marines;
@@ -263,7 +265,8 @@ namespace SolarSystem.Core
                 // Emergency bulkheads: quick with the bridge giving the order, slower without.
                 at.SealIn = 4 + rng.NextDouble() * 10;
             }
-            reactIn = Math.Max(reactIn, 15 + rng.NextDouble() * 30);
+            double react = 15 + rng.NextDouble() * 30;
+            if (fresh) reactIn = react;
             Note(seconds, at.Index, $"{marines:0} {boarder.Name} marines board at {at.Name}" + (breach ? ", hull breached" : ""));
         }
 

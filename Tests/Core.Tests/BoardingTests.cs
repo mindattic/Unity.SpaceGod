@@ -58,6 +58,24 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ASecondLandingDoesNotStandDownDefendersAlreadyOnTheMove()
+        {
+            var cruiser = new ShipCombat(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser);
+            var interior = cruiser.Interior;
+            var rng = new Random(6);
+            var bow = interior.Of(CompartmentKind.Bow);
+            interior.Board(Red, 1.1, 40, bow, true, 0, rng);
+            int s = 0;
+            for (; s < 50; s++) interior.Step(1, s, rng);
+            Assert.That(interior.UnderBoarding, Is.True);
+            double Elsewhere() => interior.Compartments.Where(c => c.Boarders <= 0.01).Sum(c => c.Marines);
+            interior.Board(Red, 1.1, 10, bow, true, s, rng);
+            double before = Elsewhere();
+            for (int end = s + 5; s < end; s++) interior.Step(1, s, rng);
+            Assert.That(Elsewhere() < before, Is.True, "the defenders stopped moving up when more boarders landed");
+        }
+
+        [Test]
         public void AFewBoardersAgainstACruisersMarinesAreRepelled()
         {
             var cruiser = new ShipCombat(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser);
