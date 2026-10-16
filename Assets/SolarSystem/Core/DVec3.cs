@@ -55,6 +55,21 @@ namespace SolarSystem.Core
         public static DVec3 Lerp(DVec3 a, DVec3 b, double t) => a + (b - a) * t;
 
         /// <summary>
+        /// Steps unit direction <paramref name="a"/> a fraction <paramref name="t"/> of the way round
+        /// to unit direction <paramref name="b"/>. When <paramref name="b"/> is exactly opposite, a
+        /// straight lerp never leaves the line (and is zero at the half-way point), so it swings round
+        /// a perpendicular instead.
+        /// </summary>
+        public static DVec3 TurnStep(DVec3 a, DVec3 b, double t)
+        {
+            if (Dot(a, b) > -0.999999) return Lerp(a, b, t).Normalized;
+            var side = Cross(a, UnitZ);
+            if (side.LengthSquared < 1e-12) side = Cross(a, UnitY);
+            double angle = t * Math.PI;
+            return (a * Math.Cos(angle) + side.Normalized * Math.Sin(angle)).Normalized;
+        }
+
+        /// <summary>
         /// Ecliptic (right-handed, z = ecliptic north) to scene (Unity, left-handed, y = up).
         /// Swapping y and z is a reflection, which is exactly the handedness change; it is its own inverse.
         /// </summary>

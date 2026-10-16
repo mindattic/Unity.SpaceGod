@@ -1,3 +1,4 @@
+using System;
 using SolarSystem.Core;
 using NUnit.Framework;
 
@@ -105,6 +106,20 @@ namespace SolarSystem.Core.Tests
             Assert.That(n.X, Is.EqualTo(0.6).Within(1e-12));
             Assert.That(n.Y, Is.EqualTo(0.8).Within(1e-12));
             Assert.That(n.Z, Is.EqualTo(0.0).Within(1e-12));
+        }
+
+        [Test]
+        public void TurningTowardTheExactOppositeDirectionStillTurns()
+        {
+            foreach (var a in new[] { DVec3.UnitX, DVec3.UnitZ })
+            {
+                var step = DVec3.TurnStep(a, -a, 0.25);
+                Assert.That(step.Length, Is.EqualTo(1.0).Within(1e-12));
+                Assert.That(DVec3.Dot(step, a), Is.EqualTo(Math.Cos(Math.PI / 4)).Within(1e-9), "a quarter of a half-turn is 45 degrees");
+                Assert.That(DVec3.TurnStep(a, -a, 0.5).Length, Is.EqualTo(1.0).Within(1e-12), "half-way is a right angle, not the zero vector");
+            }
+            var x = DVec3.TurnStep(DVec3.UnitX, DVec3.UnitY, 0.5);
+            Assert.That(x.X, Is.EqualTo(x.Y).Within(1e-12));
         }
 
         [Test]

@@ -185,7 +185,7 @@ namespace SolarSystem.Core
                 forward = want;
                 return;
             }
-            forward = DVec3.Lerp(forward, want, maxDeg / angleDeg).Normalized;
+            forward = DVec3.TurnStep(forward, want, maxDeg / angleDeg);
         }
     }
 }

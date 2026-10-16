@@ -740,7 +740,7 @@ namespace SolarSystem.Core
                 return;
             }
             double t = max / angle;
-            u.Forward = DVec3.Lerp(u.Forward, want, t).Normalized;
+            u.Forward = DVec3.TurnStep(u.Forward, want, t);
         }
 
         static double PreferredRange(BattleUnit u)
