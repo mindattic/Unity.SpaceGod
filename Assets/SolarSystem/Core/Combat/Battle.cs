@@ -995,7 +995,9 @@ namespace SolarSystem.Core
                 return near;
             }
             var t = u.Target;
-            if (t != null && t.Present && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile))
+            // Its own target only while that is still a fair one: not struck its colours, not since taken
+            // by this side (a capture doesn't clear everyone's target the way a surrender does).
+            if (t != null && Hostile(u, t) && !t.Surrendering && !t.Captured && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile))
                 return t;
             BattleUnit any = null;
             double nearest = w.RangeKm;

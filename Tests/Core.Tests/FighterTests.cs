@@ -55,6 +55,29 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void FightersBreakOffAHullThatStrikesItsColours()
+        {
+            var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };
+            var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), 2461324.0, 5) { Launch = FighterAI.Launch, FighterStep = FighterAI.Step };
+            Ship Hull(ShipClass c, Faction f, int id) => new Ship { Id = id, Name = c + "" + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(CombatSpec.Of(c), c) };
+            var carrier = b.AddShip(Hull(ShipClass.Carrier, blue, 0), 0, new DVec3(14, 0, 0), -DVec3.UnitX);
+            // The only hull on the other side, so it is every squadron's target.
+            var victim = b.AddShip(Hull(ShipClass.Battleship, red, 1), 1, new DVec3(-14, 0, 0), DVec3.UnitX);
+            for (int i = 0; i < 60; i++) b.Advance(1);
+            Assert.That(victim.Present, Is.True);
+            // A player captor holds the hailing window open while we watch.
+            carrier.PlayerControlled = true;
+            b.Surrender(victim);
+            for (int i = 0; i < 8; i++)
+            {
+                b.Advance(1);
+                Assert.That(b.Units.Where(f => f.Kind == UnitKind.Fighter && f.Present && f.Target == victim), Is.Empty,
+                    "fighters went back to attacking a hull waiting on terms");
+            }
+        }
+
+        [Test]
         public void BomberWingmenLooseTheirTorpedoesOnTheRunToo()
         {
             var b = CarrierAction(5);

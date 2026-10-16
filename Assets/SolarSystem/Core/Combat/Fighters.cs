@@ -143,7 +143,9 @@ namespace SolarSystem.Core
         {
             var f = u.Fighter;
             var rng = b.Rng;
-            if (u.Target == null || !u.Target.Present || (f.Phase != FighterPhase.AttackRun && rng.NextDouble() < dt / 20))
+            // A target that has struck its colours or changed hands is no longer one.
+            bool lost = u.Target == null || !b.Hostile(u, u.Target) || u.Target.Surrendering || u.Target.Captured;
+            if (lost || (f.Phase != FighterPhase.AttackRun && rng.NextDouble() < dt / 20))
             {
                 u.Target = ChooseTarget(b, u);
                 if (f.Phase == FighterPhase.Dogfight || f.Phase == FighterPhase.AttackRun) Switch(f, FighterPhase.Approach);
@@ -236,7 +238,7 @@ namespace SolarSystem.Core
             double bestScore = double.MaxValue;
             foreach (var o in b.Units)
             {
-                if (!b.Hostile(u, o)) continue;
+                if (!b.Hostile(u, o) || o.Surrendering || o.Captured) continue;
                 if (o.Kind == UnitKind.Fighter && bomber) continue;
                 double d = (o.Pos - u.Pos).Length;
                 double score = d;
