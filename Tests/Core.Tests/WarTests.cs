@@ -254,6 +254,19 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void TakingAFlagshipsHelmLeavesItsEscortsUnderANewFlagship()
+        {
+            var w = CreateWorld();
+            var flagship = w.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort && w.Fleet.Ships.Count(e => e.Leader == s) >= 2);
+            var escorts = w.Fleet.Ships.Where(e => e.Leader == flagship).ToList();
+            w.War.HandOverCommand(flagship);
+            Assert.That(w.Fleet.Ships.Any(e => e.Leader == flagship), Is.False, "escorts left holding station on the player's ship");
+            var heir = escorts.Single(e => !e.IsEscort);
+            Assert.That(escorts.Where(e => e != heir).All(e => e.Leader == heir), Is.True);
+            Assert.That(heir.Phase, Is.EqualTo(flagship.Phase));
+        }
+
+        [Test]
         public void APlayerFlownWarshipIsNeverMergedIntoAnAiBattleGroup()
         {
             var w = CreateWorld();

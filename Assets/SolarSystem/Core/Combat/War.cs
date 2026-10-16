@@ -801,6 +801,18 @@ namespace SolarSystem.Core
         }
 
         /// <summary>When a flagship is lost its strongest surviving escort takes the group.</summary>
+        /// <summary>
+        /// The player takes the helm of a group's flagship: its escorts carry on under the strongest of
+        /// them (as when a flagship is lost) rather than holding station on a hull that no longer runs
+        /// the group's schedule -- frozen at the spot piloting began, or left behind for good if it jumps
+        /// through the gate.
+        /// </summary>
+        public void HandOverCommand(Ship leader)
+        {
+            if (leader == null || leader.IsEscort) return;
+            Succession(leader);
+        }
+
         void Succession(Ship dead)
         {
             if (dead.IsEscort) return;

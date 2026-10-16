@@ -744,6 +744,7 @@ namespace SolarSystem
             var facing = Fleet.StateOf(ship, Clock.Jd).Facing;
             var velocity = DVec3.Zero;
             if (ship.IsEscort) ship.Leader = null;
+            else World.War.HandOverCommand(ship);
             if (ship.Battle != null)
             {
                 var unit = ship.Battle.UnitOf(ship);
