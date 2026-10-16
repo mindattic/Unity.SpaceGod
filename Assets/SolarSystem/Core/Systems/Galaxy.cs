@@ -20,8 +20,47 @@ namespace SolarSystem.Core
         public World World { get; }
         public Hyperlanes Lanes => World.Fleet.Lanes;
 
-        /// <summary>This system's own jump gate, paired with another system's (see <see cref="Galaxy.CreateDefault"/>); null until paired.</summary>
-        public JumpGate Gate { get; internal set; }
+        /// <summary>This system's jump gates, one for each link of the <see cref="GateNetwork"/> it is on; empty until linked.</summary>
+        public IReadOnlyList<JumpGate> Gates => gates;
+        readonly List<JumpGate> gates = new List<JumpGate>();
+
+        internal void AddGate(JumpGate gate) => gates.Add(gate);
+
+        /// <summary>This system's gate straight to <paramref name="other"/>, or null if they are not directly linked.</summary>
+        public JumpGate GateTo(StarSystem other)
+        {
+            foreach (var g in gates)
+                if (g.Destination == other) return g;
+            return null;
+        }
+
+        /// <summary>The gate a ship at <paramref name="helioKm"/> (from this system's root) is close enough to activate, or null.</summary>
+        public JumpGate GateInRange(DVec3 helioKm)
+        {
+            JumpGate best = null;
+            double bestKm = double.MaxValue;
+            foreach (var g in gates)
+            {
+                double km = (helioKm - g.PositionKm).Length;
+                if (g.CanActivate(helioKm) && km < bestKm)
+                {
+                    bestKm = km;
+                    best = g;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Has settlements to trade with (Sol, Alpha Centauri), rather than only stars and worlds.</summary>
+        public bool Settled
+        {
+            get
+            {
+                foreach (var s in World.Economy.Settlements)
+                    if (s.Kind != SettlementKind.Haven) return true;
+                return false;
+            }
+        }
 
         /// <summary>The catalogue entry it was built from; null for Sol, whose bodies are listed in <see cref="BodyCatalog"/>.</summary>
         public SystemSpec Spec { get; }
@@ -142,9 +181,17 @@ namespace SolarSystem.Core
         public readonly List<StarSystem> Systems = new List<StarSystem>();
         public readonly List<NearbyStar> NearbyStars = new List<NearbyStar>();
 
+        /// <summary>The jump-gate lattice between the systems (see <see cref="GateNetwork"/>).</summary>
+        public GateNetwork Network { get; private set; }
+
+        /// <summary>The ships crossing between systems and the voyages that send them (see <see cref="InterstellarTraffic"/>).</summary>
+        public InterstellarTraffic Traffic { get; private set; }
+
+        /// <summary>Every system to <paramref name="jd"/>, then the traffic between them.</summary>
         public void Update(double jd)
         {
             foreach (var s in Systems) s.Update(jd);
+            Traffic?.Update(jd);
         }
 
         public StarSystem Find(string name)
@@ -164,9 +211,10 @@ namespace SolarSystem.Core
         public static double DistanceLy(StarSystem from, StarSystem to) => (to.PositionLy - from.PositionLy).Length;
 
         /// <summary>
-        /// Sol, Alpha Centauri (settled, joined to Sol by the jump gates), and the nearest real systems
-        /// beyond (<see cref="NearbySystems"/>), each visitable but unsettled; the rest of the nearest
-        /// stars are shown, not simulated.
+        /// Sol, Alpha Centauri (both settled), and the nearest real systems beyond
+        /// (<see cref="NearbySystems"/>), each visitable but unsettled, all joined by the jump-gate
+        /// lattice (<see cref="GateNetwork"/>) that the interstellar traffic flies; the rest of the
+        /// nearest stars are shown, not simulated.
         /// </summary>
         public static Galaxy CreateDefault(double jd)
         {
@@ -181,18 +229,9 @@ namespace SolarSystem.Core
                 if (s.Spec?.NeighbourName != null) simulated.Add(s.Spec.NeighbourName);
             foreach (var n in Neighbours())
                 if (!simulated.Contains(n.Name)) g.NearbyStars.Add(n);
-            LinkGates(sol, alphaCentauri);
+            g.Network = GateNetwork.Build(g.Systems);
+            g.Traffic = new InterstellarTraffic(g, jd);
             return g;
-        }
-
-        /// <summary>Gives each of the two simulated systems a jump gate facing the other, at its own
-        /// outer edge (see <see cref="JumpGate.RadiusKm"/>), and pairs them.</summary>
-        static void LinkGates(StarSystem sol, StarSystem alphaCentauri)
-        {
-            sol.Gate = new JumpGate("Centauri Gate", Direction(sol, alphaCentauri) * GateDistanceKm(sol));
-            alphaCentauri.Gate = new JumpGate("Sol Gate", Direction(alphaCentauri, sol) * GateDistanceKm(alphaCentauri));
-            sol.Gate.Destination = alphaCentauri;
-            alphaCentauri.Gate.Destination = sol;
         }
 
         /// <summary>

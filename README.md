@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 614 passing](https://img.shields.io/badge/core%20tests-614%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 624 passing](https://img.shields.io/badge/core%20tests-624%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -15,7 +15,7 @@ A ground-up rebuild of [ExperimentSolarSystem](https://github.com/mindattic/Expe
 - **Gameplay and realistic scale, live.** Press G and everything eases between a compressed, playable layout and true proportions (1 unit = 1,000 km) over about 2.5 seconds. Whatever you are looking at stays framed.
 - **Billboards when things get small.** Anything under a few pixels, ships and planets alike, turns into a class-shaped icon in its faction colour, so you can always see where everything is, even at true scale where Earth is a speck.
 - **A living system.** Twenty-one settlements run a supply-and-demand economy that merchants trade on by themselves; three navies and a pirate band fight real battles with lasers, missiles and carrier fighters, losing ships and ports; and traffic between planetary systems rides X3-style hyperlanes. You watch it happen.
-- **Take the helm when you want to.** Press P on any ship to fly it yourself: steer with the mouse, fire its forward guns, cruise across open space, trade crates at a port, answer a pirate's demand, latch on to a derelict or a wreck and pick it over, or fly through the jump gate to Alpha Centauri.
+- **Take the helm when you want to.** Press P on any ship to fly it yourself: steer with the mouse, fire its forward guns, cruise across open space, trade crates at a port, answer a pirate's demand, latch on to a derelict or a wreck and pick it over, or fly through a jump gate to another star.
 
 ## Gameplay vs realistic
 
@@ -98,6 +98,9 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
   3. falls into the other system's overview.
 
   Esc skips the trip. A piloted ship can make the crossing itself through the jump gates (see Piloting below).
+- **The gate network.** Jump gates join the fourteen simulated systems in a sparse lattice, not every pair: each system is linked to its two nearest, and any islands that leaves are joined by their shortest links, so every star is reachable, many only by way of others (18 links; Tau Ceti is four gates from Sol). Each gate sits at its system's edge facing the star it leads to and belongs to that system's leading power. A crossing takes six hours plus two hours a light-year (Sol to Alpha Centauri, 4.34 ly, about 15 hours).
+- **Traffic between the stars.** AI ships route over the gate graph by crossing time, flying out to a gate, through it and on to the next. Freighters carry a good to another system's market when the price gap there beats the trip, gate tolls included (3% of the cargo's cost a light-year, paid to the gates' owners), trade there a few weeks and bring a backhaul home; couriers carry the mail between Sol and Alpha Centauri for a fee; yachts and survey ships go to look at the unsettled stars; raider groups now and then slip out to raid the other settled system.
+- **Blockades.** A gate never opens for its owner's declared enemies, and after raiders come through it, its owner shuts it to everyone but its own ships for 30 days and sends a navy group after them to the system they came from. Traffic then goes round by other gates, or waits at the gate (and gives up after 8 days). The STAR SYSTEMS navigator shows how many gates away each system is, the gates of the one you are in with their crossing times and which are shut, the ships in the gates, and the ships here from beyond them; the view between the stars draws the lattice (red where a gate is shut) with the ships in transit moving along it.
 - **Seeing the other system:** each system shows the other in its sky. Alpha Centauri is marked from Sol, and the Sun shines in Cassiopeia from Alpha Centauri.
 - **Alpha Centauri's game layer**, thinner and younger than Sol's:
   - **Centauri Accord:** governs the Proxima colonies with a small navy.
@@ -152,7 +155,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Hails.** In a battle, the number keys answer: to a pirate demand for your cargo, 1 hands it over and 2 refuses; to an enemy that strikes its colours, 1 demands its cargo, 2 takes the ship and 3 lets it go.
 - **Cargo and trade.** I opens the ship's grid cargo hold (a per-class grid; click a crate, then a cell, to move it). Near a settlement's world, the M market board shows Buy and Sell buttons that trade whole crates at the same prices and port tax the AI traders pay.
 - **Spawn and pilot.** V opens a screen of every ship class with a rendered preview; click one to spawn it at the camera and fly it.
-- **Jump gates.** Sol's Centauri Gate and Alpha Centauri's Sol Gate sit 5,000 km from each system's centre, facing the other star. Fly within 300 km and press Y to come out at the far gate, ship, cargo and credits intact.
+- **Jump gates.** Every system's gates sit 5,000 km from its centre, each facing the star it leads to (Sol's Centauri Gate, Alpha Centauri's Sol Gate, and so on). Fly within 300 km of one and press Y to come out at its far gate at once, ship, cargo and credits intact, unless it is shut to you.
 - **Model viewer.** F9 (or `-modelviewer <name>` on the command line) shows any ship model on its own for visual checks.
 
 ### Interface
@@ -262,7 +265,7 @@ While piloting:
 | Lock a target | T |
 | Cargo hold | I |
 | Buy and sell crates | M, near a settlement's world |
-| Activate the jump gate | Y, within 300 km of it |
+| Activate a jump gate | Y, within 300 km of it |
 | Answer a hail in battle | 1, 2, 3 |
 
 ## Project layout
@@ -279,7 +282,7 @@ Assets/SolarSystem/
     Fleet.cs, Ships.cs    ship classes, factions, schedules, brachistochrone transits, lane journeys
     Hyperlanes.cs         lane network, ramps, curves, routing
     World.cs              factions, settlements, ships; advances fleet, markets and wars together
-    Systems/              Alpha Centauri, the Galaxy of star systems, nearby stars, jump gates
+    Systems/              Alpha Centauri, the Galaxy of star systems, nearby stars, the jump-gate lattice and the traffic across it
     Infrastructure/       orbital yards, factories, habitats, real spacecraft, constellations, docking rings
     Economy/              goods, recipes, settlements and markets, trade planning, the player's cargo hold
     Combat/               hardpoints, battles, fighters, boarding, morale and surrender, wrecks, war, diplomacy, piloted flight
@@ -314,7 +317,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-614 NUnit tests, run in parallel in under two minutes, cover the following:
+624 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -350,7 +353,8 @@ dotnet test
 - Piloting: cruise spooling up and dropping out, forward guns firing only on the trigger, the piloted hull staying where the pilot loop puts it
 - Cargo hold and trade: crate footprints and rotation, no overlaps or out-of-bounds placement, buying and selling at the AI's prices and taxes, docking rules
 - Adventures: each kind offered only from real sim state (a ship actually in a fight or adrift, a derelict, a wreck with salvage, raiders lurking on a lane past the danger threshold, a merchant on a dangerous lane with time left, a raider captain), within range, never twice at once, capped, rested after it ends; ignored ones failing at expiry or when the situation settles without the player; completed ones paying credits, cargo and standing; and twenty days of the live system where every offer traces to something real
-- Jump gates: a gate pair per system at its outer edge, activation range, arrival inside the far gate, and the ship moving between fleets
+- Jump gates: a gate pair per link at each system's outer edge, activation range, arrival inside the far gate, and the ship moving between fleets
+- Gate network: a sparse, connected lattice linking each system to its nearest, gates facing their partners and owned by each system's power, crossing time growing with distance, routes going round a blockade and never through an enemy's gate, the distance markup deciding whether a cargo pays, a freighter selling its goods in the other system's markets, a survey ship crossing several gates and coming home, raiders getting a gate shut behind them and a navy sent after them, a ship turning for another gate when its own shuts, and a year of traffic with every ship somewhere real
 
 ## Limitations
 
@@ -358,7 +362,7 @@ dotnet test
 - **Moons are mean orbits.** The Moon follows the main terms of a real lunar theory (within 0.01°), and Phobos includes its tidal decay (within 0.07°). Every other moon is an ellipse with steady precession, within 0.5° of JPL Horizons over 2000-2050 except Miranda (1.7°), whose neighbours' pulls a mean orbit cannot follow.
 - **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations. Piloted flight is arcade flight, tuned for feel rather than physics.
 - **Gameplay scale bends paths.** Ships fly their true path at both scales, but gameplay scale draws it through the same compression as the planets, eased near each end so the ship stays outside the inflated worlds. In a crowded moon system an inflated neighbouring moon can still be drawn over a passing ship.
-- **Alpha Centauri is part guesswork.** The A–B orbit and Proxima's place are measured; the planets' orbital planes and phases, their radii and Proxima's orbital plane are assumed, and two of its worlds may not exist. AI ships stay in their own system; only a piloted ship crosses, through the jump gates, which sit 5,000 km out so a pilot can reach them, not light-years away. The trunk lanes across 12,000 AU in days are deep fiction.
+- **Alpha Centauri is part guesswork.** The A–B orbit and Proxima's place are measured; the planets' orbital planes and phases, their radii and Proxima's orbital plane are assumed, and two of its worlds may not exist. The jump gates sit 5,000 km out so a pilot can reach them, not light-years away; AI ships fly the in-system legs to and from them, but the gates themselves, their crossing times and the lattice are fiction. Only Sol and Alpha Centauri are settled, so interstellar trade and raiding run between those two; the other systems are crossed and surveyed. The trunk lanes across 12,000 AU in days are deep fiction.
 - **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought at bodies and, by pirate interdiction, beside hyperlanes; ships on flip-and-burn transits cannot be intercepted. Marines are not drawn yet (the interior model is ready for a shipboard view). There is no campaign or win condition; you observe, or fly one ship at a time.
 - **Piloting is partial.** A piloted ship cannot ride hyperlanes yet and gets no warning of a lane ambush. Only ships can be piloted. Stripping a part takes the soundest (or the one that fits your hull); there is no picking from a list yet.
 - **Surfaces are wrapped on spheres.** Phobos, Deimos and the other small irregular moons are drawn round. Relief is shading only (exaggerated about 5×), never displacement, and lunar libration is not modelled.

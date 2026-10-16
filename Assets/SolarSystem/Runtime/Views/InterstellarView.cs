@@ -9,15 +9,17 @@ namespace SolarSystem.Views
     /// <summary>
     /// The view between star systems: the simulated systems' stars and the other nearest stars at
     /// their real positions (light-years, J2000 ecliptic axes like everything else), each a glow sized
-    /// by its luminosity, with a route from Sol out to each simulated system drawn as a line. It has its
-    /// own coordinates (the camera's position in light-years) and never mixes with a system's scene.
-    /// The seed of a galactic map.
+    /// by its luminosity, with the jump-gate lattice (<see cref="GateNetwork"/>) drawn as lines (red
+    /// where a gate is under blockade) and the ships inside the gates as sparks moving along them. It
+    /// has its own coordinates (the camera's position in light-years) and never mixes with a system's
+    /// scene. The seed of a galactic map.
     /// </summary>
     public sealed class InterstellarView
     {
         public readonly GameObject Root;
         readonly List<Star> stars = new List<Star>();
-        readonly LineStrip route;
+        readonly List<LineStrip> links = new List<LineStrip>();
+        readonly List<(Transform t, Material m)> sparks = new List<(Transform, Material)>();
         readonly Galaxy galaxy;
         static Mesh quad;
 
@@ -75,7 +77,7 @@ namespace SolarSystem.Views
                 float size = double.IsNaN(absMag) ? 0.35f : Mathf.Clamp(Mathf.Pow(luminosity, 0.25f), 0.45f, 3f);
                 Add(n.Name, n.PositionLy, new Color(n.Color.R, n.Color.G, n.Color.B), size, false, n.Name);
             }
-            route = new LineStrip("Route", Root.transform);
+            foreach (var l in galaxy.Network.Links) links.Add(new LineStrip(l.ToString(), Root.transform));
             Root.SetActive(false);
         }
 
@@ -118,24 +120,60 @@ namespace SolarSystem.Views
                 s.Material.SetFloat("_Intensity", 1.6f * fade);
             }
 
-            // A spoke from Sol out to each simulated system and back, drawn as one strip.
-            int n = galaxy.Systems.Count;
-            var points = new Vector3[Math.Max(1, 2 * n - 2)];
-            Vector3 At(int i)
+            // The gate links, each its own strip: pale blue when open, red when either end is shut.
+            double jd = galaxy.Systems.Count > 0 ? galaxy.Systems[0].Ephemeris.Jd : 0;
+            Vector3 At(DVec3 ly)
             {
-                var d = (galaxy.Systems[i].PositionLy - cameraLy).SwapYZ * UnitsPerLy;
+                var d = (ly - cameraLy).SwapYZ * UnitsPerLy;
                 return new Vector3((float)d.X, (float)d.Y, (float)d.Z);
             }
-            points[0] = At(0);
-            for (int i = 1; i < n; i++)
+            var pair = new Vector3[2];
+            var net = galaxy.Network.Links;
+            for (int i = 0; i < net.Count && i < links.Count; i++)
             {
-                points[2 * i - 1] = At(i);
-                if (2 * i < points.Length) points[2 * i] = points[0];
+                var l = net[i];
+                bool shut = l.AtA.Blockaded(jd) || l.AtB.Blockaded(jd);
+                pair[0] = At(l.A.PositionLy);
+                pair[1] = At(l.B.PositionLy);
+                var c = shut ? new Color(1f, 0.35f, 0.3f, 0.55f * fade) : new Color(0.45f, 0.85f, 1f, 0.4f * fade);
+                links[i].SetPoints(pair, 2, c, 1f, 1f);
+                links[i].SetTint(Color.white);
+                links[i].Root.transform.localPosition = Vector3.zero;
+                links[i].Visible = true;
             }
-            route.SetPoints(points, points.Length, new Color(0.45f, 0.85f, 1f, 0.4f * fade), 1f, 1f);
-            route.SetTint(Color.white);
-            route.Root.transform.localPosition = Vector3.zero;
-            route.Visible = n > 1;
+
+            // Ships in the gates: a spark each, partway along its link.
+            var inGates = galaxy.Traffic.InGates;
+            while (sparks.Count < inGates.Count)
+            {
+                var go = new GameObject("Passage");
+                go.transform.SetParent(Root.transform, false);
+                go.AddComponent<MeshFilter>().sharedMesh = quad;
+                var mr = go.AddComponent<MeshRenderer>();
+                var m = Materials.Create(Materials.Glow, "Passage");
+                m.SetFloat("_Falloff", 2.4f);
+                mr.sharedMaterial = m;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                sparks.Add((go.transform, m));
+            }
+            for (int i = 0; i < sparks.Count; i++)
+            {
+                var (t, m) = sparks[i];
+                bool on = i < inGates.Count;
+                t.gameObject.SetActive(on);
+                if (!on) continue;
+                var p = inGates[i];
+                var from = p.From.Home.PositionLy;
+                var ly = from + (p.To.Home.PositionLy - from) * p.Progress(jd);
+                var rel = At(ly);
+                float dist = Mathf.Max(rel.magnitude, 1e-3f);
+                t.localPosition = rel;
+                t.localRotation = Quaternion.LookRotation(rel / dist, cameraRotation * Vector3.up);
+                t.localScale = Vector3.one * dist * 0.012f;
+                var fc = p.Leader.Faction.Color;
+                m.SetColor("_Color", new Color(fc.R, fc.G, fc.B));
+                m.SetFloat("_Intensity", 1.8f * fade);
+            }
         }
     }
 }

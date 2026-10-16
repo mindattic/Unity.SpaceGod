@@ -4,8 +4,9 @@ using System.Collections.Generic;
 namespace SolarSystem.Core
 {
     /// <summary>
-    /// The one place a ship ever crosses between the two independent per-system simulations. Each
-    /// system runs its own <see cref="World"/> (own bodies, factions, economy, war) with nothing
+    /// A piloted ship's crossing between two of the independent per-system simulations, at once (AI
+    /// traffic crosses the same way but spends time in the gate; see <see cref="InterstellarTraffic"/>).
+    /// Each system runs its own <see cref="World"/> (own bodies, factions, economy, war) with nothing
     /// shared between them, and every ship's id is a fixed index into its own fleet's list (ids are
     /// never reused or shuffled -- a destroyed hull stays in place, see <see cref="Ship.Destroyed"/>),
     /// so a ship can't simply move from one fleet's list to another's without desyncing every id after
@@ -21,7 +22,7 @@ namespace SolarSystem.Core
     {
         /// <summary>
         /// Sends <paramref name="ship"/> through <paramref name="gate"/> if it is close enough and the
-        /// gate is paired: retires it in <paramref name="origin"/> and hands back the arriving copy
+        /// gate is paired (whether it is open to the ship is the caller's check, see <see cref="GateLink.Open"/>): retires it in <paramref name="origin"/> and hands back the arriving copy
         /// already living in the destination system's fleet. Returns false (no-op, <paramref name="arrived"/>
         /// null) otherwise.
         /// </summary>

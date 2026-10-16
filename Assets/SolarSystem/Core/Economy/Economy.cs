@@ -498,6 +498,31 @@ namespace SolarSystem.Core
             o.From.RefreshPrices();
         }
 
+        /// <summary>
+        /// Loads <paramref name="tonnes"/> of <paramref name="good"/> bought at <paramref name="from"/>
+        /// for a market outside this economy (another system's, across the gates): paid for as
+        /// <see cref="Load"/> pays, but booked at no settlement here. <paramref name="bound"/> names
+        /// where it is going, for the HUD. Returns what it cost, tax included.
+        /// </summary>
+        public double LoadUnbooked(Ship ship, Settlement from, Good good, double tonnes, string bound)
+        {
+            int g = (int)good;
+            double cost = from.PurchaseCost(good, tonnes);
+            from.Stock[g] = Math.Max(0, from.Stock[g] - tonnes);
+            from.Owner.Treasury += cost * PortTax;
+            from.TradeVolumeCredits += cost;
+            ship.HasCargo = true;
+            ship.CargoGood = good;
+            ship.CargoTonnes = tonnes;
+            ship.CargoCost = cost * (1 + PortTax);
+            ship.Faction.Treasury -= ship.CargoCost;
+            ship.CargoBonus = 0;
+            ship.CargoDestination = null;
+            ship.Cargo = tonnes.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " t " + GoodInfo.Of(good).Name + " for " + bound;
+            from.RefreshPrices();
+            return ship.CargoCost;
+        }
+
         public static string CargoText(Ship ship)
         {
             if (!ship.HasCargo) return null;

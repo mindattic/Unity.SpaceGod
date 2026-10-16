@@ -443,15 +443,39 @@ namespace SolarSystem.UI
             GUI.Label(new Rect(r.x + 12, sy, w - 24, 16), "STAR SYSTEMS", small);
             GUI.contentColor = oldColor;
             sy += 17;
+            var network = app.Galaxy.Network;
+            double jd = app.Clock.Jd;
             foreach (var system in app.Galaxy.Systems)
             {
                 bool here = system == app.ActiveSystem;
                 bool going = app.Travel.Active && app.Travel.To == system;
-                string label = system.Name + (here ? "   ◉ here" : going ? "   travelling…" : "   " + Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly  ›");
+                // How many gates away it is, by the quickest open way (a gate network, not all-pairs).
+                var route = here ? null : network.Route(app.ActiveSystem, system, null, jd);
+                string hops = route == null ? "" : "  " + route.Count + (route.Count == 1 ? " gate" : " gates");
+                string label = system.Name + (here ? "   ◉ here" : going ? "   travelling…" : "   " + Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly" + hops + "  ›");
                 // Rows tighten as the list of systems grows, so the body tree below keeps its room.
                 float rowHeight = app.Galaxy.Systems.Count > 4 ? 18 : 22;
                 if (GUI.Button(new Rect(r.x + 10, sy, w - 20, rowHeight), label, here ? buttonActive : button) && !here) app.TravelTo(system);
                 sy += rowHeight + (app.Galaxy.Systems.Count > 4 ? 2 : 3);
+                if (!here) continue;
+                // This system's own gates: where each leads, how long the crossing, and whether it is shut.
+                foreach (var gate in system.Gates)
+                {
+                    bool shut = gate.Blockaded(jd) || gate.Partner.Blockaded(jd);
+                    string line = "   " + gate.Name + "  " + gate.Link.Ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly, " +
+                                  (gate.Link.TransitDays * 24).ToString("0", CultureInfo.InvariantCulture) + " h" + (shut ? "   SHUT" : "");
+                    var old = GUI.contentColor;
+                    GUI.contentColor = shut ? new Color(1f, 0.5f, 0.42f) : new Color(0.7f, 0.82f, 0.95f);
+                    GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), line, small);
+                    GUI.contentColor = old;
+                    sy += 15;
+                }
+            }
+            int crossing = app.Galaxy.Traffic.InGates.Count;
+            if (crossing > 0)
+            {
+                GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), "   " + crossing + (crossing == 1 ? " ship" : " ships") + " in the gates", small);
+                sy += 15;
             }
             float treeTop = sy + 4 - r.y;
 
@@ -481,6 +505,22 @@ namespace SolarSystem.UI
                     foreach (var escort in app.Fleet.Ships)
                         if (escort.Leader == ship && !escort.Destroyed) rows.Add((escort.Name + "  · " + escort.Spec.DisplayName, Target.OfShip(escort), 2, Color.Lerp(fc, Color.gray, 0.35f)));
                 }
+            }
+            // Ships from other systems, come through the gates (their factions belong to their own worlds).
+            bool visitorsHeader = false;
+            var local = new HashSet<Faction>(app.Fleet.Factions);
+            foreach (var ship in app.Fleet.Ships)
+            {
+                if (ship.IsEscort || ship.Destroyed || local.Contains(ship.Faction)) continue;
+                if (!visitorsHeader)
+                {
+                    rows.Add(("", Target.None, 0, Color.clear));
+                    rows.Add(("FROM BEYOND THE GATES", Target.None, 0, new Color(0.7f, 0.82f, 0.95f)));
+                    visitorsHeader = true;
+                }
+                var fc = new Color(ship.Faction.Color.R, ship.Faction.Color.G, ship.Faction.Color.B);
+                string from = ship.Voyage != null ? "  · " + ship.Voyage.Home.Name : "";
+                rows.Add((ship.Name + from + "  " + ShortStatus(ship), Target.OfShip(ship), 1, fc));
             }
 
             // Docking rings and what is in orbit, after the bodies.
@@ -583,6 +623,15 @@ namespace SolarSystem.UI
             if (ship.Derelict) return "DERELICT";
             if (c.Phase == ShipPhase.Lurk) return "lurking on " + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Adrift) return "adrift by " + c.LaneLeg.Lane.Name;
+            if (c.GateKm is DVec3 gateKm)
+            {
+                // Bound for a jump gate: name it, and the system beyond.
+                string gate = "a jump gate";
+                foreach (var g in app.ActiveSystem.Gates)
+                    if ((g.PositionKm - gateKm).Length < 1) gate = "the " + g.Name;
+                if (c.Voyage != null && c.Voyage.AtGate) return "at " + gate;
+                if (c.Phase == ShipPhase.Transit) return "-> " + gate;
+            }
             if (c.Phase == ShipPhase.Parked) return (c.Role == ShipRole.Free ? "drifting @ " : "@ ") + app.Catalog[c.Orbit.Body].Name;
             if (c.Phase == ShipPhase.Transit && c.Wander) return "free flight near " + app.Catalog[c.Orbit.Body].Name;
             if (c.Phase == ShipPhase.Queued) return "queued @ " + c.Ring.Name;

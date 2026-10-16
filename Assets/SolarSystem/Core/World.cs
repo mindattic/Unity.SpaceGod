@@ -50,8 +50,17 @@ namespace SolarSystem.Core
         /// (see <see cref="EventDirector"/>), advanced by <see cref="UpdateAdventures"/>.</summary>
         public EventDirector Adventures { get; private set; }
 
-        /// <summary>Raised when a ship joins the fleet after the start (a yard finished it).</summary>
+        /// <summary>Raised when a ship joins the fleet after the start (a yard finished it, or it came through a gate).</summary>
         public event Action<Ship> ShipAdded;
+
+        /// <summary>Raised when a ship bound for a jump gate reaches it (see <see cref="Ship.GateKm"/> and <see cref="InterstellarTraffic"/>).</summary>
+        public event Action<Ship, double> ReachedGate;
+
+        /// <summary>
+        /// Orders for a ship here on an interstellar voyage (raiders from another system, a navy's
+        /// expedition): the body to go to next, or -1 to fall back on the usual choice.
+        /// </summary>
+        public Func<Ship, int, double, int> VoyageOrders;
 
         int builtCount;
 
@@ -199,10 +208,16 @@ namespace SolarSystem.Core
             economy.ChooseBuild = yard => TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
             economy.ShipBuilt = OnShipBuilt;
             fleet.BeforeEvent = economy.AdvanceTo;
-            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip;
+            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip || (ship.Voyage != null && ship.Voyage.AtGate);
             fleet.Dwell = war.Dwell;
             fleet.Arrived = (ship, when) =>
             {
+                // At a jump gate, not a port: the interstellar traffic takes it from here.
+                if (ship.GateKm != null && ship.Orbit.Body == Catalog.Root.Index)
+                {
+                    ReachedGate?.Invoke(ship, when);
+                    return;
+                }
                 if (IsTrader(ship)) economy.OnArrive(ship, ship.Orbit.Body, when);
                 war.OnArrived(ship, when);
             };
@@ -211,6 +226,11 @@ namespace SolarSystem.Core
             war.BattleStarted += b => DivertAround(b, b.StartJd);
             fleet.ChooseNext = (ship, here, when) =>
             {
+                if (ship.Voyage != null && VoyageOrders != null)
+                {
+                    int ordered = VoyageOrders(ship, here, when);
+                    if (ordered >= 0) return ordered;
+                }
                 // Free ships follow their own whims (the fleet's built-in choice), not orders or markets.
                 if (ship.Role == ShipRole.Free) return -1;
                 if (!IsTrader(ship)) return war.ChooseNext(ship, here, when);
@@ -602,7 +622,8 @@ namespace SolarSystem.Core
 
         string[] merchantNames = FreighterNames, minerNames = MinerNames;
 
-        int[] PortBodies()
+        /// <summary>The worlds with a port a merchant may trade at (every settlement but a haven).</summary>
+        public int[] PortBodies()
         {
             var list = new List<int>();
             foreach (var s in Economy.Settlements)

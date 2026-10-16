@@ -107,9 +107,9 @@ namespace SolarSystem
         BattleUnit termsPrompted;
         bool demandPrompted;
 
-        /// <summary>Whether the piloted ship is close enough to this system's jump gate to activate it
-        /// (see <see cref="UpdateGateActivation"/>); drives the gate's glow and the HUD prompt.</summary>
-        bool nearGate;
+        /// <summary>The jump gate the piloted ship is close enough to activate, or null
+        /// (see <see cref="UpdateGateActivation"/>); drives that gate's glow and the HUD prompt.</summary>
+        JumpGate nearGate;
 
         /// <summary>The hulk the piloted ship is latched on to (see <see cref="UpdateSalvage"/>), or null.</summary>
         public SalvageSession Salvage { get; private set; }
@@ -943,7 +943,7 @@ namespace SolarSystem
         /// position every frame piloting is active, before <see cref="UpdateShips"/> reads it.</summary>
         void UpdatePiloting(float dt)
         {
-            if (!IsPiloting) { pilotBoosting = false; pilotCruise = default; nearGate = false; return; }
+            if (!IsPiloting) { pilotBoosting = false; pilotCruise = default; nearGate = null; return; }
             var ship = Piloted.Ship;
             // Taken this very frame (the war let go of it on capture) -- even if its captors then scuttled it
             // at once: the session ends, as a loss, before anything here hands the hull back to the player.
@@ -993,8 +993,8 @@ namespace SolarSystem
         }
 
         /// <summary>
-        /// While piloting, checks (and on the player's command, performs) this system's jump gate
-        /// transit: a flyable, in-world alternative to the menu-driven STAR SYSTEMS jump (see
+        /// While piloting, checks (and on the player's command, performs) a transit through whichever
+        /// of this system's jump gates the ship is in range of (one that is shut will not open): a flyable, in-world alternative to the menu-driven STAR SYSTEMS jump (see
         /// <see cref="StarTravel"/>, untouched -- the camera still uses it on its own). The eligibility
         /// and position-handoff math is Core's (<see cref="GateTransit"/>); this just wires the
         /// activation key and re-seeds the pilot session onto the arriving hull in its new system,
@@ -1002,13 +1002,16 @@ namespace SolarSystem
         /// </summary>
         void UpdateGateActivation(Ship ship)
         {
-            var gate = ActiveSystem.Gate;
-            if (gate == null || ship.Battle != null) { nearGate = false; return; }
+            if (ActiveSystem.Gates.Count == 0 || ship.Battle != null) { nearGate = null; return; }
             var shipHelioKm = Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
-            bool wasNear = nearGate;
-            nearGate = gate.CanActivate(shipHelioKm);
-            if (nearGate && !wasNear) ShowToast("In range of " + gate.Name.ToUpperInvariant() + " to " + gate.Destination.Name.ToUpperInvariant() + " (Y to activate)");
-            if (!nearGate || !Input.ActivateGate) return;
+            var wasNear = nearGate;
+            var gate = nearGate = ActiveSystem.GateInRange(shipHelioKm);
+            if (gate != null && gate != wasNear)
+                ShowToast("In range of " + gate.Name.ToUpperInvariant() + " to " + gate.Destination.Name.ToUpperInvariant() +
+                          (gate.Admits(ship.Faction, Clock.Jd) && gate.Partner.Admits(ship.Faction, Clock.Jd) ? " (Y to activate)" : " (shut: under blockade)"));
+            if (gate == null || !Input.ActivateGate) return;
+            // A blockaded gate (or one whose far end is) will not open for the pilot either.
+            if (!gate.Link.Open(ActiveSystem, ship.Faction, Clock.Jd)) { ShowToast(gate.Name.ToUpperInvariant() + " is shut to " + ship.Faction.Name); return; }
 
             var destination = gate.Destination;
             if (!GateTransit.TryPerform(gate, shipHelioKm, ship, Fleet, Clock.Jd, out var arrived)) return;
@@ -1029,7 +1032,7 @@ namespace SolarSystem
             pilotLockTarget = Target.None;
             SpaceCamera.PilotLockTarget = Target.None;
             SeedPilotLook(pilotForward);
-            nearGate = false;
+            nearGate = null;
 
             Select(Piloted);
             SpaceCamera.EnterPilotChase(Piloted, 6);

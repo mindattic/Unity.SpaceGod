@@ -280,8 +280,8 @@ namespace SolarSystem.Core.Tests
             Assert.That(g.NearbyStars.Select(n => n.Name), Does.Contain("Procyon"));
             Assert.That(g.NearbyStars.Count + 10, Is.EqualTo(Galaxy.Neighbours().Count()));
 
-            // Only Sol and Alpha Centauri are joined by gates; the new systems have no settlements or ships.
-            Assert.That(g.Systems.Where(s => s.Gate != null).Select(s => s.Name), Is.EquivalentTo(new[] { "Sol System", "Alpha Centauri" }));
+            // Every system is on the gate lattice; the new systems start with no settlements or ships.
+            Assert.That(g.Systems.Where(s => s.Gates.Count == 0).Select(s => s.Name), Is.Empty);
             foreach (var s in g.Systems.Skip(2))
             {
                 Assert.That(s.World.Economy.Settlements, Is.Empty, s.Name);

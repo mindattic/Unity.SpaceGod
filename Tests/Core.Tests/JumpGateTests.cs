@@ -20,10 +20,10 @@ namespace SolarSystem.Core.Tests
             var sol = g.Systems[0];
             var ac = g.Systems[1];
 
-            Assert.That(sol.Gate, Is.Not.Null);
-            Assert.That(ac.Gate, Is.Not.Null);
-            Assert.That(sol.Gate.Destination, Is.SameAs(ac));
-            Assert.That(ac.Gate.Destination, Is.SameAs(sol));
+            Assert.That(sol.GateTo(ac), Is.Not.Null);
+            Assert.That(ac.GateTo(sol), Is.Not.Null);
+            Assert.That(sol.GateTo(ac).Destination, Is.SameAs(ac));
+            Assert.That(ac.GateTo(sol).Destination, Is.SameAs(sol));
         }
 
         [Test]
@@ -33,14 +33,14 @@ namespace SolarSystem.Core.Tests
             var sol = g.Systems[0];
             var ac = g.Systems[1];
 
-            Assert.That(sol.Gate.PositionKm.Length, Is.EqualTo(sol.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
-            Assert.That(ac.Gate.PositionKm.Length, Is.EqualTo(ac.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
+            Assert.That(sol.GateTo(ac).PositionKm.Length, Is.EqualTo(sol.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
+            Assert.That(ac.GateTo(sol).PositionKm.Length, Is.EqualTo(ac.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
             // Clear of the root's own body: the Sun's gate isn't inside the Sun.
-            Assert.That(sol.Gate.PositionKm.Length - sol.Catalog.Root.RadiusKm, Is.GreaterThanOrEqualTo(JumpGate.RadiusKm - 1e-6));
+            Assert.That(sol.GateTo(ac).PositionKm.Length - sol.Catalog.Root.RadiusKm, Is.GreaterThanOrEqualTo(JumpGate.RadiusKm - 1e-6));
 
             // Each gate points (in its own system's frame) toward the real direction of the other star.
-            double towardAc = DVec3.Dot(sol.Gate.PositionKm.Normalized, Galaxy.Direction(sol, ac));
-            double towardSol = DVec3.Dot(ac.Gate.PositionKm.Normalized, Galaxy.Direction(ac, sol));
+            double towardAc = DVec3.Dot(sol.GateTo(ac).PositionKm.Normalized, Galaxy.Direction(sol, ac));
+            double towardSol = DVec3.Dot(ac.GateTo(sol).PositionKm.Normalized, Galaxy.Direction(ac, sol));
             TestContext.Out.WriteLine($"Sol gate alignment {towardAc:0.000}, Centauri gate alignment {towardSol:0.000}");
             Assert.That(towardAc, Is.InRange(0.9999, 1.0001));
             Assert.That(towardSol, Is.InRange(0.9999, 1.0001));
@@ -51,7 +51,8 @@ namespace SolarSystem.Core.Tests
         {
             var g = Create();
             var sol = g.Systems[0];
-            var gate = sol.Gate;
+            var ac = g.Systems[1];
+            var gate = sol.GateTo(ac);
 
             Assert.That(gate.CanActivate(gate.PositionKm), Is.True);
             var justInside = gate.PositionKm + new DVec3(JumpGate.ActivationRangeKm * 0.5, 0, 0);
@@ -68,13 +69,13 @@ namespace SolarSystem.Core.Tests
             var sol = g.Systems[0];
             var ac = g.Systems[1];
 
-            var arrival = sol.Gate.ArrivalOffsetKm;
+            var arrival = sol.GateTo(ac).ArrivalOffsetKm;
             double distanceFromAcRoot = arrival.Length;
-            Assert.That(distanceFromAcRoot < ac.Gate.PositionKm.Length, Is.True, "arrival should be closer to the destination's root than its gate");
+            Assert.That(distanceFromAcRoot < ac.GateTo(sol).PositionKm.Length, Is.True, "arrival should be closer to the destination's root than its gate");
             Assert.That(distanceFromAcRoot, Is.EqualTo(JumpGate.RadiusKm - JumpGate.ArrivalInsetKm).Within(1e-6));
 
             // Facing back toward the destination's own root (into the system, not out past the gate).
-            double facingInward = DVec3.Dot(sol.Gate.ArrivalForward, -ac.Gate.PositionKm.Normalized);
+            double facingInward = DVec3.Dot(sol.GateTo(ac).ArrivalForward, -ac.GateTo(sol).PositionKm.Normalized);
             Assert.That(facingInward, Is.InRange(0.9999, 1.0001));
         }
 
@@ -90,7 +91,7 @@ namespace SolarSystem.Core.Tests
             int acCountBefore = ac.World.Fleet.Ships.Count;
             int solCountBefore = sol.World.Fleet.Ships.Count;
 
-            bool ok = GateTransit.TryPerform(sol.Gate, sol.Gate.PositionKm, ship, sol.World.Fleet, StartJd, out var arrived);
+            bool ok = GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived);
 
             Assert.That(ok, Is.True);
             Assert.That(arrived, Is.Not.Null);
@@ -108,7 +109,7 @@ namespace SolarSystem.Core.Tests
             Assert.That(arrived.Destroyed, Is.False);
             Assert.That(arrived.Role, Is.EqualTo(ShipRole.Free));
             Assert.That(arrived.Orbit.Body, Is.EqualTo(ac.Catalog.Root.Index));
-            Assert.That((sol.Gate.ArrivalOffsetKm - arrived.Orbit.Center).Length < 1e-6, Is.True, "the ship should land exactly at the arrival offset the activated gate computes");
+            Assert.That((sol.GateTo(ac).ArrivalOffsetKm - arrived.Orbit.Center).Length < 1e-6, Is.True, "the ship should land exactly at the arrival offset the activated gate computes");
             Assert.That(arrived.Ports, Is.Not.Null);
             Assert.That(arrived.Ports, Is.Not.Empty);
         }
@@ -127,7 +128,7 @@ namespace SolarSystem.Core.Tests
             ship.CargoDestination = booked;
             ship.CargoBonus = 5000;
 
-            Assert.That(GateTransit.TryPerform(sol.Gate, sol.Gate.PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
+            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
 
             Assert.That(arrived.HasCargo, Is.True, "the goods themselves come along");
             Assert.That(arrived.CargoTonnes, Is.EqualTo(100));
@@ -183,7 +184,7 @@ namespace SolarSystem.Core.Tests
             var hidden = sol.World.Economy.Settlements.Where(s => s.Hidden).Select(s => s.Body).ToList();
             Assert.That(hidden, Is.Not.Empty);
             var ship = ac.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort);
-            Assert.That(GateTransit.TryPerform(ac.Gate, ac.Gate.PositionKm, ship, ac.World.Fleet, StartJd, out var arrived), Is.True);
+            Assert.That(GateTransit.TryPerform(ac.GateTo(sol), ac.GateTo(sol).PositionKm, ship, ac.World.Fleet, StartJd, out var arrived), Is.True);
             Assert.That(arrived.Ports.Intersect(hidden), Is.Empty);
         }
 
@@ -197,7 +198,7 @@ namespace SolarSystem.Core.Tests
             int solBefore = sol.World.Fleet.Ships.Count;
             int acBefore = ac.World.Fleet.Ships.Count;
 
-            bool ok = GateTransit.TryPerform(sol.Gate, DVec3.Zero, ship, sol.World.Fleet, StartJd, out var arrived);
+            bool ok = GateTransit.TryPerform(sol.GateTo(ac), DVec3.Zero, ship, sol.World.Fleet, StartJd, out var arrived);
 
             Assert.That(ok, Is.False);
             Assert.That(arrived, Is.Null);

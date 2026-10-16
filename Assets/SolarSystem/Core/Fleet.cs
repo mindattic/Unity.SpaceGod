@@ -475,7 +475,8 @@ namespace SolarSystem.Core
             {
                 // Holding position (a siege, a refit, an ambush): decide again rather than fly to itself.
                 // A free ship's hop out to open space near the same world is a real trip, though.
-                if (ship.DestinationBody == ship.Orbit.Body && !ship.Wander) ScheduleNext(ship, ship.PhaseEndJd);
+                // A ship bound for a gate is leaving even from the root it is parked at (one gate to the next).
+                if (ship.DestinationBody == ship.Orbit.Body && !ship.Wander && ship.GateKm == null) ScheduleNext(ship, ship.PhaseEndJd);
                 else Depart(ship);
             }
             else if (ship.Phase == ShipPhase.Lane) EndLane(ship);
@@ -566,6 +567,12 @@ namespace SolarSystem.Core
             ship.FinalBody = to;
             ship.Journey = null;
             ship.JourneyIndex = 0;
+            if (ship.GateKm is DVec3 gate && to == catalog.Root.Index)
+            {
+                // Out to a jump gate: a fixed point off the system's root, never by hyperlane.
+                Burn(ship, departJd, to, () => FixedPoint(to, gate));
+                return;
+            }
             if (Lanes != null)
             {
                 int fromSystem = Lanes.SystemOf(from), toSystem = Lanes.SystemOf(to);
@@ -916,6 +923,14 @@ namespace SolarSystem.Core
                 ship.Orbit = ship.HoldPoint;
                 ship.PhaseStartJd = nowJd;
                 ship.PhaseEndJd = entry;
+                return;
+            }
+            if (ship.GateKm != null)
+            {
+                // Bound for a gate (see InterstellarTraffic): no markets or orders to consult, just go.
+                ship.DestinationBody = catalog.Root.Index;
+                ship.Wander = false;
+                ship.PhaseEndJd = nowJd + 0.05 + rng.NextDouble() * 0.15;
                 return;
             }
             int here = ship.Orbit.Body;

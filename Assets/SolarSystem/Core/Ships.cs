@@ -299,6 +299,15 @@ namespace SolarSystem.Core
         /// than because it was actually lost -- so the Runtime draws nothing for it instead of a wreck.</summary>
         public bool GateDeparted;
 
+        /// <summary>The interstellar voyage this ship (a flagship, for a group) is on, or null; see <see cref="InterstellarTraffic"/>.</summary>
+        public Voyage Voyage;
+
+        /// <summary>
+        /// Bound for one of this system's jump gates: the gate's fixed position from the system root
+        /// (km). Its next trip is a burn to that point rather than to a world; null otherwise.
+        /// </summary>
+        public DVec3? GateKm;
+
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;
 

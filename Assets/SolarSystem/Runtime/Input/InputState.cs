@@ -67,7 +67,7 @@ namespace SolarSystem.Input
         /// two never fire together.</summary>
         public bool LockTarget;
 
-        /// <summary>While piloting, in range of this system's jump gate: activates it.</summary>
+        /// <summary>While piloting, in range of one of this system's jump gates: activates it.</summary>
         public bool ActivateGate;
 
         Vector2 pressPosition;

@@ -922,6 +922,12 @@ namespace SolarSystem.Core
             heir.LaneHold = dead.LaneHold;
             heir.LaneHoldSide = dead.LaneHoldSide;
             CopyRest(dead, heir);
+            // An interstellar voyage goes on under the new flagship; one held at its gate goes again.
+            heir.Voyage = dead.Voyage;
+            heir.GateKm = dead.GateKm;
+            if (heir.Voyage != null) heir.Voyage.AtGate = false;
+            dead.Voyage = null;
+            dead.GateKm = null;
             foreach (var s in Fleet.Ships)
                 if (s.Leader == dead && s != heir) s.Leader = heir;
             if (Orders.TryGetValue(dead, out var o)) Orders[heir] = o;
@@ -1095,7 +1101,8 @@ namespace SolarSystem.Core
             return new GroupOrder { Kind = OrderKind.Raid, Body = target };
         }
 
-        bool IsHomeGuard(Ship leader)
+        /// <summary>The navy's oldest surviving group, which never leaves home.</summary>
+        public bool IsHomeGuard(Ship leader)
         {
             // Each navy keeps its oldest surviving group at home.
             foreach (var s in Fleet.Ships)
@@ -1493,7 +1500,8 @@ namespace SolarSystem.Core
             var groups = new List<Ship>();
             foreach (var s in Fleet.Ships)
                 // The player's ship is flown by the player: never handed to an AI flagship, nor one itself.
-                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Phase == ShipPhase.Parked)
+                // Nor a group on an interstellar voyage: it keeps to its own business.
+                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Phase == ShipPhase.Parked && s.Voyage == null)
                     groups.Add(s);
             groups.Sort((a, b) => GroupStrength(b).CompareTo(GroupStrength(a)));
             for (int i = 0; i < groups.Count; i++)
