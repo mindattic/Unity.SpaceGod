@@ -667,18 +667,45 @@ namespace SolarSystem
             EnterPiloting(t);
         }
 
+        /// <summary>
+        /// Makes <paramref name="ship"/> a freshly Parked hull fixed at the pilot's spot and facing.
+        /// Taken control may start mid-lane, mid-burn, queued, landed or in formation (see
+        /// <see cref="EnterPiloting"/>), so the old phase's bookkeeping (path, journey, ring queue) is
+        /// stale and dropped: done on taking the helm, so nothing treats a flown hull as landed (hidden,
+        /// unpickable) or reads an escort's missing orbit, and again on release.
+        /// </summary>
+        void PinWherePiloted(Ship ship)
+        {
+            var v = pilotForward;
+            var u = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
+            ship.Orbit = new ParkingOrbit
+            {
+                Body = pilotFrameBody, Center = pilotOffsetKm, RadiusKm = 0,
+                U = u, V = v, EpochJd = Clock.Jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
+            };
+            ship.Phase = ShipPhase.Parked;
+            ship.Path = null;
+            ship.Journey = null;
+            ship.JourneyIndex = 0;
+            ship.Ring = null;
+            ship.HoldPoint = null;
+            ship.LaneHoldSide = DVec3.Zero;
+        }
+
         /// <summary>The body whose frame best describes a ship's current position, and its offset
         /// there in true km -- the same per-phase placement <see cref="UpdateShips"/> computes for
         /// drawing, used instead to seed piloting from wherever a ship actually is (mid-lane,
         /// mid-burn, queued, landed...), not only a parked orbit.</summary>
         (int body, DVec3 offsetKm) CurrentFrame(Ship ship, double jd)
         {
-            var st = Fleet.StateOf(ship, jd);
-            if (ship.Phase == ShipPhase.Parked)
-                return (ship.Orbit.Body, ship.Orbit.OffsetAt(jd));
-            if ((ship.Phase == ShipPhase.Queued || ship.Planetside) && ship.Ring != null)
-                return (ship.Ring.Body, st.HelioKm - Ephemeris.Helio(ship.Ring.Body));
-            return (ship.FrameBody, st.HelioKm - Ephemeris.Helio(ship.FrameBody));
+            // An escort has no schedule of its own (no orbit, no phase): it is wherever its leader is.
+            var c = ship.Controller;
+            var st = Fleet.StateOf(c, jd);
+            if (c.Phase == ShipPhase.Parked)
+                return (c.Orbit.Body, c.Orbit.OffsetAt(jd));
+            if ((c.Phase == ShipPhase.Queued || c.Planetside) && c.Ring != null)
+                return (c.Ring.Body, st.HelioKm - Ephemeris.Helio(c.Ring.Body));
+            return (c.FrameBody, st.HelioKm - Ephemeris.Helio(c.FrameBody));
         }
 
         /// <summary>
@@ -694,6 +721,9 @@ namespace SolarSystem
             var ship = t.Ship;
             Piloted = t;
             World.PilotedShip = ship;
+            // Where it is (and which way it faces) before an escort is cut loose from the leader it shares them with.
+            var (frame, offsetKm) = CurrentFrame(ship, Clock.Jd);
+            var facing = Fleet.StateOf(ship, Clock.Jd).Facing;
             if (ship.IsEscort) ship.Leader = null;
             if (ship.Battle != null)
             {
@@ -705,15 +735,17 @@ namespace SolarSystem
                     unit.PlayerLockTarget = null;
                 }
             }
-            var (frame, offsetKm) = CurrentFrame(ship, Clock.Jd);
             pilotFrameBody = frame;
             pilotOffsetKm = offsetKm;
             pilotVelKmS = DVec3.Zero;
             pilotAngularRateDegS = 0;
             pilotCruise = default;
             pilotBattleCheckTimer = 0;
-            pilotForward = Fleet.StateOf(ship, Clock.Jd).Facing;
+            pilotForward = facing;
             SeedPilotLook(pilotForward);
+            // Out of a battle, the hull is the pilot's from here: no longer landed, descending or in formation.
+            // In one, the battle owns its pose, but an escort cut loose still needs an orbit of its own.
+            if (ship.Battle == null || ship.Orbit == null) PinWherePiloted(ship);
 
             Select(t);
             SpaceCamera.EnterPilotChase(t, 6);
@@ -807,24 +839,8 @@ namespace SolarSystem
                 {
                     // Pin the hull exactly where the player left it (facing included) before the AI
                     // schedule resumes -- otherwise it picks up from the stale pre-piloting orbit and
-                    // the ship snaps back to wherever that orbit would have drifted to on its own. Taken
-                    // control may have started mid-lane, mid-burn, queued or landed (see EnterPiloting),
-                    // so the old phase's bookkeeping (path, journey, ring queue) is stale and dropped --
-                    // the ship always comes back out as a freshly Parked hull wherever it was released.
-                    var v = pilotForward;
-                    var u = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
-                    ship.Orbit = new ParkingOrbit
-                    {
-                        Body = pilotFrameBody, Center = pilotOffsetKm, RadiusKm = 0,
-                        U = u, V = v, EpochJd = Clock.Jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
-                    };
-                    ship.Phase = ShipPhase.Parked;
-                    ship.Path = null;
-                    ship.Journey = null;
-                    ship.JourneyIndex = 0;
-                    ship.Ring = null;
-                    ship.HoldPoint = null;
-                    ship.LaneHoldSide = DVec3.Zero;
+                    // the ship snaps back to wherever that orbit would have drifted to on its own.
+                    PinWherePiloted(ship);
                     Fleet.ScheduleNext(ship, Clock.Jd);
                 }
             }
@@ -1167,6 +1183,8 @@ namespace SolarSystem
                         var pup = Mathf.Abs(Vector3.Dot(pf.normalized, Vector3.up)) > 0.98f ? Vector3.right : Vector3.up;
                         shipRotation[i] = Quaternion.LookRotation(pf, pup);
                         shipRotationInitialised[i] = true;
+                        // Its own state, not whatever the schedule last drew (an entry glow, a drive flame).
+                        shipStates[i] = new ShipState(Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm, pilotForward, pilotVelKmS.Length, false, 0);
                         continue;
                     }
 
