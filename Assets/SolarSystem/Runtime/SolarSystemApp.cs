@@ -96,6 +96,11 @@ namespace SolarSystem
         float pilotBattleCheckTimer;
         const float PilotBattleCheckIntervalS = 0.5f;
 
+        /// <summary>The surrendered hull (or pirate cargo demand) the player was last prompted about, so the
+        /// choice toast shows once per hail rather than every frame. See <see cref="UpdateSurrenderPrompts"/>.</summary>
+        BattleUnit termsPrompted;
+        bool demandPrompted;
+
         /// <summary>Whether the piloted ship is close enough to this system's jump gate to activate it
         /// (see <see cref="UpdateGateActivation"/>); drives the gate's glow and the HUD prompt.</summary>
         bool nearGate;
@@ -913,6 +918,49 @@ namespace SolarSystem
             // No firing while cruising -- the cruise drive is a travel tier, not a combat one.
             unit.PlayerFireHeld = Input.Fire && !pilotCruise.Active;
             unit.PlayerLockTarget = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
+            UpdateSurrenderPrompts(ship.Battle, unit);
+        }
+
+        /// <summary>
+        /// While piloting in a battle, the number keys answer hails: a pirate demand for this ship's cargo
+        /// (1 hand it over, 2 refuse), or an enemy hull that has struck its colours to this side (1 demand
+        /// its cargo, 2 take the ship, 3 let it go). Unanswered, the battle settles it after
+        /// <see cref="Battle.SurrenderDecisionSeconds"/>.
+        /// </summary>
+        void UpdateSurrenderPrompts(Battle battle, BattleUnit unit)
+        {
+            int key = Input.NumberKey;
+            if (unit.CargoDemandedBy != null)
+            {
+                if (!demandPrompted)
+                {
+                    demandPrompted = true;
+                    ShowToast(unit.CargoDemandedBy.Name + " demand your cargo:  1 hand it over and go, 2 refuse and fight");
+                }
+                if (key == 1 && battle.AnswerCargoDemand(unit, true)) ShowToast("Cargo handed over; the pirates let you go");
+                else if (key == 2 && battle.AnswerCargoDemand(unit, false)) ShowToast("Demand refused: weapons free");
+                return;
+            }
+            demandPrompted = false;
+
+            var hailing = battle.AwaitingTermsFrom(unit.Side);
+            if (hailing == null)
+            {
+                termsPrompted = null;
+                return;
+            }
+            if (termsPrompted != hailing)
+            {
+                termsPrompted = hailing;
+                ShowToast("The " + hailing.Name + " strikes its colours:  1 demand its cargo, 2 take the ship, 3 let it go");
+            }
+            SurrenderTerms? terms = key == 1 ? SurrenderTerms.RansomCargo : key == 2 ? SurrenderTerms.TakeShip : key == 3 ? SurrenderTerms.LetGo : (SurrenderTerms?)null;
+            if (terms == null) return;
+            if (battle.OfferSurrenderTerms(hailing, terms.Value))
+                ShowToast(terms == SurrenderTerms.RansomCargo ? "The " + hailing.Name + " hands over its cargo and is let go"
+                    : terms == SurrenderTerms.TakeShip ? "Boarders away to take the " + hailing.Name
+                    : "The " + hailing.Name + " is let go");
+            else ShowToast("Nobody on this side can board the " + hailing.Name);
         }
 
         /// <summary>Locks the camera's tracking onto whatever's hovered/selected, or clears an existing

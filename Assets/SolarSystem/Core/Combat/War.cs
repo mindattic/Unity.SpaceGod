@@ -210,6 +210,54 @@ namespace SolarSystem.Core
                 if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
                     $"{battle.Name}: {captor.Name} marines take the {u.Ship.Name}", WorldEventKind.Capture, battle.Body);
             };
+            b.UnitSurrendered += (battle, u) =>
+            {
+                if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
+                    $"{battle.Name}: the {u.Ship.Name} strikes its colours and hails for terms", WorldEventKind.Battle, battle.Body);
+            };
+            b.SurrenderDecided += OnSurrenderDecided;
+            b.CargoDemanded += (battle, u, pirates) =>
+            {
+                if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
+                    $"{battle.Name}: {pirates.Name} demand the {u.Ship.Name}'s cargo", WorldEventKind.Battle, battle.Body);
+            };
+        }
+
+        /// <summary>
+        /// Books a captor's terms for a hull that struck its colours (or a player who paid off pirates):
+        /// ransomed cargo goes to the captor, a released hull carries on; a ship to be taken waits for the
+        /// boarders and is booked by the capture hook like any other prize.
+        /// </summary>
+        void OnSurrenderDecided(Battle b, BattleUnit u, Faction captor, SurrenderTerms terms)
+        {
+            var ship = u.Ship;
+            if (ship == null) return;
+            double jd = b.StartJd + b.Seconds / Astro.SecondsPerDay;
+            string who = captor != null ? captor.Name : "its foes";
+            switch (terms)
+            {
+                case SurrenderTerms.RansomCargo:
+                    if (ship.HasCargo)
+                    {
+                        if (captor != null && captor.IsPirate) Loot(ship);
+                        else
+                        {
+                            if (captor != null) captor.Treasury += ship.CargoTonnes * GoodInfo.Of(ship.CargoGood).BasePrice * 0.8;
+                            Economy.Release(ship);
+                            ship.HasCargo = false;
+                            ship.CargoDestination = null;
+                            ship.Cargo = null;
+                        }
+                    }
+                    world.Log(jd, $"{b.Name}: the {ship.Name} hands its cargo to {who} and is let go", WorldEventKind.Capture, b.Body);
+                    break;
+                case SurrenderTerms.LetGo:
+                    world.Log(jd, $"{b.Name}: {who} let the {ship.Name} go", WorldEventKind.Battle, b.Body);
+                    break;
+                case SurrenderTerms.TakeShip:
+                    world.Log(jd, $"{b.Name}: {who} send boarders to take the {ship.Name}", WorldEventKind.Capture, b.Body);
+                    break;
+            }
         }
 
         /// <summary>The lane with the most merchant traffic, preferring those that start at the raiders' own system.</summary>

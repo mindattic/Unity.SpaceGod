@@ -186,6 +186,10 @@ namespace SolarSystem.Views
                     e.Color = new Color(0.45f, 0.85f, 1f) * 1.3f;
                     e.Life = 3.5f;
                     break;
+                case FxKind.Hail:
+                    e.Color = new Color(1f, 1f, 0.8f) * 1.3f;
+                    e.Life = 3f;
+                    break;
                 default:
                     return;
             }
@@ -261,6 +265,15 @@ namespace SolarSystem.Views
                     var c = e.Unit != null && e.Unit.Present ? Point(e.Battle, e.Unit.Pos) : Point(e.Battle, e.A);
                     float r = (float)(e.Size * 0.8 * app.BattleKmScale) * (e.Kind == FxKind.Captured ? 0.8f + t : 1f);
                     Sprite(c, Mathf.Max(r, PixelSize(c, e.Kind == FxKind.Captured ? 22 : 10)), e.Color * fade, Shape.Ring);
+                    break;
+                }
+                case FxKind.Hail:
+                {
+                    // A hull hailing for terms: a slow-blinking signal ring around it, weapons cold.
+                    var c = e.Unit != null && e.Unit.Present ? Point(e.Battle, e.Unit.Pos) : Point(e.Battle, e.A);
+                    float r = (float)(e.Size * 1.1 * app.BattleKmScale);
+                    float blink = Mathf.Sin(age * 6f) > 0 ? 1f : 0.35f;
+                    Sprite(c, Mathf.Max(r, PixelSize(c, 26)), e.Color * fade * blink, Shape.Ring);
                     break;
                 }
                 case FxKind.Pulse:

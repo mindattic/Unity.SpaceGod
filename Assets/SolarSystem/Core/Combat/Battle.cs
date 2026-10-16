@@ -44,6 +44,34 @@ namespace SolarSystem.Core
         public bool Fled, Dead;
         public bool Fleeing;
 
+        /// <summary>True once this hull has struck its colours: holds fire and waits on its captor's
+        /// terms (<see cref="SurrenderOutcome"/>) rather than fighting to the last. See <see cref="Morale"/>.</summary>
+        public bool Surrendering;
+
+        /// <summary>Seconds spent hailing since <see cref="Surrendering"/> began; past
+        /// <see cref="Battle.SurrenderDecisionSeconds"/> the battle decides terms itself if nobody chooses first.</summary>
+        public double SurrenderTimer;
+
+        /// <summary>What its captor decided once it struck its colours, or null while still awaiting terms.</summary>
+        public SurrenderTerms? SurrenderOutcome;
+
+        /// <summary>Set once its captor chooses to take the ship: open to boarding exactly like a disabled hull.</summary>
+        public bool SurrenderOpenToBoarding;
+
+        /// <summary>This unit's own breaking point, 0-1, rolled once at creation so otherwise-identical
+        /// hulls do not all strike their colours on the same tick under the same pressure. See <see cref="Morale.Pressure"/>.</summary>
+        public double MoraleThreshold;
+
+        /// <summary>Pirates hailing this (player-flown) hull with "your cargo or your life": who is asking,
+        /// or null. Answered through <see cref="Battle.AnswerCargoDemand"/>; unanswered, it lapses into a fight.</summary>
+        public Faction CargoDemandedBy;
+
+        /// <summary>Seconds the current <see cref="CargoDemandedBy"/> has gone unanswered.</summary>
+        public double CargoDemandTimer;
+
+        /// <summary>Set once a cargo demand has been made of this hull, so pirates ask only once a battle.</summary>
+        public bool CargoDemandMade;
+
         /// <summary>Formation: the unit this one keeps station on, and where (km, in the leader's frame).</summary>
         public BattleUnit Leader;
         public DVec3 Slot;
@@ -210,6 +238,9 @@ namespace SolarSystem.Core
 
         /// <summary>An interdiction pulse: an expanding electromagnetic shell.</summary>
         Pulse,
+
+        /// <summary>A hull breaking off, weapons powered down, hailing to ask terms.</summary>
+        Hail,
     }
 
     /// <summary>Something to draw: a beam, a hit, an explosion. A and B are battle-local km.</summary>
@@ -272,6 +303,17 @@ namespace SolarSystem.Core
         /// <summary>Raised when a unit is destroyed (the world books the loss).</summary>
         public Action<Battle, BattleUnit> UnitDestroyed;
 
+        /// <summary>Raised the moment a hull strikes its colours: breaks off, powers down weapons and hails.</summary>
+        public Action<Battle, BattleUnit> UnitSurrendered;
+
+        /// <summary>Raised once a captor's terms for a surrendered hull are settled -- auto-decided or
+        /// chosen externally via <see cref="OfferSurrenderTerms"/> -- so the world can apply the
+        /// consequences (cargo ransomed, a clean getaway; a taken prize follows the normal capture hook).</summary>
+        public Action<Battle, BattleUnit, Faction, SurrenderTerms> SurrenderDecided;
+
+        /// <summary>Raised when pirates demand a player-flown hull's cargo (the hull, the pirates).</summary>
+        public Action<Battle, BattleUnit, Faction> CargoDemanded;
+
         /// <summary>Fighter AI hook, run each step for every fighter (see FighterAI).</summary>
         public Action<Battle, BattleUnit, double> FighterStep;
 
@@ -280,6 +322,14 @@ namespace SolarSystem.Core
 
         public const double EscapeKm = 55;
         public const double MaxStep = 1.0;
+
+        /// <summary>How long a hailing hull waits before the battle decides terms itself if nobody has.</summary>
+        public const double SurrenderDecisionSeconds = 15;
+
+        /// <summary>How long an AI captor takes to answer a hail when no player-flown hull is there to choose.</summary>
+        public const double SurrenderAiDecisionSeconds = 4;
+
+        readonly double[] sideStrength = new double[2];
         const int MaxStepsPerAdvance = 500;
         const double MaxSeconds = 4 * 3600;
 
@@ -325,6 +375,7 @@ namespace SolarSystem.Core
                 Id = nextUnitId++, Kind = kind, Side = side, Faction = faction, Combat = combat, LengthKm = lengthKm,
                 Pos = pos, Forward = forward.LengthSquared > 0 ? forward.Normalized : DVec3.UnitX,
                 RetargetIn = rng.NextDouble() * 2, Wander = rng.NextDouble() * 100, Circle = rng.Next(2) == 0 ? -1 : 1,
+                MoraleThreshold = 0.55 + rng.NextDouble() * 0.5,
             };
             if (side >= 0 && side < 2 && SideLeaders[side] == null) SideLeaders[side] = faction;
             Units.Add(u);
@@ -367,6 +418,7 @@ namespace SolarSystem.Core
         void Step(double dt)
         {
             Seconds += dt;
+            TallySideStrength();
             for (int i = 0; i < Units.Count; i++)
             {
                 var u = Units[i];
@@ -387,6 +439,7 @@ namespace SolarSystem.Core
             StepMissiles(dt);
             StepRounds(dt);
             StepBoarding(dt);
+            StepSurrenders(dt);
             foreach (var u in Units)
             {
                 if (!u.Present) continue;
@@ -412,13 +465,13 @@ namespace SolarSystem.Core
             foreach (var u in Units)
             {
                 if (!u.Present || u.Kind == UnitKind.Fighter || u.Captured) continue;
-                bool willing = !u.Fleeing && !u.Combat.Disabled && (u.Combat.Armed || CanBoard(u));
+                bool willing = !u.Fleeing && !u.Surrendering && !u.Combat.Disabled && (u.Combat.Armed || CanBoard(u));
                 if (u.Side == 0) { any0 = true; fight0 |= willing; }
                 else { any1 = true; fight1 |= willing; }
             }
             bool fighting = any0 && any1 && (fight0 || fight1);
             Mopping = !fighting;
-            if (Seconds < MaxSeconds && (fighting || Boarding || FightersAloft)) return;
+            if (Seconds < MaxSeconds && (fighting || Boarding || FightersAloft || AwaitingSurrenderTerms)) return;
             Over = true;
             Winner = fight0 && !fight1 ? 0 : fight1 && !fight0 ? 1 : any0 && !any1 ? 0 : any1 && !any0 ? 1 : -1;
         }
@@ -478,7 +531,13 @@ namespace SolarSystem.Core
         void Think(BattleUnit u, double dt)
         {
             var c = u.Combat;
-            if (u.Captured || u.Latched != null) return;
+            if (u.Captured || u.Latched != null || u.Surrendering) return;
+            if (u.Kind == UnitKind.Ship && !u.PlayerControlled && !c.Disabled && StrikesColours(u))
+            {
+                Surrender(u);
+                return;
+            }
+            if (u.Kind == UnitKind.Ship && u.Faction.IsPirate && !u.PlayerControlled) MaybeDemandCargo(u);
             if (u.Kind == UnitKind.Ship)
             {
                 bool merchant = u.Ship != null && !u.Ship.Spec.IsMilitary && !u.Faction.IsPirate;
@@ -516,7 +575,7 @@ namespace SolarSystem.Core
             BattleUnit flagship = SideFlagship(u.Side);
             foreach (var o in Units)
             {
-                if (!Hostile(u, o) || o.Captured) continue;
+                if (!Hostile(u, o) || o.Captured || o.Surrendering) continue;
                 double score = (o.Pos - u.Pos).Length;
                 // A disabled hull is a prize, not a threat: shoot it only if nothing else is left.
                 if (o.Combat.Disabled) score += 40;
@@ -557,7 +616,7 @@ namespace SolarSystem.Core
                 u.Vel = u.Latched.Vel;
                 return;
             }
-            if (c.Disabled || u.Captured || u.Stunned > 0)
+            if (c.Disabled || u.Captured || u.Surrendering || u.Stunned > 0)
             {
                 // Adrift: no drive, slowly losing what way it had.
                 u.Vel *= Math.Max(0, 1 - 0.002 * dt);
@@ -713,7 +772,7 @@ namespace SolarSystem.Core
         void Fire(BattleUnit u, double dt)
         {
             var c = u.Combat;
-            if (u.Captured) return;
+            if (u.Captured || u.Surrendering) return;
             double accuracyScale = c.BridgeIntact ? 1 : 0.6;
             foreach (var s in c.Subsystems)
             {
@@ -1186,7 +1245,7 @@ namespace SolarSystem.Core
             {
                 var bt = u.BoardTarget;
                 bool stillOpen = bt.Present && !bt.Captured &&
-                    (bt.Combat.Disabled || bt.Stunned > 10 || (breacher && (bt.Combat.Shield <= bt.Combat.Spec.Shield * 0.25 || !bt.Combat.HasShieldGenerator)));
+                    (bt.Combat.Disabled || bt.SurrenderOpenToBoarding || bt.Stunned > 10 || (breacher && (bt.Combat.Shield <= bt.Combat.Spec.Shield * 0.25 || !bt.Combat.HasShieldGenerator)));
                 if (!stillOpen) u.BoardTarget = null;
             }
             if (u.BoardTarget != null || u.Fleeing || u.Combat.Disabled) return;
@@ -1198,7 +1257,7 @@ namespace SolarSystem.Core
             {
                 if (!Hostile(u, o) || o.Captured || o.Kind != UnitKind.Ship) continue;
                 if (o.Combat.Interior.Boarder != null && o.Combat.Interior.Boarder != u.Faction) continue;
-                bool open = o.Combat.Disabled || o.Stunned > 10 || (breacher && (o.Combat.Shield <= o.Combat.Spec.Shield * 0.25 || !o.Combat.HasShieldGenerator));
+                bool open = o.Combat.Disabled || o.SurrenderOpenToBoarding || o.Stunned > 10 || (breacher && (o.Combat.Shield <= o.Combat.Spec.Shield * 0.25 || !o.Combat.HasShieldGenerator));
                 if (!open) continue;
                 if (!breacher && ThreatNear(u, o.Pos, 6)) continue;
                 double d = (o.Pos - u.Pos).Length;
@@ -1298,7 +1357,8 @@ namespace SolarSystem.Core
                 var interior = u.Combat.Interior;
                 if (interior.Boarder == null) continue;
                 var boarder = interior.Boarder;
-                if (interior.Step(dt, Seconds, rng)) Capture(u, boarder);
+                if (u.SurrenderOpenToBoarding && !u.Captured) Capture(u, boarder);
+                else if (interior.Step(dt, Seconds, rng)) Capture(u, boarder);
             }
             foreach (var u in Units)
             {
@@ -1326,6 +1386,163 @@ namespace SolarSystem.Core
             u.Combat.Interior.Settle();
             Emit(FxKind.Captured, u.Pos, u.Pos, u.LengthKm, side, u, -1);
             UnitCaptured?.Invoke(this, u, captor);
+        }
+
+        // ---------------------------------------------------------------- surrender
+
+        /// <summary>A hull has struck its colours and nobody has settled its terms yet.</summary>
+        bool AwaitingSurrenderTerms
+        {
+            get
+            {
+                foreach (var u in Units)
+                    if (u.Present && u.Surrendering && u.SurrenderOutcome == null) return true;
+                return false;
+            }
+        }
+
+        void TallySideStrength()
+        {
+            sideStrength[0] = sideStrength[1] = 0;
+            foreach (var u in Units)
+                if (u.Present && !u.Captured && !u.Surrendering && u.Side >= 0 && u.Side < 2)
+                    sideStrength[u.Side] += u.Combat.Strength;
+        }
+
+        double OutgunnedOf(BattleUnit u) =>
+            u.Side < 0 || u.Side > 1 ? 0 : Morale.Outgunned(sideStrength[u.Side], sideStrength[1 - u.Side]);
+
+        static double DamageTollOf(BattleUnit u)
+        {
+            var c = u.Combat;
+            double shield = c.Spec.Shield > 0 ? c.Shield / c.Spec.Shield : 1;
+            return Morale.DamageToll(c.HullFraction, shield);
+        }
+
+        bool StrikesColours(BattleUnit u) =>
+            Morale.StrikesColours(DamageTollOf(u), OutgunnedOf(u), Morale.Resolve(u.Faction, u.Ship != null && u.Ship.Spec.IsMilitary), u.MoraleThreshold);
+
+        /// <summary>
+        /// Strikes <paramref name="u"/>'s colours: it breaks off, powers down its weapons and hails,
+        /// and is no longer shot at while it waits on its captor's terms.
+        /// </summary>
+        public void Surrender(BattleUnit u)
+        {
+            if (u.Surrendering || !u.Present || u.Captured) return;
+            u.Surrendering = true;
+            u.SurrenderTimer = 0;
+            u.Fleeing = false;
+            u.Target = null;
+            u.BoardTarget = null;
+            foreach (var o in Units)
+                if (o.Target == u) o.Target = null;
+            Emit(FxKind.Hail, u.Pos, u.Pos, u.LengthKm, u.Side, u, -1);
+            UnitSurrendered?.Invoke(this, u);
+        }
+
+        /// <summary>The faction a hull on <paramref name="side"/> surrenders to: the other side's leader.</summary>
+        public Faction CaptorOf(int side) => side < 0 || side > 1 ? null : SideLeaders[1 - side];
+
+        /// <summary>True when someone on the side facing <paramref name="u"/> could board it.</summary>
+        bool CaptorCanBoard(BattleUnit u)
+        {
+            foreach (var o in Units)
+                if (Hostile(u, o) && !o.Captured && !o.Surrendering && !o.Combat.Disabled && CanBoard(o)) return true;
+            return false;
+        }
+
+        bool CaptorPlayerPresent(BattleUnit u)
+        {
+            foreach (var o in Units)
+                if (Hostile(u, o) && o.PlayerControlled) return true;
+            return false;
+        }
+
+        /// <summary>The first hull on the side facing <paramref name="captorSide"/> still waiting for terms, or null.</summary>
+        public BattleUnit AwaitingTermsFrom(int captorSide)
+        {
+            foreach (var u in Units)
+                if (u.Present && u.Surrendering && u.SurrenderOutcome == null && u.Side != captorSide) return u;
+            return null;
+        }
+
+        /// <summary>
+        /// The captor's answer to a hull that has struck its colours: hand over the cargo and go, be
+        /// boarded and taken, or simply go. Taking it needs someone able to board; with nobody, it is
+        /// refused. False when <paramref name="u"/> isn't waiting on terms.
+        /// </summary>
+        public bool OfferSurrenderTerms(BattleUnit u, SurrenderTerms terms)
+        {
+            if (u == null || !u.Present || !u.Surrendering || u.SurrenderOutcome != null) return false;
+            if (terms == SurrenderTerms.TakeShip && !CaptorCanBoard(u)) return false;
+            Settle(u, CaptorOf(u.Side), terms);
+            return true;
+        }
+
+        void Settle(BattleUnit u, Faction captor, SurrenderTerms terms)
+        {
+            u.SurrenderOutcome = terms;
+            if (terms == SurrenderTerms.TakeShip) u.SurrenderOpenToBoarding = true;
+            SurrenderDecided?.Invoke(this, u, captor, terms);
+            // Released: the hull powers up and leaves the field.
+            if (terms != SurrenderTerms.TakeShip) u.Fled = true;
+        }
+
+        void StepSurrenders(double dt)
+        {
+            foreach (var u in Units)
+            {
+                if (!u.Present) continue;
+                if (u.CargoDemandedBy != null)
+                {
+                    u.CargoDemandTimer += dt;
+                    if (u.CargoDemandTimer > SurrenderDecisionSeconds) AnswerCargoDemand(u, false);
+                }
+                if (!u.Surrendering || u.SurrenderOutcome != null) continue;
+                u.SurrenderTimer += dt;
+                double wait = CaptorPlayerPresent(u) ? SurrenderDecisionSeconds : SurrenderAiDecisionSeconds;
+                if (u.SurrenderTimer < wait) continue;
+                var captor = CaptorOf(u.Side);
+                if (captor == null) { Settle(u, null, SurrenderTerms.LetGo); continue; }
+                bool warship = u.Ship != null && u.Ship.Spec.IsMilitary;
+                bool cargo = u.Ship != null && u.Ship.HasCargo;
+                Settle(u, captor, Morale.ChooseTerms(captor.IsPirate, warship, cargo, CaptorCanBoard(u), rng.NextDouble()));
+            }
+        }
+
+        /// <summary>
+        /// Pirates with the upper hand hail a player-flown hull that carries cargo: hand it over and go,
+        /// or fight. Asked once a battle.
+        /// </summary>
+        void MaybeDemandCargo(BattleUnit pirate)
+        {
+            foreach (var v in Units)
+            {
+                if (!Hostile(pirate, v) || !v.PlayerControlled || v.CargoDemandMade || v.Surrendering) continue;
+                if (v.Ship == null || !v.Ship.HasCargo) continue;
+                if (!Morale.ShouldDemandCargo(OutgunnedOf(v), DamageTollOf(v))) continue;
+                v.CargoDemandMade = true;
+                v.CargoDemandedBy = pirate.Faction;
+                v.CargoDemandTimer = 0;
+                Emit(FxKind.Hail, pirate.Pos, v.Pos, pirate.LengthKm, pirate.Side, pirate, -1);
+                CargoDemanded?.Invoke(this, v, pirate.Faction);
+            }
+        }
+
+        /// <summary>
+        /// The player's answer to a pirate cargo demand: comply and the cargo is ransomed and the hull
+        /// goes free (it leaves the field); refuse and the fight goes on. False when nothing was asked.
+        /// </summary>
+        public bool AnswerCargoDemand(BattleUnit victim, bool comply)
+        {
+            if (victim == null || victim.CargoDemandedBy == null) return false;
+            var pirates = victim.CargoDemandedBy;
+            victim.CargoDemandedBy = null;
+            if (!comply || !victim.Present) return true;
+            victim.SurrenderOutcome = SurrenderTerms.RansomCargo;
+            SurrenderDecided?.Invoke(this, victim, pirates, SurrenderTerms.RansomCargo);
+            victim.Fled = true;
+            return true;
         }
 
         static double SegmentPointDistance(DVec3 a, DVec3 b, DVec3 p)
