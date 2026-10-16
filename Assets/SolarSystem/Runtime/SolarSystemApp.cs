@@ -913,16 +913,16 @@ namespace SolarSystem
         {
             if (!IsPiloting) { pilotBoosting = false; pilotCruise = default; nearGate = false; return; }
             var ship = Piloted.Ship;
+            // Taken this very frame (the war let go of it on capture) -- even if its captors then scuttled it
+            // at once: the session ends, as a loss, before anything here hands the hull back to the player.
+            if (ship != null && World.PilotedShip != ship)
+            {
+                LoseHelm();
+                return;
+            }
             if (ship == null || ship.Destroyed)
             {
                 ExitPiloting();
-                return;
-            }
-            // Taken this very frame (the war let go of it on capture): the session ends before anything
-            // here hands the captured hull back to the player's controls.
-            if (World.PilotedShip != ship)
-            {
-                LoseHelm();
                 return;
             }
 
