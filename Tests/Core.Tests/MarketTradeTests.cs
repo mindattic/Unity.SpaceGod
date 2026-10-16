@@ -10,6 +10,24 @@ namespace SolarSystem.Core.Tests
     [TestFixture]
     public class MarketTradeTests
     {
+        [Test]
+        public void PricesFollowTheStockWhenARunOfCratesStopsPartWay()
+        {
+            var (economy, faction, settlement) = CreateMarket(demand: 50, treasury: 1e15);
+            // Stocked a little over target, where the price moves with every tonne.
+            double unitTonnes = CargoFootprint.Of(Good.Electronics).Tonnes;
+            settlement.Stock[(int)Good.Electronics] = settlement.Target(Good.Electronics) * 0.6 + 400 * unitTonnes;
+            settlement.RefreshPrices();
+            var ship = CreateShip(faction);
+            // Far more crates than the hold takes: the run ends on a full hold, part-way through.
+            var outcome = economy.BuyIntoHold(ship, settlement, Good.Electronics, 100000, out int bought);
+            Assert.That(outcome, Is.EqualTo(Economy.TradeOutcome.Ok));
+            Assert.That(bought, Is.GreaterThan(0));
+            double price = settlement.Price[(int)Good.Electronics];
+            settlement.RefreshPrices();
+            Assert.That(price, Is.EqualTo(settlement.Price[(int)Good.Electronics]), "the market showed the price from before the purchase");
+        }
+
         // The player's faction and the port's owner are deliberately different factions (not just
         // different Faction instances with the same name) -- otherwise a port tax paid to the owner
         // and the same amount drawn from the buyer would land back in the one treasury and net to

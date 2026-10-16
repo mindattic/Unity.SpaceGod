@@ -552,13 +552,14 @@ namespace SolarSystem.Core
             bought = 0;
             if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
             double unitTonnes = CargoFootprint.Of(good).Tonnes;
+            var stopped = TradeOutcome.Ok;
             for (int i = 0; i < crates; i++)
             {
-                if (s.Available(good) < unitTonnes) return bought > 0 ? TradeOutcome.Ok : TradeOutcome.NoStock;
+                if (s.Available(good) < unitTonnes) { stopped = TradeOutcome.NoStock; break; }
                 double cost = s.PurchaseCost(good, unitTonnes);
                 double total = cost * (1 + PortTax);
-                if (ship.Faction.Treasury < total) return bought > 0 ? TradeOutcome.Ok : TradeOutcome.CantAfford;
-                if (ship.PersonalHold.AddFirstFit(good) == null) return bought > 0 ? TradeOutcome.Ok : TradeOutcome.NoRoom;
+                if (ship.Faction.Treasury < total) { stopped = TradeOutcome.CantAfford; break; }
+                if (ship.PersonalHold.AddFirstFit(good) == null) { stopped = TradeOutcome.NoRoom; break; }
 
                 s.Stock[(int)good] = Math.Max(0, s.Stock[(int)good] - unitTonnes);
                 s.Owner.Treasury += cost * PortTax;
@@ -566,8 +567,9 @@ namespace SolarSystem.Core
                 ship.Faction.Treasury -= total;
                 bought++;
             }
+            // Prices follow the stock that changed, however the run of crates ended.
             if (bought > 0) s.RefreshPrices();
-            return TradeOutcome.Ok;
+            return bought > 0 ? TradeOutcome.Ok : stopped;
         }
 
         /// <summary>
@@ -582,12 +584,13 @@ namespace SolarSystem.Core
             sold = 0;
             if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
             var hold = ship.PersonalHold;
+            var stopped = TradeOutcome.Ok;
             for (int i = 0; i < crates; i++)
             {
                 CargoItem item = null;
                 foreach (var it in hold.Items)
                     if (it.Good == good) { item = it; break; }
-                if (item == null) return sold > 0 ? TradeOutcome.Ok : TradeOutcome.NothingToSell;
+                if (item == null) { stopped = TradeOutcome.NothingToSell; break; }
 
                 double tonnes = item.Tonnes;
                 double value = s.SaleValue(good, tonnes);
@@ -599,8 +602,9 @@ namespace SolarSystem.Core
                 ship.Faction.Treasury += value - tax;
                 sold++;
             }
+            // Prices follow the stock that changed, however the run of crates ended.
             if (sold > 0) s.RefreshPrices();
-            return TradeOutcome.Ok;
+            return sold > 0 ? TradeOutcome.Ok : stopped;
         }
 
         // ---------------------------------------------------------------- queries
