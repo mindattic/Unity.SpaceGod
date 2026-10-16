@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 511 passing](https://img.shields.io/badge/core%20tests-511%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 614 passing](https://img.shields.io/badge/core%20tests-614%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -15,7 +15,7 @@ A ground-up rebuild of [ExperimentSolarSystem](https://github.com/mindattic/Expe
 - **Gameplay and realistic scale, live.** Press G and everything eases between a compressed, playable layout and true proportions (1 unit = 1,000 km) over about 2.5 seconds. Whatever you are looking at stays framed.
 - **Billboards when things get small.** Anything under a few pixels, ships and planets alike, turns into a class-shaped icon in its faction colour, so you can always see where everything is, even at true scale where Earth is a speck.
 - **A living system.** Twenty-one settlements run a supply-and-demand economy that merchants trade on by themselves; three navies and a pirate band fight real battles with lasers, missiles and carrier fighters, losing ships and ports; and traffic between planetary systems rides X3-style hyperlanes. You watch it happen.
-- **Take the helm when you want to.** Press P on any ship to fly it yourself: steer with the mouse, fire its forward guns, cruise across open space, trade crates at a port, answer a pirate's demand, or fly through the jump gate to Alpha Centauri.
+- **Take the helm when you want to.** Press P on any ship to fly it yourself: steer with the mouse, fire its forward guns, cruise across open space, trade crates at a port, answer a pirate's demand, latch on to a derelict or a wreck and pick it over, or fly through the jump gate to Alpha Centauri.
 
 ## Gameplay vs realistic
 
@@ -73,8 +73,9 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Escort fighters.** Besides carrier squadrons, each of the six navy patrol groups flies two named fighters as escorts.
 - **Fighters.** Carriers launch their squadrons (two of interceptors to one of torpedo bombers) as they enter a battle. Each squadron flies attack runs on capital ships (approach from the side, dive in guns firing or torpedoes away, pass close, break off, swing round from a new side) or dogfights enemy fighters. Wingmen fly a loose vee: each pilot has their own wander, reaction lag and discipline, so formations breathe and stretch, and spread out on the run.
 - **Boarding.** Every hull has an interior: a chain of compartments (bow, holds, quarters, batteries, midships, the bridge, engineering) with its crew and marines in them. A disabled ship (no engines, a lost bridge on a holed hull, or a hull nearly gone) can be boarded: a warship or raider lines up alongside, matches its drift, latches and sends its marines through the airlock; a pirate **breacher** rams its drill prow into the hull and its assault bay opens straight in; and mid-battle, warships fire drill-tipped **boarding pods** that bounce off shields but punch through bare plating and stick there, each with a squad aboard. A breach vents its compartment and kills crew until the emergency bulkheads seal. The fight inside is resolved over time, compartment by compartment: marines rush to the breach, casualties trade on numbers, training (each faction's marine quality, room for upgrades) and a defender's advantage, and the bridge and engineering are fortified for a last stand. Holding both takes the ship. Pirates keep warships they can crew, strip merchant holds and leave the hull adrift (or sell it to the breakers, or scuttle it); navies take serviceable prizes and scuttle pirates. The interior model keeps everything a future deck-by-deck boarding view needs.
+- **Salvage and boarding derelicts.** A hull the raiders cast adrift drifts where it was taken, with a fifth of its cargo they had no time for and its own stores, and sometimes crew who sealed themselves in or a few raiders still stripping it. Flying a ship, come alongside a derelict or a wreck and match velocity (within about a kilometre and 20 m/s) and press 1 to latch on. Raiders aboard hold the hull until your marines go through the airlock and fight them compartment by compartment, on the same interior model as any boarding; survivors are found once the hulk is clear. Then choose: salvage cargo crate by crate into the grid hold, strip a component (fitted in place of one of your own shot-away hardpoints of the same kind, or broken down into a crate), or claim the hull if it can still fly, with rescued survivors and hands from your ship as its prize crew.
 - **Lane ambushes.** Raiders lie in wait just outside a busy hyperlane. When a ship passes, an electromagnetic pulse throws every ship near that point out of the lane, knocking out their drives and shields for a minute or two, and the raiders close in. The fight happens in open space beside the lane; survivors climb back in and carry on. Ambushed lanes look dangerous to route planners for a while, so traffic shifts. Fighters fly back and land on their carriers when the shooting stops, and carriers short of fighters (or groups short of marines) go home to refit.
-- **Adventures near you** (`Core/Events`). Whatever the sim is doing around you turns into timed opportunities, each with a HUD marker, a short hook, an expiry and a reward (credits, cargo crates for your grid hold, standing with a faction): distress calls from ships really under attack or drifting after an interdiction pulse, derelicts and wrecks to pick over, raiders lurking off lanes with a record of ambushes, merchants paying for an escort across a dangerous lane, bounties on the named captains of real raider groups, and the odd rare anomaly. Fly there and see it through; ignore it and it fails when it expires or the situation settles without you.
+- **Adventures near you** (`Core/Events`). Whatever the sim is doing around you turns into timed opportunities, each with a HUD marker, a short hook, an expiry and a reward (credits, cargo crates for your grid hold, standing with a faction): distress calls from ships really under attack or drifting after an interdiction pulse, derelicts and wrecks to latch on to and pick over, raiders lurking off lanes with a record of ambushes, merchants paying for an escort across a dangerous lane, bounties on the named captains of real raider groups, and the odd rare anomaly. Fly there and see it through; ignore it and it fails when it expires or the situation settles without you.
 - **Pilots, not clockwork.**
   - **Avoidance:** every ship watches the others an hour or so ahead. When two would pass closer than a safe distance (a few km plus a few hull lengths), both turn aside, the smaller giving way more, and drift back onto their planned path once clear. Ring queues are a spaced line up the approach path.
   - **Diversion:** merchants still on their way to a port where fighting has just broken out change course mid-flight, keeping their momentum, for the nearest safe port.
@@ -313,7 +314,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-511 NUnit tests, run in parallel in under two minutes, cover the following:
+614 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -335,6 +336,7 @@ dotnet test
 - Economy internals: market pricing and its clamps, the production tick and limiting inputs, population growth and decline, trader cargo choice and booking
 - Combat: the stronger group winning and hardpoints taking the damage, reactor and shield-generator losses, hardpoints sitting on the hull, shield arcs, coarse steps at high warp, and two years of war with battles, losses and a working economy
 - Weapons: railgun and gun rounds' travel time, lead and size-dependent misses
+- Salvage: latching only alongside with velocities matched, what a derelict is left with (cargo, stores, survivors, raiders aboard), fighting through raiders before anything is taken, the grid hold filling, stripped parts fitted or scrapped, claiming a flyable hull with a prize crew, a live derelict lying where it was taken, and the adventure on a hulk seen through only by working it
 - Wrecks and surrender: lasting wrecks with salvage and expiry, hulls striking their colours, ransom, prize-taking and pirate cargo demands
 - War and diplomacy: siege length and port capture, symmetric relations, docking rules
 - Pirate havens: the hidden belt havens found by scanner range, by trailing beaten raiders or by a parked warship's sweep, the garrison and raiders blocking an assault, boarding (goods seized) or destroying a haven, its raiders lying low until it is rebuilt, a navy assaulting a haven it has found, and new bands sailing only from standing havens
@@ -358,7 +360,7 @@ dotnet test
 - **Gameplay scale bends paths.** Ships fly their true path at both scales, but gameplay scale draws it through the same compression as the planets, eased near each end so the ship stays outside the inflated worlds. In a crowded moon system an inflated neighbouring moon can still be drawn over a passing ship.
 - **Alpha Centauri is part guesswork.** The A–B orbit and Proxima's place are measured; the planets' orbital planes and phases, their radii and Proxima's orbital plane are assumed, and two of its worlds may not exist. AI ships stay in their own system; only a piloted ship crosses, through the jump gates, which sit 5,000 km out so a pilot can reach them, not light-years away. The trunk lanes across 12,000 AU in days are deep fiction.
 - **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought at bodies and, by pirate interdiction, beside hyperlanes; ships on flip-and-burn transits cannot be intercepted. Marines are not drawn yet (the interior model is ready for a shipboard view). There is no campaign or win condition; you observe, or fly one ship at a time.
-- **Piloting is partial.** A piloted ship cannot ride hyperlanes yet, gets no warning of a lane ambush, and cannot salvage wrecks or derelicts. Only ships can be piloted.
+- **Piloting is partial.** A piloted ship cannot ride hyperlanes yet and gets no warning of a lane ambush. Only ships can be piloted. Stripping a part takes the soundest (or the one that fits your hull); there is no picking from a list yet.
 - **Surfaces are wrapped on spheres.** Phobos, Deimos and the other small irregular moons are drawn round. Relief is shading only (exaggerated about 5×), never displacement, and lunar libration is not modelled.
 - **Weather is a model on a 2015 snapshot.** Jupiter's map is Hubble's of January 2015, turned so the Great Red Spot is where it is today; the other storms on it are 2015 weather. The flow map reproduces real band speeds and the spot's rotation, not real storm evolution. The Saturn, Uranus and Neptune maps are stylized (CC BY), so only their motion is data.
 - **Asteroids ignore Jupiter.** They fly two-body orbits from the 2026 osculating elements, drifting from their true places by roughly 0.01 AU a year. Only numbered objects brighter than H 15.5 (about 2 to 5 km) are included, and asteroids are labelled but not selectable.
@@ -372,7 +374,6 @@ Planned, from the open tickets in [docs/USER_STORIES.md](docs/USER_STORIES.md):
 - Shield bubbles that ripple where a hit lands.
 - The piloted ship riding hyperlanes, with warning of and a response to lane ambushes.
 - Hidden pirate bases on real belt asteroids.
-- Salvaging and boarding derelicts and wrecks from the piloted ship.
 
 ## Documentation
 

@@ -160,8 +160,8 @@ namespace SolarSystem.Core.Tests
             var op = Expect.Single(director.Active);
             Assert.That(op.Kind, Is.EqualTo(OpportunityKind.Wreck));
             Assert.That(op.Wreck, Is.SameAs(wreck));
-            Assert.That(op.Reward.CargoGood, Is.EqualTo(Good.Electronics));
-            Assert.That(op.Reward.CargoCrates, Is.InRange(1, 3));
+            Assert.That(op.Hook, Does.Contain("electronics"), "the hook says what its hold still reads");
+            Assert.That(op.Reward.CargoCrates, Is.Zero, "the cargo is the player's to take, not a reward");
             Assert.That(op.ExpiresJd, Is.LessThanOrEqualTo(wreck.CreatedJd + wreck.LifetimeDays));
         }
 
@@ -351,8 +351,7 @@ namespace SolarSystem.Core.Tests
         public void AnObserverCannotCollectOnlyAPilotedShipArriving()
         {
             var s = Add(ShipClass.Freighter, traders, Near);
-            s.Derelict = true;
-            s.DerelictSinceJd = Jd;
+            s.Phase = ShipPhase.Adrift;
             Tick(Jd, pilot: null, at: Near);
             var op = Expect.Single(director.Active);
             Assert.That(op.Engaged, Is.False);
@@ -364,22 +363,70 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
-        public void SeeingADerelictThroughPaysCreditsAndCargo()
+        public void ADerelictIsSeenThroughByLatchingOnAndWorkingItNotByFlyingPast()
         {
             var s = Add(ShipClass.Freighter, traders, Near);
+            s.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
             s.Derelict = true;
             s.DerelictSinceJd = Jd;
-            s.HasCargo = true;
-            s.CargoGood = Good.Machinery;
-            s.CargoTonnes = 5000;
+            s.Combat.Interior.Abandon(0, 0, 1);
+            s.Salvage.Add(new SalvageStack(Good.Machinery, 5000));
+            player.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser);
             double before = navy.Treasury;
             Tick(Jd);
             var op = Expect.Single(director.Active);
+            Assert.That(op.Hook, Does.Contain("machinery"));
+
             Tick(Jd + 0.1, player, Near);
+            Assert.That(op.IsActive && op.Engaged, Is.True, "on the scene, but nothing done yet");
+
+            var session = SalvageSession.Latch(player, s);
+            int crates = session.SalvageCargo();
+            session.CastOff();
+            Assert.That(director.HulkWorked(session, Jd + 0.11), Is.SameAs(op));
             Assert.That(op.State, Is.EqualTo(OpportunityState.Completed));
+            Assert.That(op.Outcome, Does.Contain("took " + crates + " crates"));
             Assert.That(navy.Treasury - before, Is.EqualTo(op.Reward.Credits));
-            Assert.That(op.Reward.CargoCrates, Is.GreaterThan(0));
-            Assert.That(player.PersonalHold.Items.Count(i => i.Good == Good.Machinery), Is.EqualTo(op.Reward.CargoCrates));
+            Assert.That(player.PersonalHold.Items.Count(i => i.Good == Good.Machinery), Is.EqualTo(crates).And.GreaterThan(0));
+        }
+
+        [Test]
+        public void SurvivorsBroughtOutOfADerelictEarnTheirOwnersThanks()
+        {
+            var s = Add(ShipClass.Freighter, traders, Near);
+            s.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
+            s.Derelict = true;
+            s.DerelictSinceJd = Jd;
+            s.Combat.Interior.Abandon(6, 0, 1);
+            player.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            double plain = op.Reward.Credits;
+            Assert.That(op.Hook, Does.Contain("movement aboard"));
+
+            var session = SalvageSession.Latch(player, s); // nobody hostile: the survivors are found at once
+            session.CastOff();
+            director.HulkWorked(session, Jd + 0.1);
+            Assert.That(op.State, Is.EqualTo(OpportunityState.Completed));
+            Assert.That(op.Outcome, Does.Contain("rescued 6 survivors"));
+            Assert.That(op.Reward.Credits, Is.EqualTo(plain + 6 * director.SurvivorRescueCredits));
+            Assert.That(director.ReputationWith(traders), Is.EqualTo(director.SurvivorRescueReputation));
+        }
+
+        [Test]
+        public void LatchingOnAndLeavingEmptyHandedSeesNothingThrough()
+        {
+            var s = Add(ShipClass.Freighter, traders, Near);
+            s.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
+            s.Derelict = true;
+            s.DerelictSinceJd = Jd;
+            s.Combat.Interior.Abandon(0, 0, 1);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            var session = SalvageSession.Latch(player, s);
+            session.CastOff();
+            Assert.That(director.HulkWorked(session, Jd + 0.1), Is.Null);
+            Assert.That(op.IsActive, Is.True);
         }
 
         [Test]
@@ -518,12 +565,17 @@ namespace SolarSystem.Core.Tests
         [Test]
         public void SalvagingAWreckEmptiesWhatWasTaken()
         {
-            var wreck = new Wreck { Id = 1, Name = "Ship X", Ship = new Ship(), Pos = Near, CreatedJd = Jd, LifetimeDays = 21 };
+            var wreck = new Wreck { Id = 1, Name = "Ship X", Faction = traders, Ship = new Ship { Spec = ShipClassSpec.Of(ShipClass.Freighter) }, Pos = Near, CreatedJd = Jd, LifetimeDays = 21 };
             double crate = CargoFootprint.Of(Good.Copper).Tonnes;
             wreck.Salvage.Add(new SalvageStack(Good.Copper, crate)); // exactly one crate's worth
             wrecks.Add(wreck);
             Tick(Jd);
             Tick(Jd + 0.1, player, Near);
+            Assert.That(director.Active.Single().IsActive, Is.True, "flying past salvages nothing");
+            var session = SalvageSession.Latch(player, wreck);
+            Assert.That(session.SalvageCargo(), Is.EqualTo(1));
+            session.CastOff();
+            director.HulkWorked(session, Jd + 0.2);
             Assert.That(director.History.Single().State, Is.EqualTo(OpportunityState.Completed));
             Assert.That(wreck.Salvage, Is.Empty);
         }

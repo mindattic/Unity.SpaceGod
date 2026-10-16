@@ -325,11 +325,24 @@ namespace SolarSystem.Core
             bool warship = ship.Spec.IsMilitary;
             if (captor.IsPirate)
             {
-                if (ship.HasCargo) Loot(ship);
+                // Looting draws nothing from the dice, so the roll can be made first: a hull about to be cast
+                // adrift is stripped in a hurry, and some of its cargo is left aboard for a salvager.
                 double roll = rng.NextDouble();
+                bool adrift = !warship && roll < 0.55;
+                var good = ship.CargoGood;
+                double left = 0;
+                if (ship.HasCargo)
+                {
+                    if (adrift)
+                    {
+                        left = ship.CargoTonnes * SalvageSession.LeftAboardShare;
+                        ship.CargoTonnes -= left;
+                    }
+                    Loot(ship);
+                }
                 if (warship && hull >= 0.3) how = Steal(ship, captor, b) ? $"pressed into {world.Pirates.Name} service" : "scuttled";
                 else if (warship) { Scuttle(ship); how = "scuttled"; }
-                else if (roll < 0.55) { LeaveAdrift(ship, jd); how = "stripped and left adrift"; }
+                else if (adrift) { LeaveAdrift(ship, b, u, captor, good, left, jd); how = "stripped and left adrift"; }
                 else if (roll < 0.85)
                 {
                     world.Pirates.Treasury += Economy.HullPrice(ship.Spec.Class) * 0.25;
@@ -383,12 +396,36 @@ namespace SolarSystem.Core
             losses[ship.Faction] = n + 1;
         }
 
-        void LeaveAdrift(Ship ship, double jd)
+        /// <summary>
+        /// The raiders cast the hull off where they took it: it drifts there, fixed in the fight's own frame
+        /// (so a salvager can come alongside, match it and latch on), with what they left of its cargo, its
+        /// stores, and perhaps some of its crew hiding aboard or some of the raiders still stripping it (see
+        /// <see cref="SalvageSession.Strand"/>).
+        /// </summary>
+        void LeaveAdrift(Ship ship, Battle b, BattleUnit u, Faction raiders, Good good, double leftTonnes, double jd)
         {
             Detach(ship);
             ship.Derelict = true;
             ship.DerelictSinceJd = jd;
+            ship.DerelictBy = raiders;
             ship.Cargo = "Derelict: boarded, stripped and abandoned";
+            var v = u.Forward.LengthSquared > 1e-12 ? u.Forward.Normalized : DVec3.UnitX;
+            var w = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
+            ship.Orbit = new ParkingOrbit
+            {
+                Body = b.Body, Center = b.Anchor + u.Pos, RadiusKm = 0,
+                U = w, V = v, EpochJd = jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
+            };
+            ship.Phase = ShipPhase.Parked;
+            ship.Path = null;
+            ship.Journey = null;
+            ship.JourneyIndex = 0;
+            ship.Ring = null;
+            ship.HoldPoint = null;
+            ship.LaneHoldSide = DVec3.Zero;
+            ship.DestinationBody = b.Body;
+            ship.PhaseStartJd = ship.PhaseEndJd = jd;
+            SalvageSession.Strand(ship, raiders, good, leftTonnes, jd);
         }
 
         /// <summary>The prize changes hands: a prize crew takes over and it joins the captor (a group of theirs in the fight, if there is room).</summary>

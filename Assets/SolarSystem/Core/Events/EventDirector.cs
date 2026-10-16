@@ -255,18 +255,17 @@ namespace SolarSystem.Core
 
         Opportunity DerelictOf(Ship s, double jd)
         {
+            // What it pays for is reporting and working the hulk (the salvage registry's award); what is in
+            // its hold the player takes for themselves once latched on (see SalvageSession).
             var reward = new OpportunityReward { Credits = s.Spec.IsMilitary ? 180000 : 60000 };
-            if (s.HasCargo && s.CargoTonnes > 0)
-            {
-                reward.CargoGood = s.CargoGood;
-                reward.CargoCrates = (int)Math.Clamp(Math.Round(s.CargoTonnes / CargoFootprint.Of(s.CargoGood).Tonnes), 1, 3);
-            }
+            string aboard = s.Combat != null && s.Combat.Interior.Survivors + s.Combat.Interior.Marines > 0.5 ? " Sensors read movement aboard." : "";
             return new Opportunity
             {
                 Kind = OpportunityKind.Derelict,
                 SourceKey = Key("derelict", s),
                 Title = "Derelict: " + s.Name,
-                Hook = "No transponder answer from " + s.Name + ". Hull dark, airlocks open: boarded and left to drift. Worth a look before it breaks up.",
+                Hook = "No transponder answer from " + s.Name + ". Hull dark, airlocks open: boarded and left to drift. " + HoldReads(s.Salvage) + aboard +
+                       " Match velocity and latch on before it breaks up.",
                 ExpiresJd = Math.Min(jd + 5, s.DerelictSinceJd + 25),
                 Ship = s,
                 Reward = reward,
@@ -275,25 +274,24 @@ namespace SolarSystem.Core
 
         Opportunity WreckOf(Wreck w, double jd)
         {
-            var reward = new OpportunityReward { Credits = 25000 };
-            foreach (var stack in w.Salvage)
-            {
-                if (stack.Tonnes <= 0) continue;
-                reward.CargoGood = stack.Good;
-                reward.CargoCrates = (int)Math.Clamp(Math.Round(stack.Tonnes / CargoFootprint.Of(stack.Good).Tonnes), 1, 3);
-                break;
-            }
-            string what = reward.CargoCrates > 0 ? "Its hold still reads " + GoodInfo.Of(reward.CargoGood).Name.ToLowerInvariant() + "." : "Scrap, at least.";
             return new Opportunity
             {
                 Kind = OpportunityKind.Wreck,
                 SourceKey = "wreck:" + w.Id,
                 Title = "Wreck: " + w.Name,
-                Hook = "The wreck of " + w.Name + " is still tumbling where it died. " + what,
+                Hook = "The wreck of " + w.Name + " is still tumbling where it died. " + HoldReads(w.Salvage) + " Latch on and strip it.",
                 ExpiresJd = Math.Min(jd + 6, w.CreatedJd + w.LifetimeDays),
                 Wreck = w,
-                Reward = reward,
+                Reward = new OpportunityReward { Credits = 25000 },
             };
+        }
+
+        /// <summary>What a hulk's scanned hold shows, for its hook.</summary>
+        static string HoldReads(IReadOnlyList<SalvageStack> salvage)
+        {
+            foreach (var stack in salvage)
+                if (stack.Tonnes > 0) return "Its hold still reads " + GoodInfo.Of(stack.Good).Name.ToLowerInvariant() + ".";
+            return "Scrap, at least.";
         }
 
         Opportunity Ambush(Ship s, Lane lane, double jd, EventSources src)
@@ -416,19 +414,14 @@ namespace SolarSystem.Core
                     }
                     break;
 
+                // Coming within sight of a hulk is not seeing it through: that takes latching on and working
+                // it (HulkWorked), so these only fail here.
                 case OpportunityKind.Derelict:
                     if (s.Destroyed || !s.Derelict) { Fail(op, jd, s.Name + " broke up before anyone reached it."); return; }
-                    if (op.Engaged) { Complete(op, jd, player, "You picked over " + s.Name + "."); return; }
                     break;
 
                 case OpportunityKind.Wreck:
                     if (!Contains(src.Wrecks, op.Wreck) || op.Wreck.Expired(jd)) { Fail(op, jd, "The wreck of " + op.Wreck.Name + " broke up."); return; }
-                    if (op.Engaged)
-                    {
-                        TakeSalvage(op);
-                        Complete(op, jd, player, "You salvaged the wreck of " + op.Wreck.Name + ".");
-                        return;
-                    }
                     break;
 
                 case OpportunityKind.PirateAmbush:
@@ -474,19 +467,39 @@ namespace SolarSystem.Core
             return false;
         }
 
-        /// <summary>A salvaged wreck's hold is emptied of what the reward took, so the next salvager finds less.</summary>
-        static void TakeSalvage(Opportunity op)
+        /// <summary>Credits per survivor brought out of a derelict, paid by the ship's owners.</summary>
+        public double SurvivorRescueCredits = 15000;
+
+        /// <summary>Standing with a derelict's owners for bringing its survivors out.</summary>
+        public double SurvivorRescueReputation = 4;
+
+        /// <summary>
+        /// The player latched on to a hulk and got something out of it (<see cref="SalvageSession.Worked"/>):
+        /// the derelict or wreck opportunity on it, if one is open, is seen through -- by that ship, whether or
+        /// not it was seen arriving -- and paid. Survivors brought out add their owners' thanks to the reward.
+        /// Returns the opportunity completed, or null if none was open on it.
+        /// </summary>
+        public Opportunity HulkWorked(SalvageSession session, double jd)
         {
-            if (op.Reward.CargoCrates <= 0) return;
-            var salvage = op.Wreck.Salvage;
-            for (int i = 0; i < salvage.Count; i++)
+            if (session == null || !session.Worked) return null;
+            var op = Active.Find(o => session.Derelict != null
+                ? o.Kind == OpportunityKind.Derelict && o.Ship == session.Derelict
+                : o.Kind == OpportunityKind.Wreck && o.Wreck == session.Wreck);
+            if (op == null) return null;
+            var player = session.Player;
+            op.Engaged = true;
+            op.EngagedBy = player;
+            op.EngagedFaction = player.Faction;
+            // Whoever the hull belonged to when the clamps took hold (a claimed one has changed hands since).
+            var owners = session.Owners;
+            if (session.SurvivorsRescued >= 0.5 && owners != null && !owners.IsPirate && owners != player.Faction)
             {
-                if (salvage[i].Good != op.Reward.CargoGood) continue;
-                double left = salvage[i].Tonnes - op.Reward.CargoCrates * CargoFootprint.Of(op.Reward.CargoGood).Tonnes;
-                if (left > 0) salvage[i] = new SalvageStack(salvage[i].Good, left);
-                else salvage.RemoveAt(i);
-                return;
+                op.Reward.Credits += RoundThousand(session.SurvivorsRescued * SurvivorRescueCredits);
+                op.Reward.ReputationWith = owners;
+                op.Reward.Reputation += SurvivorRescueReputation;
             }
+            Complete(op, jd, player, "You " + session.Summary() + " aboard " + session.Name + ".");
+            return op;
         }
 
         void Complete(Opportunity op, double jd, Ship player, string how)

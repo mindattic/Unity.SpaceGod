@@ -36,6 +36,10 @@ namespace SolarSystem.Core
         public double Marines;
         public double Boarders;
 
+        /// <summary>People sheltering here who take no part in a fight: the crew left behind on a derelict,
+        /// sealed in and waiting for a rescue (see <see cref="Interior.Abandon"/>).</summary>
+        public double Survivors;
+
         /// <summary>True once boarders hold it (no defenders left in it).</summary>
         public bool Taken;
 
@@ -126,6 +130,17 @@ namespace SolarSystem.Core
         }
 
         public bool UnderBoarding => Boarder != null && Boarders > 0.5 && !Captured;
+
+        /// <summary>Non-combatants sheltering aboard (a derelict's left-behind crew).</summary>
+        public double Survivors
+        {
+            get
+            {
+                double n = 0;
+                foreach (var c in Compartments) n += c.Survivors;
+                return n;
+            }
+        }
 
         public int TakenCount
         {
@@ -463,6 +478,73 @@ namespace SolarSystem.Core
             }
             Boarder = null;
             Captured = false;
+        }
+
+        /// <summary>
+        /// The hull is left adrift: its own people are gone, apart from <paramref name="survivors"/> who
+        /// sealed themselves in at the far end from the airlocks, and <paramref name="lurkers"/> raiders
+        /// still aboard stripping it, who hold the holds (or wherever there is loot) as defenders of
+        /// <paramref name="lurkerQuality"/>. Any boarding that took it is over.
+        /// </summary>
+        public void Abandon(double survivors, double lurkers, double lurkerQuality)
+        {
+            foreach (var c in Compartments)
+            {
+                c.Crew = c.Marines = c.Boarders = c.Survivors = 0;
+                c.Taken = false;
+                c.Vented = false;
+                c.SealIn = 0;
+            }
+            Boarder = null;
+            Captured = false;
+            DefenderQuality = lurkerQuality;
+            if (survivors > 0) (Of(CompartmentKind.Engineering) ?? Compartments[Compartments.Count - 1]).Survivors = survivors;
+            if (lurkers > 0) (Of(CompartmentKind.Hold) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.Bridge) ?? Compartments[0]).Marines = lurkers;
+        }
+
+        /// <summary>
+        /// Boarders still aboard go back the way they came: they are taken off and counted, and whatever
+        /// they held is nobody's again (a derelict cleared, or a boarding party called back to its ship).
+        /// </summary>
+        public double Recall()
+        {
+            double n = 0;
+            foreach (var c in Compartments)
+            {
+                n += c.Boarders;
+                c.Boarders = 0;
+                c.Taken = false;
+            }
+            Boarder = null;
+            Captured = false;
+            return n;
+        }
+
+        /// <summary>Takes up to <paramref name="n"/> crew off the ship, evenly from every compartment; returns how many went.</summary>
+        public double TakeCrew(double n)
+        {
+            double have = Crew;
+            if (have <= 0 || n <= 0) return 0;
+            double share = Math.Min(1, n / have);
+            foreach (var c in Compartments) c.Crew -= c.Crew * share;
+            return have * share;
+        }
+
+        /// <summary>Takes up to <paramref name="n"/> marines off the ship (a boarding party leaving through the airlock).</summary>
+        public double TakeMarines(double n)
+        {
+            double have = Marines;
+            if (have <= 0 || n <= 0) return 0;
+            double share = Math.Min(1, n / have);
+            foreach (var c in Compartments) c.Marines -= c.Marines * share;
+            return have * share;
+        }
+
+        /// <summary>People come aboard: crew spread through the ship, marines to their barracks.</summary>
+        public void Embark(double crew, double marines)
+        {
+            if (crew > 0) foreach (var c in Compartments) c.Crew += crew / Compartments.Count;
+            if (marines > 0) (Of(CompartmentKind.Quarters) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.AssaultBay) ?? Compartments[Compartments.Count / 2]).Marines += marines;
         }
 
         /// <summary>Back at a yard: crew and marines made up to strength.</summary>

@@ -91,6 +91,32 @@ namespace SolarSystem.Core
             Adventures.Update(jd, EventSources.Of(this, jd), playerHelioKm, PilotedShip);
         }
 
+        /// <summary>Where a wreck is now, heliocentric km: fixed in its body's frame, or beside the lane it died by.</summary>
+        public DVec3 WreckHelio(Wreck w, double jd)
+        {
+            var lanes = Fleet.Lanes;
+            if (w.Site == null || lanes == null) return Ephemeris.HelioAt(w.Body, jd) + w.Pos;
+            var hop = w.Site.Hop;
+            var a = Ephemeris.HelioAt(hop.From, jd) + w.Site.FromOffset;
+            var b = Ephemeris.HelioAt(hop.To, jd) + w.Site.ToOffset;
+            return lanes.CurveKm(hop.Lane, a, b, w.Site.Progress, jd) + w.Site.Side + w.Local;
+        }
+
+        /// <summary>
+        /// The player's ship lets go of a hulk (or has just claimed it): the clamps come off, what came of it
+        /// goes in the event log, and the derelict or wreck adventure on it, if one is open, is seen through
+        /// (<see cref="EventDirector.HulkWorked"/>). Returns that adventure, or null.
+        /// </summary>
+        public Opportunity FinishSalvage(SalvageSession session, double jd)
+        {
+            if (session == null) return null;
+            session.CastOff();
+            if (!session.Worked) return null;
+            int body = session.Derelict?.Orbit?.Body ?? session.Wreck?.Body ?? -1;
+            Log(jd, $"The {session.Player.Name} {session.Summary()} aboard {session.Name}", session.Claimed ? WorldEventKind.Capture : WorldEventKind.Info, body);
+            return Adventures?.HulkWorked(session, jd);
+        }
+
         public void NotifyAdded(Ship ship) => ShipAdded?.Invoke(ship);
 
         public void Log(double jd, string text, WorldEventKind kind = WorldEventKind.Info, int body = -1)

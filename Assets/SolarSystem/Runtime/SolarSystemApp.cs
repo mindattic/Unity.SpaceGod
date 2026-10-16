@@ -111,6 +111,23 @@ namespace SolarSystem
         /// (see <see cref="UpdateGateActivation"/>); drives the gate's glow and the HUD prompt.</summary>
         bool nearGate;
 
+        /// <summary>The hulk the piloted ship is latched on to (see <see cref="UpdateSalvage"/>), or null.</summary>
+        public SalvageSession Salvage { get; private set; }
+
+        /// <summary>The nearest derelict or wreck within <see cref="SalvageApproachKm"/> while piloting and not
+        /// latched: a line for the HUD saying how far off it is and how fast the gap is closing.</summary>
+        public string SalvageApproach { get; private set; }
+
+        /// <summary>How near a hulk must be for its approach readout to show, km.</summary>
+        const double SalvageApproachKm = 60;
+
+        /// <summary>The hulk last offered "1 latch on", and how far into the session's log the toasts have reached.</summary>
+        object salvagePrompted;
+        int salvageLogShown;
+
+        /// <summary>The piloted ship's offset from the hulk it is latched to, held fixed while the clamps are on.</summary>
+        DVec3 salvageLatchOffsetKm;
+
         public bool ShowOrbits { get; set; } = true;
         public bool ShowLabels { get; set; } = true;
         public bool ShowHelp { get; set; } = true;
@@ -855,6 +872,8 @@ namespace SolarSystem
         /// nothing handed back, since the hull is its captor's now and the war disposes of it.</summary>
         void LoseHelm()
         {
+            EndSalvage(null);
+            SalvageApproach = null;
             var ship = Piloted.Ship;
             // Where it was taken: the captor's schedule (or the drifting hulk) picks up from here. If the
             // capture ended the fight in the same tick, the war has already planned the prize's next trip from
@@ -872,6 +891,8 @@ namespace SolarSystem
 
         void ExitPiloting()
         {
+            EndSalvage(null);
+            SalvageApproach = null;
             var ship = Piloted.Ship;
             Piloted = Target.None;
             World.PilotedShip = null;
@@ -991,6 +1012,8 @@ namespace SolarSystem
 
             var destination = gate.Destination;
             if (!GateTransit.TryPerform(gate, shipHelioKm, ship, Fleet, Clock.Jd, out var arrived)) return;
+            EndSalvage(null);
+            SalvageApproach = null;
 
             World.PilotedShip = null;
             Activate(destination);
@@ -1020,13 +1043,15 @@ namespace SolarSystem
         /// instead of letting its own AI steer and pick targets for the hull.</summary>
         void UpdatePilotBattle(Ship ship, float dt)
         {
+            if (ship.Battle != null && Salvage != null) EndSalvage("Clamps released: battle stations");
+            if (ship.Battle != null) SalvageApproach = null;
             if (ship.Battle == null)
             {
                 // Out of any fight: a hail left open when the last one ended (or before release) is gone,
                 // so the next battle's demand or surrender gets its own prompt.
                 demandPrompted = false;
                 termsPrompted = null;
-                UpdateHavenAssault(ship);
+                if (!UpdateSalvage(ship, dt)) UpdateHavenAssault(ship);
                 pilotBattleCheckTimer -= dt;
                 if (pilotBattleCheckTimer > 0) return;
                 pilotBattleCheckTimer = PilotBattleCheckIntervalS;
@@ -1085,6 +1110,182 @@ namespace SolarSystem
         }
 
         Settlement havenPrompted;
+
+        // ---------------------------------------------------------------- salvage and boarding of hulks
+
+        /// <summary>A hulk's position and velocity in the pilot's frame (true km, km/s), from where it is at two nearby moments.</summary>
+        (DVec3 offsetKm, DVec3 velKmS) HulkInPilotFrame(Func<double, DVec3> helioAt)
+        {
+            const double h = 1e-5;
+            double jd = Clock.Jd;
+            var now = helioAt(jd) - Ephemeris.HelioAt(pilotFrameBody, jd);
+            var next = helioAt(jd + h) - Ephemeris.HelioAt(pilotFrameBody, jd + h);
+            return (now, (next - now) / (h * Astro.SecondsPerDay));
+        }
+
+        static DVec3 DerelictHelio(Ephemeris eph, Ship s, double jd) => eph.HelioAt(s.Orbit.Body, jd) + s.Orbit.OffsetAt(jd);
+
+        static string Num(double v, string format) => v.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// Salvage while piloting, out of any battle: the nearest derelict (<see cref="Ship.Derelict"/>) or wreck
+        /// gets an approach readout; matched alongside it (<see cref="SalvageSession.Check"/>), 1 latches on.
+        /// Latched, the ship rides with the hulk and the number keys choose: with raiders aboard, 1 sends the
+        /// marines through the airlock; once it is clear, 1 salvages cargo into the grid hold, 2 strips the
+        /// most useful component, 3 claims the hull if it can fly; 4 (or throttling away) casts off. Returns
+        /// true while it has the number keys (latched, or alongside and offering to latch).
+        /// </summary>
+        bool UpdateSalvage(Ship ship, float dt)
+        {
+            if (Salvage != null) return UpdateLatched(ship, dt);
+
+            // The nearest hulk in reach of the readout.
+            Ship derelict = null;
+            Wreck wreck = null;
+            DVec3 rel = default, relVel = default;
+            double best = SalvageApproachKm;
+            foreach (var s in Fleet.Ships)
+            {
+                if (!s.Derelict || s.Destroyed || s == ship || s.Orbit == null) continue;
+                var (off, vel) = HulkInPilotFrame(jd => DerelictHelio(Ephemeris, s, jd));
+                double d = (off - pilotOffsetKm).Length;
+                if (d >= best) continue;
+                best = d;
+                derelict = s;
+                rel = pilotOffsetKm - off;
+                relVel = pilotVelKmS - vel;
+            }
+            foreach (var w in World.War.Wrecks.Items)
+            {
+                var (off, vel) = HulkInPilotFrame(jd => World.WreckHelio(w, jd));
+                double d = (off - pilotOffsetKm).Length;
+                if (d >= best) continue;
+                best = d;
+                wreck = w;
+                derelict = null;
+                rel = pilotOffsetKm - off;
+                relVel = pilotVelKmS - vel;
+            }
+            if (derelict == null && wreck == null)
+            {
+                SalvageApproach = null;
+                salvagePrompted = null;
+                return false;
+            }
+
+            string name = derelict != null ? "DERELICT " + derelict.Name : "WRECK " + wreck.Name;
+            double hulkLength = derelict != null ? derelict.LengthKm : wreck.LengthKm;
+            double range = SalvageSession.LatchRangeKm(hulkLength, ship.LengthKm);
+            var state = SalvageSession.Check(rel, relVel, range);
+            double closing = rel.LengthSquared > 0 ? -DVec3.Dot(relVel, rel.Normalized) : 0;
+            string how = state == LatchState.Ready ? "[1] LATCH ON"
+                : state == LatchState.TooFast ? "match velocity: " + Num(relVel.Length * 1000, "0") + " m/s, under " + Num(SalvageSession.MatchSpeedKmS * 1000, "0") + " to latch"
+                : "come within " + Num(range, "0.0") + " km and match velocity to latch";
+            SalvageApproach = name + "   " + Num(best, "0.0") + " km   " + (closing >= 0 ? "closing " : "opening ") + Num(Math.Abs(closing) * 1000, "0") + " m/s   " + how;
+            if (state != LatchState.Ready)
+            {
+                salvagePrompted = null;
+                return false;
+            }
+            object hulk = (object)derelict ?? wreck;
+            if (salvagePrompted != hulk)
+            {
+                salvagePrompted = hulk;
+                ShowToast("Alongside " + (derelict != null ? "the derelict " + derelict.Name : "the wreck of " + wreck.Name) + ", velocity matched:  1 latch on");
+            }
+            if (Input.NumberKey != 1) return true;
+            Salvage = derelict != null ? SalvageSession.Latch(ship, derelict) : SalvageSession.Latch(ship, wreck);
+            if (Salvage == null) return true;
+            salvageLatchOffsetKm = rel;
+            salvageLogShown = 0;
+            SalvageApproach = null;
+            ShowSalvageLog();
+            return true;
+        }
+
+        bool UpdateLatched(Ship ship, float dt)
+        {
+            var s = Salvage;
+            bool hulkGone = s.Derelict != null ? s.Derelict.Destroyed || !s.Derelict.Derelict : !World.War.Wrecks.Items.Contains(s.Wreck);
+            if (hulkGone) { EndSalvage("The hulk broke up under you: clamps released"); return false; }
+            // Throttling or strafing away pulls the clamps off.
+            if (Input.Move.sqrMagnitude > 0.25f) { EndSalvage("Clamps released"); return false; }
+
+            // Riding with the hulk: held at the offset the clamps took hold at, moving as it moves.
+            var (off, vel) = s.Derelict != null
+                ? HulkInPilotFrame(jd => DerelictHelio(Ephemeris, s.Derelict, jd))
+                : HulkInPilotFrame(jd => World.WreckHelio(s.Wreck, jd));
+            pilotOffsetKm = off + salvageLatchOffsetKm;
+            pilotVelKmS = vel;
+            pilotCruise = default;
+
+            // The fight aboard runs on the sim clock (real time while piloting, faster under warp).
+            s.Step(Math.Min(10, dt * Clock.Warp.SimSecondsPerSecond * Clock.Speed));
+            ShowSalvageLog();
+
+            int key = Input.NumberKey;
+            if (key == 4) { EndSalvage("Clamps released"); return true; }
+            if (s.Hostile)
+            {
+                if (key == 1 && !s.Fighting && !s.SendBoarders()) ShowToast("No marines aboard to send across");
+                return true;
+            }
+            if (key == 1)
+            {
+                if (s.SalvageCargo() > 0) ShowCargo = true;
+            }
+            else if (key == 2)
+            {
+                var part = s.BestPart();
+                if (part == null) ShowToast("Nothing left aboard worth stripping");
+                else s.Strip(part);
+            }
+            else if (key == 3)
+            {
+                if (!s.CanClaim(out var why)) ShowToast("Can't claim " + s.Name + ": " + why);
+                else if (s.Claim(Fleet, Clock.Jd))
+                {
+                    var claimed = s.Derelict;
+                    EndSalvage(null);
+                    ShowToast("Claimed: the " + claimed.Name + " flies your colours (select it and press P to take its helm)");
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Toasts each new line of the latched session's log.</summary>
+        void ShowSalvageLog()
+        {
+            var log = Salvage?.Log;
+            if (log == null) return;
+            if (salvageLogShown > log.Count) salvageLogShown = log.Count;
+            if (salvageLogShown == log.Count) return;
+            ShowToast(log[log.Count - 1]);
+            salvageLogShown = log.Count;
+        }
+
+        /// <summary>The number-key choices open on the latched hulk right now, for the HUD.</summary>
+        public string SalvageChoices()
+        {
+            var s = Salvage;
+            if (s == null) return "";
+            if (s.Hostile)
+                return s.Fighting ? "Marines fighting aboard   4 cast off"
+                    : (s.MarinesReady >= 0.5 ? "1 send " + Num(s.MarinesReady, "0") + " marines across   " : "No marines to send   ") + "4 cast off";
+            return "1 salvage cargo   2 strip a component   3 claim the hull   4 cast off";
+        }
+
+        /// <summary>Lets go of the latched hulk: the session ends, is logged, and pays out any adventure on it.</summary>
+        void EndSalvage(string toast)
+        {
+            var s = Salvage;
+            if (s == null) return;
+            Salvage = null;
+            salvagePrompted = null;
+            var op = World.FinishSalvage(s, Clock.Jd);
+            if (op != null) ShowToast(op.Outcome);
+            else if (toast != null) ShowToast(toast);
+        }
 
         /// <summary>
         /// While piloting in a battle, the number keys answer hails: a pirate demand for this ship's cargo

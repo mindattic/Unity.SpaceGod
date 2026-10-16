@@ -59,14 +59,7 @@ namespace SolarSystem.Core
                 BodyName = b => catalog[b].Name,
                 IsMerchant = world.IsTrader,
                 PirateHunters = world.Belt,
-                WreckHelio = w =>
-                {
-                    if (w.Site == null || lanes == null) return eph.HelioAt(w.Body, jd) + w.Pos;
-                    var hop = w.Site.Hop;
-                    var a = eph.HelioAt(hop.From, jd) + w.Site.FromOffset;
-                    var b = eph.HelioAt(hop.To, jd) + w.Site.ToOffset;
-                    return lanes.CurveKm(hop.Lane, a, b, w.Site.Progress, jd) + w.Site.Side + w.Local;
-                },
+                WreckHelio = w => world.WreckHelio(w, jd),
                 LaneDanger = lane =>
                 {
                     double d = 0;

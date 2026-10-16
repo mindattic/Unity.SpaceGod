@@ -62,6 +62,7 @@ namespace SolarSystem.UI
             DrawNavigator();
             DrawSelection();
             DrawStatus();
+            DrawSalvage();
             if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
             if (app.ShowCargo) DrawCargo();
@@ -1243,6 +1244,57 @@ namespace SolarSystem.UI
                 app.LevelView();
         }
 
+        /// <summary>
+        /// Above the status bar while piloting: the approach readout for the nearest derelict or wreck (range,
+        /// closing speed, what is still needed to latch), or -- latched on -- the hulk's compartments with who is
+        /// in each, what is still aboard, the part most worth stripping and the number-key choices.
+        /// </summary>
+        void DrawSalvage()
+        {
+            var s = app.Salvage;
+            if (s == null)
+            {
+                if (string.IsNullOrEmpty(app.SalvageApproach)) return;
+                var line = new GUIContent(app.SalvageApproach);
+                float lw = text.CalcSize(line).x + 28;
+                var lr = Panel(new Rect((Screen.width - lw) * 0.5f, Screen.height - 76, lw, 30));
+                GUI.contentColor = Accent;
+                GUI.Label(new Rect(lr.x + 14, lr.y + 6, lw, 20), line, text);
+                GUI.contentColor = Color.white;
+                return;
+            }
+
+            var rows = new List<string>();
+            foreach (var c in s.Interior.Compartments)
+            {
+                var who = new List<string>();
+                if (c.Marines > 0.5) who.Add(c.Marines.ToString("0", CultureInfo.InvariantCulture) + " raiders");
+                if (c.Boarders > 0.5) who.Add(c.Boarders.ToString("0", CultureInfo.InvariantCulture) + " our marines");
+                if (c.Survivors > 0.5) who.Add(c.Survivors.ToString("0", CultureInfo.InvariantCulture) + " survivors");
+                if (c.Vented) who.Add("open to space");
+                rows.Add(c.Name + ":  " + (who.Count == 0 ? "empty" : string.Join(", ", who)));
+            }
+            var aboard = new List<string>();
+            foreach (var stack in s.Manifest)
+                aboard.Add(GoodInfo.Of(stack.Good).Name + " " + stack.Tonnes.ToString("0", CultureInfo.InvariantCulture) + " t");
+            rows.Add("Aboard:  " + (aboard.Count == 0 ? "nothing left" : string.Join(", ", aboard)));
+            var part = s.BestPart();
+            if (part != null)
+                rows.Add("Best part:  " + SalvageSession.KindName(part.Kind) + " (" + part.Health.ToString("P0", CultureInfo.InvariantCulture) + ")" +
+                         (s.FitFor(part) != null ? ", fits our own shot-away mount" : ", scrap for " + GoodInfo.Of(SalvageSession.ScrapOf(part.Kind)).Name.ToLowerInvariant()));
+            if (s.SurvivorsRescued > 0.5) rows.Add("Rescued:  " + s.SurvivorsRescued.ToString("0", CultureInfo.InvariantCulture) + " survivors");
+
+            const float rowH = 16;
+            float w = 520, h = 62 + rows.Count * rowH;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - h - 48, w, h));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 20), "LATCHED  ·  " + s.Name.ToUpperInvariant() + (s.Hostile ? "  ·  HOSTILES ABOARD" : ""), title);
+            for (int i = 0; i < rows.Count; i++)
+                GUI.Label(new Rect(r.x + 12, r.y + 30 + i * rowH, w - 24, rowH), rows[i], small);
+            GUI.contentColor = Accent;
+            GUI.Label(new Rect(r.x + 12, r.yMax - 26, w - 24, 20), app.SalvageChoices(), text);
+            GUI.contentColor = Color.white;
+        }
+
         /// <summary>Converts a scene speed near the camera into an equivalent true speed, using the local scale.</summary>
         double SceneSpeedToKmS(double sceneSpeed)
         {
@@ -1268,6 +1320,7 @@ namespace SolarSystem.UI
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
+                "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell appear while piloting near the shown settlement's body",
                 "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",
             };

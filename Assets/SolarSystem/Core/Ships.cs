@@ -262,6 +262,13 @@ namespace SolarSystem.Core
         public bool Derelict;
         public double DerelictSinceJd;
 
+        /// <summary>Who stripped it and left it adrift (raiders some of whom may still be aboard).</summary>
+        public Faction DerelictBy;
+
+        /// <summary>What a salvager still finds aboard a derelict: what the raiders left of the cargo, and
+        /// the ship's own stores. The player takes it crate by crate (see <see cref="SalvageSession"/>).</summary>
+        public readonly List<SalvageStack> Salvage = new List<SalvageStack>();
+
         /// <summary>Hold size in tonnes (0 for warships).</summary>
         public double CapacityTonnes;
         public bool HasCargo;
