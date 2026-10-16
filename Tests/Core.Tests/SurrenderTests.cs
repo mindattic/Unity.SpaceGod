@@ -168,6 +168,19 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void APlayerAloneCannotOrderBoardersAwayItHasNoWayToSend()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(21, playerPirate: true);
+            b.Advance(2);
+            Assert.That(merchant.Surrendering, Is.True);
+            Assert.That(pirate.Combat.MarinesAvailable >= 15, Is.True);
+            Assert.That(b.OfferSurrenderTerms(merchant, SurrenderTerms.TakeShip), Is.False,
+                "only the AI flies a boarding approach; taking the ship would leave it waiting for ever");
+            b.Advance(Battle.SurrenderDecisionSeconds + 3);
+            Assert.That(merchant.SurrenderOutcome, Is.Not.EqualTo(SurrenderTerms.TakeShip));
+        }
+
+        [Test]
         public void AnArmedWarshipThatStrikesItsColoursCanStillBeBoarded()
         {
             // Its own guns are powered down: a hull waiting on terms is no threat to the boarders it asked for.

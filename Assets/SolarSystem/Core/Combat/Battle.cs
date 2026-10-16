@@ -1453,7 +1453,8 @@ namespace SolarSystem.Core
         bool CaptorCanBoard(BattleUnit u)
         {
             foreach (var o in Units)
-                if (Hostile(u, o) && !o.Captured && !o.Surrendering && !o.Combat.Disabled && CanBoard(o)) return true;
+                // A player-flown hull never flies a boarding approach (see Think), so it can't be the one to take it.
+                if (Hostile(u, o) && !o.Captured && !o.Surrendering && !o.Combat.Disabled && !o.PlayerControlled && CanBoard(o)) return true;
             return false;
         }
 
