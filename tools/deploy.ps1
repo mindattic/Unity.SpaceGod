@@ -67,7 +67,8 @@ Write-Host ''
 Write-Host '  Building Windows player (Unity batch mode)...' -ForegroundColor Cyan
 New-Item -ItemType Directory -Force "$repoDir/Logs" | Out-Null
 $logFile = "$repoDir/Logs/deploy-build.log"
-$uargs = @("-batchmode", "-quit", "-projectPath", $repoDir, "-executeMethod", "SolarSystem.EditorTools.ProjectSetup.SetupAndBuild", "-logFile", $logFile)
+# Start-Process joins these with bare spaces, so paths are quoted here or a space in one would split it.
+$uargs = @("-batchmode", "-quit", "-projectPath", "`"$repoDir`"", "-executeMethod", "SolarSystem.EditorTools.ProjectSetup.SetupAndBuild", "-logFile", "`"$logFile`"")
 $p = Start-Process -FilePath $unity -ArgumentList $uargs -Wait -PassThru -NoNewWindow
 $errors = Select-String -Path $logFile -Pattern "error CS\d+" -ErrorAction SilentlyContinue | Select-Object -First 40
 if ($errors) { $errors | ForEach-Object { Write-Host $_.Line -ForegroundColor Red } }
