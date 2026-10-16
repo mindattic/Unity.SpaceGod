@@ -769,6 +769,7 @@ namespace SolarSystem
             pilotBattleCheckTimer = 0;
             demandPrompted = false;
             termsPrompted = null;
+            havenPrompted = null;
             pilotForward = facing;
             SeedPilotLook(pilotForward);
             // Out of a battle, the hull is the pilot's from here: no longer landed, descending or in formation.
@@ -1044,13 +1045,16 @@ namespace SolarSystem
                 return;
             }
             bool marines = World.War.HasMarines(ship);
+            // Destroying it takes guns (or marines to set the charges), as AssaultHaven requires.
+            bool canDestroy = marines || ship.Controller.Combat.Armed;
             if (havenPrompted != haven)
             {
                 havenPrompted = haven;
-                ShowToast(haven.Name + "'s defences are down:  " + (marines ? "1 board and take it, " : "") + "2 destroy it");
+                ShowToast(!canDestroy ? haven.Name + "'s defences are down, but this hull has neither guns nor marines to finish it"
+                    : haven.Name + "'s defences are down:  " + (marines ? "1 board and take it, " : "") + "2 destroy it");
             }
             int key = Input.NumberKey;
-            if ((key == 1 && marines) || key == 2)
+            if ((key == 1 && marines) || (key == 2 && canDestroy))
             {
                 bool capture = key == 1;
                 if (World.War.AssaultHaven(haven, ship, capture, Clock.Jd))
