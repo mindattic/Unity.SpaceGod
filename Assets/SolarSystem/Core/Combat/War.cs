@@ -227,18 +227,18 @@ namespace SolarSystem.Core
                     u.PlayerControlled = false;
                 }
                 if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
-                    $"{battle.Name}: {captor.Name} marines take the {u.Ship.Name}", WorldEventKind.Capture, battle.Body);
+                    $"{battle.Name}: {captor.Name} marines take the {u.Ship.Name}", WorldEventKind.Capture, Shown(battle));
             };
             b.UnitSurrendered += (battle, u) =>
             {
                 if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
-                    $"{battle.Name}: the {u.Ship.Name} strikes its colours and hails for terms", WorldEventKind.Battle, battle.Body);
+                    $"{battle.Name}: the {u.Ship.Name} strikes its colours and hails for terms", WorldEventKind.Battle, Shown(battle));
             };
             b.SurrenderDecided += OnSurrenderDecided;
             b.CargoDemanded += (battle, u, pirates) =>
             {
                 if (u.Ship != null) world.Log(battle.StartJd + battle.Seconds / Astro.SecondsPerDay,
-                    $"{battle.Name}: {pirates.Name} demand the {u.Ship.Name}'s cargo", WorldEventKind.Battle, battle.Body);
+                    $"{battle.Name}: {pirates.Name} demand the {u.Ship.Name}'s cargo", WorldEventKind.Battle, Shown(battle));
             };
         }
 
@@ -268,13 +268,13 @@ namespace SolarSystem.Core
                             ship.Cargo = null;
                         }
                     }
-                    world.Log(jd, $"{b.Name}: the {ship.Name} hands its cargo to {who} and is let go", WorldEventKind.Capture, b.Body);
+                    world.Log(jd, $"{b.Name}: the {ship.Name} hands its cargo to {who} and is let go", WorldEventKind.Capture, Shown(b));
                     break;
                 case SurrenderTerms.LetGo:
-                    world.Log(jd, $"{b.Name}: {who} let the {ship.Name} go", WorldEventKind.Battle, b.Body);
+                    world.Log(jd, $"{b.Name}: {who} let the {ship.Name} go", WorldEventKind.Battle, Shown(b));
                     break;
                 case SurrenderTerms.TakeShip:
-                    world.Log(jd, $"{b.Name}: {who} send boarders to take the {ship.Name}", WorldEventKind.Capture, b.Body);
+                    world.Log(jd, $"{b.Name}: {who} send boarders to take the {ship.Name}", WorldEventKind.Capture, Shown(b));
                     break;
             }
         }
@@ -359,7 +359,7 @@ namespace SolarSystem.Core
                 }
                 how = Steal(ship, captor, b) ? "taken as a prize" : "scuttled";
             }
-            world.Log(jd, $"The {ship.Name} is {how} by the {captor.Name}", WorldEventKind.Capture, b.Body);
+            world.Log(jd, $"The {ship.Name} is {how} by the {captor.Name}", WorldEventKind.Capture, Shown(b));
         }
 
         void Loot(Ship ship)
@@ -602,7 +602,7 @@ namespace SolarSystem.Core
                 }
             }
             Battles.Add(b);
-            world.Log(jd, $"{b.Name}: {Describe(b, 0)} engage {Describe(b, 1)}", WorldEventKind.Battle, body);
+            world.Log(jd, $"{b.Name}: {Describe(b, 0)} engage {Describe(b, 1)}", WorldEventKind.Battle, Shown(b));
             BumpDanger(body, 1.5);
             BattleStarted?.Invoke(b);
             return b;
@@ -646,9 +646,15 @@ namespace SolarSystem.Core
                 if (s.Controller.Orbit != null) dir += s.Controller.Orbit.OffsetAt(jd).Normalized;
             if (dir.LengthSquared < 1e-6) dir = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, 0.2);
             var anchor = at ?? dir.Normalized * Battle.AnchorDistanceKm(b0);
-            battleCount.TryGetValue(body, out int n);
-            battleCount[body] = n + 1;
-            string name = (n == 0 ? "Battle of " : Ordinal(n + 1) + " Battle of ") + b0.Name;
+            // A fight over a haven nobody has found yet must not name its rock: it is a skirmish
+            // somewhere in the belt (counted apart, so the first named battle there is still the first).
+            bool concealed = HidesHaven(body);
+            string place = !concealed ? b0.Name : b0.Kind == BodyKind.Asteroid ? "the Belt" : "the Dark";
+            int key = concealed ? (b0.Kind == BodyKind.Asteroid ? ConcealedBelt : ConcealedDark) : body;
+            battleCount.TryGetValue(key, out int n);
+            battleCount[key] = n + 1;
+            string kind = concealed ? "Skirmish in " : "Battle of ";
+            string name = (n == 0 ? kind : Ordinal(n + 1) + " " + kind) + place;
             var b = new Battle(nextBattleId++, body, name, anchor, jd, rng.Next());
             Hook(b);
             var approach = DVec3.Cross(anchor.Normalized, DVec3.UnitZ);
@@ -656,6 +662,20 @@ namespace SolarSystem.Core
             b.ApproachAxis = approach.Normalized;
             return b;
         }
+
+        // battleCount keys for concealed skirmishes (body indices are never negative).
+        const int ConcealedBelt = -1, ConcealedDark = -2;
+
+        /// <summary>Whether <paramref name="body"/> hosts a hidden haven nobody has found yet.</summary>
+        bool HidesHaven(int body)
+        {
+            foreach (var st in Economy.At(body))
+                if (!st.Discovered) return true;
+            return false;
+        }
+
+        /// <summary>The body a battle's news names: none while it is fought over an undiscovered haven.</summary>
+        int Shown(Battle b) => HidesHaven(b.Body) ? -1 : b.Body;
 
         /// <summary>Where a side's line starts: the two sides open about 26 km apart.</summary>
         static DVec3 Spot(Battle b, int side) => b.ApproachAxis * (side == 0 ? 13 : -13);
@@ -798,7 +818,7 @@ namespace SolarSystem.Core
             string winner = b.Winner >= 0 ? Describe(b, b.Winner) + " hold the field" : "both sides break off";
             string text = $"{b.Name} ends: {winner}. Losses {Short(b, 0)} {lost[0]}, {Short(b, 1)} {lost[1]}";
             if (lootTonnes > 0) text += $"; pirates take {lootTonnes:N0} t of cargo";
-            world.Log(jd, text, WorldEventKind.Battle, b.Body);
+            world.Log(jd, text, WorldEventKind.Battle, Shown(b));
             if (lootValue > 0) world.Pirates.Treasury += lootValue * 0.3;
         }
 

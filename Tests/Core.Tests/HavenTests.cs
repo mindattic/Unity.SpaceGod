@@ -262,5 +262,26 @@ namespace SolarSystem.Core.Tests
             Assert.That(homes, Does.Contain("Dactyl's Rest"), "recruiting goes on from the haven still standing");
             Assert.That(homes.Count(n => n == "Dactyl's Rest"), Is.EqualTo(homes.Count), string.Join(", ", homes));
         }
+
+        [Test]
+        public void ABattleOverAnUndiscoveredHavenDoesNotNameItsRock()
+        {
+            var w = CreateWorld();
+            var h = Haven(w, "Hollow Iron");
+            ParkWarship(w, w.Sol, ShipClass.Cruiser, h.Body);
+            var b = w.War.TryStartBattle(h.Body, w.Sol, StartJd);
+            Assert.That(b, Is.Not.Null);
+            Assert.That(b.Name, Is.EqualTo("Skirmish in the Belt"));
+            var news = w.Events.Where(e => e.Text.StartsWith(b.Name)).ToList();
+            Assert.That(news, Is.Not.Empty);
+            Assert.That(news.All(e => !e.Text.Contains("Psyche") && e.Body == -1), Is.True, "the news must not point at the rock");
+
+            w.War.Discover(h, w.Sol, StartJd, "test");
+            w.War.Battles.Clear();
+            ParkWarship(w, w.Sol, ShipClass.Cruiser, h.Body);
+            var named = w.War.TryStartBattle(h.Body, w.Sol, StartJd);
+            Assert.That(named.Name, Is.EqualTo("Battle of Psyche"), "once found, the first battle there is named for it");
+            Assert.That(w.Events.Last(e => e.Text.StartsWith(named.Name)).Body, Is.EqualTo(h.Body));
+        }
     }
 }
