@@ -770,7 +770,8 @@ namespace SolarSystem
         {
             if (IsPiloting) ExitPiloting();
 
-            int frame = SpaceCamera.FrameBody;
+            // Where the camera is now: its free-flight frame goes stale while it is focused on something far off.
+            int frame = SpaceCamera.FrameAt(SpaceCamera.ScenePosition);
             var offsetKm = Scale.InverseLocalOffset(Catalog[frame], SpaceCamera.ScenePosition - BodyScene(frame));
             var forwardUnity = SpaceCamera.Rotation * Vector3.forward;
             var forward = new DVec3(forwardUnity.x, forwardUnity.y, forwardUnity.z).SwapYZ;

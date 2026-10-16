@@ -438,6 +438,16 @@ namespace SolarSystem.Cameras
         /// <summary>Re-anchors to whichever body's sphere of influence contains the scene point, keeping the scene position.</summary>
         public void SetScenePosition(DVec3 scenePosition)
         {
+            int f = FrameAt(scenePosition);
+            frame = f;
+            trueOffset = world.Scale.InverseLocalOffset(world.Catalog[f], scenePosition - world.BodyScene(f));
+            ScenePosition = scenePosition;
+        }
+
+        /// <summary>The innermost body whose sphere of influence contains the scene point (the root if none does).
+        /// <see cref="FrameBody"/> is only kept up to date while flying free; this holds in any mode.</summary>
+        public int FrameAt(DVec3 scenePosition)
+        {
             int f = 0;
             while (true)
             {
@@ -456,9 +466,7 @@ namespace SolarSystem.Cameras
                 if (best < 0) break;
                 f = best;
             }
-            frame = f;
-            trueOffset = world.Scale.InverseLocalOffset(world.Catalog[f], scenePosition - world.BodyScene(f));
-            ScenePosition = scenePosition;
+            return f;
         }
 
         /// <summary>Frame hysteresis: enter a child's SOI below 92% of it, leave ours above 108%.</summary>
