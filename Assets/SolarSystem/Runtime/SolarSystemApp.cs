@@ -565,14 +565,15 @@ namespace SolarSystem
                 ShowSatellites = !ShowSatellites;
                 ShowToast(ShowSatellites ? "SATELLITES ON: constellations drawn" : "SATELLITES OFF  (K to show)");
             }
-            if (i.WatchBattle)
+            // The chase camera belongs to the pilot: nothing re-aims it at something else mid-flight.
+            if (i.WatchBattle && !IsPiloting)
             {
                 var b = BiggestBattle();
                 if (b != null) WatchBattle(b);
                 else ShowToast("No battles under way");
             }
-            if (i.Home) FocusSystemOverview();
-            if (i.Focus) FocusSelected();
+            if (i.Home && !IsPiloting) FocusSystemOverview();
+            if (i.Focus && !IsPiloting) FocusSelected();
             if (i.Escape)
             {
                 if (IsPiloting) ExitPiloting();

@@ -530,7 +530,7 @@ namespace SolarSystem.UI
                 {
                     bool doubleClick = lastRowTarget == target && Time.unscaledTime - lastRowClick < 0.4f;
                     app.Select(target);
-                    if (doubleClick) app.SpaceCamera.FocusOn(target);
+                    if (doubleClick && !app.IsPiloting) app.SpaceCamera.FocusOn(target);
                     lastRowClick = Time.unscaledTime;
                     lastRowTarget = target;
                 }
