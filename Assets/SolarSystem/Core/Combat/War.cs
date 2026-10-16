@@ -1414,7 +1414,8 @@ namespace SolarSystem.Core
             // Groups that met at a body without a fight (a war resumed, say) fight now, if they are fit to.
             foreach (var s in Fleet.Ships)
             {
-                if (s.Destroyed || s.IsEscort || s.Battle != null || s.Phase != ShipPhase.Parked) continue;
+                // Not the player's ship: its fights start only where the player engages (TryStartPlayerBattle).
+                if (s.Destroyed || s.IsEscort || s.Battle != null || s.Phase != ShipPhase.Parked || s == world.PilotedShip) continue;
                 if (!(s.Spec.IsMilitary || s.Faction.IsPirate) || !Willing(s, jd)) continue;
                 int body = s.Orbit.Body;
                 if (lastBattleEndJd.TryGetValue(body, out double ended) && jd - ended < 0.5) continue;

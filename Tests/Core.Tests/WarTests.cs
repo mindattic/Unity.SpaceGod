@@ -86,6 +86,21 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void TheDailySweepDoesNotStartFightsOnThePlayersBehalf()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy 7");
+            var enemy = MakeFaction(w, "Enemy Navy 7");
+            w.Diplomacy.Set(player, enemy, Relation.War);
+            int here = w.Catalog["Pluto"].Index;
+            ParkWarship(w, enemy, ShipClass.Destroyer, here);
+            var flown = ParkWarship(w, player, ShipClass.Battleship, here);
+            w.PilotedShip = flown;
+            w.War.Update(StartJd + 1.01);
+            Assert.That(w.War.BattleAt(here), Is.Null, "a fight was started in the player's name without the player");
+        }
+
+        [Test]
         public void APlayerWhoFliesIntoAFightStaysInIt()
         {
             var w = CreateWorld();
