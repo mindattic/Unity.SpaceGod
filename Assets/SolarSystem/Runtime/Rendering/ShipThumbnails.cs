@@ -20,6 +20,8 @@ namespace SolarSystem.Rendering
         static readonly int Layer = LayerMask.NameToLayer("ModelViewer");
 
         static Camera camera;
+        static readonly int SunPositionId = Shader.PropertyToID("_SunPositionWS"), SunColorId = Shader.PropertyToID("_SunColor");
+        static readonly int Sun2PositionId = Shader.PropertyToID("_Sun2PositionWS"), Sun2ColorId = Shader.PropertyToID("_Sun2Color");
         // Keyed by livery too: the spawn screen shows the same class in the home or the hostile colours.
         static readonly Dictionary<(ShipClass, Faction), RenderTexture> cache = new Dictionary<(ShipClass, Faction), RenderTexture>();
 
@@ -69,9 +71,24 @@ namespace SolarSystem.Rendering
             camera.farClipPlane = radius * 10f;
 
             var rt = new RenderTexture(Size, Size, 16, RenderTextureFormat.ARGB32) { name = "ShipThumb_" + cls };
+            // Ship.shader lights only from the scene's global star(s), not Unity lights: light the hull from
+            // a fixed key direction for the snapshot, not from wherever the game's Sun happens to be just now.
+            var sunPos = Shader.GetGlobalVector(SunPositionId);
+            var sunColor = Shader.GetGlobalVector(SunColorId);
+            var sun2Pos = Shader.GetGlobalVector(Sun2PositionId);
+            var sun2Color = Shader.GetGlobalVector(Sun2ColorId);
+            var key = bounds.center + Quaternion.Euler(35f, -30f, 0f) * Vector3.back * (radius * 1000f);
+            Shader.SetGlobalVector(SunPositionId, key);
+            Shader.SetGlobalVector(SunColorId, new Vector4(1.2f, 1.2f, 1.2f, 1f));
+            Shader.SetGlobalVector(Sun2PositionId, key);
+            Shader.SetGlobalVector(Sun2ColorId, Vector4.zero);
             camera.targetTexture = rt;
             camera.Render();
             camera.targetTexture = null;
+            Shader.SetGlobalVector(SunPositionId, sunPos);
+            Shader.SetGlobalVector(SunColorId, sunColor);
+            Shader.SetGlobalVector(Sun2PositionId, sun2Pos);
+            Shader.SetGlobalVector(Sun2ColorId, sun2Color);
 
             Object.DestroyImmediate(root);
             return rt;
