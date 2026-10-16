@@ -856,8 +856,11 @@ namespace SolarSystem
         void LoseHelm()
         {
             var ship = Piloted.Ship;
-            // Where it was taken: the captor's schedule (or the drifting hulk) picks up from here.
+            // Where it was taken: the captor's schedule (or the drifting hulk) picks up from here. If the
+            // capture ended the fight in the same tick, the war has already planned the prize's next trip from
+            // its old spot: plan it again from here, or the pin would hold it until that trip's departure time.
             PinWherePiloted(ship);
+            if (ship.Battle == null && !ship.Destroyed && !ship.Derelict && !ship.IsEscort) Fleet.ScheduleNext(ship, Clock.Jd);
             Piloted = Target.None;
             pilotLockTarget = Target.None;
             pilotBoosting = false;
