@@ -175,6 +175,19 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AShipArrivingThroughTheGateDoesNotKnowTheWayToAHiddenHaven()
+        {
+            var g = Create();
+            var sol = g.Systems[0];
+            var ac = g.Systems[1];
+            var hidden = sol.World.Economy.Settlements.Where(s => s.Hidden).Select(s => s.Body).ToList();
+            Assert.That(hidden, Is.Not.Empty);
+            var ship = ac.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort);
+            Assert.That(GateTransit.TryPerform(ac.Gate, ac.Gate.PositionKm, ship, ac.World.Fleet, StartJd, out var arrived), Is.True);
+            Assert.That(arrived.Ports.Intersect(hidden), Is.Empty);
+        }
+
+        [Test]
         public void TransitFailsWhenTheShipIsOutOfRange()
         {
             var g = Create();

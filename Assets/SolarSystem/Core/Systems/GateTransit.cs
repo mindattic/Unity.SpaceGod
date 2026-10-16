@@ -36,7 +36,7 @@ namespace SolarSystem.Core
 
             var next = ship.CloneForGateArrival();
             next.Role = ShipRole.Free;
-            next.Ports = AnywhereRoutes(destination.Catalog);
+            next.Ports = destination.World.FreeShipPorts();
 
             var forward = gate.ArrivalForward;
             var up = Math.Abs(forward.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX;
@@ -59,15 +59,6 @@ namespace SolarSystem.Core
             destination.World.Fleet.Receive(next);
             arrived = next;
             return true;
-        }
-
-        /// <summary>Every non-star visible body, for a ship that now wanders wherever it pleases (see <see cref="World.AddFreeShips"/>).</summary>
-        static int[] AnywhereRoutes(BodyCatalog catalog)
-        {
-            var list = new List<int>();
-            foreach (var b in catalog.Bodies)
-                if (b.IsVisible && !b.IsStar) list.Add(b.Index);
-            return list.ToArray();
         }
     }
 }

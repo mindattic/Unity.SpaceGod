@@ -629,16 +629,22 @@ namespace SolarSystem.Core
         /// Independent pilots who go where they please: yachts and survey ships (fast courier hulls) and
         /// prospectors (ore haulers), roaming every world in the system, not just its ports.
         /// </summary>
-        void AddFreeShips(double jd, string[] yachts, string[] prospectors)
+        /// <summary>Where a free ship may go: any visible world but a star -- and but a hidden haven's rock,
+        /// which nobody knows to go to. Shared by the free roamers, sandbox spawns and gate arrivals.</summary>
+        public int[] FreeShipPorts()
         {
-            // Anywhere, that is, but a hidden haven's rock: nobody knows to go there.
             var hidden = new HashSet<int>();
             foreach (var s in Economy.Settlements)
                 if (s.Hidden) hidden.Add(s.Body);
             var anywhere = new List<int>();
             foreach (var b in Catalog.Bodies)
                 if (b.IsVisible && !b.IsStar && !hidden.Contains(b.Index)) anywhere.Add(b.Index);
-            var places = anywhere.ToArray();
+            return anywhere.ToArray();
+        }
+
+        void AddFreeShips(double jd, string[] yachts, string[] prospectors)
+        {
+            var places = FreeShipPorts();
             void Add(string name, ShipClass cls)
             {
                 var ship = Fleet.AddShip(name, cls, Independents, ShipRole.Free);

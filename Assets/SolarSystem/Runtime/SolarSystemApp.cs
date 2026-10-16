@@ -802,6 +802,7 @@ namespace SolarSystem
             var faction = hostile ? World.Pirates : World.Sol;
             string name = "Sandbox " + cls + " " + (++spawnedCount);
             var ship = Fleet.SpawnAt(name, cls, faction, frame, offsetKm, forward, Clock.Jd);
+            ship.Ports = World.FreeShipPorts(); // not a hidden haven's rock, as for every free ship
 
             EnterPiloting(Target.OfShip(ship));
         }
