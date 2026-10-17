@@ -273,6 +273,12 @@ namespace SolarSystem.Core
                 ship.Company.Ships.Remove(ship);
             }
             ship.Company = c;
+            // A load aboard was bought by the flag it flew: the new flag, which will take the whole of its sale, pays for it.
+            if (ship.HasCargo && ship.Faction != null && ship.Faction != c.Flag && ship.CargoCost > 0)
+            {
+                ship.Faction.Treasury += ship.CargoCost;
+                c.Flag.Treasury -= ship.CargoCost;
+            }
             ship.Faction = c.Flag;
             ship.CompanyBookedCredits = ship.Credits;
             ship.LoadedFrom = null;
