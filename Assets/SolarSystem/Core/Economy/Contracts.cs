@@ -1092,7 +1092,12 @@ namespace SolarSystem.Core
                     bool playerOpposite = false;
                     foreach (var v in b.Units)
                         if (v.Side == 1 - u.Side && v.PlayerFlown) playerOpposite = true;
-                    if (playerOpposite) Close(c, ContractState.Completed, jd, u.Dead ? "killed" : "taken");
+                    // A captain who got away in the pods is still at large: the contract stands.
+                    var outlaw = world.Outlaws?.Of(c.Target);
+                    if (playerOpposite && (outlaw == null || !outlaw.AtLarge))
+                        // The bounty itself is the law's to pay (a captain in the brig handed over, a kill on a scanned
+                        // wreck): the patron does not pay it a second time.
+                        Close(c, ContractState.Completed, jd, u.Dead ? "killed" : "taken", pay: false);
                     break;
                 }
             }
