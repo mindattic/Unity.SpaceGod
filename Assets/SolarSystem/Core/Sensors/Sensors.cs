@@ -116,6 +116,35 @@ namespace SolarSystem.Core
         public double ReachKm(double signature) => signature > 0 ? RangeKm * Math.Sqrt(signature) : 0;
     }
 
+    /// <summary>
+    /// One look at a contact (U.SPC-T100): when the sweep was made, when the light it saw had left the contact (as long
+    /// before as light takes to cross the gap), where the contact was then, where the observer was, and the world it was
+    /// parked at (-1 in flight). Word of it goes on from the observer at light speed (<see cref="ArrivesAt"/>).
+    /// </summary>
+    public readonly struct ContactSighting
+    {
+        public readonly double ObservedJd, SeenJd;
+        public readonly DVec3 HelioKm, ObserverHelioKm;
+        public readonly int Body;
+        public readonly ContactLevel Level;
+
+        public ContactSighting(double observedJd, double seenJd, DVec3 helio, DVec3 observer, int body, ContactLevel level)
+        {
+            ObservedJd = observedJd;
+            SeenJd = seenJd;
+            HelioKm = helio;
+            ObserverHelioKm = observer;
+            Body = body;
+            Level = level;
+        }
+
+        /// <summary>The light delay the observer saw it with, seconds.</summary>
+        public double LagSeconds => (ObservedJd - SeenJd) * Astro.SecondsPerDay;
+
+        /// <summary>When word of this sighting, radioed on from the observer, reaches <paramref name="where"/>.</summary>
+        public double ArrivesAt(DVec3 where) => ObservedJd + LightSpeed.DelayDays(ObserverHelioKm, where);
+    }
+
     /// <summary>One track in a picture: what is (or was last) known of a ship, and where it was seen.</summary>
     public sealed class Contact
     {
@@ -129,9 +158,20 @@ namespace SolarSystem.Core
 
         public double FirstSeenJd, LastSeenJd;
 
-        /// <summary>Where it was last seen, heliocentric km, and how bright it was.</summary>
+        /// <summary>Where it was last seen, heliocentric km (where it was when the light left it, not where it is now),
+        /// and how bright it was.</summary>
         public DVec3 LastHelioKm;
         public double Signature;
+
+        /// <summary>When the light of the last look left it: <see cref="LastSeenJd"/> less the light time across the gap.</summary>
+        public double SeenJd;
+
+        /// <summary>The light delay of the last look, seconds (U.SPC-T100).</summary>
+        public double LagSeconds => (LastSeenJd - SeenJd) * Astro.SecondsPerDay;
+
+        /// <summary>The latest looks at it, oldest first (at most <see cref="ContactBook.SightingsKept"/>): what a fleet
+        /// far from the observers knows is an older one, until word of the newer has crossed to it.</summary>
+        public readonly List<ContactSighting> Sightings = new List<ContactSighting>();
 
         /// <summary>Not seen on the last sweep: a track going stale, lost after the picture's hold time.</summary>
         public bool Cold => Now == ContactLevel.None;
@@ -161,6 +201,23 @@ namespace SolarSystem.Core
 
         public Contact Of(Ship s) => s != null && contacts.TryGetValue(s, out var c) ? c : null;
 
+        /// <summary>How many looks each track keeps: at a sweep every 0.1 day, more than two days of them, longer
+        /// than light takes across any system.</summary>
+        public const int SightingsKept = 24;
+
+        /// <summary>
+        /// What is known of <paramref name="s"/> at <paramref name="where"/> at <paramref name="jd"/> (U.SPC-T100): the
+        /// newest look whose word, radioed on from the observer at light speed, has had time to get there; null if none has.
+        /// </summary>
+        public ContactSighting? KnownAt(Ship s, DVec3 where, double jd)
+        {
+            var c = Of(s);
+            if (c == null) return null;
+            for (int i = c.Sightings.Count - 1; i >= 0; i--)
+                if (c.Sightings[i].ArrivesAt(where) <= jd) return c.Sightings[i];
+            return null;
+        }
+
         /// <summary>What is known of <paramref name="s"/>: its track's level, or nothing.</summary>
         public ContactLevel LevelOf(Ship s) => Of(s)?.Level ?? ContactLevel.None;
 
@@ -176,7 +233,12 @@ namespace SolarSystem.Core
         /// <summary>A sweep saw <paramref name="s"/> at <paramref name="level"/> (None: did not see it).
         /// A track keeps what it had resolved while it is held, so a known ship that goes dark and is
         /// picked up again as a blip is still known.</summary>
-        internal void Observe(Ship s, ContactLevel level, DVec3 helio, double signature, double jd)
+        internal void Observe(Ship s, ContactLevel level, DVec3 helio, double signature, double jd) =>
+            Observe(s, level, helio, signature, jd, helio, jd, -1);
+
+        /// <summary>A look from <paramref name="observer"/> that saw <paramref name="s"/> at <paramref name="helio"/> by light
+        /// that left it at <paramref name="seenJd"/>, parked at <paramref name="body"/> (-1 in flight).</summary>
+        internal void Observe(Ship s, ContactLevel level, DVec3 helio, double signature, double jd, DVec3 observer, double seenJd, int body)
         {
             contacts.TryGetValue(s, out var c);
             if (level == ContactLevel.None)
@@ -188,8 +250,11 @@ namespace SolarSystem.Core
             c.Now = level;
             if (level > c.Level) c.Level = level;
             c.LastSeenJd = jd;
+            c.SeenJd = seenJd;
             c.LastHelioKm = helio;
             c.Signature = signature;
+            if (c.Sightings.Count >= SightingsKept) c.Sightings.RemoveAt(0);
+            c.Sightings.Add(new ContactSighting(jd, seenJd, helio, observer, body, level));
         }
 
         /// <summary>Drops the tracks cold for longer than <paramref name="holdDays"/>, and the ships gone for good.
@@ -301,6 +366,46 @@ namespace SolarSystem.Core
             return helio;
         }
 
+        /// <summary>
+        /// Records a look from <paramref name="observer"/> at <paramref name="s"/> in <paramref name="book"/> at
+        /// <paramref name="jd"/>: the light it saw left the ship as long ago as light takes across the gap, so the track
+        /// puts it where it was then (U.SPC-T100), at the world it was parked at, if any.
+        /// </summary>
+        void Record(ContactBook book, Ship s, ContactLevel level, DVec3 helioNow, DVec3 observer, double signature, double jd)
+        {
+            if (level == ContactLevel.None)
+            {
+                book.Observe(s, level, helioNow, signature, jd);
+                return;
+            }
+            double lag = LightSpeed.DelayDays(helioNow, observer);
+            double seen = jd - lag;
+            var helio = helioNow;
+            var c = s.Controller;
+            if (lag > 0 && !(c == pilotShip && c == world.PilotedShip)) helio = world.Fleet.StateOf(c, seen).HelioKm;
+            book.Observe(s, level, helio, signature, jd, observer, seen, ParkedAt(c));
+        }
+
+        /// <summary>The world <paramref name="s"/> is parked at (or down on), or -1 in flight.</summary>
+        static int ParkedAt(Ship s) => (s.Phase == ShipPhase.Parked || s.Phase == ShipPhase.Landed) && s.Orbit != null ? s.Orbit.Body : -1;
+
+        /// <summary>
+        /// What <paramref name="f"/> knows of <paramref name="target"/> at <paramref name="where"/> at <paramref name="jd"/>
+        /// (U.SPC-T100): the newest sighting in its picture whose word has crossed from the observer at light speed. A
+        /// fleet across the system acts on a look minutes or hours old, and the ship may have moved on since. Its own
+        /// ships it knows as they are.
+        /// </summary>
+        public ContactSighting? KnownAt(Faction f, Ship target, DVec3 where, double jd)
+        {
+            if (f == null || target == null) return null;
+            if (target.Faction == f)
+            {
+                var h = HelioOf(target, jd);
+                return new ContactSighting(jd, jd, h, h, ParkedAt(target.Controller), ContactLevel.Identified);
+            }
+            return PictureOf(f).KnownAt(target, where, jd);
+        }
+
         /// <summary>The signature of <paramref name="s"/> at <paramref name="jd"/>.</summary>
         public double SignatureOf(Ship s, double jd) => Signatures.Of(s, Burning(s, jd));
 
@@ -338,14 +443,22 @@ namespace SolarSystem.Core
             double sig = Signatures.Of(target, burning);
             bool squawk = Signatures.Transponder(target);
             var best = ContactLevel.None;
+            var by = helio;
+            double byKm2 = double.MaxValue;
             foreach (var o in Observers(jd))
             {
                 if (o.Faction != f) continue;
-                var level = Resolve(o.Suite, sig, (o.Helio - helio).Length, squawk);
-                if (level > best) best = level;
-                if (best == ContactLevel.Identified) break;
+                double d2 = (o.Helio - helio).LengthSquared;
+                var level = Resolve(o.Suite, sig, Math.Sqrt(d2), squawk);
+                // The best look, and of those the nearest: the one with the least light delay.
+                if (level != ContactLevel.None && (level > best || (level == best && d2 < byKm2)))
+                {
+                    best = level;
+                    by = o.Helio;
+                    byKm2 = d2;
+                }
             }
-            if (best != ContactLevel.None) book.Observe(target, best, helio, sig, jd);
+            if (best != ContactLevel.None) Record(book, target, best, helio, by, sig, jd);
             return book.LevelOf(target);
         }
 
@@ -445,17 +558,25 @@ namespace SolarSystem.Core
                 {
                     if (t.Ship.Faction == f) continue;
                     var best = ContactLevel.None;
+                    var by = t.Helio;
+                    double byKm2 = double.MaxValue;
                     if (t.Signature > 0)
                         foreach (var o in observers)
                         {
                             if (o.Faction != f) continue;
                             double reach = o.Suite.RangeKm * t.Root;
-                            if ((o.Helio - t.Helio).LengthSquared > reach * reach) continue;
-                            var level = Resolve(o.Suite, t.Signature, (o.Helio - t.Helio).Length, t.Transponder);
-                            if (level > best) best = level;
-                            if (best == ContactLevel.Identified) break;
+                            double d2 = (o.Helio - t.Helio).LengthSquared;
+                            if (d2 > reach * reach) continue;
+                            var level = Resolve(o.Suite, t.Signature, Math.Sqrt(d2), t.Transponder);
+                            // The best look, and of those the nearest: the one with the least light delay.
+                            if (level != ContactLevel.None && (level > best || (level == best && d2 < byKm2)))
+                            {
+                                best = level;
+                                by = o.Helio;
+                                byKm2 = d2;
+                            }
                         }
-                    book.Observe(t.Ship, best, t.Helio, t.Signature, jd);
+                    Record(book, t.Ship, best, t.Helio, by, t.Signature, jd);
                 }
                 var lost = book.Expire(jd, FactionHoldDays);
                 if (lost != null && Lost != null) foreach (var s in lost) Lost(f, s);
@@ -524,7 +645,7 @@ namespace SolarSystem.Core
                     seen[c] = st = (h, b);
                 }
                 double sig = Signatures.Of(s, st.burning);
-                Player.Observe(s, Resolve(suite, sig, (st.helio - helioKm).Length, Signatures.Transponder(s)), st.helio, sig, jd);
+                Record(Player, s, Resolve(suite, sig, (st.helio - helioKm).Length, Signatures.Transponder(s)), st.helio, helioKm, sig, jd);
             }
             var lost = Player.Expire(jd, PlayerHoldSeconds / Astro.SecondsPerDay);
             if (lost != null && Lost != null) foreach (var s in lost) Lost(null, s);

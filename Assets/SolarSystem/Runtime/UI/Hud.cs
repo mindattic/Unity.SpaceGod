@@ -273,7 +273,7 @@ namespace SolarSystem.UI
                     // A contact is named by what the scanners make of it: unknown, its class, or its name.
                     var tint = contact.Level == ContactLevel.Identified ? new Color(c.R, c.G, c.B) : ContactGrey;
                     if (contact.Cold) tint.a = 0.5f;
-                    DrawLabel(contact.Label + (contact.Cold ? "  (contact lost)" : ""), p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), tint, contact.Level != ContactLevel.Identified);
+                    DrawLabel(contact.Label + (contact.Cold ? "  (contact lost)" : contact.LagSeconds >= 0.1 ? "  (" + LightSpeed.Describe(contact.LagSeconds / Astro.SecondsPerDay) + " ago, light lag)" : ""), p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), tint, contact.Level != ContactLevel.Identified);
                 }
             }
         }
@@ -629,7 +629,7 @@ namespace SolarSystem.UI
                 // How many gates away it is, by the quickest open way (a gate network, not all-pairs).
                 var route = here ? null : network.Route(app.ActiveSystem, system, null, jd);
                 string hops = route == null ? "" : "  " + route.Count + (route.Count == 1 ? " gate" : " gates");
-                string label = system.Name + (here ? "   ◉ here" : going ? "   travelling…" : "   " + Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly" + hops + "  ›");
+                string label = system.Name + (here ? "   ◉ here" : going ? "   travelling…" : "   " + Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly" + hops + NewsAge(system, jd) + "  ›");
                 // Rows tighten as the list of systems grows, so the body tree below keeps its room.
                 float rowHeight = app.Galaxy.Systems.Count > 4 ? 18 : 22;
                 if (GUI.Button(new Rect(r.x + 10, sy, w - 20, rowHeight), label, here ? buttonActive : button) && !here) app.TravelTo(system);
@@ -1846,6 +1846,13 @@ namespace SolarSystem.UI
             GUI.contentColor = old;
             if (newsShown.Count == 0) GUI.Label(new Rect(8, 4, width, 18), "Nothing to report yet.", small);
             GUI.EndScrollView();
+        }
+
+        /// <summary>How old the news here is from a settled system beyond the gates (U.SPC-T100): what is known of it is that old.</summary>
+        string NewsAge(StarSystem system, double jd)
+        {
+            var r = system.Settled ? app.Galaxy.Traffic?.News.Known(app.ActiveSystem, system) : null;
+            return r == null ? "" : "  · news " + LightSpeed.Describe(r.AgeDays(jd)) + " old";
         }
 
         static string JourneyText(Ship s)

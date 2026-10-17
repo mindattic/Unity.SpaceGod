@@ -1277,8 +1277,9 @@ namespace SolarSystem.Core
             }
 
             // Hunt pirates working an own port -- that its ships or stations have seen there (U.SPC-T66).
+            var at = world.Sensors?.HelioOf(leader, jd) ?? default;
             foreach (var s in Economy.Settlements)
-                if (s.Owner == f && s.Body != here && PiratesSeenAt(s.Body, f, jd))
+                if (s.Owner == f && s.Body != here && PiratesSeenAt(s.Body, f, at, jd))
                     return new GroupOrder { Kind = OrderKind.Hunt, Body = s.Body };
 
             // Strike a hidden haven this navy has found, if the group can take its garrison.
@@ -1646,16 +1647,34 @@ namespace SolarSystem.Core
             return false;
         }
 
-        /// <summary>Raiders parked at <paramref name="body"/> that <paramref name="f"/>'s picture makes out (by class
-        /// at least: a warship with no transponder over its port): what a navy can act on, rather than what is there.</summary>
-        bool PiratesSeenAt(int body, Faction f, double jd)
+        /// <summary>
+        /// Raiders <paramref name="f"/>'s picture holds parked at <paramref name="body"/> (by class at least: a warship
+        /// with no transponder over its port), as the word has reached a group at <paramref name="where"/> (U.SPC-T100):
+        /// a sighting crosses the system at light speed, so a group far off acts on a look minutes or hours old, sails
+        /// for raiders that may have gone, and does not yet know of ones that have just come. What a navy can act on,
+        /// rather than what is there.
+        /// </summary>
+        bool PiratesSeenAt(int body, Faction f, DVec3 where, double jd)
         {
             var sensors = world.Sensors;
-            foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate && s.Phase == ShipPhase.Parked && s.Orbit.Body == body
-                    && (sensors == null || sensors.Knows(f, s, jd) >= ContactLevel.Class)) return true;
+            if (sensors == null)
+            {
+                foreach (var s in Fleet.Ships)
+                    if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate && s.Phase == ShipPhase.Parked && s.Orbit.Body == body) return true;
+                return false;
+            }
+            foreach (var c in sensors.PictureOf(f).Contacts)
+            {
+                var s = c.Ship;
+                if (s.Destroyed || s.IsEscort || s.Faction == null || !s.Faction.IsPirate) continue;
+                if (sensors.KnownAt(f, s, where, jd) is ContactSighting seen && seen.Body == body && seen.Level >= ContactLevel.Class) return true;
+            }
             return false;
         }
+
+        /// <summary>Whether a navy group at <paramref name="where"/> has word of raiders working its own port at
+        /// <paramref name="body"/> (see <see cref="PiratesSeenAt"/>).</summary>
+        public bool KnowsOfRaidersAt(int body, Faction f, DVec3 where, double jd) => PiratesSeenAt(body, f, where, jd);
 
         /// <summary>Strength defending a body against <paramref name="attacker"/>: hostile platforms and parked warships.</summary>
         public double DefenceAt(int body, Faction attacker)

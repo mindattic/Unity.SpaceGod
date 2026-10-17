@@ -253,6 +253,26 @@ namespace SolarSystem.Core
             return value * 1.03;
         }
 
+        /// <summary>
+        /// A copy of this market's board as it stands at this moment (its stock, prices, flows and deliveries booked),
+        /// for news carried elsewhere (U.SPC-T100): it prices a sale with the same curve as the live market, but stays
+        /// as it was when it was taken, however the real market moves on. No facilities, platforms or people's state.
+        /// </summary>
+        public Settlement Snapshot()
+        {
+            var s = new Settlement
+            {
+                Id = Id, Name = Name, Body = Body, Kind = Kind, Owner = Owner, Population = Population, InitialPopulation = InitialPopulation,
+                Hidden = Hidden, Fallen = Fallen, RebuildJd = RebuildJd, DaysSinceCapture = DaysSinceCapture,
+            };
+            Array.Copy(Stock, s.Stock, Stock.Length);
+            Array.Copy(Price, s.Price, Price.Length);
+            Array.Copy(Inbound, s.Inbound, Inbound.Length);
+            Array.Copy(Demand, s.Demand, Demand.Length);
+            Array.Copy(Supply, s.Supply, Supply.Length);
+            return s;
+        }
+
         public override string ToString() => Name;
     }
 }

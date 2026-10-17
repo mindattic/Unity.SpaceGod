@@ -72,6 +72,11 @@ namespace SolarSystem.Core
         public int[] HomeRoute;
         public int[] HomePorts;
 
+        /// <summary>A trade run's plan, on the news it was planned on (U.SPC-T100): the market it was bound for, what that
+        /// market's board said the cargo would fetch there, and how old that board was when the ship set out.</summary>
+        public string PlannedMarket;
+        public double ExpectedSale, PlannedOnNewsJd = double.NaN;
+
         public JumpGate NextGate => Route != null && Leg < Route.Count ? Route[Leg] : null;
         public bool Homeward => Destination == Home;
     }
@@ -83,6 +88,9 @@ namespace SolarSystem.Core
         public readonly List<Ship> Ships = new List<Ship>();
         public JumpGate From, To;
         public double EnterJd, ExitJd;
+
+        /// <summary>The news it carries: what the system it left knew when it went in (U.SPC-T100, <see cref="Newswire.Bundle"/>).</summary>
+        public List<SystemReport> News;
 
         public Ship Leader => Ships[0];
 
@@ -120,6 +128,9 @@ namespace SolarSystem.Core
         /// <summary>Ships inside a gate right now.</summary>
         public IReadOnlyList<Passage> InGates => inGates;
 
+        /// <summary>What each system knows of the others, and how old it is (U.SPC-T100).</summary>
+        public Newswire News { get; }
+
         /// <summary>Voyages that have reached their far end so far, by purpose (homecomings not counted).</summary>
         public readonly Dictionary<VoyagePurpose, int> Arrivals = new Dictionary<VoyagePurpose, int>();
 
@@ -156,6 +167,7 @@ namespace SolarSystem.Core
             this.galaxy = galaxy;
             rng = new Random(seed);
             nextDailyJd = jd + 0.5;
+            News = new Newswire(galaxy, jd);
             foreach (var system in galaxy.Systems)
             {
                 var s = system;
@@ -186,6 +198,9 @@ namespace SolarSystem.Core
                     inGates.RemoveAt(i);
                     Emerge(p);
                 }
+
+            // The news: relays sent and reports arrived, before anyone plans on it.
+            News.Update(jd);
 
             while (jd >= nextDailyJd)
             {
@@ -288,7 +303,7 @@ namespace SolarSystem.Core
             }
             world.Economy.Release(leader);
 
-            var p = new Passage { From = gate, To = gate.Partner, EnterJd = jd, ExitJd = jd + link.TransitDays };
+            var p = new Passage { From = gate, To = gate.Partner, EnterJd = jd, ExitJd = jd + link.TransitDays, News = News.Bundle(system, jd) };
             var copy = CopyOf(leader);
             copy.Voyage = v;
             copy.Role = leader.Role;
@@ -362,6 +377,7 @@ namespace SolarSystem.Core
             else if (v.Homeward) Home(system, leader, jd);
             else Arrive(system, leader, p.To, jd);
             foreach (var s in p.Ships) world.NotifyAdded(s);
+            News.Carried(system, p.News, leader.Name, jd);
         }
 
         /// <summary>Back where it belongs: takes up its old role, route and ports.</summary>
@@ -625,19 +641,27 @@ namespace SolarSystem.Core
         void DispatchTrade(StarSystem from, StarSystem to, double jd)
         {
             if (Out(from, VoyagePurpose.Trade, to) >= MaxTradersPerRoute) return;
+            // Traders here know the far markets only by the last news from them (U.SPC-T100): none, no run.
+            var news = News.Known(from, to);
+            if (news == null) return;
             var world = from.World;
             Ship bestShip = null;
             Settlement bestFrom = null;
             Good bestGood = default;
             double bestTonnes = 0, bestProfit = 0;
             List<JumpGate> bestRoute = null;
+            Settlement bestTo = null;
+            double bestSale = 0;
             foreach (var ship in world.Fleet.Ships)
             {
                 if (!Idle(world, ship) || ship.Role != ShipRole.Trader || ship.Spec.Class != ShipClass.Freighter || ship.HasCargo) continue;
                 var route = Network.Route(from, to, ship.Faction, jd);
                 if (route == null || route.Count == 0) continue;
-                if (BestCargo(from, to, ship, PortOf(ship), route, jd, out var src, out var good, out double tonnes, out double profit) && profit > bestProfit)
+                if (BestCargo(from, to, ship, PortOf(ship), route, jd, news.Markets, out var src, out var good, out double tonnes, out double profit, out var dst, out double sale)
+                    && profit > bestProfit)
                 {
+                    bestTo = dst;
+                    bestSale = sale;
                     bestProfit = profit;
                     bestShip = ship;
                     bestFrom = src;
@@ -648,8 +672,14 @@ namespace SolarSystem.Core
             }
             if (bestShip == null) return;
             world.Economy.LoadUnbooked(bestShip, bestFrom, bestGood, bestTonnes, to.Name);
-            SetOut(from, to, bestShip, VoyagePurpose.Trade, bestRoute, jd);
-            world.Log(jd, $"{bestShip.Name} loads {Tonnes(bestTonnes)} {GoodInfo.Of(bestGood).Name} at {bestFrom.Name} for {to.Name}, by the {bestRoute[0].Name}", WorldEventKind.Info, bestFrom.Body);
+            var voyage = SetOut(from, to, bestShip, VoyagePurpose.Trade, bestRoute, jd);
+            if (voyage != null)
+            {
+                voyage.PlannedMarket = bestTo.Name;
+                voyage.ExpectedSale = bestSale;
+                voyage.PlannedOnNewsJd = news.AsOfJd;
+            }
+            world.Log(jd, $"{bestShip.Name} loads {Tonnes(bestTonnes)} {GoodInfo.Of(bestGood).Name} at {bestFrom.Name} for {bestTo.Name} at {to.Name}, by the {bestRoute[0].Name}, on news {LightSpeed.Describe(news.AgeDays(jd))} old", WorldEventKind.Info, bestFrom.Body);
         }
 
         static string Tonnes(double t) => t.ToString("N0", CultureInfo.InvariantCulture) + " t";
@@ -660,8 +690,20 @@ namespace SolarSystem.Core
         /// on the way, against what the dearest market there would pay. True if one clears <see cref="MinMargin"/>.
         /// </summary>
         public static bool BestCargo(StarSystem from, StarSystem to, Ship ship, int port, List<JumpGate> route, double jd,
-            out Settlement source, out Good good, out double tonnes, out double profit)
+            out Settlement source, out Good good, out double tonnes, out double profit) =>
+            BestCargo(from, to, ship, port, route, jd, to.World.Economy.Settlements, out source, out good, out tonnes, out profit, out _, out _);
+
+        /// <summary>
+        /// As <see cref="BestCargo(StarSystem, StarSystem, Ship, int, List{JumpGate}, double, out Settlement, out Good, out double, out double)"/>,
+        /// but against <paramref name="markets"/>: the far system's boards as the news here has them (U.SPC-T100), not as
+        /// they are. <paramref name="market"/> is the board the run is planned on and <paramref name="sale"/> what it says
+        /// the cargo will fetch there, after port tax.
+        /// </summary>
+        public static bool BestCargo(StarSystem from, StarSystem to, Ship ship, int port, List<JumpGate> route, double jd, IEnumerable<Settlement> markets,
+            out Settlement source, out Good good, out double tonnes, out double profit, out Settlement market, out double sale)
         {
+            market = null;
+            sale = 0;
             source = null;
             good = default;
             tonnes = 0;
@@ -679,17 +721,19 @@ namespace SolarSystem.Core
                     double available = src.Available(gd);
                     double minimum = Math.Min(ship.CapacityTonnes * 0.1, 200);
                     if (available < minimum) continue;
-                    foreach (var dst in to.World.Economy.Settlements)
+                    foreach (var dst in markets)
                     {
                         if (dst.Kind == SettlementKind.Haven || !to.World.Diplomacy.CanDockAt(ship.Faction, dst)) continue;
                         double t = Math.Min(Math.Min(ship.CapacityTonnes, available), dst.Absorb(gd));
                         if (t < minimum) continue;
                         double landed = src.PurchaseCost(gd, t) * (1 + Economy.PortTax) * markup;
-                        double sale = dst.SaleValue(gd, t) * (1 - Economy.PortTax);
-                        double p = sale - landed - days * RunningCostPerDay;
+                        double value = dst.SaleValue(gd, t) * (1 - Economy.PortTax);
+                        double p = value - landed - days * RunningCostPerDay;
                         if (p > landed * MinMargin && p > profit)
                         {
                             profit = p;
+                            market = dst;
+                            sale = value;
                             source = src;
                             good = gd;
                             tonnes = t;
@@ -814,8 +858,10 @@ namespace SolarSystem.Core
                 if (ship.HasCargo && v.Purpose == VoyagePurpose.Trade && jd < v.StayUntilJd + 30) continue;
                 var route = Network.Route(system, v.Home, ship.Faction, jd);
                 if (route == null || route.Count == 0) continue;
-                if (v.Purpose == VoyagePurpose.Trade && !ship.HasCargo &&
-                    BestCargo(system, v.Home, ship, PortOf(ship), route, jd, out var src, out var good, out double tonnes, out _))
+                // It knows home's markets only by the news that has reached it here (U.SPC-T100).
+                var homeNews = News.Known(system, v.Home);
+                if (v.Purpose == VoyagePurpose.Trade && !ship.HasCargo && homeNews != null &&
+                    BestCargo(system, v.Home, ship, PortOf(ship), route, jd, homeNews.Markets, out var src, out var good, out double tonnes, out _, out _, out _))
                 {
                     world.Economy.LoadUnbooked(ship, src, good, tonnes, v.Home.Name);
                     world.Log(jd, $"{ship.Name} loads {Tonnes(tonnes)} {GoodInfo.Of(good).Name} at {src.Name} to take home to {v.Home.Name}", WorldEventKind.Info, src.Body);
