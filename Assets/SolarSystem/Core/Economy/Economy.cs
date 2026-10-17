@@ -570,6 +570,51 @@ namespace SolarSystem.Core
         }
 
         /// <summary>
+        /// A captain on a fixed trade route (U.SPC-T102): loads, at <paramref name="here"/>, the cargo that earns the
+        /// most per day carried to the route's next stop, <paramref name="toBody"/>, if any run there pays at all.
+        /// Paid for and booked as <see cref="PlanTrade"/> does. Returns whether it loaded anything.
+        /// </summary>
+        public bool LoadFor(Ship ship, int here, int toBody, double jd)
+        {
+            if (ship.HasCargo || ship.CapacityTonnes <= 0) return false;
+            double fuelHere = PropellantPriceAt(ship, here);
+            var options = new List<Option>();
+            foreach (var from in At(here))
+            {
+                if (!CanTrade(ship, from)) continue;
+                AddLoadedOptions(ship, from, here, jd, 0, 0, ship.Propellant, fuelHere, options);
+            }
+            Option best = default;
+            bool found = false;
+            foreach (var o in options)
+                if (o.To.Body == toBody && o.Score > 0 && (!found || o.Score > best.Score))
+                {
+                    best = o;
+                    found = true;
+                }
+            if (!found) return false;
+            Load(ship, best);
+            return true;
+        }
+
+        /// <summary>
+        /// Puts <paramref name="tonnes"/> of <paramref name="good"/> the ship came by without buying (ore cut from a
+        /// mining claim) in its hold, at no cost, and books it for the best market it can reach; returns that body, or -1.
+        /// </summary>
+        public int LoadOwn(Ship ship, Good good, double tonnes, int here, double jd)
+        {
+            if (ship.HasCargo || tonnes <= 0) return -1;
+            ship.HasCargo = true;
+            ship.CargoGood = good;
+            ship.CargoTonnes = tonnes;
+            ship.CargoCost = 0;
+            ship.CargoBonus = 0;
+            ship.CargoDestination = null;
+            ship.Cargo = CargoText(ship);
+            return PlanTrade(ship, here, jd);
+        }
+
+        /// <summary>
         /// The loads a ship could take from <paramref name="from"/> and where to: each priced by its run
         /// (<see cref="PriceRun"/>) plus <paramref name="extraDays"/> and <paramref name="extraCost"/> already
         /// spent getting there, leaving out any its <paramref name="tanks"/> cannot carry that far.

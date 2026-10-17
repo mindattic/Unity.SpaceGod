@@ -65,6 +65,9 @@ namespace SolarSystem.Input
         /// <summary>The contracts board of the port in view (F7): jobs to take, and the player's own (U.SPC-T101).</summary>
         public bool ToggleContracts;
 
+        /// <summary>The player's own fleet and property (F9): owned ships, captains, standing orders, the books.</summary>
+        public bool ToggleFleet;
+
         /// <summary>The news feed: the full log of what has happened, filterable (X).</summary>
         public bool ToggleNews;
 
@@ -180,7 +183,8 @@ namespace SolarSystem.Input
             ToggleOutfit = kb.f2Key.wasPressedThisFrame;
             ToggleSilent = kb.f3Key.wasPressedThisFrame;
             ToggleBounties = kb.f4Key.wasPressedThisFrame;
-            ToggleContracts = kb.f7Key.wasPressedThisFrame;
+            ToggleContracts = ToggleFleet = kb.f7Key.wasPressedThisFrame;
+            ToggleFleet = kb.f9Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;
             ToggleSpawn = kb.vKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;

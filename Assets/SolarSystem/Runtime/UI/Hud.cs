@@ -86,6 +86,7 @@ namespace SolarSystem.UI
             if (app.ShowOutfit) DrawOutfit();
             if (app.ShowBounties) DrawBounties();
             if (app.ShowContracts) DrawContracts();
+            if (app.ShowFleet) DrawFleet();
             if (app.ShowHelp) DrawHelp();
             if (app.ShowSaves) DrawSaves();
             DrawToast();
@@ -1342,6 +1343,186 @@ namespace SolarSystem.UI
             GUI.contentColor = old;
         }
 
+        // ---------------------------------------------------------------- the player's fleet (U.SPC-T102)
+
+        Vector2 fleetScroll;
+
+        /// <summary>
+        /// The player's fleet and property (F9): the house account and its books, every owned ship with its captain,
+        /// standing orders and running profit, and what else the house owns. At the port in view (the selected world's
+        /// biggest, else the one the piloted ship is alongside) it buys hulls, a warehouse or a share; on a selected
+        /// world it stakes a claim. A ship's Orders button steps through what it can be told to do, using the selected
+        /// world (a route or patrol to it) or the selected ship (an escort).
+        /// </summary>
+        void DrawFleet()
+        {
+            var world = app.World;
+            var h = world.Holdings;
+            if (h == null) return;
+            double jd = app.Clock.Jd;
+            var sel = app.Selected;
+            Settlement port = null;
+            if (sel.IsBody)
+                foreach (var s in app.Economy.At(sel.Body))
+                    if (s.Discovered && (port == null || s.Population > port.Population)) port = s;
+            if (port == null && app.IsPiloting)
+                foreach (var s in app.Economy.Settlements)
+                    if (s.Discovered && app.NearPort(s)) { port = s; break; }
+            var flown = world.PilotedShip;
+            var purse = flown != null && flown.Faction != h.House ? flown.Faction : null;
+
+            const float w = 820, rowH = 20;
+            int shipRows = 0, propRows = 0;
+            foreach (var o in h.Ships) if (!o.Lost) shipRows++;
+            foreach (var p in h.Properties) if (!p.Lost) propRows++;
+            float listH = Mathf.Min((shipRows + propRows + 2) * rowH, 260);
+            float h0 = 128 + listH + 6 * 16;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, 110, w, h0));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 22), "YOUR FLEET  ·  account " + Credits(h.Balance) + "  ·  earned " + Credits(h.TotalEarned) +
+                "  ·  costs " + Credits(h.TotalCosts) + "  ·  lost " + Credits(h.TotalLost), title);
+            var old = GUI.contentColor;
+
+            // The account.
+            float x = r.x + 12, y = r.y + 30;
+            if (purse != null)
+            {
+                if (GUI.Button(new Rect(x, y, 150, 20), "Deposit 10 M cr", button))
+                    app.ShowToast(h.Deposit(purse, 1e7, jd) ? "10 M cr into the house account" : "The purse cannot spare it");
+                if (GUI.Button(new Rect(x + 156, y, 150, 20), "Withdraw 10 M cr", button))
+                    app.ShowToast(h.Withdraw(purse, 1e7, jd) ? "10 M cr out to the " + purse.Name : "Not that much in the account");
+                if (!h.Owns(flown) && GUI.Button(new Rect(x + 312, y, 220, 20), "Take " + flown.Name + " into the fleet", button))
+                    app.ShowToast(h.Enlist(flown, jd) != null ? flown.Name + " flies your flag now" : "It cannot join the fleet");
+            }
+            else
+            {
+                GUI.contentColor = Dim;
+                GUI.Label(new Rect(x, y + 2, w - 24, 18), flown != null ? "Flying your own " + flown.Name + ": its purse is the house account." : "Pilot a ship (P) to move money between its purse and the house account.", small);
+            }
+
+            // Buying at the port in view, and staking a claim on the selected world.
+            y += 24;
+            GUI.contentColor = Color.white;
+            if (port != null)
+            {
+                GUI.Label(new Rect(x, y + 2, 170, 18), port.Name + ":", small);
+                float bx = x + 170;
+                if (h.CanBuyAt(port))
+                    foreach (var cls in new[] { ShipClass.Freighter, ShipClass.Miner, ShipClass.Courier, ShipClass.Destroyer })
+                    {
+                        if (GUI.Button(new Rect(bx, y, 112, 20), ShipClassSpec.Of(cls).DisplayName + " " + Credits(Economy.HullPrice(cls)), button))
+                        {
+                            var bought = h.Buy(port, cls, null, jd);
+                            app.ShowToast(bought != null ? "Bought the " + bought.Name + " at " + port.Name : "Cannot afford it here");
+                        }
+                        bx += 116;
+                    }
+                if (GUI.Button(new Rect(bx, y, 96, 20), "Warehouse", button))
+                    app.ShowToast(h.BuyWarehouse(port, jd) != null ? "A warehouse at " + port.Name + " for " + Credits(Holdings.WarehousePrice) : "Not for sale");
+                bx += 100;
+                if (GUI.Button(new Rect(bx, y, 108, 20), "5% share " + Credits(Holdings.SharePrice(port, 0.05)), button))
+                    app.ShowToast(h.BuyShare(port, 0.05, jd) != null ? "5% of " + port.Name + " is yours" : "Not for sale");
+            }
+            else
+            {
+                GUI.contentColor = Dim;
+                GUI.Label(new Rect(x, y + 2, 420, 18), "Select a world with a port (or fly alongside one) to buy there.", small);
+            }
+            if (sel.IsBody && !world.Catalog[sel.Body].IsStar)
+            {
+                GUI.contentColor = Color.white;
+                float cx = r.xMax - 12 - 2 * 150;
+                foreach (var ore in new[] { Good.NickelIron, Good.Water })
+                {
+                    if (GUI.Button(new Rect(cx, y + 24, 146, 20), "Claim " + GoodInfo.Of(ore).Name.ToLowerInvariant() + " " + Credits(Holdings.ClaimPrice(ore)), button))
+                        app.ShowToast(h.StakeClaim(sel.Body, ore, jd) != null ? "Claim staked on " + world.Catalog[sel.Body].Name : "Cannot stake that claim");
+                    cx += 150;
+                }
+            }
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(x, y + 26, 460, 18), "Orders use the selected world (a route or patrol to it) or the selected ship (escort).   F9 to close", small);
+
+            // Ships and property.
+            var view = new Rect(r.x + 8, y + 48, w - 16, listH);
+            var content = new Rect(0, 0, w - 36, (shipRows + propRows + 2) * rowH);
+            fleetScroll = GUI.BeginScrollView(view, fleetScroll, content);
+            float ly = 0;
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(4, ly, w, rowH), shipRows == 0 ? "No ships yet." : "SHIPS", small);
+            ly += rowH;
+            foreach (var o in h.Ships)
+            {
+                if (o.Lost) continue;
+                GUI.contentColor = o.Ship == flown ? new Color(0.55f, 1f, 0.6f) : Color.white;
+                string captain = o.Captain != null ? "Capt. " + o.Captain.Name : "no captain";
+                GUI.Label(new Rect(4, ly, 540, rowH), o.Name + "  (" + o.Ship.Spec.DisplayName + ")  ·  " + captain + "  ·  " + o.Orders.Describe(world.Catalog) + "  ·  net " + Credits(o.Net), small);
+                if (GUI.Button(new Rect(w - 36 - 236, ly, 70, rowH - 2), o.Captain == null ? "Hire" : "Dismiss", button))
+                {
+                    if (o.Captain == null) app.ShowToast("Captain " + h.Hire(o, jd).Name + " takes the " + o.Name);
+                    else h.Dismiss(o, jd);
+                }
+                if (GUI.Button(new Rect(w - 36 - 162, ly, 160, rowH - 2), "Orders: next", button))
+                {
+                    var next = NextOrders(o, sel);
+                    app.ShowToast(o.Name + ": " + next.Describe(world.Catalog));
+                }
+                ly += rowH;
+            }
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(4, ly, w, rowH), propRows == 0 ? "No property yet." : "PROPERTY", small);
+            ly += rowH;
+            GUI.contentColor = Color.white;
+            foreach (var p in h.Properties)
+            {
+                if (p.Lost) continue;
+                string extra = p.Kind == PropertyKind.Warehouse ? "  ·  " + Tonnes(p.StoredTonnes) + " of " + Tonnes(p.CapacityTonnes) + " stored"
+                    : p.Kind == PropertyKind.MiningClaim ? "  ·  " + Tonnes(p.YieldPerDay) + " a day" : "";
+                GUI.Label(new Rect(4, ly, w - 40, rowH), p.Name + extra + "  ·  income " + Credits(p.Income) + "  ·  upkeep " + Credits(p.Upkeep), small);
+                ly += rowH;
+            }
+            GUI.EndScrollView();
+
+            // The latest lines in the books.
+            GUI.contentColor = Dim;
+            float by = view.yMax + 4;
+            int n = h.Ledger.Count;
+            for (int i = Math.Max(0, n - 6); i < n; i++, by += 16)
+            {
+                var e = h.Ledger[i];
+                GUI.Label(new Rect(r.x + 12, by, w - 24, 16), Astro.ToDateTime(e.Jd).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "  " + e.Text +
+                    (Math.Abs(e.Amount) >= 1 ? "  " + (e.Amount > 0 ? "+" : "") + Credits(e.Amount) + (e.Cash ? "" : " (loss)") : ""), small);
+            }
+            GUI.contentColor = old;
+        }
+
+        /// <summary>Steps a ship to the next standing orders it can carry out: hold, a trade route between where it is and the
+        /// selected world, mining the house's first claim it can work, escorting the selected (or flown) ship, a patrol.</summary>
+        StandingOrder NextOrders(OwnedShip o, Target sel)
+        {
+            var h = app.World.Holdings;
+            int here = o.Ship.Orbit?.Body ?? -1;
+            int there = sel.IsBody ? sel.Body : -1;
+            Property claim = null;
+            foreach (var p in h.OfKind(PropertyKind.MiningClaim))
+                if (Economy.Carries(o.Ship.Spec.Class, p.Ore)) { claim = p; break; }
+            var charge = sel.IsShip && sel.Ship != o.Ship ? sel.Ship : app.World.PilotedShip;
+            var choices = new List<StandingOrder>
+            {
+                StandingOrder.Hold(),
+                here >= 0 && there >= 0 && here != there ? StandingOrder.TradeRoute(here, there) : null,
+                claim != null ? StandingOrder.Mining(claim) : null,
+                charge != null && charge != o.Ship ? StandingOrder.Escort(charge) : null,
+                there >= 0 ? (here >= 0 && here != there ? StandingOrder.Patrol(here, there) : StandingOrder.Patrol(there)) : null,
+            };
+            int start = (int)o.Orders.Kind;
+            for (int k = 1; k <= choices.Count; k++)
+            {
+                var c = choices[(start + k) % choices.Count];
+                if (c != null && h.Order(o, c)) return c;
+            }
+            h.Order(o, StandingOrder.Hold());
+            return o.Orders;
+        }
+
         // ---------------------------------------------------------------- market board
 
         void DrawMarket()
@@ -2117,6 +2298,7 @@ namespace SolarSystem.UI
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
                 "F7  contracts board of the port in view: freight, passengers, colonists, escorts, patrols, surveys, bounties",
+                "F9  your fleet: buy hulls, warehouses, station shares and claims; hire captains and give them standing orders",
                 "F4  bounty board of the port in view: outlaws wanted there, their records, where last seen, who hunts them",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",

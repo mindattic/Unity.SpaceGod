@@ -71,6 +71,10 @@ namespace SolarSystem.Core
         /// bounties posted from what the system needs, and who has taken them (see <see cref="Core.Contracts"/>).</summary>
         public Contracts Contracts { get; private set; }
 
+        /// <summary>The player's own fleet and property: owned ships under hired captains' standing orders, warehouses,
+        /// station shares and mining claims, and the house account their earnings go to (see <see cref="Core.Holdings"/>).</summary>
+        public Holdings Holdings { get; private set; }
+
         /// <summary>The most bounty hunter groups the free traders keep in service.</summary>
         public int HunterCap = 3;
 
@@ -113,6 +117,7 @@ namespace SolarSystem.Core
             Law.Update(jd);
             Outlaws.Update(jd);
             Contracts.Update(jd);
+            Holdings.Update(jd);
             if (jd >= nextRecountJd)
             {
                 Economy.RecountInbound(Fleet.Ships);
@@ -317,6 +322,7 @@ namespace SolarSystem.Core
             // The boards post from the markets, migration, the war's danger and the law's books (U.SPC-T101).
             Contracts = new Contracts(this, seed + 17);
             war.BattleEnded += Contracts.OnBattleEnded;
+            Holdings = new Holdings(this, seed + 19);
             economy.DockAllowed = Law.AllowsDocking;
             economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
@@ -365,7 +371,8 @@ namespace SolarSystem.Core
             economy.CanCrew = (yard, cls) => Crews.CanCrew(yard.Owner, cls);
             fleet.BeforeEvent = economy.AdvanceTo;
             fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip || (ship.Voyage != null && ship.Voyage.AtGate);
-            fleet.Dwell = war.Dwell;
+            // The player's captains keep their own time in port (mining a claim, waiting on a charge).
+            fleet.Dwell = (ship, normal) => Holdings.Owns(ship) ? Holdings.Dwell(ship, normal) : war.Dwell(ship, normal);
             fleet.Arrived = (ship, when) =>
             {
                 // At a jump gate, not a port: the interstellar traffic takes it from here.
@@ -394,6 +401,8 @@ namespace SolarSystem.Core
                     int ordered = VoyageOrders(ship, here, when);
                     if (ordered >= 0) return ordered;
                 }
+                // The player's own ships go where their captains' standing orders take them.
+                if (Holdings.Owns(ship)) return Holdings.ChooseNext(ship, here, when);
                 // A merchant, courier or free ship on a contract goes where it takes it; an idle one may take one here.
                 if (IsTrader(ship) || ship.Role == ShipRole.Free)
                 {

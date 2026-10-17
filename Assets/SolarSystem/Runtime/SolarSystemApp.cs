@@ -166,13 +166,16 @@ namespace SolarSystem
         /// <summary>The contracts board (F7) of the port in view: jobs to take, and the player's own to see through or give up.</summary>
         public bool ShowContracts { get; set; }
 
+        /// <summary>The player's fleet and property (F9): buy hulls and property, hire captains, give standing orders, read the books.</summary>
+        public bool ShowFleet { get; set; }
+
         /// <summary>The news feed panel in place of the four-line ticker (X).</summary>
         public bool ShowNews { get; set; }
         public bool ShowSpawn { get; set; }
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || ShowSaves || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts)); // market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
+        bool ClickPanelOpen => ShowSpawn || ShowSaves || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet)); // market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -641,6 +644,7 @@ namespace SolarSystem
             if (i.ToggleOutfit) ShowOutfit = !ShowOutfit;
             if (i.ToggleBounties) ShowBounties = !ShowBounties;
             if (i.ToggleContracts) ShowContracts = !ShowContracts;
+            if (i.ToggleFleet) ShowFleet = !ShowFleet;
             if (i.ToggleNews) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
