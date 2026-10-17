@@ -786,6 +786,12 @@ namespace SolarSystem.Core
             c.Fate = CompanyFate.Bankrupt;
             c.FateJd = jd;
             world.Log(jd, $"{c.Name} of {c.HomePort?.Name ?? "nowhere"} goes bankrupt" + (c.Cash < 0 ? $" owing {Credits(-c.Cash)}" : ""), WorldEventKind.Economy, c.HomePort?.Body ?? -1);
+            // What the sales left over goes back where its money came from, rather than out of the world with the company.
+            if (c.Cash > 0)
+            {
+                c.Flag.Treasury += c.Cash;
+                c.Cash = 0;
+            }
         }
 
         // ---------------------------------------------------------------- new companies
