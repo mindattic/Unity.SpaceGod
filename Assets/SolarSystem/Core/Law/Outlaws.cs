@@ -908,7 +908,20 @@ namespace SolarSystem.Core
             {
                 var captor = hu.Combat?.Interior.Boarder;
                 if (captor == null || captor.IsPirate) Free(o, jd, $"is freed from the brig of the {holder.Name} when the raiders take it");
-                else End(o, OutlawFate.Captured, jd, captor.Name);
+                else
+                {
+                    // Lawful boarders find the captain in the brig: theirs, and so is the price on them, in full.
+                    double total = 0;
+                    foreach (var kv in new List<KeyValuePair<Faction, double>>(o.Record.Bounty))
+                    {
+                        kv.Key.Treasury -= kv.Value;
+                        total += kv.Value;
+                        Law.ClearBounty(o.Record, kv.Key);
+                    }
+                    captor.Treasury += total;
+                    End(o, OutlawFate.Captured, jd, captor.Name);
+                    if (total > 0) world.Log(jd, $"{captor.Name} collects {Cr(total)} cr on {o.Title}, found in the brig of the {holder.Name}", WorldEventKind.Law, -1);
+                }
             }
             else if (hu.Combat != null && hu.Combat.HullFraction < BrigBreachHull)
             {
