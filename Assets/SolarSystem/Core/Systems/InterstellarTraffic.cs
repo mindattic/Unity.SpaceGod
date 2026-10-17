@@ -229,7 +229,10 @@ namespace SolarSystem.Core
         void TryEnter(StarSystem system, Ship ship, double when, double now)
         {
             var v = ship.Voyage;
-            if (ship.Destroyed || v == null || ship == system.World.PilotedShip || ship.Faction != v.Faction)
+            // Fighting at the gate: it goes through (or not) once the fight is over.
+            if (!ship.Destroyed && ship.Battle != null) return;
+            // A hulk cast adrift there is going nowhere.
+            if (ship.Destroyed || v == null || ship == system.World.PilotedShip || ship.Faction != v.Faction || ship.Derelict)
             {
                 atGates.RemoveAll(e => e.ship == ship);
                 if (!ship.Destroyed) CancelVoyage(system, ship, now, v != null && ship.Faction == v.Faction);
@@ -310,7 +313,8 @@ namespace SolarSystem.Core
             p.Ships.Add(copy);
             foreach (var e in world.Fleet.Ships)
             {
-                if (e.Leader != leader || e.Destroyed) continue;
+                // An escort still fighting, or left a hulk, stays behind.
+                if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict) continue;
                 var ec = CopyOf(e);
                 ec.Role = ShipRole.Escort;
                 ec.Leader = copy;
@@ -514,7 +518,7 @@ namespace SolarSystem.Core
                 ship.Ports = v.HomePorts ?? ship.Ports;
             }
             else if (restore || ship.Ports == null) ship.Ports = system.World.FreeShipPorts();
-            if (ship != system.World.PilotedShip && !ship.Destroyed) system.World.Fleet.ScheduleNext(ship, jd);
+            if (ship != system.World.PilotedShip && !ship.Destroyed && !ship.Derelict) system.World.Fleet.ScheduleNext(ship, jd);
         }
 
         // ---------------------------------------------------------------- orders abroad
