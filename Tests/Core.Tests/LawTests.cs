@@ -264,6 +264,40 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AMerchantTakenByPiratesIsNotChargedToTheShipsDefendingIt()
+        {
+            // A hunter and a Belt merchant against raiders who board and take the merchant: the prize moves to
+            // the raiders' side, but the hunter neither attacked nor robbed it.
+            var w = CreateWorld();
+            int earth = Body(w, "Earth");
+            var b = new Battle(0, earth, "Battle of Earth", new DVec3(20000, 0, 0), StartJd, 1);
+            var hunter = Hull(ShipClass.Cruiser, w.Independents, 9001, "Long Arm");
+            b.AddShip(hunter, 0, new DVec3(4, 0, 0), -DVec3.UnitX);
+            var merchant = b.AddShip(Hull(ShipClass.Freighter, w.Belt, 9002, "Ballast"), 0, new DVec3(5, 0, 0), -DVec3.UnitX);
+            var raider = Hull(ShipClass.Destroyer, w.Pirates, 9003);
+            b.AddShip(raider, 1, new DVec3(-4, 0, 0), DVec3.UnitX);
+            b.AggressorSide = 0;
+            merchant.TakenFromSide = 0;
+            merchant.Side = 1;
+            merchant.Captured = true;
+            w.Law.OnBattleEnded(b, StartJd);
+            Assert.That(w.Law.FindRecord(hunter)?.Crimes.Count ?? 0, Is.EqualTo(0), "the hunter defended the merchant");
+            Assert.That(w.Law.FindRecord(raider).Crimes.Single().Kind, Is.EqualTo(CrimeKind.Piracy));
+
+            // A lawful hull that boards and takes a ship it is at peace with has robbed it, prize crew and all.
+            var w2 = CreateWorld();
+            var b2 = new Battle(0, earth, "Battle of Earth", new DVec3(20000, 0, 0), StartJd, 1);
+            b2.AddShip(Hull(ShipClass.Cruiser, w2.Independents, 9001), 0, new DVec3(4, 0, 0), -DVec3.UnitX).PlayerControlled = true;
+            var prize = b2.AddShip(Hull(ShipClass.Freighter, w2.Belt, 9002), 1, new DVec3(-4, 0, 0), DVec3.UnitX);
+            b2.AggressorSide = 0;
+            prize.TakenFromSide = 1;
+            prize.Side = 0;
+            prize.Captured = true;
+            w2.Law.OnBattleEnded(b2, StartJd);
+            Assert.That(w2.Law.Player.Crimes.Single().Kind, Is.EqualTo(CrimeKind.Piracy));
+        }
+
+        [Test]
         public void HuntingAShipWantedInThatJurisdictionIsNoCrime()
         {
             var w = CreateWorld();

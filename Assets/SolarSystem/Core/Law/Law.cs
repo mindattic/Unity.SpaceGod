@@ -471,8 +471,13 @@ namespace SolarSystem.Core
                     bool harmed = false, robbed = false;
                     foreach (var v in victims)
                     {
-                        harmed |= v.Dead || v.Captured;
-                        robbed |= v.Captured || v.SurrenderOutcome == SurrenderTerms.RansomCargo || v.SurrenderOutcome == SurrenderTerms.TakeShip;
+                        // A captured hull now sits on its captor's side: taken by this side, it was robbed; taken by
+                        // a third party fighting alongside it (pirates who took a merchant the offenders were
+                        // defending), it is not this side's doing.
+                        bool takenHere = v.Captured && v.Side == side;
+                        harmed |= v.Dead || takenHere;
+                        robbed |= takenHere || v.SurrenderOutcome == SurrenderTerms.RansomCargo
+                                  || (v.SurrenderOutcome == SurrenderTerms.TakeShip && (!v.Captured || takenHere));
                     }
                     bool pirate = by != null && by.IsPirate;
                     // A wanted ship stopped by the law answers only for hurting the patrol; a lawful ship that was
@@ -550,7 +555,8 @@ namespace SolarSystem.Core
             var list = new List<BattleUnit>();
             foreach (var v in b.Units)
             {
-                if (v.Side != side || v.Kind == UnitKind.Fighter || v.Faction == null || v.Faction.IsPirate || v.Faction == by) continue;
+                // By the side it fought on: a hull taken by boarders has moved to its captor's side.
+                if (v.FoughtOn != side || v.Kind == UnitKind.Fighter || v.Faction == null || v.Faction.IsPirate || v.Faction == by) continue;
                 if (by != null && world.Diplomacy.Get(by, v.Faction) == Relation.War) continue;
                 var rec = v.PlayerFlown ? Player : v.Ship != null ? FindRecord(v.Ship) : null;
                 if (rec != null && (juris != null ? rec.WantedBy(juris) : rec.Wanted)) continue;

@@ -106,6 +106,12 @@ namespace SolarSystem.Core
         /// <summary>Taken by boarders: it has changed sides and carries a prize crew, so it no longer fights.</summary>
         public bool Captured;
 
+        /// <summary>The side a captured hull fought on before it was taken (its <see cref="Side"/> is now its captor's); -1 until then.</summary>
+        public int TakenFromSide = -1;
+
+        /// <summary>The side it fought on: the one it was taken from, if it was captured.</summary>
+        public int FoughtOn => Captured && TakenFromSide >= 0 ? TakenFromSide : Side;
+
         /// <summary>A fighter that has landed back aboard its carrier.</summary>
         public bool Docked;
 
@@ -1466,6 +1472,7 @@ namespace SolarSystem.Core
             foreach (var o in Units)
                 if (o.Faction == captor && o.Side != u.Side) side = o.Side;
             if (side < 0) side = 1 - u.Side;
+            if (!u.Captured) u.TakenFromSide = u.Side;
             u.Captured = true;
             u.Side = side;
             u.Fleeing = false;
