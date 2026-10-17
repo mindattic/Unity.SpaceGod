@@ -262,6 +262,7 @@ namespace SolarSystem.Core
             w.Wire(startJd, seed, Hyperlanes.CreateDefault(ephemeris));
             var war = w.War;
             w.Infrastructure.AddSolSpacecraft();
+            w.Infrastructure.AddSolLagrangeStations(w.Sol, w.Belt);
             w.Infrastructure.AddSolRings(w.Economy);
             w.Fleet.Rings.AddRange(w.Infrastructure.Rings);
 
@@ -611,6 +612,9 @@ namespace SolarSystem.Core
             // The Banner's hidden belt bases, off the lanes on real asteroids, unknown until someone finds them.
             foreach (var (name, body, people) in BeltHavens)
                 e.Add(name, B(body), SettlementKind.Haven, Pirates, people).Hidden = true;
+            // And one out in Jupiter's trailing Trojan camp, on the twin Patroclus-Menoetius.
+            foreach (var (name, body, people) in TrojanHavens)
+                e.Add(name, B(body), SettlementKind.Haven, Pirates, people).Hidden = true;
 
             // Belt Consortium: Ceres and the Jovian moons.
             var ceres = e.Add("Ceres Hub", B("Ceres"), SettlementKind.Colony, Belt, 700e3);
@@ -643,6 +647,19 @@ namespace SolarSystem.Core
             var io = e.Add("Loki Sulphide Works", B("Io"), SettlementKind.MiningOutpost, Belt, 40e3);
             Mine(io, Good.Copper, 2000);
             Mine(io, Good.Zinc, 600);
+
+            // The Greek camp at Jupiter's L4: dark, primitive Trojans rich in ices and organics, mined
+            // for volatiles and a little metal (game layer, on real rocks; see Core/Systems/SOURCES.md).
+            var hektor = e.Add("Skamandrios Diggings", B("Hektor"), SettlementKind.MiningOutpost, Belt, 30e3);
+            Mine(hektor, Good.Hydrocarbons, 900);
+            Mine(hektor, Good.Water, 1800);
+            Mine(hektor, Good.Nitrogen, 300);
+            Mine(hektor, Good.NickelIron, 1200);
+
+            var eurybates = e.Add("Queta Camp", B("Eurybates"), SettlementKind.MiningOutpost, Belt, 12e3);
+            Mine(eurybates, Good.NickelIron, 900);
+            Mine(eurybates, Good.RareEarths, 25);
+            Mine(eurybates, Good.Water, 600);
 
             // Outer Reach Compact: Saturn and beyond.
             var titan = e.Add("Kraken Port", B("Titan"), SettlementKind.Colony, Reach, 500e3);
@@ -693,6 +710,12 @@ namespace SolarSystem.Core
             ("Hollow Iron", "Psyche", 6e3),
             ("Lantern Rock", "Lutetia", 4e3),
             ("Dactyl's Rest", "Ida", 3e3),
+        };
+
+        /// <summary>The hidden pirate havens of Jupiter's Trojan swarms: name, Trojan, people.</summary>
+        public static readonly (string name, string body, double people)[] TrojanHavens =
+        {
+            ("Menoetius Hold", "Patroclus", 5e3),
         };
 
         /// <summary>

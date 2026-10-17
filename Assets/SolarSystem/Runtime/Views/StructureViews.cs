@@ -113,6 +113,9 @@ namespace SolarSystem.Views
                 case StructureKind.Factory: return ShipMeshFactory.GetFactory(s.Owner, s.Industry);
                 case StructureKind.Habitat: return ShipMeshFactory.GetHabitat(s.Owner);
                 case StructureKind.CrewedStation: return ShipMeshFactory.GetCrewedStation(s.Name == "Tiangong");
+                // A depot's tank farm and a gateway's crew ring borrow the factory and habitat frames.
+                case StructureKind.Depot: return ShipMeshFactory.GetFactory(s.Owner, IndustryKind.Farm);
+                case StructureKind.Gateway: return ShipMeshFactory.GetHabitat(s.Owner);
                 default: return ShipMeshFactory.GetSpacecraft(s.Name);
             }
         }
@@ -141,7 +144,9 @@ namespace SolarSystem.Views
             foreach (var v in views)
             {
                 var s = v.S;
-                Scenes[s] = s.AtL2 ? scale.MapNear(eph, scene, s.Body, s.Helio(eph))
+                // A Lagrange point is mapped near the body it sits by: L1 and L2 near the smaller body,
+                // L3 to L5 on the larger one's mapping, so Jupiter's L4 stays on Jupiter's drawn orbit.
+                Scenes[s] = s.AtLagrange ? scale.MapNear(eph, scene, Lagrange.MappedNear(app.Catalog, s.Body, s.Lagrange), s.Helio(eph))
                     : scene[s.Body] + scale.LocalOffset(app.Catalog[s.Body], s.Orbit.OffsetAt(jd));
                 Sizes[s] = scale.ShipLength(s.LengthKm);
             }
@@ -179,7 +184,7 @@ namespace SolarSystem.Views
                 t.localPosition = rel;
                 t.localScale = Vector3.one * (float)size;
                 // Long axis along the orbit; habitats face their ring to the planet's pole and spin.
-                if (s.AtL2)
+                if (s.AtLagrange)
                 {
                     var toSun = app.Relative(scene[0]) - rel;
                     t.localRotation = Quaternion.LookRotation(Vector3.Cross(toSun, Vector3.up).normalized + Vector3.up * 0.01f, -toSun);

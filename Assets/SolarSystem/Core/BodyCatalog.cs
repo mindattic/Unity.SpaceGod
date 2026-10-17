@@ -11,7 +11,8 @@ namespace SolarSystem.Core
     ///    (valid 1800-2050), E. M. Standish. Earth's entry is the Earth-Moon barycentre.
     ///  - Eris: JPL Small-Body Database osculating elements, epoch JD 2459000.5.
     ///  - Ceres: mean elements least-squares fitted to JPL Horizons positions every 30 days over 2000-2050.
-    ///  - Psyche, Lutetia and Ida (main-belt asteroids, game-layer pirate havens): JPL Small-Body Database
+    ///  - Psyche, Lutetia and Ida (main-belt asteroids, game-layer pirate havens), and the Jupiter Trojans
+    ///    Hektor, Patroclus and Eurybates (mining grounds and a haven): JPL Small-Body Database
     ///    osculating elements, epoch JD 2461200.5; sizes, GM and spin periods from the SBDB physical
     ///    parameters (see Systems/SOURCES.md).
     ///  - The Moon: principal ELP-2000/82 terms (Meeus ch. 47), see LunarTheory; its catalogue elements
@@ -297,10 +298,30 @@ namespace SolarSystem.Core
             yield return Asteroid("Ida", 16, 0.00275, 2.863348031699649, 0.04610962795708528, 1.130363094271507, 323.5366609419851,
                 113.2571826848795, 49.64769088009876, 4.634, new Rgb(0.62f, 0.56f, 0.48f),
                 "Koronis-family asteroid; Galileo found the first asteroid moon, Dactyl, orbiting it in 1993.");
+
+            // Three real Jupiter Trojans, appended after the belt asteroids so no other index moves: two of
+            // the Greek camp 60° ahead of Jupiter (L4) and one of the Trojan camp 60° behind (L5). Mining
+            // grounds and a hidden haven in the game layer (World.BuildSettlements).
+            yield return Trojan(Asteroid("Hektor", 112.5, 0.527, 5.276986092673823, 0.02434489234275647, 18.14715224028094, 342.8018513679027,
+                181.288859678094, 24.91385327109803, 6.924, new Rgb(0.47f, 0.4f, 0.35f),
+                "Largest Jupiter Trojan, a 225 km contact binary leading Jupiter at L4, with a small moon, Skamandrios."), LagrangePoint.L4);
+            yield return Trojan(Asteroid("Patroclus", 70.2, 0.091, 5.205975173988769, 0.1391467916238868, 22.06359071054631, 44.34968792774898,
+                308.8377281363527, 58.67543160284279, 102.8, new Rgb(0.44f, 0.39f, 0.35f),
+                "Twin Trojan at L5: Patroclus and Menoetius, two 110 km bodies circling each other every 4.3 days; Lucy flies by in 2033."), LagrangePoint.L5);
+            yield return Trojan(Asteroid("Eurybates", 31.9, 0.0091, 5.217371617810976, 0.09059867172297777, 8.05147293527498, 43.5587275998936,
+                28.69968222483612, 125.7480299363769, 8.711, new Rgb(0.42f, 0.4f, 0.38f),
+                "Grey Trojan at L4, the largest of a collisional family, with a 1 km moon, Queta; Lucy flies past in August 2027."), LagrangePoint.L4);
+        }
+
+        static BodyDefinition Trojan(BodyDefinition body, LagrangePoint point)
+        {
+            body.TrojanPoint = point;
+            body.CoOrbitalWith = "Jupiter";
+            return body;
         }
 
         /// <summary>
-        /// A main-belt asteroid on its JPL Small-Body Database osculating orbit (heliocentric ecliptic
+        /// A minor planet on its JPL Small-Body Database osculating orbit (heliocentric ecliptic
         /// J2000, epoch JD 2461200.5), with its period from Kepler's third law.
         /// </summary>
         static BodyDefinition Asteroid(string name, double radiusKm, double gm, double aAu, double e, double iDeg, double nodeDeg,

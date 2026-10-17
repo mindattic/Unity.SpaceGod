@@ -904,7 +904,7 @@ namespace SolarSystem.Core
             // A fight over a haven nobody has found yet must not name its rock: it is a skirmish
             // somewhere in the belt (counted apart, so the first named battle there is still the first).
             bool concealed = HidesHaven(body);
-            string place = !concealed ? b0.Name : b0.Kind == BodyKind.Asteroid ? "the Belt" : "the Dark";
+            string place = !concealed ? b0.Name : b0.TrojanPoint != LagrangePoint.None ? "the Trojans" : b0.Kind == BodyKind.Asteroid ? "the Belt" : "the Dark";
             int key = concealed ? (b0.Kind == BodyKind.Asteroid ? ConcealedBelt : ConcealedDark) : body;
             battleCount.TryGetValue(key, out int n);
             battleCount[key] = n + 1;

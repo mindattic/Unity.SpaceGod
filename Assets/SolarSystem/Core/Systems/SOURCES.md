@@ -251,6 +251,10 @@ Orbits are circular, at the published altitude and inclination. Where each craft
 - **Telescopes:**
   - Hubble: ~530 km, 28.5°
   - JWST: at Sun–Earth L2, 1.5 million km anti-sunward (its halo orbit is not drawn)
+  - Euclid: at Sun–Earth L2 since 2023 (halo orbit not drawn)
+- **At the Lagrange points** (each drawn at its point, not on its halo orbit):
+  - SOHO (since 1996) and DSCOVR (since 2015): Sun–Earth L1
+  - Queqiao: Chang'e 4's far-side relay, on a halo orbit about Earth–Moon L2 since 2018
 - **Robotic orbiters:**
   - Mars Reconnaissance Orbiter: ~300 km polar
   - Mars Odyssey: ~400 km polar
@@ -267,6 +271,13 @@ Orbits are circular, at the published altitude and inclination. Where each craft
   - Geostationary belt: 42,164 km
 
   Plane counts and altitudes are real. Satellite counts per plane are rounded.
+
+## Lagrange points
+
+- **Model:** the circular restricted three-body problem applied to each pair's instantaneous geometry (`Core/Lagrange.cs`). L1, L2 and L3 lie on the line through the pair at the roots of the collinear quintics for the mass ratio μ = m₂/(m₁+m₂) (Szebehely 1967, *Theory of Orbits*, §4.5); L4 and L5 are the third corners of the two equilateral triangles in the smaller body's instantaneous orbital plane, L4 ahead. A planet's points about the Sun use it and its moons together (Earth and the Moon as their barycentre, as JPL does); a moon's points use the moon alone.
+- **This is how JPL Horizons defines its Lagrange-point ephemerides**, and the model is checked against them (LagrangeTests): SEMB-L1, L2, L4 and L5 (Horizons 31, 32, 34, 35; heliocentric) and EM-L1, L2, L4 and L5 (3011, 3012, 3014, 3015; geocentric) on 2026-10-17 and 2027-04-17. Horizons gives EM-L1 at 84.907% and EM-L2 at 116.783% of the Earth–Moon distance; the quintics give the same to five figures.
+- **Simplified:** objects at L1, L2 and L3 really fly halo or Lissajous orbits about the point (they are unstable); they are drawn at the point itself.
+- **Infrastructure placed there (game layer):** the Cislunar Depot and the L1 Gateway at Earth–Moon L1 (the low-energy waypoint between Earth and the Moon), the Farside Depot at Earth–Moon L2, the Sunward Relay at Sun–Earth L1 (where the solar wind passes about an hour before it reaches Earth), the Outbound Depot at Sun–Earth L2, the Greek Camp Depot at Sun–Jupiter L4 and the Trojan Camp Relay at Sun–Jupiter L5. Each moves with its pair, so the L4 and L5 structures stay co-orbital with Jupiter, 60° ahead and behind.
 
 ## Docking rings (fiction on real geometry)
 
@@ -301,11 +312,30 @@ Three real main-belt asteroids, each hiding a game-layer pirate haven (Hollow Ir
 - **Simplified:** each is drawn as a sphere of its mean diameter, with its spin pole along the ecliptic north (Lutetia's measured pole and Ida's moon Dactyl are not modelled). The osculating orbits drift from the truth over decades as Jupiter perturbs them.
 - **Fiction:** the havens, their garrisons and the scanner range (2 million km) at which a ship picks one out.
 
+## Jupiter Trojans (mining grounds and a hidden haven)
+
+Three real Trojans: Hektor and Eurybates in the Greek camp at Jupiter's L4, Patroclus in the Trojan camp at L5.
+
+- **Orbits:** JPL Small-Body Database osculating elements (heliocentric ecliptic J2000), epoch JD 2461200.5, period from Kepler's third law; retrieved 2026-10-17 from the SBDB API (`ssd-api.jpl.nasa.gov/sbdb.api`). Checked against JPL Horizons heliocentric vectors on 2027-01-01 and 2027-12-31 (within 0.2°; LagrangeTests), and kept 25–100° ahead of (L4) or behind (L5) Jupiter across 2020–2035.
+
+| Body | a (AU) | e | i | Ω | ω | M | Solution |
+|---|---|---|---|---|---|---|---|
+| 624 Hektor | 5.276986 | 0.024345 | 18.1472° | 342.8019° | 181.2889° | 24.9139° | JPL, 2026-06-05 |
+| 617 Patroclus | 5.205975 | 0.139147 | 22.0636° | 44.3497° | 308.8377° | 58.6754° | JPL, 2026-09-09 |
+| 3548 Eurybates | 5.217372 | 0.090599 | 8.0515° | 43.5587° | 28.6997° | 125.7480° | JPL, 2024-09-11 |
+
+- **Physical data:**
+  - Hektor: diameter 225 km (SBDB); GM 0.527 km³/s² from its mass, 7.9 × 10¹⁸ kg, measured by its moon Skamandrios (Marchis et al. 2014, ApJL 783, L37); rotation 6.924 h (LCDB).
+  - Patroclus: diameter 140 km, the NEOWISE equivalent of the 113 and 104 km pair (Grav et al. 2012, ApJ 759, 49); GM 0.091 km³/s² from the pair's mass, 1.36 × 10¹⁸ kg (Marchis et al. 2006, Nature 439, 565); rotation 102.8 h, the pair's mutual period (LCDB).
+  - Eurybates: diameter 64 km (NEOWISE, Grav et al. 2012); GM 0.0091 km³/s² **assumed** (a density of 1 g/cm³; its moon Queta has not yet given a mass); rotation 8.711 h (LCDB).
+- **Simplified:** each is drawn as one sphere of its mean diameter (Hektor's lobes, Patroclus's twin Menoetius and the moons Skamandrios and Queta are not modelled). Trojans are strongly perturbed by Jupiter: an osculating orbit holds for years, not decades, and does not librate.
+- **Fiction:** the mining outposts Skamandrios Diggings (Hektor) and Queta Camp (Eurybates), the Belt Consortium's lanes out to them, and the Black Banner's hidden haven Menoetius Hold on Patroclus. Trojans are dark, primitive D- and P-type bodies thought rich in ices and organics, hence the volatiles mined there.
+
 ## Factions, settlements, stations
 
 - Everything below is game-layer fiction placed on real (or candidate) worlds:
   - the Centauri Accord, the Toliman Combine, the Kentaurus Free Traders and the Long Dark;
   - New Kentaurus, Ember Station, Far Reach, Rigil Gate, Aurora Skimmer, Toliman Forge and Blackhollow;
   - every orbital yard, factory and habitat;
-  - in Sol, the Black Banner and its havens: Blackwater on Deimos and the hidden belt bases above.
+  - in Sol, the Black Banner and its havens: Blackwater on Deimos, the hidden belt bases and Menoetius Hold above.
 - The ore mined at Toliman Forge is fiction: no asteroid belt is known around B.

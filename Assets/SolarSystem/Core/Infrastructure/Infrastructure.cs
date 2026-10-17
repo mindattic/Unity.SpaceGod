@@ -22,11 +22,22 @@ namespace SolarSystem.Core
 
         /// <summary>A robotic orbiter (Mars Reconnaissance Orbiter, LRO...).</summary>
         Probe,
+
+        /// <summary>A propellant depot: tank farms parked where ships leaving a world pass (game layer).</summary>
+        Depot,
+
+        /// <summary>A communications relay (Queqiao over the Moon's far side, the game layer's signal stations).</summary>
+        Relay,
+
+        /// <summary>A crewed transfer station, the gateway between a world and its neighbours (game layer).</summary>
+        Gateway,
     }
 
     /// <summary>
     /// A permanent thing in orbit: game-layer industry made physical (a settlement's shipyard and
-    /// factories, its habitat), or a real spacecraft. It holds a circular orbit about its body.
+    /// factories, its habitat), or a real spacecraft. It holds a circular orbit about its body, or
+    /// sits at one of the Lagrange points of its body and what that orbits (<see cref="Core.Lagrange"/>),
+    /// moving with the pair so it stays co-orbital.
     /// </summary>
     public sealed class OrbitalStructure
     {
@@ -50,8 +61,14 @@ namespace SolarSystem.Core
         /// <summary>Real size (km), for drawing at the ship scale.</summary>
         public double LengthKm;
 
-        /// <summary>Flies at the Sun-planet L2 point (JWST) instead of an orbit about the body.</summary>
-        public bool AtL2;
+        /// <summary>
+        /// Sits at this Lagrange point of <see cref="Body"/> and what it orbits (JWST at Sun-Earth L2, a
+        /// depot at Earth-Moon L1) instead of an orbit about the body; None for an ordinary orbit.
+        /// </summary>
+        public LagrangePoint Lagrange;
+
+        /// <summary>At a Lagrange point rather than in orbit about its body.</summary>
+        public bool AtLagrange => Lagrange != LagrangePoint.None;
 
         /// <summary>A real spacecraft (geometry from published orbits; phases illustrative).</summary>
         public bool Real;
@@ -59,23 +76,14 @@ namespace SolarSystem.Core
 
         public DVec3 HelioAt(Ephemeris eph, double jd)
         {
-            if (AtL2)
-            {
-                // Sun-Earth L2 sits 1.5 million km beyond Earth on the Sun-Earth line (it moves with Earth).
-                var planet = eph.HelioAt(Body, jd);
-                return planet + planet.Normalized * 1.5e6;
-            }
+            if (AtLagrange) return Core.Lagrange.HelioAt(eph, Body, Lagrange, jd);
             return eph.HelioAt(Body, jd) + Orbit.OffsetAt(jd);
         }
 
         /// <summary>The same, from the ephemeris' current frame.</summary>
         public DVec3 Helio(Ephemeris eph)
         {
-            if (AtL2)
-            {
-                var planet = eph.Helio(Body);
-                return planet + planet.Normalized * 1.5e6;
-            }
+            if (AtLagrange) return Core.Lagrange.HelioAt(eph, Body, Lagrange, eph.Jd);
             return eph.Helio(Body) + Orbit.OffsetAt(eph.Jd);
         }
 
@@ -403,11 +411,16 @@ namespace SolarSystem.Core
             Real("ISS", StructureKind.CrewedStation, "Earth", 420, 51.64, 40, 0, 0.109, "International Space Station: ~420 km, 51.64°, crewed since 2000.");
             Real("Tiangong", StructureKind.CrewedStation, "Earth", 385, 41.47, 170, 120, 0.055, "China's space station: ~385 km, 41.5°.");
             Real("Hubble", StructureKind.Telescope, "Earth", 530, 28.47, 290, 230, 0.0132, "Hubble Space Telescope: ~530 km, 28.5°, since 1990.");
-            Structures.Add(new OrbitalStructure
-            {
-                Name = "JWST", Kind = StructureKind.Telescope, Body = catalog["Earth"].Index, AtL2 = true, LengthKm = 0.021, Real = true,
-                Note = "James Webb Space Telescope, at the Sun-Earth L2 point 1.5 million km beyond Earth (its halo orbit is not drawn).",
-            });
+            AtPoint("JWST", StructureKind.Telescope, "Earth", LagrangePoint.L2, 0.021, null,
+                "James Webb Space Telescope, at the Sun-Earth L2 point 1.5 million km beyond Earth (its halo orbit is not drawn).");
+            AtPoint("Euclid", StructureKind.Telescope, "Earth", LagrangePoint.L2, 0.0045, null,
+                "ESA's dark-universe survey telescope, at Sun-Earth L2 since 2023 (halo orbit not drawn).");
+            AtPoint("SOHO", StructureKind.Probe, "Earth", LagrangePoint.L1, 0.0095, null,
+                "Solar and Heliospheric Observatory, watching the Sun from Sun-Earth L1 since 1996 (halo orbit not drawn).");
+            AtPoint("DSCOVR", StructureKind.Probe, "Earth", LagrangePoint.L1, 0.0018, null,
+                "Deep Space Climate Observatory: solar-wind warning and the EPIC camera's whole-Earth view, at Sun-Earth L1 since 2015.");
+            AtPoint("Queqiao", StructureKind.Relay, "Moon", LagrangePoint.L2, 0.0042, null,
+                "China's relay for the Moon's far side (Chang'e 4), on a halo orbit about Earth-Moon L2 since 2018 (drawn at the point).");
             Real("Lunar Reconnaissance Orbiter", StructureKind.Probe, "Moon", 100, 90, 30, 0, 0.004, "LRO: polar lunar orbit (drawn circular at 100 km).");
             Real("Mars Reconnaissance Orbiter", StructureKind.Probe, "Mars", 300, 93, 60, 0, 0.0137, "MRO: ~300 km sun-synchronous polar orbit.");
             Real("Mars Odyssey", StructureKind.Probe, "Mars", 400, 93.2, 150, 90, 0.0057, "2001 Mars Odyssey: ~400 km polar orbit.");
@@ -434,6 +447,43 @@ namespace SolarSystem.Core
             var geo = new Constellation { Name = "Geostationary belt", Body = earth, Color = new Rgb(0.95f, 0.75f, 0.95f) };
             geo.Shells.Add(new Constellation.Shell(42164, 0.05, 1, 540));
             Constellations.AddRange(new[] { starlink, gps, galileo, glonass, beidou, geo });
+        }
+
+        /// <summary>Puts a structure at a Lagrange point of a body and what it orbits (a real spacecraft when it has no owner).</summary>
+        public OrbitalStructure AtPoint(string name, StructureKind kind, string body, LagrangePoint point, double km, Faction owner, string note)
+        {
+            var st = new OrbitalStructure
+            {
+                Name = name, Kind = kind, Body = catalog[body].Index, Lagrange = point, LengthKm = km, Owner = owner, Real = owner == null, Note = note,
+            };
+            Structures.Add(st);
+            return st;
+        }
+
+        /// <summary>
+        /// Sol's game-layer infrastructure at the Lagrange points, where it belongs: a depot and a
+        /// gateway at Earth-Moon L1 (the cheapest stop between Earth and the Moon), a depot at Earth-Moon
+        /// L2 for ships bound out of cislunar space, a storm-warning relay at Sun-Earth L1 (an hour of
+        /// warning before the solar wind arrives), a depot at Sun-Earth L2 for outbound traffic, and at
+        /// Jupiter's L4 and L5 the Trojan camps' depot and relay, co-orbital with Jupiter 60 degrees ahead
+        /// and behind. The inner points are <paramref name="inner"/>'s, the Trojan camps <paramref name="trojans"/>'.
+        /// </summary>
+        public void AddSolLagrangeStations(Faction inner, Faction trojans)
+        {
+            AtPoint("Cislunar Depot", StructureKind.Depot, "Moon", LagrangePoint.L1, 1.2, inner,
+                "Propellant depot at Earth-Moon L1, the low-energy waypoint between Earth and the Moon (game layer).");
+            AtPoint("L1 Gateway", StructureKind.Gateway, "Moon", LagrangePoint.L1, 2.0, inner,
+                "Transfer station at Earth-Moon L1, where Earth-Moon traffic changes ships (game layer).");
+            AtPoint("Farside Depot", StructureKind.Depot, "Moon", LagrangePoint.L2, 1.0, inner,
+                "Propellant depot at Earth-Moon L2, beyond the Moon, for ships leaving cislunar space (game layer).");
+            AtPoint("Sunward Relay", StructureKind.Relay, "Earth", LagrangePoint.L1, 0.4, inner,
+                "Signal station at Sun-Earth L1: an hour's warning of solar storms, relayed across the system (game layer).");
+            AtPoint("Outbound Depot", StructureKind.Depot, "Earth", LagrangePoint.L2, 1.4, inner,
+                "Propellant depot at Sun-Earth L2, the departure point for the outer system (game layer).");
+            AtPoint("Greek Camp Depot", StructureKind.Depot, "Jupiter", LagrangePoint.L4, 1.2, trojans,
+                "Propellant depot at Sun-Jupiter L4, 60 degrees ahead of Jupiter, serving the Greek camp's miners (game layer).");
+            AtPoint("Trojan Camp Relay", StructureKind.Relay, "Jupiter", LagrangePoint.L5, 0.4, trojans,
+                "Signal station at Sun-Jupiter L5, 60 degrees behind Jupiter, the only ears in the Trojan camp (game layer).");
         }
 
         // ---------------------------------------------------------------- docking rings

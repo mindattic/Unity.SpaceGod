@@ -1071,11 +1071,17 @@ namespace SolarSystem.UI
             heading = s.Name;
             string kind = s.Kind == StructureKind.Shipyard ? "Orbital shipyard" : s.Kind == StructureKind.Factory ? "Factory station"
                 : s.Kind == StructureKind.Habitat ? "Orbital habitat" : s.Kind == StructureKind.CrewedStation ? "Crewed space station"
-                : s.Kind == StructureKind.Telescope ? "Space telescope" : "Robotic orbiter";
+                : s.Kind == StructureKind.Telescope ? "Space telescope" : s.Kind == StructureKind.Depot ? "Propellant depot"
+                : s.Kind == StructureKind.Relay ? "Communications relay" : s.Kind == StructureKind.Gateway ? "Transfer station" : "Robotic orbiter";
             sub = kind + (s.Real ? "  ·  real spacecraft" : "  ·  " + (s.Owner?.Name ?? ""));
             headingColor = s.Owner != null ? new Color(s.Owner.Color.R, s.Owner.Color.G, s.Owner.Color.B) : Accent;
             var b = app.Catalog[s.Body];
-            if (s.AtL2) lines.Add(("Where", "Sun-" + b.Name + " L2, 1.5 million km beyond " + b.Name));
+            if (s.AtLagrange)
+            {
+                // Co-orbital: the point moves with its pair, so it is always this far from the smaller body.
+                lines.Add(("Where", Lagrange.Name(app.Catalog, s.Body, s.Lagrange)));
+                lines.Add(("From " + b.Name, Km((s.Helio(app.Ephemeris) - app.Ephemeris.Helio(s.Body)).Length)));
+            }
             else
             {
                 lines.Add(("Orbiting", b.Name));

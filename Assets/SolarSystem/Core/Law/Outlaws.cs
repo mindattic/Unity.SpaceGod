@@ -430,7 +430,12 @@ namespace SolarSystem.Core
         {
             if (body < 0 || body >= world.Catalog.Count) return (-1, where);
             foreach (var st in world.Economy.At(body))
-                if (!st.Discovered) return (-1, world.Catalog[body].Kind == BodyKind.Asteroid ? "somewhere in the Belt" : "somewhere in the dark");
+                if (!st.Discovered)
+                {
+                    var rock = world.Catalog[body];
+                    return (-1, rock.TrojanPoint != LagrangePoint.None ? "somewhere in the Trojans"
+                        : rock.Kind == BodyKind.Asteroid ? "somewhere in the Belt" : "somewhere in the dark");
+                }
             return (body, where);
         }
 

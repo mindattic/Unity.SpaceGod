@@ -222,6 +222,11 @@ namespace SolarSystem.Core.Tests
             var titan = Port(w, "Kraken Port");
             var earth = Port(w, "Earth Orbital");
             Assert.That(w.Economy.CanTrade(belt, earth), Is.True);
+            // The warm-up's own trade may already have run war goods to the Federation and brought on an embargo
+            // from the Reach: let it run out first (which clears its tally), so only the sale below decides.
+            foreach (var e in w.Diplomacy.Embargoes.Where(e => e.Against == w.Belt).ToList()) e.UntilJd = jd;
+            Days(w, ref jd, 1, markets: false);
+            Assert.That(w.Diplomacy.IsEmbargoed(w.Reach, w.Belt) || w.Diplomacy.IsEmbargoed(w.Sol, w.Belt), Is.False);
 
             w.Economy.Sold(belt, titan, Good.Munitions, w.Shocks.EmbargoThreshold * 1.2);
             Days(w, ref jd, 1, markets: false);

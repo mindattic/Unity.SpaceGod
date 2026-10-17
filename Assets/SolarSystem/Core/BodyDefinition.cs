@@ -15,7 +15,7 @@ namespace SolarSystem.Core
         /// <summary>A large artificial station on its own orbit about a star (game layer): a port and a lane stop.</summary>
         Station,
 
-        /// <summary>A minor body of the main asteroid belt, smaller than a dwarf planet (Psyche, Lutetia, Ida).</summary>
+        /// <summary>A minor body smaller than a dwarf planet: the main belt's Psyche, Lutetia and Ida, Jupiter's Trojans Hektor, Patroclus and Eurybates.</summary>
         Asteroid,
     }
 
@@ -138,6 +138,13 @@ namespace SolarSystem.Core
         public double LaplacePoleDecDeg = double.NaN;
 
         public string Summary;
+
+        /// <summary>
+        /// A Trojan: the Lagrange point of its parent's planet (<see cref="CoOrbitalWith"/>) whose swarm it
+        /// librates about, sharing that planet's orbit 60° ahead (L4) or behind (L5). None otherwise.
+        /// </summary>
+        public LagrangePoint TrojanPoint;
+        public string CoOrbitalWith;
 
         public BodyStatus Status = BodyStatus.Confirmed;
 

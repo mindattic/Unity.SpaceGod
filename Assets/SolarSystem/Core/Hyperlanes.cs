@@ -91,6 +91,9 @@ namespace SolarSystem.Core
                 ("Mercury", "Venus", 0.06), ("Venus", "Earth", -0.05), ("Earth", "Mars", 0.07), ("Mars", "Ceres", -0.06),
                 ("Ceres", "Jupiter", 0.05), ("Earth", "Ceres", -0.04), ("Mars", "Jupiter", 0.04), ("Jupiter", "Saturn", -0.05),
                 ("Saturn", "Uranus", 0.05), ("Uranus", "Neptune", -0.06), ("Neptune", "Pluto", 0.07), ("Saturn", "Neptune", 0.03),
+                // Out to the Greek camp's mines at Jupiter's L4, 60 degrees ahead along its orbit (the Trojan camp at
+                // L5 has no lane: only the raiders hidden there go).
+                ("Jupiter", "Hektor", 0.04), ("Hektor", "Eurybates", -0.05),
             };
             foreach (var (a, b, bend) in links) h.Add(a, b, bend);
             return h;
