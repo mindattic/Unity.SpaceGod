@@ -564,6 +564,9 @@ namespace SolarSystem.Core
             losses.TryGetValue(old, out int n);
             losses[old] = n + 1;
             ship.Faction = captor;
+            // Whoever sat in its brig goes free with the taking: nobody's to hand over for a bounty any more.
+            ship.Prisoners = 0;
+            ship.PrisonerBounty = 0;
             if (captor.Prefix.Length > 0 && ship.Name.StartsWith(old.Prefix + " ")) ship.Name = captor.Prefix + ship.Name.Substring(old.Prefix.Length);
             ship.Combat.Interior.HandOver(ship.Combat.Spec.Crew * 0.3);
             Ship group = null;

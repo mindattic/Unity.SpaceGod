@@ -420,6 +420,9 @@ namespace SolarSystem.Core
             ship.DerelictBy = null;
             ship.Cargo = null;
             ship.Faction = owner;
+            // Its old owners' prisoners are long gone from its brig (cast adrift with the hulk, or freed by the raiders).
+            ship.Prisoners = 0;
+            ship.PrisonerBounty = 0;
             if (old != owner && owner.Prefix.Length > 0 && old.Prefix.Length > 0 && ship.Name.StartsWith(old.Prefix + " "))
                 ship.Name = owner.Prefix + ship.Name.Substring(old.Prefix.Length);
             Interior.Recall();
