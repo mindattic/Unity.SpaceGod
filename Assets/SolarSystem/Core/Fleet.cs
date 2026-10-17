@@ -839,7 +839,19 @@ namespace SolarSystem.Core
                 ship.GravityLossKmS = GravityLoss(ship, frame, from, to);
                 // A slow boat weighs a transfer orbit against that flip-and-burn and flies whichever costs less.
                 if (allowConic && !underWay && UsesConics(ship))
-                    arrival = TryConic(ship, frame, from, to, departJd, arrivalOrbit, keepOut) ?? arrival;
+                {
+                    // Weighing the conic asks for an arrival of its own, which books a ring's holding point afresh:
+                    // keep the one this flip-and-burn arrives at unless the conic is flown.
+                    var ring = ship.Ring;
+                    var hold = ship.HoldPoint;
+                    var conic = TryConic(ship, frame, from, to, departJd, arrivalOrbit, keepOut);
+                    if (conic != null) arrival = conic;
+                    else
+                    {
+                        ship.Ring = ring;
+                        ship.HoldPoint = hold;
+                    }
+                }
             }
             ship.PlannedConicDepartJd = double.NaN;
 
