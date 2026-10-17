@@ -330,7 +330,17 @@ namespace SolarSystem.Core
                         m++;
                     }
                 }
-                if (n == 0) continue;
+                if (n == 0)
+                {
+                    // No ports left to ration: what it had in force goes with them, rather than standing on
+                    // forever and landing on the first port it takes back.
+                    if (current != null)
+                    {
+                        current.EndJd = jd;
+                        End(current, jd, $"The {f.Name} ends war rationing: it has no ports left to ration");
+                    }
+                    continue;
+                }
                 essentials /= n;
                 if (m > 0) munitions = munitionSum / m;
 
