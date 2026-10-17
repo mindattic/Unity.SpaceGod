@@ -57,7 +57,12 @@ namespace SolarSystem.Core.Tests
             var ship = w.Fleet.AddShip("Contractor " + w.Fleet.Ships.Count, cls, w.Independents, role);
             ship.CapacityTonnes = Economy.CapacityOf(cls);
             ship.Ports = w.PortBodies();
-            w.Fleet.Station(ship, body, StartJd);
+            // Parked, but not yet planning a run of its own off the market (stationing would, and whether it looked
+            // at the board first is a roll of the fleet's dice): these tests are of what it does with the board.
+            ship.Orbit = new ParkingOrbit { Body = body, EpochJd = StartJd };
+            ship.Phase = ShipPhase.Parked;
+            ship.PhaseStartJd = StartJd;
+            ship.PhaseEndJd = StartJd + 1;
             return ship;
         }
 
