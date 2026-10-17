@@ -690,7 +690,8 @@ namespace SolarSystem.Core
             {
                 if (v.Side != 1 - u.FoughtOn || v.Ship == null || v.Dead || v.Captured || v.Ship == u.Ship || v.Ship.Destroyed) continue;
                 if (v.Faction == null || v.Faction.IsPirate || (captor != null && v.Faction != captor)) continue;
-                if (Outfitting.BrigRoom(v.Ship) < 1) continue;
+                // A brig already holed (see Breach) holds nobody: the captain would be out of it in the same breath.
+                if (Outfitting.BrigRoom(v.Ship) < 1 || (v.Combat != null && v.Combat.HullFraction < BrigBreachHull)) continue;
                 int rank = v.Ship == world.PilotedShip ? 0 : IsHunter(v.Ship) ? 1 : 2;
                 if (rank < bestRank)
                 {
