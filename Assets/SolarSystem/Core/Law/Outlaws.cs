@@ -538,7 +538,9 @@ namespace SolarSystem.Core
                 // The crime the law booked for this fight, if anyone saw it: the deeds go on its bounty.
                 var rec = o.Record;
                 Crime crime = rec.Crimes.Count > 0 ? rec.Crimes[rec.Crimes.Count - 1] : null;
-                if (crime != null && crime.Jd == jd && crime.Detail == b.Name && crime.Recorded)
+                // Unless the law has already settled every price on them in this fight (paid a hunter, or let them lapse on
+                // a captain dead with the ship): a captain still wanted -- at large, in the pods or in a brig -- answers for it.
+                if (crime != null && crime.Jd == jd && crime.Detail == b.Name && crime.Recorded && rec.Wanted)
                 {
                     double extra = kills * KillBounty + robbed * RobbedBounty + ransoms * RansomBounty;
                     if (o.Feared) extra *= FearedBountyFactor;
