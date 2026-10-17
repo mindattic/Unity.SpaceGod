@@ -370,7 +370,8 @@ namespace SolarSystem.Core
                 ship.CargoDestination = null;
                 // Whatever is in its hold the house came by for nothing: all it fetches is profit.
                 ship.CargoCost = 0;
-                // Out of any trading company's books: its takings are the house's now.
+                // Out of any trading company's books (what it took since their last review is still theirs): its takings are the house's now.
+                world.Companies?.SettleOut(ship.Company, ship);
                 ship.Company?.Ships.Remove(ship);
                 ship.Company = null;
                 ship.Faction = House;

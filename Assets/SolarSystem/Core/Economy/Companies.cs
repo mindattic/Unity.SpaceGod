@@ -267,12 +267,33 @@ namespace SolarSystem.Core
         /// <summary>Puts <paramref name="ship"/> in <paramref name="c"/>'s fleet, under its flag; its trade from here on is the company's.</summary>
         public void Enlist(Company c, Ship ship)
         {
-            if (ship.Company != null && ship.Company != c) ship.Company.Ships.Remove(ship);
+            if (ship.Company != null && ship.Company != c)
+            {
+                SettleOut(ship.Company, ship);
+                ship.Company.Ships.Remove(ship);
+            }
             ship.Company = c;
             ship.Faction = c.Flag;
             ship.CompanyBookedCredits = ship.Credits;
             ship.LoadedFrom = null;
             if (!c.Ships.Contains(ship)) c.Ships.Add(ship);
+        }
+
+        /// <summary>
+        /// A hull leaving <paramref name="c"/>'s fleet between reviews (sold, merged, taken into the player's fleet): what it
+        /// has taken since the last review is booked to the company now, as <see cref="Book"/> would, before it goes.
+        /// </summary>
+        public void SettleOut(Company c, Ship ship)
+        {
+            if (c == null || ship == null) return;
+            double delta = ship.Credits - ship.CompanyBookedCredits;
+            ship.CompanyBookedCredits = ship.Credits;
+            if (delta == 0) return;
+            double tax = Math.Max(0, delta) * CorporateTax;
+            c.Flag.Treasury += tax - delta;
+            c.Cash += delta - tax;
+            c.Earned += delta;
+            c.TaxPaid += tax;
         }
 
         /// <summary>A company hull came into this system (through a gate, as a copy): it is still its company's.</summary>
@@ -730,11 +751,12 @@ namespace SolarSystem.Core
         public void Merge(Company buyer, Company target, double price, double jd)
         {
             CancelOrder(target);
+            // Its hulls' takings since the last review are its own, and go over with its cash.
+            foreach (var s in new List<Ship>(target.Ships)) Enlist(buyer, s);
+            target.Ships.Clear();
             buyer.Cash += target.Cash - price;
             target.Flag.Treasury += price;
             target.Cash = 0;
-            foreach (var s in new List<Ship>(target.Ships)) Enlist(buyer, s);
-            target.Ships.Clear();
             foreach (var r in target.Routes)
                 if (buyer.RouteOf(r.From, r.To) == null) buyer.Routes.Add(r);
             target.Fate = CompanyFate.Merged;
