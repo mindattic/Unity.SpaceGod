@@ -653,11 +653,13 @@ namespace SolarSystem.Core
         {
             if (prize?.Combat == null) return 0;
             double taken = 0;
+            // The share is of the crew there were before anyone took any, not of those the last captor left.
+            double crew = prize.Combat.Interior.Crew;
             foreach (var c in captors)
             {
                 if (c == null || c == prize || c.Destroyed) continue;
                 double room = BrigRoom(c);
-                double want = Math.Floor(prize.Combat.Interior.Crew * PrisonerShare - taken + 1e-9);
+                double want = Math.Floor(crew * PrisonerShare - taken + 1e-9);
                 double n = Math.Floor(Math.Min(room, want) + 1e-9);
                 if (n < 1) continue;
                 n = Math.Floor(prize.Combat.Interior.TakeCrew(n) + 1e-9);
