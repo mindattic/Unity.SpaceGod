@@ -653,6 +653,14 @@ namespace SolarSystem.Core
         }
 
         /// <summary>
+        /// Loads a contract's lot (see <see cref="Contracts"/>): <paramref name="tonnes"/> of <paramref name="good"/>
+        /// bought at <paramref name="from"/> as <see cref="Load"/> buys, booked for delivery at <paramref name="to"/>
+        /// (on its inbound book) with no supply bonus: the contract pays for the run.
+        /// </summary>
+        public void LoadFor(Ship ship, Settlement from, Good good, double tonnes, Settlement to) =>
+            Load(ship, new Option { From = from, To = to, Good = good, Tonnes = tonnes, Cost = from.PurchaseCost(good, tonnes) });
+
+        /// <summary>
         /// Loads <paramref name="tonnes"/> of <paramref name="good"/> bought at <paramref name="from"/>
         /// for a market outside this economy (another system's, across the gates): paid for as
         /// <see cref="Load"/> pays, but booked at no settlement here. <paramref name="bound"/> names

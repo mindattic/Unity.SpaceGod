@@ -1217,6 +1217,9 @@ namespace SolarSystem.Core
                 var seen = SeenLast(h.Contract.Target);
                 if (seen != null && seen.Body >= 0) return seen.Body;
             }
+            // Nothing to chase: the guns' jobs on the contracts boards, a patrol or an escort (U.SPC-T101).
+            int job = world.Contracts?.ChooseForHunter(leader, here, jd) ?? -1;
+            if (job >= 0) return job;
             var ports = leader.Route;
             if (ports == null || ports.Length == 0) return here;
             return ports[rng.Next(ports.Length)];

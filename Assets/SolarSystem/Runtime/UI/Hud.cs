@@ -85,6 +85,7 @@ namespace SolarSystem.UI
             if (app.ShowCargo) DrawCargo();
             if (app.ShowOutfit) DrawOutfit();
             if (app.ShowBounties) DrawBounties();
+            if (app.ShowContracts) DrawContracts();
             if (app.ShowHelp) DrawHelp();
             if (app.ShowSaves) DrawSaves();
             DrawToast();
@@ -1265,6 +1266,82 @@ namespace SolarSystem.UI
             GUI.contentColor = old;
         }
 
+        // ---------------------------------------------------------------- contracts board (U.SPC-T101)
+
+        /// <summary>
+        /// The contracts board (F7) of the port in view -- the selected world's biggest, else the one the piloted ship is
+        /// alongside: the jobs it posts from what the system needs (freight, passengers and colonists, escorts, patrols,
+        /// surveys, bounties), best paid first, with Take while the ship is alongside; and the player's own contracts,
+        /// with Abandon (which costs standing with the patron). See <see cref="Contracts"/>.
+        /// </summary>
+        void DrawContracts()
+        {
+            var contracts = app.World.Contracts;
+            if (contracts == null) return;
+            Settlement port = null;
+            var t = app.Selected;
+            if (t.IsBody)
+                foreach (var s in app.Economy.At(t.Body))
+                    if (s.Discovered && (port == null || s.Population > port.Population)) port = s;
+            if (port == null && app.IsPiloting)
+                foreach (var s in app.Economy.Settlements)
+                    if (s.Discovered && app.NearPort(s)) { port = s; break; }
+            var board = port != null ? contracts.BoardAt(port) : new List<Contract>();
+            var mine = contracts.PlayerActive();
+            const float w = 860, rowH = 20;
+            int rows = Mathf.Min(board.Count, 12), ownRows = Mathf.Min(mine.Count, 6);
+            float h = 54 + Mathf.Max(1, rows) * rowH + (ownRows > 0 ? 24 + ownRows * rowH : 0);
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, 120, w, h));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 22), "CONTRACTS  ·  " + (port != null ? port.Name + "  ·  " + port.Owner.Name : "no port in view"), title);
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            var ship = app.World.PilotedShip;
+            bool alongside = port != null && ship != null && app.NearPort(port);
+            string note = port == null ? "Select a world with a port, or fly alongside one.   F7 to close"
+                : port.Owner.IsPirate ? "A haven posts no contracts.   F7 to close"
+                : board.Count == 0 ? "Nothing posted here today.   F7 to close"
+                : alongside ? "Jobs posted from what the system needs. Freight: buy the crates at any market and bring them in.   F7 to close"
+                : "Fly alongside to take a job (P to pilot a ship).   F7 to close";
+            GUI.Label(new Rect(r.x + 12, r.y + 28, w - 24, 18), note, small);
+            double jd = app.Clock.Jd;
+            for (int i = 0; i < rows; i++)
+            {
+                var c = board[i];
+                float y = r.y + 48 + i * rowH;
+                GUI.contentColor = c.Urgency >= 0.6 ? new Color(1f, 0.78f, 0.35f) : Color.white;
+                GUI.Label(new Rect(r.x + 12, y, w - 110, rowH), Contracts.Describe(c, jd), small);
+                if (alongside && GUI.Button(new Rect(r.xMax - 90, y, 78, rowH - 2), "Take", button))
+                {
+                    var outcome = contracts.Take(c, ship, true, jd);
+                    app.ShowToast(outcome switch
+                    {
+                        Contracts.TakeOutcome.Ok => "Contract taken: " + c.Title + ", due in " + c.DeadlineDays.ToString("0", CultureInfo.InvariantCulture) + " d",
+                        Contracts.TakeOutcome.NotOffered => c.Patron.Name + " offers you no contracts",
+                        Contracts.TakeOutcome.NoRoom => "No room aboard for that",
+                        Contracts.TakeOutcome.Unarmed => "That job wants an armed ship",
+                        Contracts.TakeOutcome.NotHere => "Fly alongside " + c.Board.Name + " to sign",
+                        _ => "No longer on offer",
+                    });
+                }
+            }
+            if (ownRows > 0)
+            {
+                float y0 = r.y + 52 + Mathf.Max(1, rows) * rowH;
+                GUI.contentColor = Dim;
+                GUI.Label(new Rect(r.x + 12, y0, w - 24, 18), "YOUR CONTRACTS  (giving one up costs standing with whoever posted it)", small);
+                for (int i = 0; i < ownRows; i++)
+                {
+                    var c = mine[i];
+                    float y = y0 + 22 + i * rowH;
+                    GUI.contentColor = c.DueJd - jd < 1 ? new Color(1f, 0.55f, 0.45f) : new Color(0.6f, 0.9f, 1f);
+                    GUI.Label(new Rect(r.x + 12, y, w - 110, rowH), Contracts.Describe(c, jd), small);
+                    if (GUI.Button(new Rect(r.xMax - 90, y, 78, rowH - 2), "Abandon", button) && contracts.Abandon(c, jd))
+                        app.ShowToast("Contract abandoned: " + c.Title);
+                }
+            }
+            GUI.contentColor = old;
+        }
+
         // ---------------------------------------------------------------- market board
 
         void DrawMarket()
@@ -2039,6 +2116,7 @@ namespace SolarSystem.UI
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
+                "F7  contracts board of the port in view: freight, passengers, colonists, escorts, patrols, surveys, bounties",
                 "F4  bounty board of the port in view: outlaws wanted there, their records, where last seen, who hunts them",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",

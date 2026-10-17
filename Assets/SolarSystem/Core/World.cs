@@ -67,6 +67,10 @@ namespace SolarSystem.Core
         /// <summary>The trading companies that own and run the merchant fleet (U.SPC-T99; see <see cref="Core.Companies"/>).</summary>
         public Companies Companies { get; private set; }
 
+        /// <summary>The stations' contracts boards: freight, passengers and colonists, escorts, patrols, surveys and
+        /// bounties posted from what the system needs, and who has taken them (see <see cref="Core.Contracts"/>).</summary>
+        public Contracts Contracts { get; private set; }
+
         /// <summary>The most bounty hunter groups the free traders keep in service.</summary>
         public int HunterCap = 3;
 
@@ -108,6 +112,7 @@ namespace SolarSystem.Core
             Shocks.Update(jd);
             Law.Update(jd);
             Outlaws.Update(jd);
+            Contracts.Update(jd);
             if (jd >= nextRecountJd)
             {
                 Economy.RecountInbound(Fleet.Ships);
@@ -309,6 +314,9 @@ namespace SolarSystem.Core
             war.BattleEnded += Outlaws.OnBattleEnded;
             Law.Committed += Outlaws.OnCrime;
             war.Crews.Resolved += Outlaws.OnPodResolved;
+            // The boards post from the markets, migration, the war's danger and the law's books (U.SPC-T101).
+            Contracts = new Contracts(this, seed + 17);
+            war.BattleEnded += Contracts.OnBattleEnded;
             economy.DockAllowed = Law.AllowsDocking;
             economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
@@ -369,7 +377,9 @@ namespace SolarSystem.Core
                 // A freighter bound for a jump gate carries goods for another system's markets: it keeps them through
                 // any port it passes on the way to the gate (selling there skipped the gate's toll and the far market).
                 bool bound = ship.Voyage != null && ship.GateKm != null;
-                if (IsTrader(ship) && !bound) economy.OnArrive(ship, ship.Orbit.Body, when);
+                // Contract cargo and people go to the contract, not the market (U.SPC-T101).
+                bool contracted = Contracts.OnArrived(ship, ship.Orbit.Body, when);
+                if (IsTrader(ship) && !bound && !contracted) economy.OnArrive(ship, ship.Orbit.Body, when);
                 war.OnArrived(ship, when);
             };
             fleet.ReachedRing = war.OnArrived;
@@ -383,6 +393,12 @@ namespace SolarSystem.Core
                 {
                     int ordered = VoyageOrders(ship, here, when);
                     if (ordered >= 0) return ordered;
+                }
+                // A merchant, courier or free ship on a contract goes where it takes it; an idle one may take one here.
+                if (IsTrader(ship) || ship.Role == ShipRole.Free)
+                {
+                    int job = Contracts.ChooseNext(ship, here, when);
+                    if (job >= 0) return job;
                 }
                 // Free ships follow their own whims (the fleet's built-in choice), not orders or markets -- unless
                 // their tanks are getting low, when even an idle wanderer heads for somewhere to fill them.
