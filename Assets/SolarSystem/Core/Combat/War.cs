@@ -1827,12 +1827,30 @@ namespace SolarSystem.Core
                         if (e.Leader == small && !e.Destroyed) members.Add(e);
                     foreach (var m in members)
                     {
-                        Fleet.AddEscort(big, m, Fleet.SlotFor(size - 1));
+                        Fleet.AddEscort(big, m, Fleet.SlotFor(FreeSlot(big)));
                         size++;
                     }
                     Orders.Remove(small);
                     retreating.Remove(small);
                 }
+            }
+        }
+
+        /// <summary>The first formation slot on <paramref name="leader"/> no living escort holds: a ship merged in
+        /// never sits on top of one already there (escorts lost or cut loose leave gaps among the slots).</summary>
+        int FreeSlot(Ship leader)
+        {
+            for (int k = 0; ; k++)
+            {
+                var at = Fleet.SlotFor(k);
+                bool taken = false;
+                foreach (var e in Fleet.Ships)
+                    if (!e.Destroyed && e.Leader == leader && (e.FormationSlot - at).LengthSquared < 1e-9)
+                    {
+                        taken = true;
+                        break;
+                    }
+                if (!taken) return k;
             }
         }
 
