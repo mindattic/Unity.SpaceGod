@@ -278,6 +278,8 @@ namespace SolarSystem.Core
             lastReviewJd = Jd;
             foreach (var s in Settlements)
             {
+                // A fallen haven makes and trades nothing until it is rebuilt: its last prices are no market to follow.
+                if (s.Fallen) continue;
                 foreach (var f in s.Facilities)
                 {
                     if (f.Recipe.Kind == IndustryKind.Shipyard) continue;
