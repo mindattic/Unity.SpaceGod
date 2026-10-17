@@ -2148,19 +2148,20 @@ namespace SolarSystem.Core
         /// </summary>
         public bool Beaten(Faction f, Faction enemy)
         {
-            if (Losses(f) <= 2) return false;
             int own = Warships(f), them = Warships(enemy);
-            if (own <= BeatenNavyShips && own * 3 < them) return true;
             if (own >= them) return false;
-            int yards = 0;
+            // Its yards all under the enemy's guns: beaten however few hulls it has lost since the war last flared up
+            // (the count starts again then, and a siege needs only days to take a yard).
+            int free = 0;
             bool besieged = false;
             foreach (var st in Economy.Settlements)
             {
                 if (st.Owner != f || !st.HasShipyard) continue;
-                yards++;
-                besieged |= besiegers.TryGetValue(st, out var by) && by == enemy;
+                if (besiegers.TryGetValue(st, out var by) && by == enemy) besieged = true;
+                else free++;
             }
-            return yards <= 1 && besieged;
+            if (besieged && free == 0) return true;
+            return Losses(f) > 2 && own <= BeatenNavyShips && own * 3 < them;
         }
 
         /// <summary>Wars wind down to ceasefires when both sides have bled, and flare up again months later.</summary>
