@@ -316,6 +316,25 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AHunterWhoJoinsANavyAgainstRaidersIsNotChargedForTheNavysEnemiesOnTheirSide()
+        {
+            // The Reach starts it against raiders with Federation warships beside them (the Reach and the Federation
+            // are at war); a hunter joins the Reach against the raiders, and nobody is hurt or robbed.
+            var w = CreateWorld();
+            int earth = Body(w, "Earth");
+            w.Diplomacy.Set(w.Reach, w.Sol, Relation.War);
+            var b = new Battle(0, earth, "Battle of Earth", new DVec3(20000, 0, 0), StartJd, 1);
+            b.AddShip(Hull(ShipClass.Cruiser, w.Reach, 9001), 0, new DVec3(4, 0, 0), -DVec3.UnitX);
+            var hunter = Hull(ShipClass.Cruiser, w.Independents, 9002, "Warrant");
+            b.AddShip(hunter, 0, new DVec3(5, 0, 0), -DVec3.UnitX);
+            b.AddShip(Hull(ShipClass.Destroyer, w.Pirates, 9003), 1, new DVec3(-4, 0, 0), DVec3.UnitX);
+            b.AddShip(Hull(ShipClass.Cruiser, w.Sol, 9004), 1, new DVec3(-5, 0, 0), DVec3.UnitX);
+            b.AggressorSide = 0;
+            w.Law.OnBattleEnded(b, StartJd);
+            Assert.That(w.Law.FindRecord(hunter)?.Crimes.Count ?? 0, Is.EqualTo(0), "the hunter attacked nobody it is at peace with");
+        }
+
+        [Test]
         public void HuntingAShipWantedInThatJurisdictionIsNoCrime()
         {
             var w = CreateWorld();

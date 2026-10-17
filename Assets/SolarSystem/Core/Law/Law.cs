@@ -484,8 +484,10 @@ namespace SolarSystem.Core
                     bool pirate = by != null && by.IsPirate;
                     // A wanted ship stopped by the law answers only for hurting the patrol; a lawful ship that was
                     // attacked and fought back did nothing wrong (unless it turned robber).
+                    // Nor did a third party that only fought alongside the side that started it (a bounty hunter joining
+                    // a navy against raiders, with that navy's enemies on the raiders' side), unless anyone was hurt.
                     if (b.EnforcingSide == 1 - side) { if (!harmed) continue; }
-                    else if (side != b.AggressorSide && !pirate && !robbed) continue;
+                    else if ((side != b.AggressorSide || (by != b.SideLeaders[side] && !harmed)) && !pirate && !robbed) continue;
                     var rec = kv.Key as LawRecord ?? RecordOfCaptain((Ship)kv.Key);
                     // The one they attacked who lived to tell it, else anyone close enough to see.
                     string witness = null;
