@@ -140,7 +140,9 @@ namespace SolarSystem.Core.Tests
             Assert.That(news.Any(e => e.Kind == WorldEventKind.Economy && e.Text.StartsWith("Workers at Ares Prime") && e.Text.Contains("strike")), Is.True);
 
             // Industry stops but life support runs: a strike-bound mine makes almost nothing.
-            foreach (var g in new[] { Good.Water, Good.Nitrogen, Good.HeliumThree, Good.Machinery }) ares.Stock[(int)g] = ares.Target(g) * 2;
+            // (Enough inputs for every day the markets have stood still while waiting for the strike: the tick below spans them all.)
+            double idle = Math.Max(1, jd + 0.5 - w.Economy.Jd);
+            foreach (var g in new[] { Good.Water, Good.Nitrogen, Good.HeliumThree, Good.Machinery }) ares.Stock[(int)g] = ares.Target(g) * 2 * idle;
             ares.Stock[(int)Good.Food] = 0;
             w.Economy.AdvanceTo(jd + 0.5);
             Assert.That(OreMine(ares).Utilisation, Is.LessThanOrEqualTo(0.15 + 1e-9));

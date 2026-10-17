@@ -208,7 +208,8 @@ namespace SolarSystem.Core.Tests
             BreakTheRivals(w, c, jd);
             c.OnOrder = null;
             c.ClassPerDay[(int)ShipClass.Freighter] = 30000;
-            c.Cash = Economy.HullPrice(ShipClass.Freighter) * 1.1;
+            // Short of the reserve on either hull it might buy (a miner is the cheaper one).
+            c.Cash = System.Math.Min(Economy.HullPrice(ShipClass.Freighter), Economy.HullPrice(ShipClass.Miner)) * 1.1;
             w.Companies.Review(jd);
             Assert.That(c.OnOrder, Is.Null, "the price and a reserve, or nothing");
         }
