@@ -388,14 +388,16 @@ namespace SolarSystem.Core
             {
                 if (!o.Aboard || o.Ship.Battle != null) continue;
                 var pos = world.Fleet.StateOf(o.Ship, jd).HelioKm;
-                string witness = Law.FindWitness(pos, jd);
+                // Seen by what the hull itself gives off (a raider lying dark is hard to make out), not a battle's glare.
+                string witness = world.Sensors != null ? Law.FindWitness(pos, jd, null, world.Sensors.SignatureOf(o.Ship, jd)) : Law.FindWitness(pos, jd);
                 if (witness == null) continue;
                 Sight(o.Record, Locate(o.Ship), jd, witness);
             }
             var p = Law.Player;
             if (p.Wanted && world.PilotedShip != null && pilotBody >= 0 && !double.IsNaN(pilotJd) && jd - pilotJd < 1)
             {
-                string witness = Law.FindWitness(pilotHelio, jd);
+                double sig = world.Sensors != null && world.Sensors.PilotSignature > 0 ? world.Sensors.PilotSignature : Signatures.Battle;
+                string witness = Law.FindWitness(pilotHelio, jd, null, sig);
                 if (witness != null) Sight(p, (pilotBody, "near " + BodyName(pilotBody)), jd, witness);
             }
         }
