@@ -328,6 +328,8 @@ namespace SolarSystem.Core
                 return new ShipState(here, facing, v.Length / Astro.SecondsPerDay, true, progress);
             }
 
+            if (s.Conic != null) return ConicState(s, jd);
+
             double total = s.PhaseEndJd - s.PhaseStartJd;
             double tau = Math.Max(0, Math.Min(total, jd - s.PhaseStartJd));
             double half = total * 0.5;
@@ -346,6 +348,25 @@ namespace SolarSystem.Core
             var at = ephemeris.HelioAt(s.FrameBody, jd) + pos + Drift(s, tau);
             return new ShipState(at, thrust.Normalized, velocity.Length / Astro.SecondsPerDay, true,
                 s.PathLength > 0 ? dist / s.PathLength : 1);
+        }
+
+        /// <summary>
+        /// A ship on a transfer orbit (U.SPC-T95): falling along its conic, nose along its velocity, its
+        /// drive lit only for the escape burn as it leaves and the capture burn as it arrives.
+        /// </summary>
+        ShipState ConicState(Ship s, double jd)
+        {
+            var c = s.Conic;
+            double total = c.Days;
+            double tau = Math.Max(0, Math.Min(total, jd - s.PhaseStartJd));
+            var pos = c.OffsetAt(tau);
+            const double h = 1e-4;
+            double t0 = Math.Max(0, tau - h), t1 = Math.Min(total, tau + h);
+            var v = t1 > t0 ? (c.OffsetAt(t1) - c.OffsetAt(t0)) / (t1 - t0) : c.V0;
+            bool burning = tau < c.DepartureBurnDays || total - tau < c.ArrivalBurnDays;
+            var at = ephemeris.HelioAt(s.FrameBody, jd) + pos;
+            return new ShipState(at, v.LengthSquared > 0 ? v.Normalized : DVec3.UnitX, v.Length / Astro.SecondsPerDay, burning,
+                total > 0 ? tau / total : 1);
         }
 
         /// <summary>
@@ -443,6 +464,8 @@ namespace SolarSystem.Core
         /// </summary>
         public static DVec3 TransitOffset(Ship s, double progress)
         {
+            // On a transfer orbit progress is by time (see ConicState).
+            if (s.Conic != null) return s.Conic.OffsetAt(Math.Max(0, Math.Min(1, progress)) * s.Conic.Days);
             double dist = Math.Max(0, Math.Min(1, progress)) * s.PathLength;
             PointAtDistance(s, dist, out var pos, out _);
             double total = s.PhaseEndJd - s.PhaseStartJd;
@@ -456,6 +479,7 @@ namespace SolarSystem.Core
         /// <summary>Position relative to the ship's <see cref="Ship.FrameBody"/> a time into its transit (days).</summary>
         public static DVec3 TransitOffsetAt(Ship s, double tau)
         {
+            if (s.Conic != null) return s.Conic.OffsetAt(tau);
             double total = s.PhaseEndJd - s.PhaseStartJd;
             tau = Math.Max(0, Math.Min(total, tau));
             double dist = tau < total * 0.5
@@ -622,7 +646,10 @@ namespace SolarSystem.Core
                 Burn(ship, departJd, to, () => FixedPoint(to, gate));
                 return;
             }
-            if (Lanes != null)
+            // A slow boat that judged the lanes' tolls dearer than the time flies straight across on a transfer orbit.
+            bool direct = ship.PlannedDirect && UsesConics(ship);
+            ship.PlannedDirect = false;
+            if (Lanes != null && !direct)
             {
                 int fromSystem = Lanes.SystemOf(from), toSystem = Lanes.SystemOf(to);
                 if (fromSystem != toSystem) ship.Journey = Lanes.Route(fromSystem, toSystem, departJd);
@@ -630,10 +657,10 @@ namespace SolarSystem.Core
             if (ship.Journey != null)
             {
                 var hop = ship.Journey[0];
-                Burn(ship, departJd, hop.From, () => RampOrbit(hop, hop.From, departJd));
+                Burn(ship, departJd, hop.From, () => RampOrbit(hop, hop.From, departJd), allowConic: true);
             }
             else if (ship.Wander) Burn(ship, departJd, to, () => WanderOrbit(to, ship));
-            else Burn(ship, departJd, to, () => ArrivalFor(ship, to));
+            else Burn(ship, departJd, to, () => ArrivalFor(ship, to), allowConic: true);
         }
 
         /// <summary>
@@ -686,6 +713,7 @@ namespace SolarSystem.Core
             ship.OriginBody = hop.From;
             ship.FrameBody = 0;
             ship.Path = null;
+            ship.Conic = null;
             ship.Phase = ShipPhase.Lane;
             ship.LaneStartProgress = 0;
             ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
@@ -744,12 +772,12 @@ namespace SolarSystem.Core
             if (ship.JourneyIndex < ship.Journey.Count)
             {
                 var next = ship.Journey[ship.JourneyIndex];
-                Burn(ship, jd, next.From, () => RampOrbit(next, next.From, jd));
+                Burn(ship, jd, next.From, () => RampOrbit(next, next.From, jd), allowConic: true);
             }
             else
             {
                 int to = ship.FinalBody;
-                Burn(ship, jd, to, () => ArrivalFor(ship, to));
+                Burn(ship, jd, to, () => ArrivalFor(ship, to), allowConic: true);
             }
         }
 
@@ -780,8 +808,10 @@ namespace SolarSystem.Core
         }
 
         /// <summary>A flip-and-burn from the ship's current orbit (or ramp) to <paramref name="to"/>, arriving in the orbit the factory gives.</summary>
-        void Burn(Ship ship, double departJd, int to, Func<ParkingOrbit> arrivalOrbit, DVec3? initialVelocity = null)
+        void Burn(Ship ship, double departJd, int to, Func<ParkingOrbit> arrivalOrbit, DVec3? initialVelocity = null, bool allowConic = false)
         {
+            ship.Conic = null;
+            ship.GravityLossKmS = 0;
             int from = ship.Orbit.Body;
             int frame = CommonFrame(from, to);
             double keepOut = FrameKeepOutKm(frame);
@@ -803,6 +833,15 @@ namespace SolarSystem.Core
             // Nothing cleared: fly rest to rest, with no drift, so the ship keeps exactly to its path
             // (which goes round the frame's centre) rather than drifting through it.
             if (!clear) Plan(ship, frame, from, to, departJd, start, startVelocity, arrival, keepOut, underWay);
+            if (OrbitalTransfers)
+            {
+                // A torch holds its straight line against the wells it climbs out of and falls into.
+                ship.GravityLossKmS = GravityLoss(ship, frame, from, to);
+                // A slow boat weighs a transfer orbit against that flip-and-burn and flies whichever costs less.
+                if (allowConic && !underWay && UsesConics(ship))
+                    arrival = TryConic(ship, frame, from, to, departJd, arrivalOrbit, keepOut) ?? arrival;
+            }
+            ship.PlannedConicDepartJd = double.NaN;
 
             ship.DepartureOrbit = ship.Orbit;
             ship.Orbit = arrival;
@@ -877,6 +916,7 @@ namespace SolarSystem.Core
             ship.LegPropellant = 0;
             ship.Orbit = FixedPoint(frame, here - ephemeris.HelioAt(frame, jd));
             ship.Path = null;
+            ship.Conic = null;
             ship.Phase = ShipPhase.Parked;
             CallTanker(ship, jd);
         }
@@ -1069,6 +1109,7 @@ namespace SolarSystem.Core
             ship.Wander = false;
             ship.TripsCompleted++;
             ship.Path = null;
+            ship.Conic = null;
             ship.Journey = null;
             ship.JourneyIndex = 0;
             ship.PhaseStartJd = arriveJd;
@@ -1188,6 +1229,20 @@ namespace SolarSystem.Core
             if (ChooseNext == null) ship.Cargo = CargoFor(ship, here);
 
             double windowJd = nowJd + dwell;
+            ship.PlannedConicDepartJd = double.NaN;
+            ship.PlannedDirect = false;
+            // A slow boat waits in port for its launch window when a transfer orbit then beats flying now.
+            if (UsesConics(ship))
+            {
+                if (PlanWindow(ship, here, next, windowJd, out double windowDepartJd))
+                {
+                    ship.PhaseEndJd = windowDepartJd;
+                    return;
+                }
+                // No transfer orbit beats flying now: remember that, so the departure does not weigh it again.
+                ship.PlannedConicDepartJd = windowJd;
+                ship.PlannedConicDays = -1;
+            }
             var toTarget = (FirstLegTarget(here, next, windowJd) - ephemeris.HelioAt(here, windowJd)).Normalized;
             double want = ship.Orbit.PhaseFacing(toTarget);
             double have = ship.Orbit.PhaseAt(windowJd);
@@ -1324,7 +1379,20 @@ namespace SolarSystem.Core
         }
 
         DVec3 RelativeTo(int frame, int body, double jd) =>
-            frame == body ? DVec3.Zero : ephemeris.HelioAt(body, jd) - ephemeris.HelioAt(frame, jd);
+            frame == body ? DVec3.Zero : HelioAt(body, jd) - HelioAt(frame, jd);
+
+        // Planning asks where the same bodies are at the same instants over and over (each Lambert try,
+        // each intercept bisection): remember the last few thousand answers.
+        readonly Dictionary<(int, double), DVec3> helioCache = new Dictionary<(int, double), DVec3>();
+
+        DVec3 HelioAt(int body, double jd)
+        {
+            if (helioCache.TryGetValue((body, jd), out var p)) return p;
+            if (helioCache.Count > 8192) helioCache.Clear();
+            p = ephemeris.HelioAt(body, jd);
+            helioCache[(body, jd)] = p;
+            return p;
+        }
 
         /// <summary>Velocity of <paramref name="body"/> relative to <paramref name="frame"/>, km/day (central difference).</summary>
         DVec3 VelocityRelativeTo(int frame, int body, double jd)
@@ -1673,14 +1741,34 @@ namespace SolarSystem.Core
         /// drive supplies (each burn's 2·√(a·d) over the straight distance, with a margin for dog-legs and
         /// velocity matching) and the lanes it rides. Hyperlane rides cost no delta-v; they are tolled instead.
         /// </summary>
-        public TripEstimate EstimateTrip(Ship ship, int from, int to, double jd)
+        public TripEstimate EstimateTrip(Ship ship, int from, int to, double jd) => EstimateTrip(ship, from, to, jd, out _);
+
+        /// <summary>
+        /// As <see cref="EstimateTrip(Ship, int, int, double)"/>, and whether a slow boat would rather fly
+        /// straight across on a transfer orbit than pay the lanes' tolls (U.SPC-T95). With
+        /// <see cref="OrbitalTransfers"/> on, each burn also carries its gravity correction, and a
+        /// low-thrust hauler prices each leg as the cheaper of the flip-and-burn and a transfer orbit
+        /// (its launch window and flight time against its propellant, at the hull's time value).
+        /// </summary>
+        public TripEstimate EstimateTrip(Ship ship, int from, int to, double jd, out bool direct)
         {
+            direct = false;
             double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
-            double deltaV = 0;
-            double Burn(double km)
+            bool conics = UsesConics(ship);
+            double deltaV = 0, cost = 0;
+            double Burn(double km, int frame, LegEnd start, LegEnd end)
             {
                 double days = 2 * Math.Sqrt(Math.Max(km, 1) / accel);
-                deltaV += accel * days / Astro.SecondsPerDay * LegMargin + LegMatchKmS;
+                double dv = accel * days / Astro.SecondsPerDay * LegMargin + LegMatchKmS;
+                if (OrbitalTransfers) dv += GravityLossEstimate(ship, frame, start, end, days);
+                if (conics && BestConic(ship, frame, start, end, jd, out double conicDays, out double conicDv)
+                    && LegCost(ship, conicDays, conicDv) < LegCost(ship, days, dv))
+                {
+                    days = conicDays;
+                    dv = conicDv;
+                }
+                deltaV += dv;
+                cost += LegCost(ship, days, dv);
                 return days;
             }
             if (Lanes != null)
@@ -1689,19 +1777,640 @@ namespace SolarSystem.Core
                 var route = a != b ? Lanes.Route(a, b, jd) : null;
                 if (route != null)
                 {
-                    double days = Burn((Lanes.RampHelio(route[0].Lane, a, jd) - ephemeris.HelioAt(from, jd)).Length);
+                    int first = CommonFrame(from, a), last = CommonFrame(b, to);
+                    double days = Burn((Lanes.RampHelio(route[0].Lane, a, jd) - ephemeris.HelioAt(from, jd)).Length,
+                        first, BodyEnd(first, from, ship, jd), RampEnd(a));
                     for (int i = 0; i < route.Count; i++)
                     {
                         days += Hyperlanes.RideDays(Lanes.LaneLengthKm(route[i].Lane, jd));
-                        if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5);
+                        if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5, route[i].To, RampEnd(route[i].To), RampEnd(route[i].To));
                     }
-                    days += Burn((Lanes.RampHelio(route[route.Count - 1].Lane, b, jd) - ephemeris.HelioAt(to, jd)).Length);
-                    return new TripEstimate(days + 0.3 + RingOverheadDays(ship, to, jd + days), deltaV, route.Count);
+                    days += Burn((Lanes.RampHelio(route[route.Count - 1].Lane, b, jd) - ephemeris.HelioAt(to, jd)).Length,
+                        last, RampEnd(b), BodyEnd(last, to, null, jd));
+                    var viaLanes = new TripEstimate(days + 0.3 + RingOverheadDays(ship, to, jd + days), deltaV, route.Count);
+                    if (!conics) return viaLanes;
+                    // A slow boat may sooner wait for a window and fall across than pay the tolls.
+                    double laneCost = cost + route.Count * Economy.LaneToll(ship.MassTonnes) + (viaLanes.Days - days) * TimeValueOf(ship);
+                    int frame = CommonFrame(from, to);
+                    if (BestConic(ship, frame, BodyEnd(frame, from, ship, jd), BodyEnd(frame, to, null, jd), jd, out double straightDays, out double straightDv)
+                        && LegCost(ship, straightDays, straightDv) < laneCost)
+                    {
+                        direct = true;
+                        double total = straightDays + 1.0;
+                        return new TripEstimate(total + RingOverheadDays(ship, to, jd + total), straightDv, 0);
+                    }
+                    return viaLanes;
                 }
             }
+            int common = CommonFrame(from, to);
             double d = (ephemeris.HelioAt(to, jd) - ephemeris.HelioAt(from, jd)).Length;
-            double direct = Burn(d) + 1.0;
-            return new TripEstimate(direct + RingOverheadDays(ship, to, jd + direct), deltaV, 0);
+            double flight = Burn(d, common, BodyEnd(common, from, ship, jd), BodyEnd(common, to, null, jd)) + 1.0;
+            return new TripEstimate(flight + RingOverheadDays(ship, to, jd + flight), deltaV, 0);
+        }
+
+        // ---------------------------------------------------------------- transfer orbits (U.SPC-T95)
+
+        /// <summary>
+        /// Real orbital mechanics for traffic (U.SPC-T95). On, every ship flies the trajectory its drive
+        /// suits: a torch keeps its flip-and-burn and pays a gravity correction for holding its line
+        /// through the wells at either end and the frame's own; a low-thrust hauler weighs that against a
+        /// transfer orbit under the frame's gravity (a Lambert conic, patched onto escape and capture
+        /// hyperbolas at worlds with a sphere of influence) and flies whichever costs its owner less,
+        /// waiting in port for a launch window when that pays. Off, the classic all-flip-and-burn fleet.
+        /// </summary>
+        public bool OrbitalTransfers;
+
+        /// <summary>A drive of at least this (g) is a torch: it flies flip-and-burns everywhere.</summary>
+        public const double TorchAccelG = 0.25;
+
+        /// <summary>The longest a slow boat will wait in port for a launch window, days.</summary>
+        public const double MaxWindowWaitDays = 800;
+
+        /// <summary>How many times the ship's distance from a world its sphere of influence must reach for the trip to be flown as a patched conic.</summary>
+        public const double PatchFactor = 2;
+
+        /// <summary>Cargo under a supply contract is wanted urgently: its hull's time is worth this many times more.</summary>
+        public const double UrgentCargoFactor = 4;
+
+        /// <summary>Flight times a slow boat tries, as fractions of the leg's Hohmann time.</summary>
+        static readonly double[] TransferTimeFactors = { 0.15, 0.22, 0.3, 0.45, 0.6, 0.8, 1.0, 1.2 };
+
+        /// <summary>The fewer flight times a window search first sweeps its whole span with.</summary>
+        static readonly double[] CoarseTimeFactors = { 0.15, 0.3, 0.6, 1.0 };
+
+        public static DriveKind DriveOf(Ship ship) => ship.Spec.AccelG >= TorchAccelG ? DriveKind.Torch : DriveKind.LowThrust;
+
+        bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust;
+
+        /// <summary>
+        /// What a day of the hull's time is worth to its owner (credits) when it trades time for propellant:
+        /// its crew's days (<see cref="Economy.RunningCostPerDay"/>), what its cargo cost (money tied up on
+        /// the way, 0.3% a day), and <see cref="UrgentCargoFactor"/> times as much for contracted supplies.
+        /// An empty or cheaply laden hauler's time is worth little, so it takes the slow boat.
+        /// </summary>
+        public static double TimeValuePerDay(Ship ship)
+        {
+            double v = Economy.RunningCostPerDay(ship.Spec.Class);
+            if (ship.HasCargo) v += 0.003 * Math.Max(0, ship.CargoCost);
+            if (ship.HasCargo && ship.CargoBonus > 0) v *= UrgentCargoFactor;
+            return v;
+        }
+
+        /// <summary>Overrides what a day of a hull's time is worth to its planner; null for <see cref="TimeValuePerDay"/>.</summary>
+        public Func<Ship, double> TimeValue;
+
+        double TimeValueOf(Ship ship) => TimeValue != null ? Math.Max(0, TimeValue(ship)) : TimeValuePerDay(ship);
+
+        /// <summary>What a leg costs the ship's owner: its days at its time value and its propellant at the going rate.</summary>
+        public double LegCost(Ship ship, double days, double deltaVKmS) =>
+            Math.Max(0, days) * TimeValueOf(ship) + Propulsion.PropellantFor(ship, Math.Max(0, deltaVKmS)) * Propulsion.PropellantBasePrice;
+
+        /// <summary>The frame's gravitational parameter in km³/day².</summary>
+        double FrameMu(int frame) => Math.Max(0, catalog[frame].Gm) * Astro.SecondsPerDay * Astro.SecondsPerDay;
+
+        /// <summary>The pole a frame's transfers go round prograde about: the ecliptic's for a star, the body's spin axis otherwise.</summary>
+        DVec3 FrameNormal(int frame)
+        {
+            var f = catalog[frame];
+            return f.IsStar || f.Kind == BodyKind.Barycentre ? DVec3.UnitZ : f.SpinAxis;
+        }
+
+        /// <summary>
+        /// The world whose well a ship at <paramref name="body"/> climbs out of to fly free in
+        /// <paramref name="frame"/>: the body on its chain that orbits the frame directly (Earth for the
+        /// Moon in the Sun's frame), or -1 if it is the frame itself.
+        /// </summary>
+        int WellOf(int frame, int body)
+        {
+            if (body == frame) return -1;
+            int b = body;
+            while (b >= 0 && catalog[b].ParentIndex != frame) b = catalog[b].ParentIndex;
+            return b;
+        }
+
+        /// <summary>A world's sphere of influence against the frame it orbits, km, where it is now.</summary>
+        double SoiKm(int frame, int well, double jd) => Conics.SoiRadius(RelativeTo(frame, well, jd).Length, catalog[well].Gm, catalog[frame].Gm);
+
+        /// <summary>The parking orbit radius a planner assumes at a world it has not yet reached, km.</summary>
+        double NominalParkingKm(int body)
+        {
+            var b = catalog[body];
+            return Math.Max(b.RadiusKm * 4.75, b.RadiusKm + 160);
+        }
+
+        /// <summary>A parking orbit the planner assumes at a world (equatorial, at <see cref="NominalParkingKm"/>), for weighing windows.</summary>
+        ParkingOrbit NominalOrbit(int body)
+        {
+            var b = catalog[body];
+            var normal = b.SpinAxis.LengthSquared > 0 ? b.SpinAxis.Normalized : DVec3.UnitZ;
+            var u = DVec3.Cross(Math.Abs(normal.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, normal).Normalized;
+            double r = NominalParkingKm(body);
+            return new ParkingOrbit { Body = body, RadiusKm = r, U = u, V = DVec3.Cross(normal, u), RateRadPerDay = Kepler.CircularRate(Math.Max(b.Gm, 0), r) };
+        }
+
+        /// <summary>
+        /// Solves the transfer orbit from <paramref name="departure"/> (at <paramref name="from"/>) to
+        /// <paramref name="arrival"/> (at <paramref name="to"/>) leaving at <paramref name="departJd"/> and
+        /// taking <paramref name="days"/>, in <paramref name="frame"/>: a Lambert conic between the ends,
+        /// patched onto an escape hyperbola where the ship leaves a world whose sphere of influence is well
+        /// outside its orbit (and a capture hyperbola where it arrives at one), and the burns at each end.
+        /// A free (non-fixed) arrival orbit is phased so the ship circularises where the capture leaves it.
+        /// Returns null when there is no such orbit, or its legs inside the spheres would overlap.
+        /// </summary>
+        ConicTransfer SolveConic(Ship ship, int frame, int from, int to, double departJd, double days, ParkingOrbit departure, ParkingOrbit arrival)
+        {
+            double mu = FrameMu(frame);
+            if (!(mu > 0) || !(days > 0)) return null;
+            const double day = Astro.SecondsPerDay;
+            double arriveJd = departJd + days;
+
+            var startRel = RelativeTo(frame, from, departJd) + departure.OffsetAt(departJd);
+            var startVel = (from == frame ? DVec3.Zero : VelocityRelativeTo(frame, from, departJd)) + departure.VelocityAt(departJd);
+            int esc = WellOf(frame, from);
+            DVec3 escR = DVec3.Zero, escV = DVec3.Zero;
+            double escSoi = 0, rpDep = 0;
+            bool patchedOut = false;
+            if (esc >= 0 && catalog[esc].Gm > 0)
+            {
+                escR = RelativeTo(frame, esc, departJd);
+                escV = VelocityRelativeTo(frame, esc, departJd);
+                escSoi = SoiKm(frame, esc, departJd);
+                rpDep = (startRel - escR).Length;
+                patchedOut = rpDep > 0 && escSoi > rpDep * PatchFactor;
+            }
+
+            var toR = RelativeTo(frame, to, arriveJd);
+            var toV = to == frame ? DVec3.Zero : VelocityRelativeTo(frame, to, arriveJd);
+            int cap = WellOf(frame, to);
+            DVec3 capR = DVec3.Zero, capV = DVec3.Zero;
+            double capSoi = 0, rpArr = 0;
+            bool patchedIn = false;
+            if (cap >= 0 && catalog[cap].Gm > 0)
+            {
+                capR = RelativeTo(frame, cap, arriveJd);
+                capV = VelocityRelativeTo(frame, cap, arriveJd);
+                capSoi = SoiKm(frame, cap, arriveJd);
+                rpArr = (toR + arrival.OffsetAt(arriveJd) - capR).Length;
+                patchedIn = rpArr > 0 && capSoi > rpArr * PatchFactor;
+            }
+
+            var r1 = patchedOut ? escR : startRel;
+            var h = DVec3.Cross(r1, patchedOut ? escV : startVel);
+            var normal = h.LengthSquared > 1e-6 ? h.Normalized : FrameNormal(frame);
+            if (!patchedIn && !arrival.Fixed)
+            {
+                // Arrive where the conic comes in: facing the incoming ship, or (in orbit round the
+                // frame's own centre) a little short of opposite where it left, a near-Hohmann half turn.
+                DVec3 dir;
+                if (to == frame)
+                {
+                    var rh = r1.Normalized;
+                    var n = arrival.U.LengthSquared > 0 ? DVec3.Cross(arrival.U, arrival.V).Normalized : normal;
+                    dir = rh * -Math.Cos(10 * Astro.Deg2Rad) + DVec3.Cross(n, rh) * Math.Sin(10 * Astro.Deg2Rad);
+                }
+                else dir = (r1 - toR).Normalized;
+                arrival.EpochJd = arriveJd;
+                arrival.PhaseAtEpoch = arrival.PhaseFacing(dir);
+            }
+            var endRel = toR + arrival.OffsetAt(arriveJd);
+            var endVel = toV + arrival.VelocityAt(arriveJd);
+            var r2 = patchedIn ? capR : endRel;
+            if (!Conics.Lambert(r1, r2, days, mu, normal, out var v1, out var v2)) return null;
+
+            var c = new ConicTransfer { Mu = mu, Days = days };
+            // The legs inside each sphere of influence, and the states where they hand over to the frame's conic.
+            DVec3 exit = startRel, entry = endRel, exitVel = startVel, entryVel = endVel;
+            if (patchedOut)
+            {
+                // The escape burn at the ship's own spot in its parking orbit, onto the hyperbola through it.
+                var vInf = v1 - escV;
+                var rel = startRel - escR;
+                var relVel = startVel - escV;
+                var nPark = DVec3.Cross(rel, relVel);
+                c.Escape = Hyperbola.Through(FrameMu(esc), rel, vInf, nPark.LengthSquared > 0 ? nPark.Normalized : normal);
+                if (c.Escape == null) return null;
+                c.FromR0 = escR;
+                c.FromV0 = escV;
+                c.FromSoiKm = escSoi;
+                c.ExitDays = c.Escape.TimeToRadius(escSoi);
+                if (c.ExitDays > 0.45 * days) return null;
+                Conics.Propagate(escR, escV, mu, c.ExitDays, out var bodyAt, out var bodyVel);
+                exit = bodyAt + c.Escape.PositionAt(c.ExitDays);
+                exitVel = bodyVel + c.Escape.VelocityAt(c.ExitDays);
+                c.DepartureBurnKmS = (c.Escape.Q * c.Escape.PeriapsisSpeed - relVel).Length / day;
+            }
+            if (patchedIn)
+            {
+                var vInf = v2 - capV;
+                if (!arrival.Fixed && to == cap && arrival.U.LengthSquared > 0)
+                {
+                    // Circularise where a capture from this approach bottoms out: θ∞ round from the incoming asymptote.
+                    var ideal = Hyperbola.Arrival(FrameMu(cap), rpArr, vInf, DVec3.Cross(arrival.U, arrival.V).Normalized);
+                    if (ideal == null) return null;
+                    arrival.EpochJd = arriveJd;
+                    arrival.PhaseAtEpoch = arrival.PhaseFacing(ideal.P);
+                    endRel = toR + arrival.OffsetAt(arriveJd);
+                    endVel = toV + arrival.VelocityAt(arriveJd);
+                }
+                c.Capture = Hyperbola.Through(FrameMu(cap), endRel - capR, vInf, normal);
+                if (c.Capture == null) return null;
+                c.ToR1 = capR;
+                c.ToV1 = capV;
+                c.ToSoiKm = capSoi;
+                c.EntryDays = c.Capture.TimeToRadius(capSoi);
+                if (c.EntryDays > 0.45 * days) return null;
+                Conics.Propagate(capR, capV, mu, -c.EntryDays, out var bodyAt, out var bodyVel);
+                entry = bodyAt + c.Capture.PositionAt(-c.EntryDays);
+                entryVel = bodyVel + c.Capture.VelocityAt(-c.EntryDays);
+                c.ArrivalBurnKmS = (c.Capture.Q * c.Capture.PeriapsisSpeed - (endVel - capV)).Length / day;
+            }
+            double cruise = days - c.ExitDays - c.EntryDays;
+            if (cruise < 0.1 * days) return null;
+            if (patchedOut || patchedIn)
+            {
+                // The frame's conic from handoff to handoff, and the trims that match it to each hyperbola there.
+                if (!Conics.Lambert(exit, entry, cruise, mu, normal, out v1, out v2)) return null;
+                c.CorrectionBurnKmS = ((patchedOut ? (v1 - exitVel).Length : 0) + (patchedIn ? (v2 - entryVel).Length : 0)) / day;
+            }
+            c.R0 = exit;
+            c.V0 = v1;
+            c.R1 = entry;
+            c.V1 = v2;
+            if (!patchedOut) c.DepartureBurnKmS = (v1 - startVel).Length / day;
+            if (!patchedIn) c.ArrivalBurnKmS = (v2 - endVel).Length / day;
+
+            double accel = Math.Max(1e-9, ship.Spec.AccelG * 9.80665e-3);
+            c.DepartureBurnDays = c.DepartureBurnKmS / accel / day;
+            c.ArrivalBurnDays = c.ArrivalBurnKmS / accel / day;
+            if (c.DepartureBurnDays + c.ArrivalBurnDays > 0.5 * days) return null;
+            return c;
+        }
+
+        /// <summary>The Hohmann time between the ends of a leg about its frame, days (the yardstick for the flight times tried).</summary>
+        double HohmannDaysFor(int frame, int from, int to, double jd, ParkingOrbit departure, ParkingOrbit arrival)
+        {
+            double r1 = (RelativeTo(frame, from, jd) + departure.OffsetAt(jd)).Length;
+            double r2 = (RelativeTo(frame, to, jd) + arrival.OffsetAt(jd)).Length;
+            double mu = FrameMu(frame);
+            return mu > 0 && r1 > 0 && r2 > 0 ? Conics.HohmannTime(mu, r1, r2) : 0;
+        }
+
+        /// <summary>
+        /// Weighs a transfer orbit against the flip-and-burn just planned onto <paramref name="ship"/>, leaving
+        /// now: the flight times it tries (and the one its window was planned for), each priced at
+        /// <see cref="LegCost"/>; if the cheapest beats the flip-and-burn and keeps clear of everything, it
+        /// becomes the transit and its arrival orbit is returned. Otherwise the flip-and-burn stands (null).
+        /// </summary>
+        ParkingOrbit TryConic(Ship ship, int frame, int from, int to, double departJd, Func<ParkingOrbit> arrivalOrbit, double keepOut)
+        {
+            double brachyCost = LegCost(ship, ship.PhaseEndJd - departJd, Propulsion.TransitDeltaV(ship));
+            var arrival = arrivalOrbit();
+            double hohmann = HohmannDaysFor(frame, from, to, departJd, ship.Orbit, arrival);
+            if (!(hohmann > 0)) return null;
+            double sincePlan = double.IsNaN(ship.PlannedConicDepartJd) ? double.PositiveInfinity : Math.Abs(ship.PlannedConicDepartJd - departJd);
+            // Its window planner already judged the flip-and-burn the better buy for this leg.
+            if (ship.PlannedConicDays < 0 && sincePlan <= MaxFacingWaitDays + 0.5) return null;
+            bool planned = ship.PlannedConicDays > 0 && sincePlan < 1;
+            var tries = new List<double>();
+            if (planned) tries.AddRange(new[] { ship.PlannedConicDays, ship.PlannedConicDays * 0.8, ship.PlannedConicDays * 1.25 });
+            else foreach (double f in TransferTimeFactors) tries.Add(hohmann * f);
+            double bestCost = brachyCost, bestDays = 0;
+            foreach (double days in tries)
+            {
+                var c = SolveConic(ship, frame, from, to, departJd, days, ship.Orbit, arrival);
+                if (c == null) continue;
+                double cost = LegCost(ship, days, c.DeltaVKmS);
+                if (cost < bestCost)
+                {
+                    bestCost = cost;
+                    bestDays = days;
+                }
+            }
+            if (bestDays <= 0) return null;
+            var conic = SolveConic(ship, frame, from, to, departJd, bestDays, ship.Orbit, arrival);
+            if (conic == null) return null;
+
+            var saved = (ship.Path, ship.PathCumulative, ship.PathLength, ship.PhaseEndJd, ship.DepartureVelocity, ship.ArrivalVelocity, ship.GravityLossKmS);
+            ship.Conic = conic;
+            ship.GravityLossKmS = 0;
+            ship.PhaseStartJd = departJd;
+            ship.PhaseEndJd = departJd + conic.Days;
+            ship.DepartureVelocity = conic.V0;
+            ship.ArrivalVelocity = conic.V1;
+            // The arc as a polyline, for whatever reads the path (its length on the helm, a diversion's check).
+            const int n = 32;
+            var path = new DVec3[n + 1];
+            for (int i = 0; i <= n; i++) path[i] = conic.OffsetAt(conic.Days * i / n);
+            ship.Path = path;
+            ship.PathCumulative = Cumulative(path);
+            ship.PathLength = ship.PathCumulative[n];
+            if (Clear(ship, frame, from, to, keepOut)) return arrival;
+
+            ship.Conic = null;
+            (ship.Path, ship.PathCumulative, ship.PathLength, ship.PhaseEndJd, ship.DepartureVelocity, ship.ArrivalVelocity, ship.GravityLossKmS) = saved;
+            return null;
+        }
+
+        /// <summary>
+        /// Sets a slow boat's departure for its next trip (U.SPC-T95): over the coming synodic period
+        /// (capped at <see cref="MaxWindowWaitDays"/>, and at however long waiting would cost more than
+        /// flying now) it tries leaving on each of a grid of dates with each of a range of flight times,
+        /// and keeps the cheapest wait plus transfer. If that beats a flip-and-burn now, it waits in port for
+        /// that window and records the plan; otherwise it returns false and leaves as usual.
+        /// </summary>
+        bool PlanWindow(Ship ship, int here, int next, double earliestJd, out double departJd)
+        {
+            departJd = earliestJd;
+            if (ship.Wander || ship.Orbit == null || ship.GateKm != null) return false;
+            int legTo = next;
+            Func<double, ParkingOrbit> arrivalAt = null;
+            bool direct = false;
+            DVec3 target = ephemeris.HelioAt(next, earliestJd);
+            if (Lanes != null)
+            {
+                int a = Lanes.SystemOf(here), b = Lanes.SystemOf(next);
+                var route = a != b ? Lanes.Route(a, b, earliestJd) : null;
+                if (route != null)
+                {
+                    EstimateTrip(ship, here, next, earliestJd, out direct);
+                    if (!direct)
+                    {
+                        var hop = route[0];
+                        legTo = hop.From;
+                        arrivalAt = jd => RampOrbit(hop, hop.From, jd);
+                        target = Lanes.RampHelio(hop.Lane, a, earliestJd);
+                    }
+                }
+            }
+            if (arrivalAt == null) arrivalAt = jd => NominalOrbit(legTo);
+            int frame = CommonFrame(here, legTo);
+            double mu = FrameMu(frame);
+            if (!(mu > 0)) return false;
+
+            // What flying now by flip-and-burn would cost, for comparison.
+            double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
+            double km = Math.Max(1, (target - ephemeris.HelioAt(here, earliestJd)).Length);
+            double burnDays = 2 * Math.Sqrt(km / accel);
+            double burnDv = accel * burnDays / Astro.SecondsPerDay * LegMargin + LegMatchKmS
+                            + GravityLossEstimate(ship, frame, BodyEnd(frame, here, ship, earliestJd), BodyEnd(frame, legTo, null, earliestJd), burnDays);
+            double brachyCost = LegCost(ship, burnDays, burnDv);
+            double tv = Math.Max(1e-6, TimeValueOf(ship));
+
+            // Windows come round once a synodic period of the two ends about the frame.
+            double n1 = here == frame ? ship.Orbit.RateRadPerDay : MeanMotion(frame, WellOf(frame, here), earliestJd);
+            var probe = arrivalAt(earliestJd);
+            double n2 = legTo == frame ? (probe.Fixed ? 0 : probe.RateRadPerDay) : MeanMotion(frame, WellOf(frame, legTo), earliestJd);
+            double synodic = Math.Abs(n1 - n2) > 1e-12 ? Astro.TwoPi / Math.Abs(n1 - n2) : MaxWindowWaitDays;
+            double maxWait = Math.Max(0, Math.Min(Math.Min(synodic, MaxWindowWaitDays), brachyCost / tv));
+            double hohmann = HohmannDaysFor(frame, here, legTo, earliestJd, ship.Orbit, probe);
+            if (!(hohmann > 0)) return false;
+
+            double bestCost = brachyCost, bestWait = -1, bestDays = 0;
+            double period = !ship.Orbit.Fixed && ship.Orbit.RateRadPerDay > 0 ? Astro.TwoPi / ship.Orbit.RateRadPerDay : 0;
+            void Try(double wait, double[] factors, double onlyDays = 0)
+            {
+                if (wait < 0 || wait > maxWait + period) return;
+                double jd = earliestJd + wait;
+                var arrival = arrivalAt(jd);
+                foreach (double f in factors)
+                {
+                    double days = onlyDays > 0 ? onlyDays : hohmann * f;
+                    if (onlyDays > 0 && f != factors[0]) break;
+                    var c = SolveConic(ship, frame, here, legTo, jd, days, ship.Orbit, arrival);
+                    if (c == null) continue;
+                    double cost = wait * tv + LegCost(ship, days, c.DeltaVKmS);
+                    if (cost < bestCost)
+                    {
+                        bestCost = cost;
+                        bestWait = wait;
+                        bestDays = days;
+                    }
+                }
+            }
+            const int steps = 16;
+            double step = maxWait / steps;
+            // A coarse look over the whole span, then every flight time around the best date found.
+            for (int i = 0; i <= steps; i++) Try(step * i, CoarseTimeFactors);
+            if (bestWait >= 0)
+            {
+                double centre = bestWait;
+                if (step > 0)
+                    for (int i = -4; i <= 4; i++) Try(centre + step * i / 4.0, TransferTimeFactors);
+                else Try(centre, TransferTimeFactors);
+            }
+            if (bestWait < 0) return false;
+            // Time the escape burn to the ship's place in its parking orbit: within one turn of it, the
+            // moment it lies the right way round from where it is going.
+            if (period > 0 && period < 5)
+            {
+                double centre = bestWait, days = bestDays;
+                for (int i = -12; i <= 12; i++) if (i != 0) Try(centre + period * i / 24.0, TransferTimeFactors, days);
+            }
+            ship.PlannedConicDepartJd = earliestJd + bestWait;
+            ship.PlannedConicDays = bestDays;
+            ship.PlannedDirect = direct;
+            departJd = ship.PlannedConicDepartJd;
+            return true;
+        }
+
+        /// <summary>Mean motion (rad/day) of a world about the frame, from its distance now.</summary>
+        double MeanMotion(int frame, int well, double jd)
+        {
+            if (well < 0) return 0;
+            double r = RelativeTo(frame, well, jd).Length;
+            double mu = FrameMu(frame);
+            return r > 0 && mu > 0 ? Math.Sqrt(mu / (r * r * r)) : 0;
+        }
+
+        /// <summary>
+        /// One end of a leg as the trip estimate sees it: a world going round the frame (whose well the
+        /// ship climbs out of or falls into, from a parking orbit <see cref="Rp"/> out), or a point at
+        /// <see cref="R"/> from the frame's centre, held still (a hyperlane ramp) or in circular orbit.
+        /// </summary>
+        readonly struct LegEnd
+        {
+            public readonly int Well;
+            public readonly double R, Rp;
+            public readonly bool Still, Patched;
+
+            public LegEnd(int well, double r, double rp, bool still, bool patched)
+            {
+                Well = well;
+                R = r;
+                Rp = rp;
+                Still = still;
+                Patched = patched;
+            }
+        }
+
+        /// <summary>A world (or a parking orbit round the frame's own centre) as a leg end.</summary>
+        LegEnd BodyEnd(int frame, int body, Ship ship, double jd)
+        {
+            bool parkedHere = ship != null && ship.Orbit != null && ship.Orbit.Body == body && !ship.Orbit.Fixed && ship.Orbit.RadiusKm > 0;
+            double parking = parkedHere ? ship.Orbit.RadiusKm : NominalParkingKm(body);
+            if (body == frame) return new LegEnd(-1, parking, 0, false, false);
+            int well = WellOf(frame, body);
+            if (well < 0) return new LegEnd(-1, parking, 0, false, false);
+            double r = RelativeTo(frame, well, jd).Length;
+            double rp = well == body ? parking : RelativeTo(well, body, jd).Length;
+            bool patched = catalog[well].Gm > 0 && SoiKm(frame, well, jd) > rp * PatchFactor;
+            return new LegEnd(well, r, rp, false, patched);
+        }
+
+        /// <summary>A hyperlane ramp (a point held still off its planet) as a leg end in that planet's frame.</summary>
+        LegEnd RampEnd(int system) => new LegEnd(-1, Lanes.RampRadiusKm(system), 0, true, false);
+
+        /// <summary>
+        /// A flip-and-burn's gravity correction as the estimate sees it (U.SPC-T95): climbing straight out of
+        /// each end's well from rest (<see cref="Conics.GravityLossLeaving"/>), plus the frame's own pull
+        /// across the flight between two worlds that orbit it.
+        /// </summary>
+        double GravityLossEstimate(Ship ship, int frame, LegEnd start, LegEnd end, double days)
+        {
+            double accel = ship.Spec.AccelG * 9.80665e-3;
+            double loss = 0;
+            foreach (var e in new[] { start, end })
+                loss += e.Well >= 0 ? Conics.GravityLossLeaving(catalog[e.Well].Gm, e.Rp, accel) : Conics.GravityLossLeaving(catalog[frame].Gm, e.R, accel);
+            if (start.Well >= 0 && end.Well >= 0)
+            {
+                double r = 0.5 * (start.R + end.R);
+                if (r > 0) loss += Math.Max(0, catalog[frame].Gm) / (r * r) * days * Astro.SecondsPerDay;
+            }
+            return loss;
+        }
+
+        /// <summary>
+        /// A flip-and-burn's gravity correction as flown (U.SPC-T95): the pull of the frame's centre and of
+        /// every world on either end's chain, summed along the planned path, ∫ Σ μ/d² dt. A torch spends
+        /// that holding its straight line instead of falling off it.
+        /// </summary>
+        double GravityLoss(Ship ship, int frame, int from, int to)
+        {
+            var bodies = new List<int>();
+            if (catalog[frame].Gm > 0) bodies.Add(frame);
+            foreach (int end in new[] { from, to })
+                for (int b = end; b >= 0 && b != frame; b = catalog[b].ParentIndex)
+                    if (!bodies.Contains(b) && catalog[b].Gm > 0) bodies.Add(b);
+            double total = ship.PhaseEndJd - ship.PhaseStartJd;
+            if (!(total > 0) || bodies.Count == 0) return 0;
+            // Dense at the ends, where the wells are steep and the ship is slow.
+            const int samples = 64;
+            double loss = 0, prevTau = 0, prevG = 0;
+            for (int k = 0; k <= samples; k++)
+            {
+                double u = (double)k / samples;
+                double tau = total * (u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
+                double jd = ship.PhaseStartJd + tau;
+                var helio = HelioAt(frame, jd) + TransitOffsetAt(ship, tau);
+                double g = 0;
+                foreach (int b in bodies)
+                {
+                    double d = Math.Max((helio - HelioAt(b, jd)).Length, catalog[b].RadiusKm);
+                    if (d > 0) g += catalog[b].Gm / (d * d);
+                }
+                if (k > 0) loss += 0.5 * (g + prevG) * (tau - prevTau) * Astro.SecondsPerDay;
+                prevTau = tau;
+                prevG = g;
+            }
+            return loss;
+        }
+
+        readonly Dictionary<(int, int, int, long, long, long, long, long), (double days, double dv)[]> conicOptions =
+            new Dictionary<(int, int, int, long, long, long, long, long), (double days, double dv)[]>();
+
+        /// <summary>
+        /// The cheapest transfer orbit for a leg as the trip estimate sees it, priced at
+        /// <see cref="LegCost"/>: a Hohmann transfer (waiting for its window when both ends are worlds
+        /// going round the frame), or a faster Lambert arc leaving now. False if the frame has no gravity.
+        /// </summary>
+        bool BestConic(Ship ship, int frame, LegEnd start, LegEnd end, double jd, out double days, out double dv)
+        {
+            days = dv = 0;
+            var options = ConicOptions(frame, start, end, jd);
+            if (options == null || options.Length == 0) return false;
+            double best = double.PositiveInfinity;
+            foreach (var o in options)
+            {
+                double cost = LegCost(ship, o.days, o.dv);
+                if (cost < best)
+                {
+                    best = cost;
+                    days = o.days;
+                    dv = o.dv;
+                }
+            }
+            return best < double.PositiveInfinity;
+        }
+
+        static long Bucket(double km) => km > 0 ? (long)Math.Round(Math.Log(km) * 200) : 0;
+
+        (double days, double dv)[] ConicOptions(int frame, LegEnd start, LegEnd end, double jd)
+        {
+            double mu = FrameMu(frame);
+            double gm = catalog[frame].Gm;
+            if (!(mu > 0) || start.R <= 0 || end.R <= 0) return null;
+            bool worlds = start.Well >= 0 && end.Well >= 0;
+            long flags = (start.Still ? 1 : 0) | (end.Still ? 2 : 0) | (start.Patched ? 4 : 0) | (end.Patched ? 8 : 0);
+            var key = (frame, start.Well, end.Well, Bucket(start.R) * 4096 + Bucket(start.Rp), Bucket(end.R) * 4096 + Bucket(end.Rp),
+                flags, worlds ? (long)Math.Floor(jd) : 0, 0L);
+            if (conicOptions.TryGetValue(key, out var cached)) return cached;
+            if (conicOptions.Count > 20000) conicOptions.Clear();
+
+            const double day = Astro.SecondsPerDay;
+            double r1 = start.R, r2 = end.R;
+            double hohmann = Conics.HohmannTime(mu, r1, r2);
+            double EndBurn(LegEnd e, double vInf, double vTransfer)
+            {
+                if (e.Patched) return Conics.EscapeBurn(catalog[e.Well].Gm, e.Rp, vInf, Conics.CircularSpeed(catalog[e.Well].Gm, e.Rp));
+                return e.Still ? vTransfer : vInf;
+            }
+            var list = new List<(double, double)>();
+            double a = 0.5 * (r1 + r2);
+            double vt1 = Math.Sqrt(gm * (2 / r1 - 1 / a)), vt2 = Math.Sqrt(gm * (2 / r2 - 1 / a));
+            double vc1 = Math.Sqrt(gm / r1), vc2 = Math.Sqrt(gm / r2);
+            double wait = 0;
+            if (worlds)
+            {
+                var p1 = RelativeTo(frame, start.Well, jd);
+                var p2 = RelativeTo(frame, end.Well, jd);
+                var n = FrameNormal(frame);
+                double phase = Math.Atan2(DVec3.Dot(n, DVec3.Cross(p1, p2)), DVec3.Dot(p1, p2));
+                wait = Conics.WaitForPhase(phase, Conics.HohmannLeadAngle(mu, r1, r2), Math.Sqrt(mu / (r1 * r1 * r1)), Math.Sqrt(mu / (r2 * r2 * r2)));
+                if (double.IsInfinity(wait)) wait = 0;
+            }
+            list.Add((wait + hohmann, EndBurn(start, Math.Abs(vt1 - vc1), vt1) + EndBurn(end, Math.Abs(vc2 - vt2), vt2)));
+
+            // Faster arcs leaving now: between the worlds where they really are, or between idealised
+            // circular orbits a long arc apart (a parking orbit can be phased to suit within hours).
+            foreach (double f in new[] { 0.18, 0.3, 0.5, 0.8 })
+            {
+                double tof = hohmann * f;
+                DVec3 a1, a2, w1, w2, normal;
+                if (worlds)
+                {
+                    a1 = RelativeTo(frame, start.Well, jd);
+                    w1 = VelocityRelativeTo(frame, start.Well, jd);
+                    a2 = RelativeTo(frame, end.Well, jd + tof);
+                    w2 = VelocityRelativeTo(frame, end.Well, jd + tof);
+                    var h = DVec3.Cross(a1, w1);
+                    normal = h.LengthSquared > 0 ? h.Normalized : DVec3.UnitZ;
+                }
+                else
+                {
+                    double ang = 150 * Astro.Deg2Rad;
+                    a1 = new DVec3(r1, 0, 0);
+                    a2 = new DVec3(r2 * Math.Cos(ang), r2 * Math.Sin(ang), 0);
+                    w1 = start.Still ? DVec3.Zero : new DVec3(0, vc1 * day, 0);
+                    w2 = end.Still ? DVec3.Zero : new DVec3(-Math.Sin(ang), Math.Cos(ang), 0) * (vc2 * day);
+                    normal = DVec3.UnitZ;
+                }
+                if (!Conics.Lambert(a1, a2, tof, mu, normal, out var v1, out var v2)) continue;
+                double inf1 = (v1 - w1).Length / day, inf2 = (v2 - w2).Length / day;
+                list.Add((tof, EndBurn(start, inf1, inf1) + EndBurn(end, inf2, inf2)));
+            }
+            var result = list.ToArray();
+            conicOptions[key] = result;
+            return result;
         }
 
         /// <summary>Where the first leg of a trip heads: the first lane's ramp, or the destination itself.</summary>

@@ -631,6 +631,8 @@ namespace SolarSystem.Core
             ship.PathCumulative = lead.PathCumulative;
             ship.PathLength = lead.PathLength;
             ship.AccelKmPerDay2 = lead.AccelKmPerDay2;
+            ship.Conic = lead.Conic;
+            ship.GravityLossKmS = lead.GravityLossKmS;
             ship.DepartureVelocity = lead.DepartureVelocity;
             ship.ArrivalVelocity = lead.ArrivalVelocity;
             ship.Journey = lead.Journey;
@@ -1163,6 +1165,8 @@ namespace SolarSystem.Core
             heir.PathCumulative = dead.PathCumulative;
             heir.PathLength = dead.PathLength;
             heir.AccelKmPerDay2 = dead.AccelKmPerDay2;
+            heir.Conic = dead.Conic;
+            heir.GravityLossKmS = dead.GravityLossKmS;
             heir.DepartureVelocity = dead.DepartureVelocity;
             heir.ArrivalVelocity = dead.ArrivalVelocity;
             heir.Journey = dead.Journey;

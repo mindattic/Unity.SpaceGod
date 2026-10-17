@@ -36,7 +36,7 @@ namespace SolarSystem.Core.Tests
         /// <summary>A player in the middle of things: flying a Sol merchant, with a purse and a reputation.</summary>
         static Ship MakePlayer(World w)
         {
-            var ship = w.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort && s.Role == ShipRole.Trader);
+            var ship = w.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort && s.Role == ShipRole.Trader && s.Faction == w.Sol);
             w.PilotedShip = ship;
             ship.Credits = 4321.5;
             ship.Faction.Treasury = 1234567.25;

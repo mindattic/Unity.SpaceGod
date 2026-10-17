@@ -244,6 +244,26 @@ namespace SolarSystem.Core
         public double PathLength;
         public double AccelKmPerDay2;
 
+        /// <summary>
+        /// A coasting transfer orbit this transit flies instead of the flip-and-burn (U.SPC-T95): a
+        /// low-thrust hauler's escape burn, Lambert conic and capture burn. Null for a flip-and-burn,
+        /// whose <see cref="Path"/> is then the line it holds.
+        /// </summary>
+        public ConicTransfer Conic;
+
+        /// <summary>The delta-v (km/s) a flip-and-burn spends holding its straight line against gravity (U.SPC-T95).</summary>
+        public double GravityLossKmS;
+
+        /// <summary>
+        /// The transfer the planner chose when it set the departure date (U.SPC-T95): when it leaves
+        /// (a launch window it waits in port for), its flight time (negative when it judged a flip-and-burn
+        /// the better buy), and whether it flies straight across on a transfer orbit rather than by
+        /// hyperlane. NaN when nothing is planned.
+        /// </summary>
+        public double PlannedConicDepartJd = double.NaN;
+        public double PlannedConicDays;
+        public bool PlannedDirect;
+
         /// <summary>A one-line description of what is in the hold, for the HUD.</summary>
         public string Cargo;
         public int TripsCompleted;

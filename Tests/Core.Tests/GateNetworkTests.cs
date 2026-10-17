@@ -200,7 +200,9 @@ namespace SolarSystem.Core.Tests
             var g = Create();
             var sol = g.Find("Sol System");
             var tau = g.Find("Tau Ceti");
-            var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Free && s.Spec.Class == ShipClass.Courier && !s.Destroyed);
+            // One well away from any fighting (a courier caught in a raid on a pirate haven never gets to leave).
+            var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Free && s.Spec.Class == ShipClass.Courier && !s.Destroyed
+                && s.Battle == null && sol.World.War.Danger(s.Orbit.Body) == 0);
             string name = ship.Name;
             // Wait for it to be in port, then send it.
             double jd = RunUntil(g, StartJd, 20, () => ship.Phase == ShipPhase.Parked && ship.Voyage == null && ship.Battle == null);

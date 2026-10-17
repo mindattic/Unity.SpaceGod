@@ -303,6 +303,8 @@ namespace SolarSystem.Core
             fleet.Lands = IsTrader;
 
             fleet.Lanes = lanes;
+            // Drive-appropriate trajectories: torches flip and burn, slow boats fall along transfer orbits.
+            fleet.OrbitalTransfers = true;
             economy.EstimateTravelDays = fleet.EstimateTravelDays;
             // Civilian hulls fly on real propellant and buy it in port; traders price every run by it.
             // (Navies' own supply -- tankers and depots -- is a war-logistics matter, left to their stores for now.)

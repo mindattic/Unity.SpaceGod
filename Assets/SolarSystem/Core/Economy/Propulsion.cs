@@ -65,13 +65,15 @@ namespace SolarSystem.Core
 
         /// <summary>
         /// The delta-v (km/s) of a planned transit: the flip-and-burn (its acceleration for the whole flight)
-        /// plus the steady push that takes the ship from its departure velocity to its arrival velocity.
+        /// plus the steady push that takes the ship from its departure velocity to its arrival velocity and
+        /// what holding its line against gravity costs; or, on a transfer orbit, its escape and capture burns.
         /// </summary>
         public static double TransitDeltaV(Ship s)
         {
+            if (s.Conic != null) return s.Conic.DeltaVKmS;
             double days = s.PhaseEndJd - s.PhaseStartJd;
             if (days <= 0) return 0;
-            return (s.AccelKmPerDay2 * days + (s.ArrivalVelocity - s.DepartureVelocity).Length) / Astro.SecondsPerDay;
+            return (s.AccelKmPerDay2 * days + (s.ArrivalVelocity - s.DepartureVelocity).Length) / Astro.SecondsPerDay + s.GravityLossKmS;
         }
 
         /// <summary>Propellant (t) <paramref name="ship"/> as it is now (hold and tanks) burns for <paramref name="deltaVKmS"/>.</summary>

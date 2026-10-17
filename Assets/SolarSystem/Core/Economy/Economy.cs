@@ -353,7 +353,7 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Crew, upkeep and insurance a day under way (propellant and tolls are counted separately).</summary>
-        static double RunningCostPerDay(ShipClass c) => c == ShipClass.Courier ? 400 : c == ShipClass.Miner ? 1200 : 1500;
+        public static double RunningCostPerDay(ShipClass c) => c == ShipClass.Courier ? 400 : c == ShipClass.Miner ? 1200 : 1500;
 
         /// <summary>The toll for one hyperlane ride by a ship of <paramref name="massTonnes"/>, credits.</summary>
         public static double LaneToll(double massTonnes) => LaneTollBase + LaneTollPerTonne * Math.Max(0, massTonnes);
