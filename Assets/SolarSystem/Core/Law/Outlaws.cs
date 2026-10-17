@@ -517,11 +517,12 @@ namespace SolarSystem.Core
                 var o = Of(u.Ship);
                 // (One taken alive in this very fight is in a brig already: what the band did still counts.)
                 if (o == null || !(o.AtLarge || (o.Fate == OutlawFate.Held && o.FateJd == jd)) || !seen.Add(o)) continue;
-                int side = u.Side;
+                // Sides as fought: a hull taken in the fight has moved to its captor's side since.
+                int side = u.FoughtOn;
                 int kills = 0, robbed = 0, ransoms = 0;
                 foreach (var v in b.Units)
                 {
-                    if (v.Side != 1 - side || v.Kind == UnitKind.Fighter || v.Faction == null || v.Faction.IsPirate) continue;
+                    if (v.FoughtOn != 1 - side || v.Kind == UnitKind.Fighter || v.Faction == null || v.Faction.IsPirate) continue;
                     if (v.Dead) kills++;
                     else if (v.Captured || v.SurrenderOutcome == SurrenderTerms.TakeShip) robbed++;
                     else if (v.SurrenderOutcome == SurrenderTerms.RansomCargo)
