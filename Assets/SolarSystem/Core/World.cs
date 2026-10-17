@@ -350,7 +350,7 @@ namespace SolarSystem.Core
             economy.PaidFor = Companies.PaidFor;
             ShipAdded += Companies.OnShipAdded;
             economy.ChooseBuild = yard => Companies.Enabled
-                ? Companies.OrderAt(yard) ?? war.ChooseWarship(yard)
+                ? Requisition(yard) ?? Companies.OrderAt(yard) ?? war.ChooseWarship(yard)
                 : TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
             economy.ShipBuilt = OnShipBuilt;
             economy.CanCrew = (yard, cls) => Crews.CanCrew(yard.Owner, cls);
@@ -927,6 +927,20 @@ namespace SolarSystem.Core
             foreach (var s in Fleet.Ships)
                 if (!s.Destroyed && IsTrader(s)) n++;
             return n;
+        }
+
+        /// <summary>
+        /// A navy at war that has been worn below its peacetime strength takes its own yards' slips ahead of the
+        /// companies' orders, to rebuild; otherwise null (the companies' hulls first, then the navy's).
+        /// </summary>
+        ShipClass? Requisition(Settlement yard)
+        {
+            var f = yard.Owner;
+            if (f == null || !f.IsMilitary || !War.AtWar(f)) return null;
+            int navy = 0;
+            foreach (var s in Fleet.Ships)
+                if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary) navy++;
+            return navy < NavyCap ? War.ChooseWarship(yard) : null;
         }
 
         /// <summary>Yards build merchant hulls while the merchant fleet is under strength.</summary>

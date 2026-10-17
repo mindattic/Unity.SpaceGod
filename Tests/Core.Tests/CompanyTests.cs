@@ -125,7 +125,7 @@ namespace SolarSystem.Core.Tests
         public void AProfitableCompanyBuysANewHullAtAYardAndTakesDelivery()
         {
             var w = CreateWorld();
-            var c = Named(w, "Kepler Freight Lines");
+            var c = Named(w, "Jovian Bulk Carriers");
             double jd = StartJd + 1;
             BreakTheRivals(w, c, jd);
             c.Cash = 60e6;
@@ -135,7 +135,7 @@ namespace SolarSystem.Core.Tests
             int hulls = c.Hulls;
             w.Companies.Review(jd);
             Assert.That(c.OnOrder, Is.EqualTo(ShipClass.Freighter));
-            Assert.That(c.OrderYard, Is.SameAs(Port(w, "Earth Orbital")), "it orders at its home port's yard");
+            Assert.That(c.OrderYard, Is.SameAs(Port(w, "Ganymede Union")), "it orders at its home port's yard");
             Assert.That(c.Cash, Is.EqualTo(60e6 - c.OrderPrice).Within(1), "the price is held from its cash");
             Assert.That(w.Companies.OrderAt(c.OrderYard), Is.EqualTo(ShipClass.Freighter));
 
@@ -143,7 +143,7 @@ namespace SolarSystem.Core.Tests
             var yard = c.OrderYard;
             double price = c.OrderPrice;
             yard.BuildPoints = 1e6;
-            double owner = yard.Owner.Treasury;
+            Assert.That(w.Companies.PaidFor(yard, ShipClass.Freighter, price), Is.True);
             int before = w.Fleet.Ships.Count;
             for (double t = jd; t < jd + 12 && c.Hulls == hulls; t += 0.5) w.Economy.AdvanceTo(t);
             Assert.That(c.Hulls, Is.EqualTo(hulls + 1));
@@ -152,10 +152,36 @@ namespace SolarSystem.Core.Tests
             var built = w.Fleet.Ships.Skip(before).Single(s => s.Company == c);
             Assert.That(built.Spec.Class, Is.EqualTo(ShipClass.Freighter));
             Assert.That(built.Faction, Is.SameAs(c.Flag));
-            Assert.That(built.Name, Does.Contain("Kepler"));
-            // The owner was paid the company's price (and earned its usual taxes besides); it paid nothing for the hull.
-            Assert.That(yard.Owner.Treasury - owner, Is.GreaterThanOrEqualTo(price - 1));
-            Assert.That(w.Events.Any(e => e.Kind == WorldEventKind.Launch && e.Text.Contains("for Kepler Freight Lines")), Is.True);
+            Assert.That(built.Name, Does.Contain("Jovian"));
+            // The company paid the yard its price; the owner was not charged for the hull.
+            Assert.That(c.HullsSpent, Is.EqualTo(price).Within(1));
+            Assert.That(w.Events.Any(e => e.Kind == WorldEventKind.Launch && e.Text.Contains("for Jovian Bulk Carriers")), Is.True);
+        }
+
+        [Test]
+        public void ANavyAtWarWornBelowStrengthTakesItsYardsSlipsAheadOfTheCompanies()
+        {
+            var w = CreateWorld();
+            var c = Named(w, "Kepler Freight Lines");
+            var earth = Port(w, "Earth Orbital");
+            double jd = StartJd + 1;
+            BreakTheRivals(w, c, jd);
+            c.Cash = 60e6;
+            c.OnOrder = null;
+            c.ClassPerDay[(int)ShipClass.Freighter] = 30000;
+            w.Companies.Review(jd);
+            Assert.That(c.OrderYard, Is.SameAs(earth));
+            Assert.That(w.War.AtWar(w.Sol), Is.True);
+            // The Federation's navy is cut down below its peacetime strength: its yard builds warships first.
+            int navy = 0;
+            foreach (var s in w.Fleet.Ships.Where(s => !s.Destroyed && s.Faction == w.Sol && s.Spec.IsMilitary))
+                if (++navy > 3) s.Destroyed = true;
+            var cls = w.Economy.ChooseBuild(earth);
+            Assert.That(cls, Is.Not.Null);
+            Assert.That(ShipClassSpec.Of(cls.Value).IsMilitary, Is.True);
+            // At peace, the company's order comes first.
+            w.Diplomacy.Set(w.Sol, w.Reach, Relation.Peace);
+            if (!w.War.AtWar(w.Sol)) Assert.That(w.Economy.ChooseBuild(earth), Is.EqualTo(ShipClass.Freighter));
         }
 
         [Test]
