@@ -594,7 +594,9 @@ namespace SolarSystem.Core
             !s.Destroyed && !s.IsEscort && !s.Derelict && s.Battle == null && s != world.PilotedShip && s.Voyage == null && s.GateKm == null &&
             (s.Phase == ShipPhase.Parked || s.Phase == ShipPhase.Landed) && s.Orbit != null
             // Nor one of the player's own fleet: it sails where its captain's standing orders take it.
-            && (world.Holdings == null || !world.Holdings.Owns(s));
+            && (world.Holdings == null || !world.Holdings.Owns(s))
+            // Nor one dry in port waiting on a tanker: it would go back for its old trip first.
+            && !s.OutOfPropellant;
 
         /// <summary>The body a ship in port is at (its ring's world when landed).</summary>
         static int PortOf(Ship s) => s.Phase == ShipPhase.Landed && s.Ring != null ? s.Ring.Body : s.Orbit.Body;
