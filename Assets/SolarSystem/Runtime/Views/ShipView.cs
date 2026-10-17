@@ -480,7 +480,7 @@ namespace SolarSystem.Views
         /// <returns>False once the wreck has burnt out.</returns>
         public bool Wreck(Vector3 relative, Quaternion rotation, float length, float age, float now)
         {
-            const float Life = 28f;
+            const float Life = WreckBurnS;
             if (age > Life)
             {
                 SetVisible(false);
@@ -493,13 +493,9 @@ namespace SolarSystem.Views
             t.localRotation = rotation;
             t.localScale = Vector3.one * length;
             if (wreckSpin == 0) wreckSpin = 6f + (Ship.Id % 5) * 3f;
-            float drift = Mathf.Sqrt(age) * 0.07f;
             if (bow != null)
             {
-                bow.localPosition = new Vector3(0.01f * age, 0.015f * age, drift);
-                bow.localRotation = Quaternion.Euler(age * wreckSpin * 0.6f, age * wreckSpin * 0.3f, age * wreckSpin);
-                stern.localPosition = new Vector3(-0.01f * age, -0.01f * age, -drift);
-                stern.localRotation = Quaternion.Euler(-age * wreckSpin * 0.4f, 0, -age * wreckSpin * 0.7f);
+                PlaceBrokenHalves(age);
                 foreach (var p in parts)
                 {
                     foreach (var r in p.Renderers) r.enabled = false;
@@ -522,6 +518,38 @@ namespace SolarSystem.Views
             plume.enabled = false;
             HardStopExhaust();
             return true;
+        }
+
+        /// <summary>How long a destroyed ship burns (see <see cref="Wreck"/>) before it lingers as a cold hulk (see <see cref="BurntOut"/>), real seconds.</summary>
+        public const float WreckBurnS = 28f;
+
+        /// <summary>A warship's bow and stern drifting apart and tumbling, <paramref name="age"/> real seconds after it broke.</summary>
+        void PlaceBrokenHalves(float age)
+        {
+            if (wreckSpin == 0) wreckSpin = 6f + (Ship.Id % 5) * 3f;
+            float drift = Mathf.Sqrt(age) * 0.07f;
+            bow.localPosition = new Vector3(0.01f * age, 0.015f * age, drift);
+            bow.localRotation = Quaternion.Euler(age * wreckSpin * 0.6f, age * wreckSpin * 0.3f, age * wreckSpin);
+            stern.localPosition = new Vector3(-0.01f * age, -0.01f * age, -drift);
+            stern.localRotation = Quaternion.Euler(-age * wreckSpin * 0.4f, 0, -age * wreckSpin * 0.7f);
+        }
+
+        /// <summary>
+        /// A destroyed ship once its fires are out, for as long as its wreck lasts: a cold hulk tumbling like a
+        /// derelict, but still broken in two where it died, with its guns and masts gone and their scars left.
+        /// </summary>
+        public void BurntOut(Vector3 relative, Quaternion rotation, float length, float now)
+        {
+            Derelict(relative, rotation, length, now);
+            if (bow == null) return;
+            PlaceBrokenHalves(WreckBurnS);
+            foreach (var p in parts)
+            {
+                foreach (var r in p.Renderers) r.enabled = false;
+                p.Scar.GetComponent<Renderer>().enabled = p.Mount != null;
+                p.Fire.R.enabled = false;
+            }
+            foreach (var g in breaches) g.R.enabled = false;
         }
 
         /// <summary>A boarded hulk left adrift: dark, cold, slowly tumbling, never burning out.</summary>

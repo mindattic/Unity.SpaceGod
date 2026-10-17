@@ -2071,7 +2071,8 @@ namespace SolarSystem
             if (!stillBurning)
             {
                 wreckStart[i] = float.MaxValue;
-                shipViews[i].Derelict(rel, shipRotation[i], length, Time.unscaledTime + ship.Id);
+                // Still in two halves, its guns gone: a burnt-out wreck, not a whole hull adrift.
+                shipViews[i].BurntOut(rel, shipRotation[i], length, Time.unscaledTime + ship.Id);
             }
         }
 
