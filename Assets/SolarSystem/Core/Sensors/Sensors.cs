@@ -263,7 +263,8 @@ namespace SolarSystem.Core
         {
             List<Ship> lost = null;
             foreach (var kv in contacts)
-                if (kv.Key.Destroyed || (kv.Value.Cold && jd - kv.Value.LastSeenJd > holdDays)) (lost ??= new List<Ship>()).Add(kv.Key);
+                // (A ship gone through a jump gate is never swept again, so its track would never go cold.)
+                if (kv.Key.Destroyed || kv.Key.GateDeparted || (kv.Value.Cold && jd - kv.Value.LastSeenJd > holdDays)) (lost ??= new List<Ship>()).Add(kv.Key);
             if (lost != null) foreach (var s in lost) contacts.Remove(s);
             return lost;
         }
