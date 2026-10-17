@@ -195,6 +195,38 @@ namespace SolarSystem.Core
         public double BoostSpeedMultiplier = 1, BoostDurationS;
 
         public double TurnRateDegS;
+
+        /// <summary>The hull's real drive (U.SPC-T59), what a piloted ship flies on in
+        /// <see cref="PilotFlight"/>: its mass in kilotonnes, the thrust of its main drive (along the nose),
+        /// its retro thrusters (against it) and its manoeuvre thrusters per axis (sideways and up/down),
+        /// all in meganewtons, so an acceleration in km/s² is thrust / (mass × 1000). The AI's battle
+        /// kinematics stay on <see cref="MaxSpeed"/>/<see cref="Accel"/>/<see cref="Decel"/>; these were
+        /// set so each class's main drive pushes it as hard as its pilot tuning did before the hull had
+        /// mass, with retro thrust a quarter weaker and manoeuvre thrust well under half.</summary>
+        public double MassKt, MainThrustMN, RetroThrustMN, LateralThrustMN, VerticalThrustMN;
+
+        /// <summary>Attitude torque, MN·km: about the pitch and yaw axes (one figure, the hull being
+        /// long and roughly round in section) and about the roll axis along its length.</summary>
+        public double PitchYawTorqueMNKm, RollTorqueMNKm;
+
+        /// <summary>Beam as a fraction of <see cref="LengthKm"/>, for the roll moment of inertia.</summary>
+        public double BeamFraction = 0.2;
+
+        /// <summary>Moment of inertia about the pitch and yaw axes, kt·km²: a uniform rod of the hull's
+        /// length (m L² / 12).</summary>
+        public double PitchYawInertia => MassKt * LengthKm * LengthKm / 12;
+
+        /// <summary>Moment of inertia about the roll axis, kt·km²: a uniform cylinder of the hull's beam
+        /// (m r² / 2), far smaller than pitch/yaw, so a hull rolls much more readily than it turns.</summary>
+        public double RollInertia
+        {
+            get
+            {
+                double r = LengthKm * BeamFraction * 0.5;
+                return MassKt * r * r / 2;
+            }
+        }
+
         public SubsystemDef[] Layout;
 
         /// <summary>Fighter squadrons a carrier can launch (6 craft each).</summary>
@@ -208,6 +240,7 @@ namespace SolarSystem.Core
             [ShipClass.Carrier] = new[] { new CombatSpec
             {
                 DesignName = "Carrier", LengthKm = 3.2,
+                MassKt = 40000, MainThrustMN = 100000, RetroThrustMN = 75000, LateralThrustMN = 35000, VerticalThrustMN = 35000, PitchYawTorqueMNKm = 4770000, RollTorqueMNKm = 1190000,
                 Hull = 26000, Shield = 11000, ShieldRegen = 75, Armor = 6, MaxSpeed = 0.07, Accel = 0.0025, Decel = 0.0025,
                 BoostSpeedMultiplier = 1.3, BoostDurationS = 30, TurnRateDegS = 4, Squadrons = 3,
                 Crew = 3800, Marines = 320,
@@ -244,6 +277,7 @@ namespace SolarSystem.Core
             [ShipClass.Battleship] = new[] { new CombatSpec
             {
                 DesignName = "Battleship", LengthKm = 2.4,
+                MassKt = 30000, MainThrustMN = 90000, RetroThrustMN = 67500, LateralThrustMN = 31500, VerticalThrustMN = 31500, PitchYawTorqueMNKm = 3140000, RollTorqueMNKm = 785000,
                 Hull = 30000, Shield = 13000, ShieldRegen = 90, Armor = 10, MaxSpeed = 0.09, Accel = 0.003, Decel = 0.003,
                 BoostSpeedMultiplier = 1.3, BoostDurationS = 32, TurnRateDegS = 5,
                 Crew = 2400, Marines = 260,
@@ -279,6 +313,7 @@ namespace SolarSystem.Core
             [ShipClass.Cruiser] = new[] { new CombatSpec
             {
                 DesignName = "Cruiser", LengthKm = 1.2,
+                MassKt = 6000, MainThrustMN = 30000, RetroThrustMN = 22500, LateralThrustMN = 12000, VerticalThrustMN = 12000, PitchYawTorqueMNKm = 335000, RollTorqueMNKm = 83800,
                 Hull = 13000, Shield = 6000, ShieldRegen = 54, Armor = 6, MaxSpeed = 0.14, Accel = 0.005, Decel = 0.006,
                 BoostSpeedMultiplier = 1.4, BoostDurationS = 28, TurnRateDegS = 8,
                 Crew = 900, Marines = 140,
@@ -308,6 +343,7 @@ namespace SolarSystem.Core
             [ShipClass.Destroyer] = new[] { new CombatSpec
             {
                 DesignName = "Destroyer", LengthKm = 0.45,
+                MassKt = 700, MainThrustMN = 6300, RetroThrustMN = 4720, LateralThrustMN = 2520, VerticalThrustMN = 2520, PitchYawTorqueMNKm = 14400, RollTorqueMNKm = 3610,
                 Hull = 5500, Shield = 2500, ShieldRegen = 30, Armor = 3, MaxSpeed = 0.24, Accel = 0.009, Decel = 0.011,
                 BoostSpeedMultiplier = 1.5, BoostDurationS = 25, TurnRateDegS = 14,
                 Crew = 280, Marines = 50,
@@ -333,6 +369,7 @@ namespace SolarSystem.Core
             [ShipClass.Freighter] = new[] { new CombatSpec
             {
                 DesignName = "Freighter", LengthKm = 0.6,
+                MassKt = 900, MainThrustMN = 27000, RetroThrustMN = 20200, LateralThrustMN = 10800, VerticalThrustMN = 10800, PitchYawTorqueMNKm = 101000, RollTorqueMNKm = 25200,
                 Hull = 4500, Shield = 750, ShieldRegen = 9, Armor = 2, MaxSpeed = 0.05, Accel = 0.0015, Decel = 0.0018,
                 BoostSpeedMultiplier = 1.25, BoostDurationS = 36, TurnRateDegS = 3,
                 Crew = 40, Marines = 4,
@@ -351,6 +388,7 @@ namespace SolarSystem.Core
             [ShipClass.Miner] = new[] { new CombatSpec
             {
                 DesignName = "Ore hauler", LengthKm = 0.3,
+                MassKt = 500, MainThrustMN = 14000, RetroThrustMN = 10500, LateralThrustMN = 5600, VerticalThrustMN = 5600, PitchYawTorqueMNKm = 11500, RollTorqueMNKm = 2860,
                 Hull = 6500, Shield = 500, ShieldRegen = 6, Armor = 4, MaxSpeed = 0.04, Accel = 0.0012, Decel = 0.0014,
                 BoostSpeedMultiplier = 1.2, BoostDurationS = 38, TurnRateDegS = 3,
                 Crew = 30, Marines = 0,
@@ -367,6 +405,7 @@ namespace SolarSystem.Core
             [ShipClass.Breacher] = new[] { new CombatSpec
             {
                 DesignName = "Breacher", LengthKm = 0.18,
+                MassKt = 120, MainThrustMN = 5400, RetroThrustMN = 4050, LateralThrustMN = 2700, VerticalThrustMN = 2700, PitchYawTorqueMNKm = 4150, RollTorqueMNKm = 1040,
                 Hull = 3000, Shield = 900, ShieldRegen = 15, Armor = 12, MaxSpeed = 0.3, Accel = 0.012, Decel = 0.014,
                 BoostSpeedMultiplier = 1.6, BoostDurationS = 22, TurnRateDegS = 18,
                 Crew = 20, Marines = 70,
@@ -388,6 +427,7 @@ namespace SolarSystem.Core
             [ShipClass.Courier] = new[] { new CombatSpec
             {
                 DesignName = "Courier", LengthKm = 0.08,
+                MassKt = 3, MainThrustMN = 150, RetroThrustMN = 113, LateralThrustMN = 75, VerticalThrustMN = 75, PitchYawTorqueMNKm = 34.9, RollTorqueMNKm = 8.73,
                 Hull = 1300, Shield = 600, ShieldRegen = 12, Armor = 0, MaxSpeed = 0.35, Accel = 0.02, Decel = 0.024,
                 BoostSpeedMultiplier = 1.8, BoostDurationS = 14, TurnRateDegS = 30,
                 Crew = 6, Marines = 0,
@@ -407,6 +447,7 @@ namespace SolarSystem.Core
             [ShipClass.Fighter] = new[] { new CombatSpec
             {
                 DesignName = "Fighter", LengthKm = 0.1,
+                MassKt = 4, MainThrustMN = 220, RetroThrustMN = 165, LateralThrustMN = 110, VerticalThrustMN = 110, PitchYawTorqueMNKm = 120, RollTorqueMNKm = 30,
                 Hull = 1800, Shield = 700, ShieldRegen = 12, Armor = 1, MaxSpeed = 0.32, Accel = 0.018, Decel = 0.02,
                 BoostSpeedMultiplier = 1.7, BoostDurationS = 16, TurnRateDegS = 26,
                 Crew = 2, Marines = 0,

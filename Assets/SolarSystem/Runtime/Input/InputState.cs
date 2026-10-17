@@ -25,6 +25,13 @@ namespace SolarSystem.Input
         /// travel. See <see cref="SolarSystem.Core.PilotCruiseState"/>.</summary>
         public bool Cruise;
 
+        /// <summary>While piloting: roll, -1 (Z, anticlockwise) .. 1 (X, clockwise), seen from behind.</summary>
+        public float Roll;
+
+        /// <summary>While piloting: switches flight assist on or off (shares F with <see cref="Focus"/>,
+        /// which is gated off while piloting, so the two never fire together).</summary>
+        public bool ToggleFlightAssist;
+
         /// <summary>Held, not click-edged: while piloting, fires the ship's forward-mount weapons.
         /// Left click still selects normally outside piloting, via the click-edged <see cref="SelectClicked"/>
         /// below (gated off while piloting, so holding the trigger down and releasing it never also selects).</summary>
@@ -96,6 +103,7 @@ namespace SolarSystem.Input
             Boost = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
             Slow = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
             Cruise = kb.jKey.isPressed;
+            Roll = Axis(kb.xKey, kb.zKey);
 
             MousePosition = mouse.position.ReadValue();
             MouseDelta = mouse.delta.ReadValue();
@@ -139,6 +147,7 @@ namespace SolarSystem.Input
             }
 
             Focus = kb.fKey.wasPressedThisFrame;
+            ToggleFlightAssist = kb.fKey.wasPressedThisFrame;
             Escape = kb.escapeKey.wasPressedThisFrame;
             ToggleScale = kb.gKey.wasPressedThisFrame || kb.backquoteKey.wasPressedThisFrame;
             TimeFaster = kb.periodKey.wasPressedThisFrame || kb.equalsKey.wasPressedThisFrame || kb.numpadPlusKey.wasPressedThisFrame;
@@ -175,6 +184,8 @@ namespace SolarSystem.Input
             LookHeld = false;
             MouseDelta = Vector2.zero;
             Scroll = 0;
+            Roll = 0;
+            ToggleFlightAssist = false;
             Boost = Slow = Fire = Cruise = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;

@@ -12,9 +12,23 @@ namespace SolarSystem.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde;
 
         public static Texture2D White => white ??= Solid();
+
+        /// <summary>The piloting HUD's prograde marker: a ring with a centre dot and three ticks (U.SPC-T59).</summary>
+        public static Texture2D Prograde => prograde ??= Draw(p => Mathf.Min(Mathf.Min(Ring(p, 0.42f, 0.12f), p.magnitude - 0.09f), Ticks(p)));
+
+        /// <summary>The retrograde marker: the same ring and ticks, crossed through instead of dotted.</summary>
+        public static Texture2D Retrograde => retrograde ??= Draw(p =>
+        {
+            var q = new Vector2((p.x + p.y) * 0.70710678f, (p.y - p.x) * 0.70710678f);
+            float cross = Mathf.Min(Box(q, new Vector2(0.045f, 0.38f)), Box(q, new Vector2(0.38f, 0.045f)));
+            return Mathf.Min(Mathf.Min(Ring(p, 0.42f, 0.12f), cross), Ticks(p));
+        });
+
+        static float Ticks(Vector2 p) => Mathf.Min(Box(p - new Vector2(0, 0.72f), new Vector2(0.05f, 0.2f)),
+            Mathf.Min(Box(p - new Vector2(0.72f, 0), new Vector2(0.2f, 0.05f)), Box(p + new Vector2(0.72f, 0), new Vector2(0.2f, 0.05f))));
 
         public static Texture2D ForBody(BodyDefinition body)
         {

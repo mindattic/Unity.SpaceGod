@@ -67,18 +67,31 @@ namespace SolarSystem
         public DVec3 PilotOffsetKm => pilotOffsetKm;
         public double PilotSpeedKmS => pilotVelKmS.Length;
 
+        /// <summary>The piloted hull's velocity in its body's frame (ecliptic axes, km/s), nose and roof:
+        /// what the HUD's velocity vector and prograde/retrograde markers are drawn from.</summary>
+        public DVec3 PilotVelocityKmS => pilotVelKmS;
+        public DVec3 PilotForward => pilot.Forward;
+        public DVec3 PilotUp => pilot.Up;
+
+        /// <summary>Whether the flight computer is flying the hull to the stick (on each time the helm is
+        /// taken; F toggles it) or the hull is drifting on raw thrust. See <see cref="PilotFlight"/>.</summary>
+        public bool PilotFlightAssist => !pilotFlightAssistOff;
+        bool pilotFlightAssistOff;
+
         int pilotFrameBody;
-        DVec3 pilotOffsetKm, pilotVelKmS, pilotForward;
 
-        /// <summary>Current angular speed toward the commanded heading, deg/s -- ramps toward the
-        /// hull's <see cref="PilotTuning.TurnRateDegS"/> rather than snapping to it (see
-        /// <see cref="PilotFlight.Step"/>), so it must persist across frames like <see cref="pilotVelKmS"/> does.</summary>
-        double pilotAngularRateDegS;
+        /// <summary>The piloted hull's whole motion (position, velocity, attitude, spin, cruise ramp),
+        /// integrated by <see cref="PilotFlight.Step"/> every frame; the properties below are its parts.</summary>
+        PilotState pilot;
 
-        /// <summary>Free look orientation, accumulated by rotating around its own local axes each
-        /// frame (not world-space yaw/pitch) so the player can aim anywhere -- including straight up,
-        /// down or behind -- with no gimbal clamp.</summary>
-        Quaternion pilotLook = Quaternion.identity;
+        DVec3 pilotOffsetKm { get => pilot.Pos; set => pilot.Pos = value; }
+        DVec3 pilotVelKmS { get => pilot.Vel; set => pilot.Vel = value; }
+        DVec3 pilotForward => pilot.Forward;
+
+        /// <summary>Where the stick points the nose (ecliptic, unit): mouse movement swings it about the
+        /// hull's own roof and starboard axes, so steering stays screen-relative however the hull has
+        /// rolled, and it can point anywhere -- straight up, down or behind -- with no gimbal clamp.</summary>
+        DVec3 pilotAim = DVec3.UnitX;
         const float PilotLookSensitivity = 0.12f;
 
         /// <summary>What the pilot camera leans toward tracking, independent of the ship's own facing.</summary>
@@ -94,7 +107,7 @@ namespace SolarSystem
 
         /// <summary>The cruise drive's own ramp state (see <see cref="PilotFlight.Step"/>) -- persists
         /// across frames like <see cref="pilotVelKmS"/> does, and only while piloting.</summary>
-        PilotCruiseState pilotCruise;
+        PilotCruiseState pilotCruise { get => pilot.Cruise; set => pilot.Cruise = value; }
 
         /// <summary>Seconds until the next check for a hostile worth proactively starting a fight over
         /// (see <see cref="War.TryStartPlayerBattle"/>) -- a few times a second is plenty responsive
@@ -787,16 +800,12 @@ namespace SolarSystem
                 }
             }
             pilotFrameBody = frame;
-            pilotOffsetKm = offsetKm;
-            pilotVelKmS = velocity;
-            pilotAngularRateDegS = 0;
-            pilotCruise = default;
+            SeedPilot(offsetKm, velocity, facing);
+            pilotFlightAssistOff = false;
             pilotBattleCheckTimer = 0;
             demandPrompted = false;
             termsPrompted = null;
             havenPrompted = null;
-            pilotForward = facing;
-            SeedPilotLook(pilotForward);
             // Out of a battle, the hull is the pilot's from here: no longer landed, descending or in formation.
             // In one, the battle owns its pose, but an escort cut loose still needs an orbit of its own.
             if (ship.Battle == null || ship.Orbit == null) PinWherePiloted(ship);
@@ -804,7 +813,7 @@ namespace SolarSystem
             Select(t);
             SpaceCamera.EnterPilotChase(t, 6);
             Clock.SetWarp(0);
-            ShowToast("Piloting " + ship.Name + ", " + Clock.Warp.Label + "  (P to release, . to speed up, Left-click to fire, T to lock a target, hold J to cruise)");
+            ShowToast("Piloting " + ship.Name + ", " + Clock.Warp.Label + "  (P to release, . to speed up, Left-click to fire, T to lock a target, Z/X to roll, F flight assist, hold J to cruise)");
         }
 
         /// <summary>
@@ -855,17 +864,18 @@ namespace SolarSystem
             return true;
         }
 
-        /// <summary>Points the free-look quaternion at a facing (ecliptic, unit), level unless that
-        /// facing is itself near-vertical -- shared by <see cref="TogglePiloting"/> and a jump gate
-        /// handing the same pilot session to a new hull in the destination system.</summary>
-        void SeedPilotLook(DVec3 facing)
+        /// <summary>Starts the hull's motion at rest in attitude, nose on a facing (ecliptic, unit) and
+        /// level with the camera's up frame unless that facing is itself near-vertical, with the stick
+        /// pointing straight ahead -- shared by <see cref="TogglePiloting"/> and a jump gate handing the
+        /// same pilot session to a new hull in the destination system.</summary>
+        void SeedPilot(DVec3 offsetKm, DVec3 velocityKmS, DVec3 facing)
         {
-            var facingSwapped = facing.SwapYZ;
-            var facingUnity = new Vector3((float)facingSwapped.X, (float)facingSwapped.Y, (float)facingSwapped.Z);
-            var upReference = SpaceCamera.UpFrame * Vector3.up;
-            pilotLook = Quaternion.LookRotation(
-                Vector3.Dot(facingUnity, upReference) > 0.999f ? SpaceCamera.UpFrame * Vector3.forward : facingUnity,
-                upReference);
+            pilot = PilotState.At(offsetKm, velocityKmS, facing);
+            var upUnity = SpaceCamera.UpFrame * Vector3.up;
+            var upReference = new DVec3(upUnity.x, upUnity.y, upUnity.z).SwapYZ;
+            var level = upReference - pilot.Forward * DVec3.Dot(upReference, pilot.Forward);
+            if (level.LengthSquared > 1e-6) pilot.Up = level.Normalized;
+            pilotAim = pilot.Forward;
         }
 
         /// <summary>The piloted ship was taken from the player (boarded and captured): the session ends with
@@ -958,15 +968,22 @@ namespace SolarSystem
                 return;
             }
 
-            // Free look: rotate around the look quaternion's own local axes each frame (not a
-            // world-space yaw/pitch pair), so there's no gimbal clamp -- the nose can be pointed
-            // anywhere, including straight up/down or looping past behind.
+            // Free look: the stick swings about the hull's own roof (yaw) and starboard (pitch) axes,
+            // so there's no gimbal clamp and "mouse right" stays screen-right however the hull has
+            // rolled -- the nose can be pointed anywhere, including straight up/down or looping past behind.
             var look = ClickPanelOpen ? Vector2.zero : Input.MouseDelta;
-            pilotLook = pilotLook
-                * Quaternion.AngleAxis(look.x * PilotLookSensitivity, Vector3.up)
-                * Quaternion.AngleAxis(-look.y * PilotLookSensitivity, Vector3.right);
-            var desiredUnity = pilotLook * Vector3.forward;
-            var desiredForward = new DVec3(desiredUnity.x, desiredUnity.y, desiredUnity.z).SwapYZ;
+            if (look.sqrMagnitude > 0)
+            {
+                pilotAim = PilotFlight.RotateAbout(pilotAim, pilot.Up, -look.x * PilotLookSensitivity * Mathf.Deg2Rad);
+                pilotAim = PilotFlight.RotateAbout(pilotAim, pilot.Right, look.y * PilotLookSensitivity * Mathf.Deg2Rad).Normalized;
+            }
+            var desiredForward = pilotAim;
+
+            if (Input.ToggleFlightAssist)
+            {
+                pilotFlightAssistOff = !pilotFlightAssistOff;
+                ShowToast(pilotFlightAssistOff ? "FLIGHT ASSIST OFF: the hull drifts on its momentum  (F to turn it back on)" : "FLIGHT ASSIST ON");
+            }
 
             if (Input.LockTarget) ToggleLockTarget();
             if (!pilotLockTarget.IsNone && (!pilotLockTarget.IsShip || pilotLockTarget.Ship.Destroyed)) pilotLockTarget = Target.None;
@@ -979,17 +996,49 @@ namespace SolarSystem
                 Throttle = Mathf.Clamp(Input.Move.z, -1f, 1f),
                 StrafeRight = Mathf.Clamp(Input.Move.x, -1f, 1f),
                 StrafeUp = Mathf.Clamp(Input.Move.y, -1f, 1f),
+                Roll = Mathf.Clamp(Input.Roll, -1f, 1f),
                 Boost = Input.Boost,
                 Cruise = Input.Cruise,
                 InCombat = ship.Battle != null,
+                FlightAssistOff = pilotFlightAssistOff,
             };
             // Mirrors PilotFlight.Step's own "boosting" condition, read before Step drains the
             // charge further this frame, purely to drive the camera's FOV kick below.
             pilotBoosting = input.Boost && tuning.BoostDurationS > 0 && ship.Combat.BoostFraction > 0;
-            PilotFlight.Step(ref pilotOffsetKm, ref pilotVelKmS, ref pilotForward, ref pilotAngularRateDegS, ref pilotCruise, ship.Combat, tuning, input, dt);
+            PilotFlight.Step(ref pilot, ship.Combat, HullDynamics.Of(ship.Combat.Spec), tuning, input, PilotGravity(), dt);
+            KeepPilotAboveSurfaces(ship);
 
             UpdatePilotBattle(ship, dt);
             UpdateGateActivation(ship);
+        }
+
+        /// <summary>The pull on the piloted hull of every body it is close to (see <see cref="PilotFlight.Gravity"/>),
+        /// km/s² -- its own frame's body above all, but a moon or a neighbour too when it flies near one.</summary>
+        DVec3 PilotGravity()
+        {
+            var helio = Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
+            var g = DVec3.Zero;
+            for (int b = 0; b < Catalog.Count; b++)
+            {
+                var body = Catalog[b];
+                if (body.Gm > 0) g += PilotFlight.Gravity(helio - Ephemeris.Helio(b), body.Gm, body.RadiusKm);
+            }
+            return g;
+        }
+
+        /// <summary>A hull its thrusters cannot hold up sinks onto the surface and rests there rather than
+        /// falling through it -- any body it is close enough to feel, not only its own frame's.</summary>
+        void KeepPilotAboveSurfaces(Ship ship)
+        {
+            var frameHelio = Ephemeris.Helio(pilotFrameBody);
+            for (int b = 0; b < Catalog.Count; b++)
+            {
+                var body = Catalog[b];
+                if (body.Gm <= 0) continue;
+                var centre = Ephemeris.Helio(b) - frameHelio;
+                if ((pilotOffsetKm - centre).Length > body.RadiusKm * PilotFlight.GravityReachRadii) continue;
+                PilotFlight.KeepAboveSurface(ref pilot, centre, body.RadiusKm + Math.Max(0.5, ship.LengthKm));
+            }
         }
 
         /// <summary>
@@ -1023,15 +1072,10 @@ namespace SolarSystem
             Piloted = Target.OfShip(arrived);
             World.PilotedShip = arrived;
             pilotFrameBody = arrived.Orbit.Body;
-            pilotOffsetKm = arrived.Orbit.Center;
-            pilotVelKmS = DVec3.Zero;
-            pilotAngularRateDegS = 0;
-            pilotCruise = default;
-            pilotForward = arrived.Orbit.V;
+            SeedPilot(arrived.Orbit.Center, DVec3.Zero, arrived.Orbit.V);
             pilotBattleCheckTimer = 0;
             pilotLockTarget = Target.None;
             SpaceCamera.PilotLockTarget = Target.None;
-            SeedPilotLook(pilotForward);
             nearGate = null;
 
             Select(Piloted);
@@ -1462,10 +1506,13 @@ namespace SolarSystem
                     if (ship == World.PilotedShip)
                     {
                         shipScene[i] = bodyScene[pilotFrameBody] + Scale.LocalOffset(Catalog[pilotFrameBody], pilotOffsetKm);
+                        // Nose and roof both: the hull rolls for real (U.SPC-T59).
                         var pilotFacing = pilotForward.SwapYZ;
+                        var pilotRoof = pilot.Up.SwapYZ;
                         var pf = new Vector3((float)pilotFacing.X, (float)pilotFacing.Y, (float)pilotFacing.Z);
+                        var pup = new Vector3((float)pilotRoof.X, (float)pilotRoof.Y, (float)pilotRoof.Z);
                         if (pf.sqrMagnitude < 1e-12f) pf = Vector3.forward;
-                        var pup = Mathf.Abs(Vector3.Dot(pf.normalized, Vector3.up)) > 0.98f ? Vector3.right : Vector3.up;
+                        if (pup.sqrMagnitude < 1e-12f) pup = Mathf.Abs(Vector3.Dot(pf.normalized, Vector3.up)) > 0.98f ? Vector3.right : Vector3.up;
                         shipRotation[i] = Quaternion.LookRotation(pf, pup);
                         shipRotationInitialised[i] = true;
                         // Its own state, not whatever the schedule last drew (an entry glow, a drive flame).

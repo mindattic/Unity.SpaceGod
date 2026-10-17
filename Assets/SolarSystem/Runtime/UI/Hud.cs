@@ -57,6 +57,7 @@ namespace SolarSystem.UI
             if (app.Travel.Active) DrawTravel();
             else DrawWorldOverlay();
             if (!app.ShowHud) return;
+            DrawFlightMarkers();
             DrawTopBar();
             DrawTicker();
             DrawNavigator();
@@ -232,6 +233,83 @@ namespace SolarSystem.UI
         float ParentSeparation(BodyDefinition moon, Vector2 p)
         {
             return app.ToGui(app.BodyScene(moon.ParentIndex), out var pp, out _) ? (pp - p).magnitude : 0;
+        }
+
+        // ---------------------------------------------------------------- flight markers (U.SPC-T59)
+
+        static readonly Color ProgradeColor = new Color(0.55f, 1f, 0.6f, 0.95f);
+        static readonly Color RetrogradeColor = new Color(1f, 0.62f, 0.35f, 0.95f);
+
+        /// <summary>
+        /// While piloting, the flight instruments a Newtonian hull needs: a boresight where the nose
+        /// points, the prograde marker where the hull is actually going (its velocity relative to the
+        /// body it flies near) and the retrograde marker opposite it, joined to the boresight by the
+        /// velocity vector so a slide (flight assist off, or a hull still killing its drift) reads at a
+        /// glance, and a readout of flight assist, speed and how far the track is off the nose.
+        /// </summary>
+        void DrawFlightMarkers()
+        {
+            if (!app.IsPiloting || app.Travel.Active || Event.current.type != EventType.Repaint) return;
+            var vel = app.PilotVelocityKmS;
+            double speed = vel.Length;
+            bool noseOn = DirectionToGui(app.PilotForward, out var nose);
+            if (noseOn) DrawBoresight(nose, new Color(1, 1, 1, 0.8f));
+
+            double driftDeg = 0;
+            if (speed > 1e-6)
+            {
+                var dir = vel / speed;
+                driftDeg = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(dir, app.PilotForward)))) * 180 / Math.PI;
+                if (DirectionToGui(dir, out var pro))
+                {
+                    if (noseOn && (pro - nose).sqrMagnitude > 400) DrawLine(nose, pro, new Color(ProgradeColor.r, ProgradeColor.g, ProgradeColor.b, 0.45f), 1.5f);
+                    DrawIcon(Icons.Prograde, pro, 28, ProgradeColor);
+                    DrawLabel(SpeedText(speed), pro + new Vector2(17, -8), ProgradeColor, true);
+                }
+                if (DirectionToGui(-dir, out var retro)) DrawIcon(Icons.Retrograde, retro, 28, RetrogradeColor);
+            }
+
+            bool assist = app.PilotFlightAssist;
+            string readout = (assist ? "FLIGHT ASSIST ON" : "FLIGHT ASSIST OFF") + "   " + SpeedText(speed) +
+                             (speed > 1e-6 ? "   track " + driftDeg.ToString("0", CultureInfo.InvariantCulture) + "° off the nose" : "") + "   (F)";
+            var content = new GUIContent(readout);
+            var size = small.CalcSize(content);
+            var p = new Vector2((Screen.width - size.x) * 0.5f, Screen.height - 66);
+            DrawLabel(readout, p, assist ? Dim : RetrogradeColor, true);
+        }
+
+        /// <summary>Where a direction (ecliptic, unit) vanishes on screen, if it is in front of the camera and on screen.</summary>
+        bool DirectionToGui(DVec3 direction, out Vector2 p)
+        {
+            var d = direction.SwapYZ;
+            if (!app.RelativeToGui(new Vector3((float)d.X, (float)d.Y, (float)d.Z) * 1e6f, out p)) return false;
+            return p.x >= 0 && p.y >= 0 && p.x <= Screen.width && p.y <= Screen.height;
+        }
+
+        void DrawBoresight(Vector2 p, Color color)
+        {
+            var old = GUI.color;
+            GUI.color = color;
+            var w = Icons.White;
+            GUI.DrawTexture(new Rect(p.x - 12, p.y - 0.75f, 8, 1.5f), w);
+            GUI.DrawTexture(new Rect(p.x + 4, p.y - 0.75f, 8, 1.5f), w);
+            GUI.DrawTexture(new Rect(p.x - 0.75f, p.y + 4, 1.5f, 6), w);
+            GUI.DrawTexture(new Rect(p.x - 1, p.y - 1, 2, 2), w);
+            GUI.color = old;
+        }
+
+        void DrawLine(Vector2 a, Vector2 b, Color color, float thickness)
+        {
+            var d = b - a;
+            float length = d.magnitude;
+            if (length < 1) return;
+            var matrix = GUI.matrix;
+            var old = GUI.color;
+            GUIUtility.RotateAroundPivot(Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg, a);
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(a.x, a.y - thickness * 0.5f, length, thickness), Icons.White);
+            GUI.color = old;
+            GUI.matrix = matrix;
         }
 
         void DrawTargetMarker(Target t, bool selected)
@@ -1275,7 +1353,7 @@ namespace SolarSystem.UI
             switch (cam.Mode)
             {
                 case SpaceCamera.CameraMode.Focus when cam.PilotLocked:
-                    s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + "   (WASD throttle/strafe, mouse to steer, Shift boost, P to release)";
+                    s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + "   (WASD throttle/strafe, mouse to steer, Z/X roll, F flight assist, Shift boost, P to release)";
                     break;
                 case SpaceCamera.CameraMode.Focus:
                     s = "FOCUS  ·  " + TargetName(cam.FocusTarget) + "   (WASD to swim free, wheel to zoom, right-drag to orbit)";
@@ -1375,6 +1453,7 @@ namespace SolarSystem.UI
                 "K   satellites    R   level the view to the system plane",
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
+                "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell appear while piloting near the shown settlement's body",

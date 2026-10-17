@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 651 passing](https://img.shields.io/badge/core%20tests-651%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 669 passing](https://img.shields.io/badge/core%20tests-669%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -150,8 +150,8 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 ### Piloting
 
 - **Any ship, anywhere.** Select a ship and press P to take the helm, whether it is parked, mid-transit, on a hyperlane, queued at a ring, landed or in a battle. An escort leaves its formation; a ship already fighting hands you its place in the battle. The clock drops to real time (press . to speed it up), and P again hands the ship back.
-- **Flight.** The mouse steers, W and S throttle, A, D, Q and E strafe, Shift boosts. Turning has inertia, and each hull class has its own speed and turn rate. The field of view widens under boost and cruise.
-- **Cruise.** Hold J while flying straight at full throttle and the cruise drive spools up to far beyond normal top speed. It drops out the moment you take damage, enter a battle, throttle down or turn hard, and weapons cannot fire while cruising.
+- **Flight.** Newtonian: every design has a mass, a main drive, weaker retro thrusters, manoeuvre thrusters on each axis and moments of inertia, so a hull carries its momentum and a carrier's nose is slow to start swinging and slow to stop. The mouse steers, W and S thrust, A, D, Q and E strafe, Z and X roll, Shift lights an afterburner. With flight assist on, the flight computer counter-thrusts toward the velocity the stick asks for, killing drift and holding the hull against gravity as far as its thrusters can. F switches it off: then the throttle is raw thrust and nothing cancels anything, for sliding past a target with the guns on it or flipping end for end and burning to brake. Near a world (within four of its radii) its gravity pulls on the hull; a hull too weak to hold itself up sinks and comes to rest on the surface. The HUD shows a boresight, the prograde and retrograde markers joined by the velocity vector, and how far the track is off the nose. The field of view widens under boost and cruise.
+- **Cruise.** Hold J while flying straight at full throttle and the cruise drive spools the main drive up to many times its thrust, and flight assist up to far beyond normal top speed (with assist off it just keeps accelerating). It drops out the moment you take damage, enter a battle, throttle down or turn hard, and weapons cannot fire while cruising.
 - **Weapons.** Flying near hostiles starts or joins a battle. Left mouse fires the forward guns along the nose (missiles go to the locked target); side and aft batteries and point defence keep fighting on their own. T locks the camera onto the hovered or selected ship.
 - **Hails.** In a battle, the number keys answer: to a pirate demand for your cargo, 1 hands it over and 2 refuses; to an enemy that strikes its colours, 1 demands its cargo, 2 takes the ship and 3 lets it go.
 - **Cargo and trade.** I opens the ship's grid cargo hold (a per-class grid; click a crate, then a cell, to move it). Near a settlement's world, the M market board shows Buy and Sell buttons that trade whole crates at the same prices and port tax the AI traders pay.
@@ -260,6 +260,8 @@ While piloting:
 | --- | --- |
 | Steer | Mouse |
 | Throttle / strafe / rise and sink | W S / A D / E Q |
+| Roll | Z X |
+| Flight assist on / off | F |
 | Boost | Shift |
 | Cruise drive | Hold J |
 | Fire forward guns | Hold left mouse |
@@ -318,7 +320,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-624 NUnit tests, run in parallel in under two minutes, cover the following:
+669 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -351,7 +353,7 @@ dotnet test
 - Nearby systems: every planet keeps its catalogued period, axis and eccentricity (periapsis and apoapsis traced, the orbit closing after one period); every star its mass, size and light; the binaries balanced on their barycentres, swinging a(1 ± e) apart, at periastron on the catalogued date and tilted as measured; spot checks against the Exoplanet Archive; candidates labelled; habitable-zone flags (Proxima b in, Barnard's planets out, the Sun's zone 0.98–1.69 AU); Epsilon Eridani's belts and Tau Ceti's disc; each system at its parallax distance; a quiet year in every unsettled system
 - Avoidance: head-on ships passing wide, ships sharing a spot spreading out, a month of the whole system with no near-collisions, free ships roaming, a mid-flight course change keeping position and momentum, and merchants turning aside from fresh battles
 - Infrastructure: rings staying over their cities (latitude and longitude to a millionth of a degree, velocity = ω × r); FIFO queues clearing at most one ship per interval; no position jumps through queue, descent, landing and climb; only merchants landing; yards launching from their slips; constellations at their real altitudes and inclinations; JWST at L2
-- Piloting: cruise spooling up and dropping out, forward guns firing only on the trigger, the piloted hull staying where the pilot loop puts it
+- Piloting: Newtonian flight (momentum conserved with no thrust, a burn changing it by exactly its impulse, drift and turn-and-burn with flight assist off, assist settling on the commanded velocity without overshoot, rolls, gravity close to a world and a hull too weak for it settling on the surface), cruise spooling up and dropping out, forward guns firing only on the trigger, the piloted hull staying where the pilot loop puts it
 - Cargo hold and trade: crate footprints and rotation, no overlaps or out-of-bounds placement, buying and selling at the AI's prices and taxes, docking rules
 - Adventures: each kind offered only from real sim state (a ship actually in a fight or adrift, a derelict, a wreck with salvage, raiders lurking on a lane past the danger threshold, a merchant on a dangerous lane with time left, a raider captain), within range, never twice at once, capped, rested after it ends; ignored ones failing at expiry or when the situation settles without the player; completed ones paying credits, cargo and standing; and twenty days of the live system where every offer traces to something real
 - Jump gates: a gate pair per link at each system's outer edge, activation range, arrival inside the far gate, and the ship moving between fleets
@@ -361,7 +363,7 @@ dotnet test
 
 - **Planet elements are a fit.** The JPL table is accurate to roughly arcminutes across 1800-2050 (measured against Horizons over 2000-2050: Mercury to Neptune within 0.16°), and drifts outside that window.
 - **Moons are mean orbits.** The Moon follows the main terms of a real lunar theory (within 0.01°), and Phobos includes its tidal decay (within 0.07°). Every other moon is an ellipse with steady precession, within 0.5° of JPL Horizons over 2000-2050 except Miranda (1.7°), whose neighbours' pulls a mean orbit cannot follow.
-- **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations. Piloted flight is arcade flight, tuned for feel rather than physics.
+- **Ship drives are fiction.** The kinematics are real, but sustained 0.06 to 1.2 g torch drives are not, and transits ignore solar gravity, which is negligible at those accelerations. Piloted flight is Newtonian (thrust over mass, torque over inertia, momentum carried, gravity close to a world), but the masses and thrusts are set for feel, the assist's set speeds are game numbers, gravity is cut off beyond four radii, and spin about each axis is integrated on its own without gyroscopic coupling.
 - **Gameplay scale bends paths.** Ships fly their true path at both scales, but gameplay scale draws it through the same compression as the planets, eased near each end so the ship stays outside the inflated worlds. In a crowded moon system an inflated neighbouring moon can still be drawn over a passing ship.
 - **Alpha Centauri is part guesswork.** The A–B orbit and Proxima's place are measured; the planets' orbital planes and phases, their radii and Proxima's orbital plane are assumed, and two of its worlds may not exist. The jump gates sit 5,000 km out so a pilot can reach them, not light-years away; AI ships fly the in-system legs to and from them, but the gates themselves, their crossing times and the lattice are fiction. Only Sol and Alpha Centauri are settled, so interstellar trade and raiding run between those two; the other systems are crossed and surveyed. The trunk lanes across 12,000 AU in days are deep fiction.
 - **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought at bodies and, by pirate interdiction, beside hyperlanes; ships on flip-and-burn transits cannot be intercepted. Marines are not drawn yet (the interior model is ready for a shipboard view). There is no campaign or win condition; you observe, or fly one ship at a time.
