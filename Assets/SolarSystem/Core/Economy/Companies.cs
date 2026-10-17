@@ -401,16 +401,17 @@ namespace SolarSystem.Core
             for (int i = c.Ships.Count - 1; i >= 0; i--)
             {
                 var s = c.Ships[i];
+                if (s.GateDeparted)
+                {
+                    // Gone on through a gate: its copy over there is still ours, carries the same unbooked takings
+                    // and books them (and its own trade) itself.
+                    c.Ships.RemoveAt(i);
+                    continue;
+                }
                 double delta = s.Credits - s.CompanyBookedCredits;
                 s.CompanyBookedCredits = s.Credits;
                 trade += delta;
                 if (s.Faction != null) s.Faction.Treasury -= delta;
-                if (s.GateDeparted)
-                {
-                    // Gone on through a gate: its copy over there is still ours and books its own trade.
-                    c.Ships.RemoveAt(i);
-                    continue;
-                }
                 if (s.Destroyed || s.Derelict || s.Faction != c.Flag)
                 {
                     c.Ships.RemoveAt(i);
