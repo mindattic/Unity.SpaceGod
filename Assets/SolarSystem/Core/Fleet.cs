@@ -991,6 +991,8 @@ namespace SolarSystem.Core
                     ship.PhaseEndJd = jd;
                     Depart(ship);
                 }
+                // Dry on the way out to a jump gate: on to the gate, not into an orbit round the star.
+                else if (ship.GateKm is DVec3 gate && to == catalog.Root.Index) Burn(ship, jd, to, () => FixedPoint(to, gate));
                 else if (ship.Wander) Burn(ship, jd, to, () => WanderOrbit(to, ship));
                 else Burn(ship, jd, to, () => ArrivalFor(ship, to));
             }
