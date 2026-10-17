@@ -400,7 +400,7 @@ namespace SolarSystem.Core
             return true;
         }
 
-        static void ClearBounty(LawRecord r, Faction f)
+        internal static void ClearBounty(LawRecord r, Faction f)
         {
             r.Bounty.Remove(f);
             r.BountyUntil.Remove(f);
@@ -438,7 +438,8 @@ namespace SolarSystem.Core
         /// and robbers answer for it whichever side they were on; a lawful ship defending itself does not). A survivor among those it attacked
         /// is a witness; failing that, any ship or station in sensor range. The side enforcing the law in an
         /// interdiction commits nothing, and a wanted ship it stopped is charged only if it destroyed or took one of
-        /// the patrol's ships. A wanted commander killed or taken by a faction that posted a bounty on it has paid it
+        /// the patrol's ships. A wanted commander killed or taken by bounty hunters is theirs to collect on (see
+        /// <see cref="Outlaws.ClaimByHunter"/>); by a faction that posted a bounty on it, it has paid that one
         /// (a dead NPC captain's bounties all lapse).
         /// </summary>
         public void OnBattleEnded(Battle b, double jd)
@@ -502,6 +503,8 @@ namespace SolarSystem.Core
                 if (!player && u.Ship.IsEscort) continue;
                 var rec = player ? Player : FindRecord(u.Ship);
                 if (rec == null || !rec.Wanted) continue;
+                // Bounty hunters on the other side collect every bounty on it (see Outlaws.ClaimByHunter).
+                if (world?.Outlaws != null && world.Outlaws.ClaimByHunter(b, u, rec, jd)) continue;
                 if (!player && u.Dead)
                 {
                     var claimed = new List<Faction>(rec.Bounty.Keys);

@@ -311,6 +311,10 @@ namespace SolarSystem.Core
         public readonly List<CombatFx> Fx = new List<CombatFx>();
         public readonly Faction[] SideLeaders = new Faction[2];
 
+        /// <summary>How much of their usual resolve each side's crews keep (1 normally): facing a feared outlaw
+        /// they strike their colours sooner (see <see cref="Outlaws.FearedResolve"/>).</summary>
+        public readonly double[] Dread = { 1, 1 };
+
         public bool Over { get; private set; }
 
         /// <summary>True until the battle's first advance: it does not run in the frame it starts, so an observer can slow the clock first.</summary>
@@ -1485,7 +1489,8 @@ namespace SolarSystem.Core
         }
 
         bool StrikesColours(BattleUnit u) =>
-            Morale.StrikesColours(DamageTollOf(u), OutgunnedOf(u), Morale.Resolve(u.Faction, u.Ship != null && u.Ship.Spec.IsMilitary), u.MoraleThreshold);
+            Morale.StrikesColours(DamageTollOf(u), OutgunnedOf(u),
+                Morale.Resolve(u.Faction, u.Ship != null && u.Ship.Spec.IsMilitary) * (u.Side >= 0 && u.Side < 2 ? Dread[u.Side] : 1), u.MoraleThreshold);
 
         /// <summary>
         /// Strikes <paramref name="u"/>'s colours: it breaks off, powers down its weapons and hails,

@@ -160,13 +160,16 @@ namespace SolarSystem
         /// <summary>The shipyard's outfitting panel (F2): fit modules into the piloted hull's slots at a yard, hand over prisoners.</summary>
         public bool ShowOutfit { get; set; }
 
+        /// <summary>The bounty board (F4): the outlaws (and the player, when wanted) the port in view has bounties on.</summary>
+        public bool ShowBounties { get; set; }
+
         /// <summary>The news feed panel in place of the four-line ticker (X).</summary>
         public bool ShowNews { get; set; }
         public bool ShowSpawn { get; set; }
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || ShowSaves || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit)); // market, cargo, outfitting and news are HUD panels, hidden with it
+        bool ClickPanelOpen => ShowSpawn || ShowSaves || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties)); // market, cargo, outfitting, bounties and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -633,6 +636,7 @@ namespace SolarSystem
             if (i.ToggleMarket) ShowMarket = !ShowMarket;
             if (i.ToggleCargo) ShowCargo = !ShowCargo;
             if (i.ToggleOutfit) ShowOutfit = !ShowOutfit;
+            if (i.ToggleBounties) ShowBounties = !ShowBounties;
             if (i.ToggleNews) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
@@ -1099,6 +1103,8 @@ namespace SolarSystem
             World.Sensors?.UpdatePilot(ship, Ephemeris.HelioAt(pilotFrameBody, Clock.Jd) + pilotOffsetKm, burning, Clock.Jd);
             // The law around the ship: trespass, and patrols that scan it or, if it is wanted, hail it to pay up.
             World.Law.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
+            // Bounty hunters with a contract on the ship close in once they find it (U.SPC-T62).
+            World.Outlaws.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
             UpdateGateActivation(ship);
         }
 

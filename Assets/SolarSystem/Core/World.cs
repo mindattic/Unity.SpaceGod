@@ -61,6 +61,12 @@ namespace SolarSystem.Core
         /// can see of every other ship (see <see cref="Core.Sensors"/>).</summary>
         public Sensors Sensors { get; private set; }
 
+        /// <summary>Named outlaw captains, the ports' bounty boards and the bounty hunters who work them (see <see cref="Core.Outlaws"/>).</summary>
+        public Outlaws Outlaws { get; private set; }
+
+        /// <summary>The most bounty hunter groups the free traders keep in service.</summary>
+        public int HunterCap = 3;
+
         /// <summary>Raised when a ship joins the fleet after the start (a yard finished it, or it came through a gate).</summary>
         public event Action<Ship> ShipAdded;
 
@@ -97,6 +103,7 @@ namespace SolarSystem.Core
             Sensors?.Update(jd);
             Shocks.Update(jd);
             Law.Update(jd);
+            Outlaws.Update(jd);
             if (jd >= nextRecountJd)
             {
                 Economy.RecountInbound(Fleet.Ships);
@@ -282,7 +289,12 @@ namespace SolarSystem.Core
             Sensors = new Sensors(this);
             // The player's standing is one table: adventures seen through raise it, crimes lower it.
             Law = new Law(this, Adventures.Reputation);
+            // The law judges a battle first; then the outlaws' records take in what their bands did in it.
+            Outlaws = new Outlaws(this, seed + 11);
+            war.BattleStarted += Outlaws.OnBattleStarted;
             war.BattleEnded += Law.OnBattleEnded;
+            war.BattleEnded += Outlaws.OnBattleEnded;
+            Law.Committed += Outlaws.OnCrime;
             economy.DockAllowed = Law.AllowsDocking;
             economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
@@ -393,6 +405,7 @@ namespace SolarSystem.Core
             // A thin system feeds few raiders.
             w.PirateGroupCap = 2;
             w.PirateIncomePerDay = 4e5;
+            w.HunterCap = 1;
             w.RaiderNames = new[]
             {
                 "Lightless", "Event Horizon", "Cold Sleep", "Red Shift", "Penumbra", "Dead Air", "Null Return", "Last Light",
@@ -446,6 +459,7 @@ namespace SolarSystem.Core
             w.NavyCap = w.NavyCapAtWar = 0;
             w.PirateGroupCap = 0;
             w.PirateIncomePerDay = 0;
+            w.HunterCap = 0;
             w.Wire(startJd, seed, new Hyperlanes(ephemeris));
             w.Update(jd);
             return w;

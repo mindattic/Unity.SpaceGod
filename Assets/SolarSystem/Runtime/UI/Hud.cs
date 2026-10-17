@@ -84,6 +84,7 @@ namespace SolarSystem.UI
             if (app.ShowMarket) DrawMarket();
             if (app.ShowCargo) DrawCargo();
             if (app.ShowOutfit) DrawOutfit();
+            if (app.ShowBounties) DrawBounties();
             if (app.ShowHelp) DrawHelp();
             if (app.ShowSaves) DrawSaves();
             DrawToast();
@@ -971,7 +972,19 @@ namespace SolarSystem.UI
                 if (ship.Spec.IsMilitary || ship.Faction.IsPirate)
                 {
                     var order = app.World.War.OrderOf(c);
-                    lines.Add(("Orders", order != null ? OrderText(order) : "Patrol " + RouteText(c)));
+                    var outlaws = app.World.Outlaws;
+                    var hunter = outlaws?.HunterOf(c);
+                    var outlaw = outlaws?.Of(c);
+                    if (hunter != null)
+                    {
+                        var target = hunter.Contract?.Target;
+                        string after = target == null ? "looking for a contract" : "hunting " + (outlaws.Of(target)?.Title ?? (target.IsPlayer ? "YOU" : target.Name));
+                        lines.Add(("Bounty hunter", after + (hunter.Takes > 0 ? ",  " + hunter.Takes + " taken for " + Credits(hunter.Collected) : "")));
+                    }
+                    else lines.Add(("Orders", order != null ? OrderText(order) : "Patrol " + RouteText(c)));
+                    if (outlaw != null)
+                        lines.Add(("Outlaw", outlaw.Title + ",  " + outlaw.Deeds() + ",  " + outlaw.DaysAtLarge(app.Clock.Jd).ToString("0", CultureInfo.InvariantCulture) + " days at large" +
+                            (outlaw.Haven != null && outlaw.Haven.Discovered ? ",  sails from " + outlaw.Haven.Name : "")));
                 }
                 else
                 {
@@ -1139,6 +1152,47 @@ namespace SolarSystem.UI
                 case SettlementKind.Haven: return "pirate haven";
                 default: return "colony";
             }
+        }
+
+        // ---------------------------------------------------------------- bounty board
+
+        /// <summary>
+        /// The bounty board (F4) of the port in view -- the selected world's biggest, else the one the piloted ship is
+        /// alongside: everyone its owner has a bounty on (outlaws, and the player when wanted), the price, the record,
+        /// where each was last seen and who is hunting them (see <see cref="Outlaws.BoardAt"/>).
+        /// </summary>
+        void DrawBounties()
+        {
+            var outlaws = app.World.Outlaws;
+            if (outlaws == null) return;
+            Settlement port = null;
+            var t = app.Selected;
+            if (t.IsBody)
+                foreach (var s in app.Economy.At(t.Body))
+                    if (s.Discovered && (port == null || s.Population > port.Population)) port = s;
+            if (port == null && app.IsPiloting)
+                foreach (var s in app.Economy.Settlements)
+                    if (s.Discovered && app.NearPort(s)) { port = s; break; }
+            const float w = 760, rowH = 18;
+            var board = port != null ? outlaws.BoardAt(port) : new List<BountyPosting>();
+            int rows = Mathf.Min(board.Count, 14);
+            float h = 54 + Mathf.Max(1, rows) * rowH;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, 120, w, h));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 22), "BOUNTY BOARD  ·  " + (port != null ? port.Name + "  ·  " + port.Owner.Name : "no port in view"), title);
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            string note = port == null ? "Select a world with a port, or fly alongside one.   F4 to close"
+                : port.Owner.IsPirate ? "Nobody here answers to the law: a haven keeps no board.   F4 to close"
+                : board.Count == 0 ? "Nobody is wanted here.   F4 to close"
+                : "Bounties posted by " + port.Owner.Name + ", biggest first; a raider's BOUNTY adventure pays the price on their head.   F4 to close";
+            GUI.Label(new Rect(r.x + 12, r.y + 28, w - 24, 18), note, small);
+            for (int i = 0; i < rows; i++)
+            {
+                var p = board[i];
+                GUI.contentColor = p.IsPlayer ? new Color(1f, 0.55f, 0.45f) : p.Outlaw != null && p.Outlaw.Feared ? new Color(1f, 0.78f, 0.35f) : Color.white;
+                GUI.Label(new Rect(r.x + 12, r.y + 48 + i * rowH, w - 24, rowH), Outlaws.Describe(p, app.Clock.Jd), small);
+            }
+            GUI.contentColor = old;
         }
 
         // ---------------------------------------------------------------- market board
@@ -1908,6 +1962,7 @@ namespace SolarSystem.UI
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
+                "F4  bounty board of the port in view: outlaws wanted there, their records, where last seen, who hunts them",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
                 "X   news feed: shocks, price spikes, embargoes, battles and captures as they happen",

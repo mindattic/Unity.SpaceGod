@@ -785,13 +785,26 @@ namespace SolarSystem.Core
         /// (<see cref="Battle.EnforcingSide"/>). Null if either is already fighting, a battle is already on here,
         /// or the player is not in this body's neighbourhood.
         /// </summary>
-        public Battle TryStartInterdiction(Ship ship, Ship patrol, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
+        public Battle TryStartInterdiction(Ship ship, Ship patrol, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd) =>
+            Enforce(ship, patrol, body, offsetFromBodyKm, forward, jd, "Interdiction off ",
+                (leader, b) => $"{b.Name}: the {leader.Faction.Name} patrol {leader.Name} moves on the wanted {ship.Name}");
+
+        /// <summary>
+        /// A bounty hunter with a contract on the player's wanted ship has caught up with it (see
+        /// <see cref="Outlaws.UpdatePilot"/>): a fight where the player is, the hunter's group enforcing the law as
+        /// a patrol would. Null under the same conditions as <see cref="TryStartInterdiction"/>.
+        /// </summary>
+        public Battle TryStartHunt(Ship ship, Ship hunter, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd) =>
+            Enforce(ship, hunter, body, offsetFromBodyKm, forward, jd, "Bounty hunt off ",
+                (leader, b) => $"{b.Name}: the bounty hunter {leader.Name} closes on the wanted {ship.Name}");
+
+        Battle Enforce(Ship ship, Ship patrol, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd, string name, Func<Ship, Battle, string> news)
         {
             if (ship == null || patrol == null || ship.Destroyed || ship.Battle != null || ship.Planetside) return null;
             var leader = patrol.Controller;
             if (leader.Destroyed || leader.Battle != null || leader.Derelict || leader == world.PilotedShip) return null;
             if (offsetFromBodyKm.Length > ScaleModel.NeighbourhoodKm(Catalog[body]) || BattleAt(body) != null) return null;
-            var b = new Battle(nextBattleId++, body, "Interdiction off " + Catalog[body].Name, offsetFromBodyKm, jd, rng.Next()) { EnforcingSide = 1, AggressorSide = 1 };
+            var b = new Battle(nextBattleId++, body, name + Catalog[body].Name, offsetFromBodyKm, jd, rng.Next()) { EnforcingSide = 1, AggressorSide = 1 };
             Hook(b);
             var approach = DVec3.Cross(offsetFromBodyKm.LengthSquared > 1e-9 ? offsetFromBodyKm.Normalized : DVec3.UnitX, DVec3.UnitZ);
             b.ApproachAxis = approach.LengthSquared > 1e-6 ? approach.Normalized : DVec3.UnitX;
@@ -799,7 +812,7 @@ namespace SolarSystem.Core
             unit.PlayerControlled = true;
             Join(b, leader, 1, false);
             Battles.Add(b);
-            world.Log(jd, $"{b.Name}: the {leader.Faction.Name} patrol {leader.Name} moves on the wanted {ship.Name}", WorldEventKind.Law, Shown(b));
+            world.Log(jd, news(leader, b), WorldEventKind.Law, Shown(b));
             BattleStarted?.Invoke(b);
             return b;
         }
@@ -1174,6 +1187,7 @@ namespace SolarSystem.Core
                 if (s.Leader == dead && s != heir) s.Leader = heir;
             if (Orders.TryGetValue(dead, out var o)) Orders[heir] = o;
             Orders.Remove(dead);
+            world.Outlaws?.OnSuccession(dead, heir);
         }
 
         // ---------------------------------------------------------------- orders
@@ -1181,6 +1195,8 @@ namespace SolarSystem.Core
         /// <summary>Fleet hook: where a warship or raider group goes next (its own body to hold), or -1.</summary>
         public int ChooseNext(Ship leader, int here, double jd)
         {
+            // Bounty hunters go where their contracts take them (U.SPC-T62).
+            if (Hunter(leader)) return world.Outlaws.ChooseNext(leader, here, jd);
             if (!leader.Spec.IsMilitary && !leader.Faction.IsPirate) return -1;
             var order = Decide(leader, here, jd);
             if (!Orders.TryGetValue(leader, out var current) || current.Kind != order.Kind || current.Body != order.Body)
@@ -1342,6 +1358,9 @@ namespace SolarSystem.Core
             if (target < 0) target = haven >= 0 && haven != here ? haven : NextPatrol(leader, here);
             return new GroupOrder { Kind = OrderKind.Raid, Body = target };
         }
+
+        /// <summary>Whether <paramref name="ship"/> flies in a bounty hunter group (see <see cref="Outlaws"/>).</summary>
+        bool Hunter(Ship ship) => world.Outlaws != null && world.Outlaws.IsHunter(ship);
 
         /// <summary>The navy's oldest surviving group, which never leaves home.</summary>
         public bool IsHomeGuard(Ship leader)
@@ -1766,7 +1785,8 @@ namespace SolarSystem.Core
             foreach (var s in Fleet.Ships)
                 // The player's ship is flown by the player: never handed to an AI flagship, nor one itself.
                 // Nor a group on an interstellar voyage: it keeps to its own business.
-                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Phase == ShipPhase.Parked && s.Voyage == null)
+                // Nor bounty hunters: each works its own contract.
+                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Phase == ShipPhase.Parked && s.Voyage == null && !Hunter(s))
                     groups.Add(s);
             groups.Sort((a, b) => GroupStrength(b).CompareTo(GroupStrength(a)));
             for (int i = 0; i < groups.Count; i++)
