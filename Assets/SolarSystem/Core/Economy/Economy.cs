@@ -462,7 +462,7 @@ namespace SolarSystem.Core
             double tax = value * PortTax;
             s.Owner.Treasury += tax;
             // Paid by the owner who offered it: a port taken since the load was booked does not pay its old owner's bonus.
-            if (s == ship.CargoDestination && ship.CargoBonus > 0 && s.Owner == ship.CargoBonusPayer)
+            if (s == ship.CargoDestination && ship.CargoBonus > 0 && (ship.CargoBonusPayer == null || s.Owner == ship.CargoBonusPayer))
             {
                 s.Owner.Treasury -= ship.CargoBonus;
                 value += ship.CargoBonus;
