@@ -388,7 +388,19 @@ namespace SolarSystem.Core
             };
         }
 
-        public bool CanTrade(Ship ship, Settlement s) => Diplomacy.CanDockAt(ship.Faction, s);
+        public bool CanTrade(Ship ship, Settlement s) => Diplomacy.CanDockAt(ship.Faction, s) && (DockAllowed == null || DockAllowed(ship, s));
+
+        /// <summary>Whether the law bars <paramref name="ship"/> from a port its faction could otherwise use (see <see cref="Law.CanDock"/>).</summary>
+        public bool LawRefuses(Ship ship, Settlement s) => DockAllowed != null && Diplomacy.CanDockAt(ship.Faction, s) && !DockAllowed(ship, s);
+
+        /// <summary>The law's say on docking: false bars a ship from a port (its commander's standing there, see <see cref="Law.CanDock"/>); null for no law.</summary>
+        public Func<Ship, Settlement, bool> DockAllowed;
+
+        /// <summary>What standing does to a ship's prices at a port: the player's hold purchases cost this much more
+        /// and its sales fetch this much less (see <see cref="Law.PriceFactor"/>); null for 1.</summary>
+        public Func<Ship, Settlement, double> PriceFactor;
+
+        double PriceFactorOf(Ship ship, Settlement s) => PriceFactor == null ? 1 : Math.Max(0.1, PriceFactor(ship, s));
 
         /// <summary>Sells whatever is in the hold at the best market at the body the ship has reached.</summary>
         public void OnArrive(Ship ship, int body, double jd)
@@ -783,7 +795,7 @@ namespace SolarSystem.Core
         public TradeOutcome RefuelAt(Ship ship, Settlement s, out double tonnes, out double cost)
         {
             tonnes = cost = 0;
-            if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
+            if (!CanTrade(ship, s)) return LawRefuses(ship, s) ? TradeOutcome.Refused : TradeOutcome.CannotDock;
             double room = ship.PropellantCapacity - ship.Propellant;
             if (room < 0.01) return TradeOutcome.NoRoom;
             if (!HasPropellant(ship, s)) return TradeOutcome.NoStock;
@@ -847,7 +859,21 @@ namespace SolarSystem.Core
         /// <summary>Result of one manual buy/sell click, for the HUD to pick a toast from. <see cref="Ok"/>
         /// also covers a partial fill (ran out of stock, credits or hold room partway through a multi-crate
         /// request), since part of the trade still went through.</summary>
-        public enum TradeOutcome { Ok, CannotDock, NoStock, NoRoom, CantAfford, NothingToSell }
+        public enum TradeOutcome
+        {
+            Ok,
+            CannotDock,
+            NoStock,
+            NoRoom,
+            CantAfford,
+            NothingToSell,
+
+            /// <summary>The port's faction could deal with the ship's, but the law bars the ship from docking (see <see cref="Law.CanDock"/>).</summary>
+            Refused,
+
+            /// <summary>All there is of that good aboard is stolen, and a lawful market will not take it.</summary>
+            Contraband,
+        }
 
         /// <summary>
         /// Buys up to <paramref name="crates"/> standard crates of <paramref name="good"/> (see
@@ -861,16 +887,20 @@ namespace SolarSystem.Core
         public TradeOutcome BuyIntoHold(Ship ship, Settlement s, Good good, int crates, out int bought)
         {
             bought = 0;
-            if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
+            if (!CanTrade(ship, s)) return LawRefuses(ship, s) ? TradeOutcome.Refused : TradeOutcome.CannotDock;
             double unitTonnes = CargoFootprint.Of(good).Tonnes;
+            double factor = PriceFactorOf(ship, s);
             var stopped = TradeOutcome.Ok;
             for (int i = 0; i < crates; i++)
             {
                 if (s.Available(good) < unitTonnes) { stopped = TradeOutcome.NoStock; break; }
-                double cost = s.PurchaseCost(good, unitTonnes);
+                double cost = s.PurchaseCost(good, unitTonnes) * factor;
                 double total = cost * (1 + PortTax);
                 if (ship.Faction.Treasury < total) { stopped = TradeOutcome.CantAfford; break; }
-                if (ship.PersonalHold.AddFirstFit(good) == null) { stopped = TradeOutcome.NoRoom; break; }
+                var crate = ship.PersonalHold.AddFirstFit(good);
+                if (crate == null) { stopped = TradeOutcome.NoRoom; break; }
+                // What a haven sells is plunder: stolen goods, contraband to any lawful patrol.
+                crate.Stolen = s.Owner != null && s.Owner.IsPirate;
 
                 s.Stock[(int)good] = Math.Max(0, s.Stock[(int)good] - unitTonnes);
                 s.Owner.Treasury += cost * PortTax;
@@ -893,18 +923,27 @@ namespace SolarSystem.Core
         public TradeOutcome SellFromHold(Ship ship, Settlement s, Good good, int crates, out int sold)
         {
             sold = 0;
-            if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
+            if (!CanTrade(ship, s)) return LawRefuses(ship, s) ? TradeOutcome.Refused : TradeOutcome.CannotDock;
             var hold = ship.PersonalHold;
+            // A lawful market will not touch stolen goods; a haven takes anything.
+            bool fence = s.Owner != null && s.Owner.IsPirate;
+            double factor = PriceFactorOf(ship, s);
             var stopped = TradeOutcome.Ok;
             for (int i = 0; i < crates; i++)
             {
                 CargoItem item = null;
+                bool stolenOnly = false;
                 foreach (var it in hold.Items)
-                    if (it.Good == good) { item = it; break; }
-                if (item == null) { stopped = TradeOutcome.NothingToSell; break; }
+                {
+                    if (it.Good != good) continue;
+                    if (it.Stolen && !fence) { stolenOnly = true; continue; }
+                    item = it;
+                    break;
+                }
+                if (item == null) { stopped = stolenOnly ? TradeOutcome.Contraband : TradeOutcome.NothingToSell; break; }
 
                 double tonnes = item.Tonnes;
-                double value = s.SaleValue(good, tonnes);
+                double value = s.SaleValue(good, tonnes) / factor;
                 double tax = value * PortTax;
                 hold.Remove(item);
                 s.Stock[(int)good] += tonnes;

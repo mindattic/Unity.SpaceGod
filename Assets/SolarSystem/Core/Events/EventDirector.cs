@@ -170,6 +170,8 @@ namespace SolarSystem.Core
             {
                 if (Active.Count >= MaxActive) break;
                 if (IsOpen(op.SourceKey) || IsResting(op.SourceKey, jd)) continue;
+                // A faction that wants the player, or no longer trusts them, offers them no work.
+                if (op.Patron != null && !src.WillHire(op.Patron)) continue;
                 if (op.Kind == OpportunityKind.Bounty && Active.Exists(o => o.Kind == OpportunityKind.Bounty)) continue;
                 op.Id = nextId++;
                 op.SpawnJd = jd;
@@ -353,7 +355,8 @@ namespace SolarSystem.Core
         {
             string captain = PirateCaptains.NameFor(s);
             string payer = src.PirateHunters != null ? src.PirateHunters.Name : "Every port in the system";
-            double credits = s.Spec.Class == ShipClass.Breacher ? 400000 : 650000;
+            // The standing price on a raider captain, plus whatever the law has posted for what they have actually done.
+            double credits = (s.Spec.Class == ShipClass.Breacher ? 400000 : 650000) + RoundThousand(src.PostedBounty(s));
             return new Opportunity
             {
                 Kind = OpportunityKind.Bounty,

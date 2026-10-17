@@ -39,6 +39,12 @@ namespace SolarSystem.Core
         /// <summary>Who pays for pirates dealt with (the Belt Consortium in Sol), or null for nobody.</summary>
         public Faction PirateHunters;
 
+        /// <summary>Whether a patron will offer the player its contracts (standing and bounties, see <see cref="Law.OffersContracts"/>).</summary>
+        public Func<Faction, bool> WillHire = f => true;
+
+        /// <summary>The bounties the law has posted on a ship's captain for what they have actually done, credits.</summary>
+        public Func<Ship, double> PostedBounty = s => 0;
+
         /// <summary>How much of the fighting at a lane's two ends counts toward its danger.</summary>
         public const double EndDangerWeight = 0.25;
 
@@ -59,6 +65,8 @@ namespace SolarSystem.Core
                 BodyName = b => catalog[b].Name,
                 IsMerchant = world.IsTrader,
                 PirateHunters = world.Belt,
+                WillHire = f => Law.OffersContracts(world.Law.Player, f),
+                PostedBounty = world.Law.BountyOn,
                 WreckHelio = w => world.WreckHelio(w, jd),
                 LaneDanger = lane =>
                 {

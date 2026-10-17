@@ -53,6 +53,9 @@ namespace SolarSystem.Core
         /// <summary>Economic events driven by the sim (accidents, worked-out seams, blights, strikes, war rationing,
         /// blockades and embargoes) and the price spikes they and the war cause, reported in <see cref="Events"/>.</summary>
         public MarketShocks Shocks { get; }
+        /// <summary>Law, crime and reputation: jurisdictions, the player's and every captain's record, bounties and
+        /// the patrols that act on them (see <see cref="Core.Law"/>).</summary>
+        public Law Law { get; private set; }
 
         /// <summary>Raised when a ship joins the fleet after the start (a yard finished it, or it came through a gate).</summary>
         public event Action<Ship> ShipAdded;
@@ -88,6 +91,7 @@ namespace SolarSystem.Core
             Economy.AdvanceTo(jd);
             War.Update(jd);
             Shocks.Update(jd);
+            Law.Update(jd);
             if (jd >= nextRecountJd)
             {
                 Economy.RecountInbound(Fleet.Ships);
@@ -246,6 +250,11 @@ namespace SolarSystem.Core
             economy.Initialise();
             War = new War(this, startJd, seed + 2);
             var war = War;
+            // The player's standing is one table: adventures seen through raise it, crimes lower it.
+            Law = new Law(this, Adventures.Reputation);
+            war.BattleEnded += Law.OnBattleEnded;
+            economy.DockAllowed = Law.AllowsDocking;
+            economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
             Infrastructure.AddSettlementStructures(economy, seed + 3);
             // Merchants and couriers go down to the surface through the rings; warships and pirates hold orbit.
@@ -862,6 +871,9 @@ namespace SolarSystem.Core
 
         /// <summary>A price spike at a port, or across the system.</summary>
         Market,
+
+        /// <summary>A crime recorded, a bounty posted, paid or collected (see <see cref="Law"/>).</summary>
+        Law,
     }
 
     public readonly struct WorldEvent

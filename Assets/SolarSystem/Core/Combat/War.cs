@@ -70,6 +70,10 @@ namespace SolarSystem.Core
         /// <summary>Raised when a battle begins (the app may want to slow time or point the camera).</summary>
         public event Action<Battle> BattleStarted;
 
+        /// <summary>Raised as a battle is resolved, before its survivors go back to their schedules: every unit's
+        /// fate (dead, fled, taken, ransomed) is final. The law judges what was done in it (see <see cref="Law.OnBattleEnded"/>).</summary>
+        public event Action<Battle, double> BattleEnded;
+
         public War(World world, double jd, int seed)
         {
             this.world = world;
@@ -592,6 +596,84 @@ namespace SolarSystem.Core
             return b;
         }
 
+        /// <summary>
+        /// The player opens fire on <paramref name="target"/>, a ship their own faction has no quarrel with (an
+        /// enemy's is just <see cref="TryStartPlayerBattle"/>): a fight starts where the player is, the player alone on
+        /// one side and the target's group, its faction's other ships here and its platforms over this world on the
+        /// other. If a fight is already on here with the target in it, the player joins against it. Attacking a lawful
+        /// ship is a crime, judged when the fight ends (see <see cref="Law.OnBattleEnded"/>). The target must hold orbit at
+        /// this body (parked or queued at its ring) and the player be in its neighbourhood. Null if not.
+        /// </summary>
+        public Battle TryStartPlayerAttack(Ship ship, Ship target, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
+        {
+            if (ship == null || target == null || ship == target || ship.Destroyed || ship.Battle != null || ship.Planetside) return null;
+            if (target.Destroyed || target.GateDeparted || target.Derelict || target.Planetside) return null;
+            if (Diplomacy.Hostile(ship.Faction, target.Faction)) return TryStartPlayerBattle(ship, body, offsetFromBodyKm, forward, jd);
+            var neighbourhood = ScaleModel.NeighbourhoodKm(Catalog[body]);
+            if (offsetFromBodyKm.Length > neighbourhood) return null;
+            var existing = BattleAt(body);
+            if (existing != null)
+            {
+                var tu = existing.UnitOf(target);
+                if (tu == null || target.Battle != existing || existing.UnitOf(ship) != null) return null;
+                if ((offsetFromBodyKm - existing.Anchor).Length > Battle.EscapeKm * 0.8) return null;
+                var joined = existing.AddShip(ship, 1 - tu.Side, offsetFromBodyKm - existing.Anchor, forward);
+                joined.PlayerControlled = true;
+                return existing;
+            }
+            if (target.Battle != null) return null;
+            var leader = target.Controller;
+            // Only a ship holding orbit here (parked, or waiting on a docking ring): one in flight keeps its own schedule.
+            if (leader.Destroyed || leader.Derelict || leader.Battle != null || leader == world.PilotedShip || !Fleet.IsAt(leader, body)) return null;
+
+            var present = PresentGroups(body);
+            var b = NewBattle(body, jd, present, offsetFromBodyKm);
+            var unit = b.AddShip(ship, 0, DVec3.Zero, forward);
+            unit.PlayerControlled = true;
+            Join(b, leader, 1, false);
+            foreach (var s in present)
+                if (s.Faction == target.Faction && s.Battle == null) Join(b, s, 1, false);
+            foreach (var st in Economy.At(body))
+            {
+                if (st.Owner != target.Faction) continue;
+                for (int i = 0; i < st.Platforms.Count; i++)
+                {
+                    double a = Astro.TwoPi * i / Math.Max(1, st.Platforms.Count);
+                    b.AddPlatform(st, st.Platforms[i], 1, Spot(b, 1) * 0.4 + new DVec3(Math.Cos(a), Math.Sin(a), 0.1) * 6);
+                }
+            }
+            Battles.Add(b);
+            world.Log(jd, $"{b.Name}: the {ship.Name} opens fire on the {target.Faction.Name} {target.Spec.DisplayName.ToLowerInvariant()} {target.Name}", WorldEventKind.Battle, Shown(b));
+            BumpDanger(body, 1);
+            BattleStarted?.Invoke(b);
+            return b;
+        }
+
+        /// <summary>
+        /// A patrol interdicts the player's wanted ship (see <see cref="Law.UpdatePilot"/>): a fight off
+        /// <paramref name="body"/> where the player is, the patrol's group on the side enforcing the law
+        /// (<see cref="Battle.EnforcingSide"/>). Null if either is already fighting, a battle is already on here,
+        /// or the player is not in this body's neighbourhood.
+        /// </summary>
+        public Battle TryStartInterdiction(Ship ship, Ship patrol, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
+        {
+            if (ship == null || patrol == null || ship.Destroyed || ship.Battle != null || ship.Planetside) return null;
+            var leader = patrol.Controller;
+            if (leader.Destroyed || leader.Battle != null || leader.Derelict || leader == world.PilotedShip) return null;
+            if (offsetFromBodyKm.Length > ScaleModel.NeighbourhoodKm(Catalog[body]) || BattleAt(body) != null) return null;
+            var b = new Battle(nextBattleId++, body, "Interdiction off " + Catalog[body].Name, offsetFromBodyKm, jd, rng.Next()) { EnforcingSide = 1, AggressorSide = 1 };
+            Hook(b);
+            var approach = DVec3.Cross(offsetFromBodyKm.LengthSquared > 1e-9 ? offsetFromBodyKm.Normalized : DVec3.UnitX, DVec3.UnitZ);
+            b.ApproachAxis = approach.LengthSquared > 1e-6 ? approach.Normalized : DVec3.UnitX;
+            var unit = b.AddShip(ship, 0, DVec3.Zero, forward);
+            unit.PlayerControlled = true;
+            Join(b, leader, 1, false);
+            Battles.Add(b);
+            world.Log(jd, $"{b.Name}: the {leader.Faction.Name} patrol {leader.Name} moves on the wanted {ship.Name}", WorldEventKind.Law, Shown(b));
+            BattleStarted?.Invoke(b);
+            return b;
+        }
+
         /// <summary>Starts a battle at <paramref name="body"/> if <paramref name="aggressor"/> has a quarrel with anyone there.</summary>
         public Battle TryStartBattle(int body, Faction aggressor, double jd, DVec3? anchor = null)
         {
@@ -767,6 +849,7 @@ namespace SolarSystem.Core
             Battles.Remove(b);
             Ended.Add(b);
             if (Ended.Count > 30) Ended.RemoveAt(0);
+            BattleEnded?.Invoke(b, jd);
 
             var lost = new int[2];
             var fled = new int[2];

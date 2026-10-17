@@ -84,6 +84,10 @@ namespace SolarSystem.Core
         public int X, Y;
         public bool Rotated;
 
+        /// <summary>Bought at a pirate haven: stolen goods, contraband to any lawful patrol (see <see cref="Law.ContrabandIn"/>)
+        /// and refused at a lawful market.</summary>
+        public bool Stolen;
+
         public CargoItem(Good good, int x, int y, bool rotated)
         {
             Good = good;

@@ -495,6 +495,7 @@ namespace SolarSystem
             Scale.Layout(Ephemeris, bodyScene);
             UpdateRadii();
             UpdatePiloting(dt);
+            ShowLawNotices();
             UpdateShips(dt);
             Structures.Layout();
             if (!Travel.Active) World.UpdateAdventures(Clock.Jd, PlayerHelioKm());
@@ -961,8 +962,35 @@ namespace SolarSystem
         /// <see cref="TogglePiloting"/>), so reach is that frame matching the market's body and the ship still
         /// being within its neighbourhood -- the same "near a world" radius <see cref="Fleet.WanderOrbit"/>
         /// and the hyperlane ramps use -- on top of the usual diplomatic can-dock check.</summary>
-        public bool CanTradeNow(Settlement s) =>
-            IsPiloting && pilotFrameBody == s.Body && pilotOffsetKm.Length <= ScaleModel.NeighbourhoodKm(Catalog[s.Body]) && Economy.CanTrade(World.PilotedShip, s);
+        public bool CanTradeNow(Settlement s) => NearPort(s) && Economy.CanTrade(World.PilotedShip, s);
+
+        /// <summary>Whether the piloted ship is close enough to <paramref name="s"/> to deal with its port (trade, pay fines), welcome or not.</summary>
+        public bool NearPort(Settlement s) =>
+            IsPiloting && World.PilotedShip != null && pilotFrameBody == s.Body && pilotOffsetKm.Length <= ScaleModel.NeighbourhoodKm(Catalog[s.Body]);
+
+        /// <summary>Shows what the law has to tell the player (their crimes seen, hails, scans, bounties collected) as toasts.</summary>
+        void ShowLawNotices()
+        {
+            var notices = World.Law?.TakeNotices();
+            if (notices != null && notices.Count > 0) ShowToast(string.Join("   ·   ", notices));
+        }
+
+        /// <summary>
+        /// A patrol's order to heave to (see <see cref="Law.UpdatePilot"/>): 1 pays the fine it asks from the
+        /// player's purse. Returns true while that hail has the number keys.
+        /// </summary>
+        bool UpdateLawHail(Ship ship)
+        {
+            var hail = World.Law?.Hail;
+            if (hail == null || !hail.Interdiction) return false;
+            if (Input.NumberKey == 1)
+            {
+                if (World.Law.PayFine(ship, hail.By, Clock.Jd, out double paid))
+                    ShowToast("Paid " + Num(paid, "N0") + " cr in fines to " + hail.By.Name + ": you are free to go");
+                else ShowToast("Not enough credits to pay the fine of " + Num(hail.Fine, "N0") + " cr");
+            }
+            return true;
+        }
 
         /// <summary>Turns mouse delta + throttle/strafe keys into a flight command and steps the hull's
         /// position every frame piloting is active, before <see cref="UpdateShips"/> reads it.</summary>
@@ -1035,6 +1063,8 @@ namespace SolarSystem
             UpdatePropellant(ship, dt);
 
             UpdatePilotBattle(ship, dt);
+            // The law around the ship: trespass, and patrols that scan it or, if it is wanted, hail it to pay up.
+            World.Law.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
             UpdateGateActivation(ship);
         }
 
@@ -1157,7 +1187,18 @@ namespace SolarSystem
                 // so the next battle's demand or surrender gets its own prompt.
                 demandPrompted = false;
                 termsPrompted = null;
-                if (!UpdateSalvage(ship, dt)) UpdateHavenAssault(ship);
+                if (!UpdateSalvage(ship, dt) && !UpdateLawHail(ship)) UpdateHavenAssault(ship);
+                // Holding fire on a locked ship the player's flag has no quarrel with opens fire on it anyway: an
+                // attack on a lawful ship, a crime if anyone sees it (enemies and pirates are fought as usual below).
+                var locked = pilotLockTarget.IsShip ? pilotLockTarget.Ship : null;
+                if (locked != null && Input.Fire && !pilotCruise.Active && !ClickPanelOpen && !World.Diplomacy.Hostile(ship.Faction, locked.Faction))
+                {
+                    if (World.War.TryStartPlayerAttack(ship, locked, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd) != null)
+                    {
+                        ShowToast("Weapons free on the " + locked.Name + ": an attack on a lawful ship is a crime if anyone sees it");
+                        return;
+                    }
+                }
                 pilotBattleCheckTimer -= dt;
                 if (pilotBattleCheckTimer > 0) return;
                 pilotBattleCheckTimer = PilotBattleCheckIntervalS;

@@ -65,6 +65,7 @@ namespace SolarSystem.UI
             DrawSelection();
             DrawStatus();
             DrawSalvage();
+            DrawHail();
             if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
             if (app.ShowCargo) DrawCargo();
@@ -884,6 +885,10 @@ namespace SolarSystem.UI
                     lines.Add(("Trade profit", Credits(c.Credits)));
                 }
                 lines.Add(("Trips", c.TripsCompleted.ToString(CultureInfo.InvariantCulture)));
+                // The law's file on whoever commands it: the player's own record for the ship they fly.
+                var record = app.World.Law?.FindRecord(ship);
+                if (record != null && (record.Wanted || record.Crimes.Count > 0))
+                    lines.Add((record.IsPlayer ? "Your record" : "Captain", (record.IsPlayer ? "" : record.Name + ", ") + RecordText(record)));
             }
 
             float w = 410;
@@ -1052,6 +1057,14 @@ namespace SolarSystem.UI
             // Buy/Sell only make sense for a market the player's own ship could actually hand goods
             // over at right now -- not one merely being looked at from across the system.
             bool canTrade = market != null && app.CanTradeNow(market);
+            var law = app.World.Law;
+            var pilotRecord = app.IsPiloting && law != null ? law.Player : null;
+            bool lawful = market != null && market.Owner != null && !market.Owner.IsPirate;
+            // A row for the law at this port: the bounty to pay off here, or why it will not dock the ship.
+            bool atPort = market != null && pilotRecord != null && lawful && app.NearPort(market);
+            bool wantedHere = atPort && pilotRecord.WantedBy(market.Owner);
+            bool refused = atPort && !canTrade && app.Economy.LawRefuses(app.World.PilotedShip, market);
+            float lawRow = wantedHere || refused ? 22 : 0;
 
             // What is shaking this market right now (a strike, a blight, a blockade, rationing), from the sim's own events.
             string shocks = null;
@@ -1062,7 +1075,7 @@ namespace SolarSystem.UI
 
             const float rowH = 17;
             float w = canTrade ? 600 : 430;
-            float h = marketOpen ? 62 + GoodInfo.Count * rowH + (canTrade ? 20 : 0) + extra : 34;
+            float h = marketOpen ? 62 + GoodInfo.Count * rowH + (canTrade ? 20 : 0) + extra + lawRow : 34;
             var r = Panel(new Rect(Screen.width - w - 10, 72, w, h));
             string heading = market != null ? "MARKET  ·  " + market.Name : "MARKET  ·  system average";
             if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (marketOpen ? "[-]  " : "[+]  ") + heading, title)) marketOpen = !marketOpen;
@@ -1070,14 +1083,26 @@ namespace SolarSystem.UI
             var old = GUI.contentColor;
             GUI.contentColor = Dim;
             GUI.Label(new Rect(r.x + 12, r.y + 30, w - 24, 18), market != null
-                ? market.Owner.Name + "   (select a body or a trader to change, M to close)"
+                ? market.Owner.Name + (pilotRecord != null && lawful ? StandingText(pilotRecord, market.Owner) : "   (select a body or a trader to change, M to close)")
                 : "Select a port to see its market.   M to close", small);
             if (shocks != null)
             {
                 GUI.contentColor = new Color(1f, 0.72f, 0.4f);
                 GUI.Label(new Rect(r.x + 12, r.y + 48, w - 24, 18), "NOW:  " + shocks, small);
             }
-            float top = r.y + 50 + extra;
+            if (lawRow > 0)
+            {
+                GUI.contentColor = new Color(1f, 0.55f, 0.45f);
+                GUI.Label(new Rect(r.x + 12, r.y + 50 + extra, w - 230, 18), refused ? "DOCKING REFUSED: " + market.Owner.Name + " will not let you in"
+                    : "WANTED by " + market.Owner.Name, small);
+                // Fines are paid at the port's office even when it will not let the ship dock to trade.
+                if (wantedHere && GUI.Button(new Rect(r.xMax - 210, r.y + 48 + extra, 196, 20), "Pay bounty  " + Credits(pilotRecord.BountyBy(market.Owner)), button))
+                    app.ShowToast(law.PayFine(app.World.PilotedShip, market.Owner, app.Clock.Jd, out double paid)
+                        ? "Paid " + Credits(paid) + " to " + market.Owner.Name + ": the bounty is lifted"
+                        : "Not enough credits to pay off the bounty");
+                GUI.contentColor = Dim;
+            }
+            float top = r.y + 50 + extra + lawRow;
             if (canTrade)
             {
                 GUI.contentColor = Color.white;
@@ -1127,6 +1152,14 @@ namespace SolarSystem.UI
             GUI.contentColor = old;
         }
 
+        /// <summary>The player's standing with a port's owner, and what it does to the prices there.</summary>
+        static string StandingText(LawRecord r, Faction owner)
+        {
+            double s = r.StandingWith(owner);
+            return "   ·   your standing " + (s > 0 ? "+" : "") + s.ToString("0", CultureInfo.InvariantCulture) +
+                   ", prices x" + Law.PriceFactor(r, owner).ToString("0.00", CultureInfo.InvariantCulture);
+        }
+
         void ClickBuy(Settlement market, Good good)
         {
             var ship = app.World.PilotedShip;
@@ -1141,6 +1174,8 @@ namespace SolarSystem.UI
                     Economy.TradeOutcome.CantAfford => "Not enough credits",
                     Economy.TradeOutcome.NoRoom => "Cargo hold is full",
                     Economy.TradeOutcome.CannotDock => "Not welcome to trade here",
+                    Economy.TradeOutcome.Refused => "Docking refused: your standing with " + market.Owner.Name + " is too low",
+                    Economy.TradeOutcome.Contraband => "No lawful market will take stolen goods",
                     _ => "Can't buy that right now",
                 });
         }
@@ -1157,6 +1192,7 @@ namespace SolarSystem.UI
                 Economy.TradeOutcome.NoStock => market.Name + " has no reaction mass to spare",
                 Economy.TradeOutcome.CantAfford => "Not enough credits",
                 Economy.TradeOutcome.CannotDock => "Not welcome to trade here",
+                Economy.TradeOutcome.Refused => "Docking refused: your standing with " + market.Owner.Name + " is too low",
                 _ => "Can't refuel right now",
             });
         }
@@ -1172,6 +1208,8 @@ namespace SolarSystem.UI
                 {
                     Economy.TradeOutcome.NothingToSell => "None of that in the hold",
                     Economy.TradeOutcome.CannotDock => "Not welcome to trade here",
+                    Economy.TradeOutcome.Refused => "Docking refused: your standing with " + market.Owner.Name + " is too low",
+                    Economy.TradeOutcome.Contraband => "No lawful market will take stolen goods",
                     _ => "Can't sell that right now",
                 });
         }
@@ -1484,6 +1522,7 @@ namespace SolarSystem.UI
             {
                 case SpaceCamera.CameraMode.Focus when cam.PilotLocked:
                     s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + (app.Piloted.Ship != null ? "  ·  PROPELLANT " + (app.Piloted.Ship.Propellant <= 1e-6 ? "DRY" : Percent(app.Piloted.Ship.PropellantFraction)) : "") +
+                        (app.World.Law != null && app.World.Law.Player.Wanted ? "  ·  WANTED " + Credits(app.World.Law.Player.TotalBounty) : "") +
                         "   (WASD throttle/strafe, mouse to steer, Z/X roll, F flight assist, Shift boost, P to release)";
                     break;
                 case SpaceCamera.CameraMode.Focus:
@@ -1516,6 +1555,38 @@ namespace SolarSystem.UI
             var level = Panel(new Rect(r.xMax + 8, r.y, 120, 30));
             if (GUI.Button(new Rect(level.x + 4, level.y + 4, level.width - 8, 22), cam.Levelling ? "LEVELLING…" : "LEVEL  [R]", cam.Levelling ? buttonActive : button))
                 app.LevelView();
+        }
+
+        /// <summary>A patrol's hail of the piloted ship, above the salvage readout: hold still for a scan, or pay the fine (1) or be fired on.</summary>
+        void DrawHail()
+        {
+            var hail = app.IsPiloting ? app.World.Law?.Hail : null;
+            if (hail == null) return;
+            int seconds = Mathf.CeilToInt((float)hail.SecondsLeft(app.Clock.Jd));
+            string s = "HAILED  ·  " + hail.By.Name.ToUpperInvariant() + " PATROL " + hail.Patrol.Name.ToUpperInvariant() + "  ·  " +
+                (hail.Interdiction ? "HEAVE TO:  1 pay the " + Credits(hail.Fine) + " fine, or be fired on in " + seconds + " s"
+                    : "CARGO SCAN: hold position, " + seconds + " s  (running is a crime)");
+            var line = new GUIContent(s);
+            float lw = text.CalcSize(line).x + 28;
+            var r = Panel(new Rect((Screen.width - lw) * 0.5f, Screen.height - 112, lw, 30));
+            GUI.contentColor = hail.Interdiction ? new Color(1f, 0.55f, 0.45f) : new Color(1f, 0.85f, 0.4f);
+            GUI.Label(new Rect(r.x + 14, r.y + 6, lw, 20), line, text);
+            GUI.contentColor = Color.white;
+        }
+
+        /// <summary>A record in a line: the bounties posted, notoriety, and how many crimes are on file.</summary>
+        static string RecordText(LawRecord r)
+        {
+            var parts = new List<string>();
+            if (r.Wanted)
+            {
+                var by = new List<string>();
+                foreach (var kv in r.Bounty) by.Add(kv.Key.Name + " " + Credits(kv.Value));
+                parts.Add("WANTED: " + string.Join(", ", by));
+            }
+            parts.Add("notoriety " + r.Notoriety.ToString("0", CultureInfo.InvariantCulture));
+            parts.Add(r.Crimes.Count + " crime" + (r.Crimes.Count == 1 ? "" : "s") + " on file");
+            return string.Join(",  ", parts);
         }
 
         /// <summary>
@@ -1598,6 +1669,7 @@ namespace SolarSystem.UI
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
                 "X   news feed: shocks, price spikes, embargoes, battles and captures as they happen",
+                "Law   T lock a ship, hold fire on it to attack (a crime if seen)   patrols scan: hold still   1 pay a fine when hailed",
                 "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",
             };
             float w = 610, h = helpOpen ? 42 + help.Length * 17 : 34;

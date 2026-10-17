@@ -30,7 +30,21 @@ namespace SolarSystem.Core
         /// <see cref="Vel"/> and <see cref="Forward"/> instead every frame) and <see cref="Battle.Fire"/> routes its
         /// forward-facing weapons through <see cref="PlayerFireHeld"/>/<see cref="PlayerLockTarget"/> rather than
         /// AI target selection. Side/aft turrets and point defence are unaffected and keep firing autonomously.</summary>
-        public bool PlayerControlled;
+        public bool PlayerControlled
+        {
+            get => playerControlled;
+            set
+            {
+                playerControlled = value;
+                if (value) PlayerFlown = true;
+            }
+        }
+
+        bool playerControlled;
+
+        /// <summary>A human flew this unit at some point in the battle (kept after <see cref="PlayerControlled"/> is
+        /// cleared, as when the hull is captured), so the law knows whose deeds its were (see <see cref="Law.OnBattleEnded"/>).</summary>
+        public bool PlayerFlown { get; private set; }
 
         /// <summary>While <see cref="PlayerControlled"/>: whether the player is holding the fire trigger this frame.</summary>
         public bool PlayerFireHeld;
@@ -284,6 +298,13 @@ namespace SolarSystem.Core
 
         /// <summary>Set for an ambush beside a hyperlane; null for a battle at a body.</summary>
         public LaneSite Site;
+
+        /// <summary>The side that started the fight (every battle the war starts puts its aggressor on side 0); a
+        /// lawful ship on the other side was defending itself (see <see cref="Law.OnBattleEnded"/>).</summary>
+        public int AggressorSide;
+
+        /// <summary>The side enforcing the law (a patrol interdicting a wanted ship, see <see cref="War.TryStartInterdiction"/>), or -1.</summary>
+        public int EnforcingSide = -1;
 
         /// <summary>Raised when boarders take a unit (the world decides what they do with it).</summary>
         public Action<Battle, BattleUnit, Faction> UnitCaptured;
