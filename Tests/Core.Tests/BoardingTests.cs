@@ -197,6 +197,9 @@ namespace SolarSystem.Core.Tests
             var w = World.CreateDefault(eph, StartJd);
             int ambushes = 0, siteBattles = 0;
             var seen = new System.Collections.Generic.HashSet<Battle>();
+            // The world's own log keeps only its latest 400 entries: count every one as it is logged.
+            var logged = new System.Collections.Generic.List<WorldEvent>();
+            w.Logged += logged.Add;
             for (double jd = StartJd; jd <= StartJd + 365; jd += 0.05)
             {
                 eph.Update(jd);
@@ -204,9 +207,9 @@ namespace SolarSystem.Core.Tests
                 foreach (var b in w.War.Battles)
                     if (seen.Add(b) && b.Site != null) siteBattles++;
             }
-            ambushes = w.Events.Count(e => e.Text.Contains("spring an ambush"));
-            int prizes = w.Events.Count(e => e.Kind == WorldEventKind.Capture && e.Text.Contains(" is "));
-            foreach (var e in w.Events.Where(e => e.Text.Contains("ambush") || (e.Kind == WorldEventKind.Capture && e.Text.Contains(" is "))).Take(15))
+            ambushes = logged.Count(e => e.Text.Contains("spring an ambush"));
+            int prizes = logged.Count(e => e.Kind == WorldEventKind.Capture && e.Text.Contains(" is "));
+            foreach (var e in logged.Where(e => e.Text.Contains("ambush") || (e.Kind == WorldEventKind.Capture && e.Text.Contains(" is "))).Take(15))
                 TestContext.Out.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd}  {e.Text}");
             TestContext.Out.WriteLine($"ambushes {ambushes}, lane battles {siteBattles}, prizes {prizes}, traders alive {w.Fleet.Ships.Count(s => !s.Destroyed && !s.Derelict && w.IsTrader(s))}");
             Assert.That(ambushes > 0, Is.True, "no lane ambush in a year");

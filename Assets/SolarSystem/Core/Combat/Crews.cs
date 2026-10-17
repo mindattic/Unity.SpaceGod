@@ -79,6 +79,10 @@ namespace SolarSystem.Core
         /// <summary>For raiders' pods: the haven they sail from, which prisoners taken off them may give away.</summary>
         public Settlement Haven;
 
+        /// <summary>A named outlaw captain who got away in these pods (their flagship going down, or a brig they
+        /// broke out of), or null: whoever tractors the pods in has them (see <see cref="Outlaws.OnPodResolved"/>).</summary>
+        public Outlaw Captain;
+
         /// <summary>The cluster drifts this far from the hull at most, km.</summary>
         public const double MaxDriftKm = 300;
 

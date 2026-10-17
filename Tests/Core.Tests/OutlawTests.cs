@@ -260,7 +260,7 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
-        public void AHunterThatKillsItsTargetCollectsEveryBountyOnIt()
+        public void AHunterThatKillsItsTargetCollectsEveryBountyOnItAtTheDeadRate()
         {
             var w = CreateWorld();
             int mars = Body(w, "Mars");
@@ -276,13 +276,14 @@ namespace SolarSystem.Core.Tests
             w.Law.OnBattleEnded(b, StartJd);
             w.Outlaws.OnBattleEnded(b, StartJd);
             Assert.That(o.Record.Wanted, Is.False);
-            // Firing on the hunter in Federation space was piracy too, seen by the hunter: that bounty is collected with the rest.
-            double piracy = Law.Severity(CrimeKind.Piracy).bounty;
-            Assert.That(h.Collected, Is.EqualTo(total + piracy));
+            // Firing on the hunter in Federation space was piracy too, seen by the hunter: that bounty is collected with
+            // the rest -- all of it at the dead rate (U.SPC-T63), the hunters' scanners on the wreck the proof.
+            double piracy = Law.Severity(CrimeKind.Piracy).bounty, dead = Outlaws.DeadShare;
+            Assert.That(h.Collected, Is.EqualTo((total + piracy) * dead).Within(1));
             Assert.That(h.Takes, Is.EqualTo(1));
             Assert.That(w.Independents.Treasury - guild, Is.EqualTo(h.Collected).Within(1));
-            Assert.That(sol - w.Sol.Treasury, Is.EqualTo(2 * piracy).Within(1), "each poster pays its own");
-            Assert.That(belt - w.Belt.Treasury, Is.EqualTo(Law.Severity(CrimeKind.Assault).bounty).Within(1));
+            Assert.That(sol - w.Sol.Treasury, Is.EqualTo(2 * piracy * dead).Within(1), "each poster pays its own");
+            Assert.That(belt - w.Belt.Treasury, Is.EqualTo(Law.Severity(CrimeKind.Assault).bounty * dead).Within(1));
             Assert.That(o.Fate, Is.EqualTo(OutlawFate.Killed));
             Assert.That(o.FateBy, Does.Contain(h.Name));
             Assert.That(w.Law.FindRecord(h.Ship), Is.Null, "hunting outlaws is no crime");
@@ -314,7 +315,7 @@ namespace SolarSystem.Core.Tests
             double bounty = w.Law.Player.TotalBounty;
             w.Law.OnBattleEnded(b, StartJd);
             Assert.That(w.Law.Player.Wanted, Is.False);
-            Assert.That(h.Collected, Is.EqualTo(bounty));
+            Assert.That(h.Collected, Is.EqualTo(bounty * Outlaws.DeadShare).Within(1), "dead pays the dead rate");
             Assert.That(w.Law.FindRecord(h.Ship), Is.Null, "the hunter enforces the law");
         }
 

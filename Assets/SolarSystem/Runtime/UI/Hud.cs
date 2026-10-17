@@ -1176,7 +1176,12 @@ namespace SolarSystem.UI
             const float w = 760, rowH = 18;
             var board = port != null ? outlaws.BoardAt(port) : new List<BountyPosting>();
             int rows = Mathf.Min(board.Count, 14);
-            float h = 54 + Mathf.Max(1, rows) * rowH;
+            // Captains in the player's brig, and kills waiting on a scan of the wreck (U.SPC-T63).
+            var ship = app.IsPiloting ? app.World.PilotedShip : null;
+            var held = outlaws.HeldAboard(ship);
+            var claims = ship != null ? outlaws.Claims : new List<KillClaim>();
+            int extra = held.Count + claims.Count;
+            float h = 54 + Mathf.Max(1, rows) * rowH + (extra > 0 ? 8 + extra * 22 : 0);
             var r = Panel(new Rect((Screen.width - w) * 0.5f, 120, w, h));
             GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 22), "BOUNTY BOARD  ·  " + (port != null ? port.Name + "  ·  " + port.Owner.Name : "no port in view"), title);
             var old = GUI.contentColor;
@@ -1184,13 +1189,40 @@ namespace SolarSystem.UI
             string note = port == null ? "Select a world with a port, or fly alongside one.   F4 to close"
                 : port.Owner.IsPirate ? "Nobody here answers to the law: a haven keeps no board.   F4 to close"
                 : board.Count == 0 ? "Nobody is wanted here.   F4 to close"
-                : "Bounties posted by " + port.Owner.Name + ", biggest first; a raider's BOUNTY adventure pays the price on their head.   F4 to close";
+                : "Bounties posted by " + port.Owner.Name + ", biggest first; the price pays in full alive, half dead on a scanned wreck.   F4 to close";
             GUI.Label(new Rect(r.x + 12, r.y + 28, w - 24, 18), note, small);
             for (int i = 0; i < rows; i++)
             {
                 var p = board[i];
                 GUI.contentColor = p.IsPlayer ? new Color(1f, 0.55f, 0.45f) : p.Outlaw != null && p.Outlaw.Feared ? new Color(1f, 0.78f, 0.35f) : Color.white;
                 GUI.Label(new Rect(r.x + 12, r.y + 48 + i * rowH, w - 24, rowH), Outlaws.Describe(p, app.Clock.Jd), small);
+            }
+            float y = r.y + 56 + Mathf.Max(1, rows) * rowH;
+            bool alongside = port != null && app.NearPort(port);
+            foreach (var o in held)
+            {
+                GUI.contentColor = new Color(0.6f, 0.9f, 1f);
+                GUI.Label(new Rect(r.x + 12, y + 2, w - 200, rowH), "IN YOUR BRIG  ·  " + o.Title + "  ·  " + Credits(o.Record.TotalBounty) + " alive  ·  ransom " + Credits(Outlaws.RansomFor(o)), small);
+                GUI.contentColor = Color.white;
+                if (alongside && !port.Owner.IsPirate && (!o.Record.Wanted || o.Record.WantedBy(port.Owner)) &&
+                    GUI.Button(new Rect(r.xMax - 180, y, 168, 20), "Hand over  +" + Credits(o.Record.TotalBounty), button))
+                {
+                    double paid = outlaws.Deliver(o, port, app.Clock.Jd);
+                    app.ShowToast(o.Fate == OutlawFate.Captured ? o.Name + " handed over at " + port.Name + (paid > 0 ? " for " + Credits(paid) : "") : "Not welcome here");
+                }
+                else if (alongside && port.Owner.IsPirate && GUI.Button(new Rect(r.xMax - 180, y, 168, 20), "Ransom  +" + Credits(Outlaws.RansomFor(o)), button))
+                {
+                    double paid = outlaws.Ransom(o, port, app.Clock.Jd);
+                    app.ShowToast(paid > 0 ? o.Name + " ransomed back for " + Credits(paid) : "The " + port.Owner.Name + " will not pay");
+                }
+                y += 22;
+            }
+            foreach (var c in claims)
+            {
+                GUI.contentColor = Dim;
+                GUI.Label(new Rect(r.x + 12, y + 2, w - 24, rowH), "KILL UNPROVEN  ·  " + c.Outlaw.Title + "  ·  scan the wreck of the " + (c.Wreck != null ? c.Wreck.Name : "flagship") +
+                    " for " + Credits(Outlaws.DeadRate(c.Outlaw.Record)) + ", the dead rate", small);
+                y += 22;
             }
             GUI.contentColor = old;
         }

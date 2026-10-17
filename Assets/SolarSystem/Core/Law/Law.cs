@@ -59,7 +59,7 @@ namespace SolarSystem.Core
         public readonly string Name;
 
         /// <summary>The captain's ship (the group leader's), or null for the player.</summary>
-        public readonly Ship Captain;
+        public Ship Captain { get; internal set; }
         public bool IsPlayer => Captain == null;
 
         /// <summary>Standing with each faction (0 neutral; crimes lower it, good deeds raise it).</summary>
@@ -438,8 +438,8 @@ namespace SolarSystem.Core
         /// and robbers answer for it whichever side they were on; a lawful ship defending itself does not). A survivor among those it attacked
         /// is a witness; failing that, any ship or station in sensor range. The side enforcing the law in an
         /// interdiction commits nothing, and a wanted ship it stopped is charged only if it destroyed or took one of
-        /// the patrol's ships. A wanted commander killed or taken by bounty hunters is theirs to collect on (see
-        /// <see cref="Outlaws.ClaimByHunter"/>); by a faction that posted a bounty on it, it has paid that one
+        /// the patrol's ships. A wanted commander killed or taken by bounty hunters or the player is theirs to collect on, at
+        /// the dead rate for a kill and in full alive (see <see cref="Outlaws.ClaimInBattle"/>); by a faction that posted a bounty on it, it has paid that one
         /// (a dead NPC captain's bounties all lapse).
         /// </summary>
         public void OnBattleEnded(Battle b, double jd)
@@ -503,8 +503,10 @@ namespace SolarSystem.Core
                 if (!player && u.Ship.IsEscort) continue;
                 var rec = player ? Player : FindRecord(u.Ship);
                 if (rec == null || !rec.Wanted) continue;
-                // Bounty hunters on the other side collect every bounty on it (see Outlaws.ClaimByHunter).
-                if (world?.Outlaws != null && world.Outlaws.ClaimByHunter(b, u, rec, jd)) continue;
+                // Alive or dead (see Outlaws.ClaimInBattle): a captain taken goes in a brig to be handed over for the
+                // full price, one who got away in the pods is still wanted, and a kill pays hunters (or, on a scanned
+                // wreck, the player) the dead rate.
+                if (world?.Outlaws != null && world.Outlaws.ClaimInBattle(b, u, rec, jd)) continue;
                 if (!player && u.Dead)
                 {
                     var claimed = new List<Faction>(rec.Bounty.Keys);

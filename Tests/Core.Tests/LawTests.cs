@@ -166,7 +166,7 @@ namespace SolarSystem.Core.Tests
             Assert.That(rec.Crimes.Single().Witness, Is.EqualTo("the Ledger"), "the merchant lived to tell it");
             Assert.That(rec.BountyBy(w.Sol), Is.EqualTo(Law.Severity(CrimeKind.Piracy).bounty));
             Assert.That(w.Law.FindRecord(merchant), Is.Null, "fighting off pirates is no crime");
-            // The bounty board puts that price on the captain's head on top of the standing one.
+            // The bounty adventure names the law's price on the captain's head, paid on top of its own (U.SPC-T63).
             Assert.That(EventSources.Of(w, StartJd).PostedBounty(raider), Is.EqualTo(rec.TotalBounty));
         }
 

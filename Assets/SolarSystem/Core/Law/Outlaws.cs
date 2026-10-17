@@ -18,6 +18,10 @@ namespace SolarSystem.Core
 
         /// <summary>Gone without a fight anyone saw: the hull lost outside a battle (a collision, a scuttling).</summary>
         Vanished,
+
+        /// <summary>Taken alive and locked in a captor's brig, not yet handed over (U.SPC-T63): delivered to a lawful
+        /// port of a faction that wants them it pays the full bounty; ransomed back, or breaking out, they go free.</summary>
+        Held,
     }
 
     /// <summary>Where a wanted party was last seen: the body (or -1 when nobody can say which), when, by whom, in words.</summary>
@@ -43,11 +47,22 @@ namespace SolarSystem.Core
     {
         public readonly LawRecord Record;
 
-        /// <summary>The flagship they command (the group leader the law's record is keyed by).</summary>
-        public readonly Ship Ship;
+        /// <summary>The flagship they command (the group leader the law's record is keyed by): the last one, while
+        /// they are adrift in its pods, ashore or held.</summary>
+        public Ship Ship { get; internal set; }
 
         /// <summary>The haven they sail from, or null.</summary>
-        public readonly Settlement Haven;
+        public Settlement Haven { get; internal set; }
+
+        /// <summary>The escape pods they got away in, while those drift (see <see cref="EscapePod.Captain"/>), or null.</summary>
+        public EscapePod Pod;
+
+        /// <summary>Free again (ransomed, broken out of a brig, picked up by their own) and back with the raiders,
+        /// waiting for a new band to command (see <see cref="Outlaws.Sync"/>).</summary>
+        public bool Ashore;
+
+        /// <summary>The ship whose brig holds them, while <see cref="OutlawFate.Held"/>.</summary>
+        public Ship HeldBy;
 
         /// <summary>When the law first had them on its books (their band sailed, or they took it over).</summary>
         public readonly double SinceJd;
@@ -81,6 +96,9 @@ namespace SolarSystem.Core
         public string Title => Feared ? "the feared " + Name : Name;
 
         public bool AtLarge => Fate == OutlawFate.AtLarge;
+
+        /// <summary>At large and in command of their flagship (not adrift in its pods, nor ashore waiting for a band).</summary>
+        public bool Aboard => AtLarge && Pod == null && !Ashore;
 
         public double DaysAtLarge(double jd) => Math.Max(0, (AtLarge ? jd : FateJd) - SinceJd);
 
@@ -135,6 +153,18 @@ namespace SolarSystem.Core
     {
         public LawRecord Target;
         public double TakenJd, UntilJd;
+    }
+
+    /// <summary>A kill the player made of a wanted outlaw: the dead rate is paid once they scan the wreck (U.SPC-T63).</summary>
+    public sealed class KillClaim
+    {
+        public Outlaw Outlaw;
+
+        /// <summary>The flagship's wreck, to be scanned for proof (null: there is none, and the claim lapses).</summary>
+        public Wreck Wreck;
+
+        public double Jd;
+        public string Battle;
     }
 
     /// <summary>One line on a station's bounty board.</summary>
@@ -295,6 +325,8 @@ namespace SolarSystem.Core
             ReviewContracts(jd);
             Commission(jd);
             RepairHunters();
+            SettleCaptives(jd);
+            LapseClaims(jd);
         }
 
         /// <summary>Every raider band's captain goes on the books: its flagship, its haven, its record.</summary>
@@ -305,6 +337,13 @@ namespace SolarSystem.Core
             {
                 if (s.Destroyed || s.IsEscort || s.Derelict || s.GateDeparted || s.Faction == null || !s.Faction.IsPirate || s == world.PilotedShip) continue;
                 if (byShip.ContainsKey(s)) continue;
+                // A captain back with the raiders takes the next band that sails.
+                var ashore = All.Find(x => x.AtLarge && x.Ashore);
+                if (ashore != null)
+                {
+                    Rebind(ashore, s, jd);
+                    continue;
+                }
                 var o = new Outlaw(Law.RecordOf(s), s, world.War.HomeHaven(s), jd);
                 All.Add(o);
                 byShip[s] = o;
@@ -317,7 +356,7 @@ namespace SolarSystem.Core
         {
             foreach (var o in All)
             {
-                if (!o.AtLarge) continue;
+                if (!o.Aboard) continue;
                 if (o.Ship.Faction == null || !o.Ship.Faction.IsPirate) End(o, OutlawFate.Captured, jd, o.Ship.Faction?.Name);
                 else if (o.Ship.Destroyed || o.Ship.Derelict) End(o, OutlawFate.Vanished, jd, null);
             }
@@ -325,7 +364,10 @@ namespace SolarSystem.Core
 
         void End(Outlaw o, OutlawFate fate, double jd, string by)
         {
-            if (!o.AtLarge) return;
+            if (!o.AtLarge && o.Fate != OutlawFate.Held) return;
+            Release(o);
+            o.Pod = null;
+            o.Ashore = false;
             o.Fate = fate;
             o.FateJd = jd;
             o.FateBy = by;
@@ -344,7 +386,7 @@ namespace SolarSystem.Core
         {
             foreach (var o in All)
             {
-                if (!o.AtLarge || o.Ship.Battle != null) continue;
+                if (!o.Aboard || o.Ship.Battle != null) continue;
                 var pos = world.Fleet.StateOf(o.Ship, jd).HelioKm;
                 string witness = Law.FindWitness(pos, jd);
                 if (witness == null) continue;
@@ -466,7 +508,8 @@ namespace SolarSystem.Core
             {
                 if (u.Ship == null || u.Side < 0 || u.Side > 1) continue;
                 var o = Of(u.Ship);
-                if (o == null || !o.AtLarge || !seen.Add(o)) continue;
+                // (One taken alive in this very fight is in a brig already: what the band did still counts.)
+                if (o == null || !(o.AtLarge || (o.Fate == OutlawFate.Held && o.FateJd == jd)) || !seen.Add(o)) continue;
                 int side = u.Side;
                 int kills = 0, robbed = 0, ransoms = 0;
                 foreach (var v in b.Units)
@@ -500,13 +543,19 @@ namespace SolarSystem.Core
                     if (b.Site != null) Sight(rec, Hide(b.Site.Hop.From, "on the " + b.Site.Hop.Lane.Name + " lane"), jd, crime.Witness);
                 }
             }
-            // Outlaws whose flagship went down or was taken in it are finished.
+            // Outlaws whose flagship went down or was taken in it are finished -- unless they got away in its pods,
+            // or were taken alive into a brig.
             foreach (var u in b.Units)
             {
                 if (u.Ship == null || !(u.Dead || u.Captured)) continue;
-                if (!byShip.TryGetValue(u.Ship, out var o) || !o.AtLarge) continue;
+                if (!byShip.TryGetValue(u.Ship, out var o) || !o.AtLarge || o.Ship != u.Ship) continue;
+                if (u.Dead && o.Pod != null) continue;
+                if (u.Captured && Seize(b, u, o, jd)) continue;
                 End(o, u.Dead ? OutlawFate.Killed : OutlawFate.Captured, jd, Victor(b, 1 - u.Side));
             }
+            // Captains in the brigs of ships that fought here: a breached brig lets them go.
+            foreach (var o in All.ToArray())
+                if (o.Fate == OutlawFate.Held && o.HeldBy != null && b.UnitOf(o.HeldBy) is BattleUnit hu) Breach(o, hu, jd);
         }
 
         static string Deeds(int kills, int robbed, int ransoms)
@@ -528,8 +577,9 @@ namespace SolarSystem.Core
 
         /// <summary>
         /// A wanted party (<paramref name="rec"/>, commanding <paramref name="u"/>) has been killed or taken in a battle:
-        /// if bounty hunters fought on the other side, they collect every bounty on it, each poster paying its own
-        /// out of its treasury. True if they did (the bounties are then cleared and the law has nothing more to do).
+        /// if bounty hunters fought on the other side, they collect every bounty on it -- in full taken, at
+        /// <see cref="DeadShare"/> dead (their scanners on the wreck where it died are the proof) -- each poster paying
+        /// its own out of its treasury. True if they did (the bounties are then cleared and the law has nothing more to do).
         /// </summary>
         public bool ClaimByHunter(Battle b, BattleUnit u, LawRecord rec, double jd)
         {
@@ -538,23 +588,408 @@ namespace SolarSystem.Core
             foreach (var o in b.Units)
                 if (o.Side == 1 - u.Side && o.Ship != null && HunterOf(o.Ship) is BountyHunter h && (hunter == null || !o.Dead)) hunter = h;
             if (hunter == null) return false;
+            double total = Pay(rec, u.Dead ? DeadShare : 1, hunter.Ship);
+            var outlaw = Of(rec);
+            string name = outlaw != null ? outlaw.Title : rec.IsPlayer ? "the " + u.Ship?.Name : rec.Name;
+            world.Log(jd, $"The bounty hunter {hunter.Name} collects {Cr(total)} cr on {name}, {(u.Dead ? "dead (the wreck scanned for proof)" : "taken")} at {b.Name}", WorldEventKind.Law, -1);
+            if (rec.IsPlayer) Law.Notice($"The bounty hunter {hunter.Name} has collected the {Cr(total)} cr on your head");
+            return true;
+        }
+
+        // ---------------------------------------------------------------- alive or dead (U.SPC-T63)
+
+        /// <summary>The share of the price on a head paid for the captain dead, on proof of kill (a scanned wreck); alive pays it all.</summary>
+        public const double DeadShare = 0.5;
+
+        /// <summary>Chance a captain reaches the pods as their flagship goes: shot apart over minutes, or when the reactor goes.</summary>
+        public const double EjectChance = 0.8, EjectChanceReactor = 0.35;
+
+        /// <summary>A holding hull beaten below this share of its hull has its brig breached: the captain gets away.</summary>
+        public const double BrigBreachHull = 0.25;
+
+        /// <summary>What the raiders pay to have a captain back: this share of the price on their head, and at least <see cref="MinRansom"/> credits.</summary>
+        public const double RansomShare = 0.75, MinRansom = 50000;
+
+        /// <summary>How close the player's ship must come to a wreck to scan it for proof of kill, km.</summary>
+        public const double ProofScanKm = 2000;
+
+        /// <summary>Kills the player has made that wait on a scan of the wreck before they pay.</summary>
+        public readonly List<KillClaim> Claims = new List<KillClaim>();
+
+        /// <summary>What the price on <paramref name="r"/>'s head pays dead.</summary>
+        public static double DeadRate(LawRecord r) => r == null ? 0 : r.TotalBounty * DeadShare;
+
+        /// <summary>What the raiders pay to have <paramref name="o"/> back (see <see cref="RansomShare"/>).</summary>
+        public static double RansomFor(Outlaw o) => o == null ? 0 : Math.Max(MinRansom, RansomShare * o.Record.TotalBounty);
+
+        /// <summary>The captains locked in <paramref name="ship"/>'s brig.</summary>
+        public List<Outlaw> HeldAboard(Ship ship)
+        {
+            var list = new List<Outlaw>();
+            if (ship != null)
+                foreach (var o in All)
+                    if (o.Fate == OutlawFate.Held && o.HeldBy == ship) list.Add(o);
+            return list;
+        }
+
+        /// <summary>The player's kills of <paramref name="o"/> waiting on a scan of the wreck, or null.</summary>
+        public KillClaim ClaimOn(Outlaw o) => Claims.Find(c => c.Outlaw == o);
+
+        /// <summary>
+        /// The law's side of a battle's end for a wanted party (see <see cref="Law.OnBattleEnded"/>): alive or dead. The
+        /// player or a lawful captain wanted for an assault is collected on by hunters (<see cref="ClaimByHunter"/>). An
+        /// outlaw's flagship taken: the captain goes into a captor's brig, the bounty paid in full when they are handed
+        /// over (<see cref="Deliver"/>). Destroyed: a captain who got away in the pods is still wanted; one who died with
+        /// it pays hunters there the dead rate, or the player once they scan the wreck (<see cref="ProveKills"/>). True
+        /// if it was settled here and the law has nothing more to do.
+        /// </summary>
+        public bool ClaimInBattle(Battle b, BattleUnit u, LawRecord rec, double jd)
+        {
+            if (b == null || u == null || rec == null) return false;
+            var o = Of(rec);
+            if (o == null || o.Ship != u.Ship || !o.AtLarge) return ClaimByHunter(b, u, rec, jd);
+            if (u.Captured) return Seize(b, u, o, jd) || ClaimByHunter(b, u, rec, jd);
+            if (!u.Dead) return false;
+            if (o.Pod != null) return true;
+            if (ClaimByHunter(b, u, rec, jd)) return true;
+            if (!rec.Wanted || !PlayerFoughtAgainst(b, u)) return false;
+            var wreck = world.War?.Wrecks.Of(u.Ship);
+            Claims.Add(new KillClaim { Outlaw = o, Wreck = wreck, Jd = jd, Battle = b.Name });
+            Law.Notice($"{Cap(o.Title)} died with the {u.Ship.Name}. Scan the wreck to prove the kill for {Cr(DeadRate(rec))} cr (alive would have paid {Cr(rec.TotalBounty)})");
+            return true;
+        }
+
+        bool PlayerFoughtAgainst(Battle b, BattleUnit u)
+        {
+            foreach (var v in b.Units)
+                if (v.PlayerFlown && v.Side == 1 - u.Side && !v.Dead && !v.Captured && v.Ship != null && v.Ship == world.PilotedShip) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// An outlaw's flagship has been taken by boarders: the captain is locked in the brig of a ship on the captors'
+        /// side with a berth free (the player's first, then a hunter's, then anyone's). False if none has room.
+        /// </summary>
+        bool Seize(Battle b, BattleUnit u, Outlaw o, double jd)
+        {
+            if (o.Fate == OutlawFate.Held) return true;
+            var captor = u.Combat?.Interior.Boarder;
+            Ship best = null;
+            int bestRank = int.MaxValue;
+            foreach (var v in b.Units)
+            {
+                if (v.Side != 1 - u.Side || v.Ship == null || v.Dead || v.Captured || v.Ship == u.Ship || v.Ship.Destroyed) continue;
+                if (v.Faction == null || v.Faction.IsPirate || (captor != null && v.Faction != captor)) continue;
+                if (Outfitting.BrigRoom(v.Ship) < 1) continue;
+                int rank = v.Ship == world.PilotedShip ? 0 : IsHunter(v.Ship) ? 1 : 2;
+                if (rank < bestRank)
+                {
+                    bestRank = rank;
+                    best = v.Ship;
+                }
+            }
+            return best != null && Hold(o, best, jd, "taken alive with the " + u.Ship.Name + " at " + b.Name);
+        }
+
+        /// <summary>Locks <paramref name="o"/> in <paramref name="ship"/>'s brig. False if it has no berth free.</summary>
+        public bool Hold(Outlaw o, Ship ship, double jd, string how)
+        {
+            if (o == null || ship == null || ship.Destroyed || Outfitting.BrigRoom(ship) < 1) return false;
+            if (o.Fate != OutlawFate.AtLarge && o.Fate != OutlawFate.Held) return false;
+            Release(o);
+            o.Fate = OutlawFate.Held;
+            o.FateJd = jd;
+            o.FateBy = "the " + ship.Name;
+            o.HeldBy = ship;
+            o.Pod = null;
+            o.Ashore = false;
+            ship.CaptainsHeld++;
+            var rec = o.Record;
+            world.Log(jd, $"{Cap(o.Title)} is {how} and locked in the brig of the {ship.Name}" +
+                (rec.Wanted ? $": {Cr(rec.TotalBounty)} cr on their head, paid in full when handed over" : ""), WorldEventKind.Law, -1);
+            if (ship == world.PilotedShip)
+                Law.Notice($"{Cap(o.Title)} is in your brig. Hand them over at a port of {Posters(rec)} for {Cr(rec.TotalBounty)} cr, or ransom them at a haven for {Cr(RansomFor(o))} cr");
+            return true;
+        }
+
+        static string Posters(LawRecord rec)
+        {
+            var names = new List<string>();
+            foreach (var f in rec.Bounty.Keys) names.Add(f.Name);
+            return names.Count == 0 ? "anyone" : string.Join(" or ", names);
+        }
+
+        /// <summary>Lets go of a held captain's berth.</summary>
+        static void Release(Outlaw o)
+        {
+            if (o.HeldBy != null) o.HeldBy.CaptainsHeld = Math.Max(0, o.HeldBy.CaptainsHeld - 1);
+            o.HeldBy = null;
+        }
+
+        /// <summary>The captain is free and back with the raiders: at large, ashore until a new band sails (<see cref="Sync"/>).</summary>
+        void Free(Outlaw o, double jd, string how)
+        {
+            Release(o);
+            o.Fate = OutlawFate.AtLarge;
+            o.Pod = null;
+            o.Ashore = true;
+            o.FateBy = null;
+            world.Log(jd, $"{Cap(o.Title)} {how}: free, and back with the raiders", WorldEventKind.Law, -1);
+        }
+
+        /// <summary>A freed captain takes command of a band that has just sailed: their record, and the law's books, follow them to it.</summary>
+        void Rebind(Outlaw o, Ship ship, double jd)
+        {
+            var old = o.Ship;
+            if (old != null && byShip.TryGetValue(old, out var was) && was == o) byShip.Remove(old);
+            if (old != null && Law.Captains.TryGetValue(old, out var r) && r == o.Record) Law.Captains.Remove(old);
+            o.Record.Captain = ship;
+            Law.Captains[ship] = o.Record;
+            o.Ship = ship;
+            o.Haven = world.War.HomeHaven(ship);
+            o.Ashore = false;
+            byShip[ship] = o;
+            world.Log(jd, $"{Cap(o.Title)} is back in command, of the raider {ship.Name}", WorldEventKind.Law, -1);
+        }
+
+        /// <summary>Pays out the bounties on <paramref name="rec"/> at <paramref name="share"/> to <paramref name="payee"/>
+        /// (a hunter's group, or whoever's ship it is), each poster paying its own; all of them are cleared. Returns the credits.</summary>
+        double Pay(LawRecord rec, double share, Ship payee)
+        {
             double total = 0;
             foreach (var kv in new List<KeyValuePair<Faction, double>>(rec.Bounty))
             {
-                kv.Key.Treasury -= kv.Value;
-                total += kv.Value;
+                double amount = kv.Value * share;
+                kv.Key.Treasury -= amount;
+                total += amount;
                 Law.ClearBounty(rec, kv.Key);
             }
-            hunter.Collected += total;
-            hunter.Takes++;
-            hunter.Ship.Credits += total;
-            if (Guild != null) Guild.Treasury += total;
-            if (hunter.Contract?.Target == rec) hunter.Contract = null;
-            var outlaw = Of(rec);
-            string name = outlaw != null ? outlaw.Title : rec.IsPlayer ? "the " + u.Ship?.Name : rec.Name;
-            world.Log(jd, $"The bounty hunter {hunter.Name} collects {Cr(total)} cr on {name}, {(u.Dead ? "dead" : "taken")} at {b.Name}", WorldEventKind.Law, -1);
-            if (rec.IsPlayer) Law.Notice($"The bounty hunter {hunter.Name} has collected the {Cr(total)} cr on your head");
-            return true;
+            var hunter = HunterOf(payee);
+            if (hunter != null)
+            {
+                hunter.Collected += total;
+                hunter.Takes++;
+                hunter.Ship.Credits += total;
+                if (Guild != null) Guild.Treasury += total;
+                if (hunter.Contract?.Target == rec) hunter.Contract = null;
+            }
+            else if (payee?.Faction != null) payee.Faction.Treasury += total;
+            return total;
+        }
+
+        void Lapse(LawRecord rec, double jd, string why)
+        {
+            if (!rec.Wanted) return;
+            foreach (var f in new List<Faction>(rec.Bounty.Keys)) Law.ClearBounty(rec, f);
+            world.Log(jd, $"The bounties on {rec.Name} lapse: {why}", WorldEventKind.Law, -1);
+        }
+
+        /// <summary>
+        /// Hands a held captain over at <paramref name="port"/>, a lawful port of a faction that posted a bounty on them
+        /// (any lawful port, if none stands any more): every bounty on them is paid in full to the holder. Returns the credits.
+        /// </summary>
+        public double Deliver(Outlaw o, Settlement port, double jd)
+        {
+            if (o == null || o.Fate != OutlawFate.Held || o.HeldBy == null) return 0;
+            if (port == null || port.Fallen || port.Owner == null || port.Owner.IsPirate) return 0;
+            var holder = o.HeldBy;
+            var rec = o.Record;
+            if (rec.Wanted && !rec.WantedBy(port.Owner)) return 0;
+            if (world.Economy != null && !world.Economy.CanTrade(holder, port)) return 0;
+            double paid = Pay(rec, 1, holder);
+            End(o, OutlawFate.Captured, jd, "the " + holder.Name);
+            world.Log(jd, $"The {holder.Name} hands {o.Name} over to the {port.Owner.Name} at {port.Name}" + (paid > 0 ? $" for {Cr(paid)} cr, the full price alive" : ""),
+                WorldEventKind.Law, port.Body);
+            if (holder == world.PilotedShip) Law.Notice($"{Cap(o.Name)} is handed over at {port.Name}" + (paid > 0 ? $": {Cr(paid)} cr, the full price alive" : ""));
+            return paid;
+        }
+
+        /// <summary>Ransoms a held captain back to the raiders at <paramref name="haven"/>: they pay <see cref="RansomFor"/> and
+        /// the captain goes free, still wanted. Returns the credits (0 if the haven will not deal or cannot pay).</summary>
+        public double Ransom(Outlaw o, Settlement haven, double jd)
+        {
+            if (o == null || o.Fate != OutlawFate.Held || o.HeldBy == null) return 0;
+            if (haven == null || haven.Fallen || haven.Owner == null || !haven.Owner.IsPirate) return 0;
+            var holder = o.HeldBy;
+            double ransom = RansomFor(o);
+            if (haven.Owner.Treasury < ransom || holder.Faction == null) return 0;
+            haven.Owner.Treasury -= ransom;
+            holder.Faction.Treasury += ransom;
+            Free(o, jd, $"is ransomed back to the {haven.Owner.Name} at {haven.Name} by the {holder.Name} for {Cr(ransom)} cr");
+            return ransom;
+        }
+
+        /// <summary>
+        /// A hull is going down in battle (from <see cref="War"/>, as its people make for <paramref name="pod"/>): an
+        /// outlaw commanding it reaches the pods with <see cref="EjectChance"/> (<see cref="EjectChanceReactor"/> when the
+        /// reactor went), and a captain in its brig breaks out into them. Either is then adrift, to be tractored in by
+        /// whoever finds the pods, or lost with them if nobody does.
+        /// </summary>
+        public void OnHullLost(Battle b, BattleUnit u, EscapePod pod, bool reactor, double jd) =>
+            OnHullLost(b, u, pod, reactor, jd, rng.NextDouble());
+
+        public void OnHullLost(Battle b, BattleUnit u, EscapePod pod, bool reactor, double jd, double roll)
+        {
+            if (u?.Ship == null) return;
+            if (pod != null && pod.Captain == null && byShip.TryGetValue(u.Ship, out var o) && o.Aboard && o.Ship == u.Ship &&
+                roll < (reactor ? EjectChanceReactor : EjectChance))
+            {
+                o.Pod = pod;
+                pod.Captain = o;
+                world.Log(jd, $"{Cap(o.Title)} ejects from the dying {u.Ship.Name} in its escape pods" +
+                    (o.Record.Wanted ? $", {Cr(o.Record.TotalBounty)} cr on their head" : ""), WorldEventKind.Law, -1);
+            }
+            foreach (var c in All)
+            {
+                if (c.Fate != OutlawFate.Held || c.HeldBy != u.Ship || pod == null || pod.Captain != null) continue;
+                Release(c);
+                c.Fate = OutlawFate.AtLarge;
+                c.Pod = pod;
+                pod.Captain = c;
+                world.Log(jd, $"{Cap(c.Title)} breaks out of the brig of the dying {u.Ship.Name} and into its escape pods", WorldEventKind.Law, -1);
+            }
+        }
+
+        /// <summary>
+        /// Pods have been picked up or have fallen silent (<see cref="Crews.Resolved"/>): a captain aboard them is taken by
+        /// whoever tractored them in -- into that ship's brig, or as the rescuers' prisoner if it has no berth -- goes
+        /// free if raiders hauled them in, or dies when the air runs out (and their bounties lapse with nobody to claim them).
+        /// </summary>
+        public void OnPodResolved(EscapePod pod, Ship ship)
+        {
+            var o = pod?.Captain;
+            if (o == null || o.Pod != pod) return;
+            o.Pod = null;
+            double jd = pod.ResolvedJd;
+            if (pod.State == PodState.Lost)
+            {
+                End(o, OutlawFate.Killed, jd, "their pods' air ran out");
+                Lapse(o.Record, jd, "they died in the pods");
+                return;
+            }
+            var by = pod.TakenBy;
+            if (by != null && by.IsPirate)
+            {
+                Free(o, jd, $"is hauled in from the pods by the {(ship != null ? ship.Name : by.Name)}");
+                return;
+            }
+            if (ship != null && Hold(o, ship, jd, "tractored in from the pods")) return;
+            End(o, OutlawFate.Captured, jd, by?.Name);
+            if (by != null && o.Record.WantedBy(by)) Law.ClearBounty(o.Record, by);
+            if (ship != null && ship == world.PilotedShip) Law.Notice($"No berth free in your brig: {o.Name} is handed to the {by?.Name} as their prisoner");
+        }
+
+        /// <summary>
+        /// A captain held aboard a ship that fought (<see cref="OnBattleEnded"/>): the hull lost with them aboard kills
+        /// them; taken by raiders, they are freed; by anyone else, they change hands; beaten below
+        /// <see cref="BrigBreachHull"/>, the brig is breached and they get away.
+        /// </summary>
+        void Breach(Outlaw o, BattleUnit hu, double jd)
+        {
+            var holder = o.HeldBy;
+            if (hu.Dead)
+            {
+                End(o, OutlawFate.Killed, jd, "died in the brig of the " + holder.Name);
+                Lapse(o.Record, jd, "they died in a brig");
+            }
+            else if (hu.Captured)
+            {
+                var captor = hu.Combat?.Interior.Boarder;
+                if (captor == null || captor.IsPirate) Free(o, jd, $"is freed from the brig of the {holder.Name} when the raiders take it");
+                else End(o, OutlawFate.Captured, jd, captor.Name);
+            }
+            else if (hu.Combat != null && hu.Combat.HullFraction < BrigBreachHull)
+            {
+                Free(o, jd, $"slips out through the breached brig of the {holder.Name}");
+                if (holder == world.PilotedShip) Law.Notice($"Your brig is breached: {o.Name} has got away");
+            }
+        }
+
+        /// <summary>
+        /// Daily: captains held aboard ships the player is not flying are handed over when the holder lies at a lawful
+        /// port that pays for them; one carried through a gate is gone from this system's books, and one aboard a hull
+        /// lost outside a fight dies with it.
+        /// </summary>
+        void SettleCaptives(double jd)
+        {
+            foreach (var o in All.ToArray())
+            {
+                if (o.Fate != OutlawFate.Held || o.HeldBy == null) continue;
+                var h = o.HeldBy;
+                if (h.GateDeparted)
+                {
+                    End(o, OutlawFate.Captured, jd, "carried out of the system aboard the " + h.Name);
+                    continue;
+                }
+                if (h.Destroyed)
+                {
+                    End(o, OutlawFate.Killed, jd, "lost with the " + h.Name);
+                    Lapse(o.Record, jd, "they were lost in a brig");
+                    continue;
+                }
+                if (h == world.PilotedShip || h.Battle != null) continue;
+                var c = h.Controller;
+                if (c.Phase != ShipPhase.Parked || c.Orbit == null) continue;
+                foreach (var st in world.Economy.At(c.Orbit.Body))
+                    if (Deliver(o, st, jd) > 0 || o.Fate != OutlawFate.Held) break;
+            }
+        }
+
+        /// <summary>The nearest body with a lawful port that pays for <paramref name="rec"/> (any lawful port once nothing is posted) and docks <paramref name="ship"/>, or -1.</summary>
+        int NearestPortFor(LawRecord rec, Ship ship, int here, double jd)
+        {
+            int best = -1;
+            double bestKm = double.MaxValue;
+            foreach (var st in world.Economy.Settlements)
+            {
+                if (st.Fallen || st.Owner == null || st.Owner.IsPirate || (rec.Wanted && !rec.WantedBy(st.Owner))) continue;
+                if (!world.Economy.CanTrade(ship, st)) continue;
+                double km = st.Body == here ? 0 : (world.Ephemeris.HelioAt(st.Body, jd) - world.Ephemeris.HelioAt(here, jd)).Length;
+                if (km < bestKm)
+                {
+                    bestKm = km;
+                    best = st.Body;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>The player's ship within <see cref="ProofScanKm"/> of a wreck it has a kill claim on scans it: the dead rate is paid.</summary>
+        void ProveKills(Ship ship, double jd)
+        {
+            if (Claims.Count == 0 || world.War == null) return;
+            for (int i = Claims.Count - 1; i >= 0; i--)
+            {
+                var c = Claims[i];
+                if (c.Wreck == null || c.Wreck.Expired(jd) || !world.War.Wrecks.Items.Contains(c.Wreck)) continue;
+                if ((world.WreckHelio(c.Wreck, jd) - pilotHelio).Length > ProofScanKm) continue;
+                Claims.RemoveAt(i);
+                var rec = c.Outlaw.Record;
+                double paid = Pay(rec, DeadShare, ship);
+                world.Log(jd, $"The {ship.Name} scans the wreck of the {c.Wreck.Name}: proof that {c.Outlaw.Name} is dead, and {Cr(paid)} cr in bounties paid", WorldEventKind.Law, -1);
+                Law.Notice($"Wreck scanned: the kill of {c.Outlaw.Name} is proven. {Cr(paid)} cr paid, the dead rate");
+            }
+        }
+
+        /// <summary>Kill claims whose wreck broke up before anyone scanned it lapse, and the bounties with them.</summary>
+        void LapseClaims(double jd)
+        {
+            for (int i = Claims.Count - 1; i >= 0; i--)
+            {
+                var c = Claims[i];
+                if (c.Wreck != null && !c.Wreck.Expired(jd) && world.War != null && world.War.Wrecks.Items.Contains(c.Wreck)) continue;
+                Claims.RemoveAt(i);
+                Lapse(c.Outlaw.Record, jd, "nobody scanned the wreck to prove the kill");
+                Law.Notice($"The wreck of {c.Outlaw.Name}'s flagship is gone unscanned: no proof, no bounty");
+            }
+        }
+
+        /// <summary>Whether <paramref name="hunter"/> wants <paramref name="target"/>'s captain alive: a hunter group facing a
+        /// wanted outlaw's flagship (see <see cref="Battle.WantsAlive"/>).</summary>
+        public bool WantsAlive(Ship hunter, Ship target)
+        {
+            if (!IsHunter(hunter) || target == null) return false;
+            return byShip.TryGetValue(target, out var o) && o.Aboard && o.Ship == target && o.Record.Wanted;
         }
 
         // ---------------------------------------------------------------- feared names
@@ -606,7 +1041,8 @@ namespace SolarSystem.Core
                 if (!r.Wanted) return;
                 var o = Of(r);
                 if (o != null && !o.AtLarge) return;
-                if (!r.IsPlayer && (r.Captain == null || r.Captain.Destroyed)) return;
+                // (A captain adrift in the pods or ashore is wanted all the same.)
+                if (!r.IsPlayer && (o == null || o.Aboard) && (r.Captain == null || r.Captain.Destroyed)) return;
                 list.Add(new BountyPosting { Target = r, Outlaw = o, Bounty = r.TotalBounty, TotalBounty = r.TotalBounty, LastSeen = SeenLast(r), HuntedBy = HunterOn(r) });
             }
             Add(Law.Player);
@@ -655,7 +1091,7 @@ namespace SolarSystem.Core
             if (alive >= world.HunterCap) return;
             bool unhunted = false;
             foreach (var p in Postings())
-                if (p.TotalBounty >= MinContract && p.HuntedBy == null) unhunted = true;
+                if (p.TotalBounty >= MinContract && p.HuntedBy == null && Huntable(p.Target)) unhunted = true;
             if (!unhunted) return;
             double cost = Economy.HullPrice(ShipClass.Cruiser) + Economy.HullPrice(ShipClass.Destroyer);
             if (Guild.Treasury < cost + GuildReserve || rng.NextDouble() > CommissionChance) return;
@@ -682,6 +1118,8 @@ namespace SolarSystem.Core
             }
             var lead = fleet.AddShip(Next(), ShipClass.Cruiser, Guild, ShipRole.Patrol);
             lead.Route = world.PortBodies();
+            // A brig, to bring captains in alive for the full price (U.SPC-T63).
+            Outfitting.Install(lead, ModuleKind.Brig);
             var escort = fleet.AddShip(Next(), ShipClass.Destroyer, Guild, ShipRole.Escort);
             fleet.AddEscort(lead, escort, Fleet.SlotFor(0));
             // Out into a parking orbit of its own (not the yard's slip, where a new merchant may be sitting).
@@ -721,7 +1159,7 @@ namespace SolarSystem.Core
             if (r == null || !r.Wanted || r.TotalBounty < MinContract * 0.5) return false;
             if (r.IsPlayer) return world.PilotedShip != null && !world.PilotedShip.Destroyed;
             var o = Of(r);
-            return o != null && o.AtLarge && !o.Ship.Destroyed;
+            return o != null && o.Aboard && !o.Ship.Destroyed;
         }
 
         /// <summary>Hunters idle at a lawful shipyard are patched up there, at the free traders' expense.</summary>
@@ -755,6 +1193,13 @@ namespace SolarSystem.Core
         {
             var h = HunterOf(leader);
             if (h == null) return -1;
+            // A captain in the brig goes to the nearest port that will pay for them first.
+            var held = All.Find(o => o.Fate == OutlawFate.Held && o.HeldBy != null && o.HeldBy.Controller == leader);
+            if (held != null)
+            {
+                int port = NearestPortFor(held.Record, leader, here, jd);
+                if (port >= 0) return port;
+            }
             if (leader.Combat.Damage > RepairDamage || !leader.Combat.Armed)
             {
                 int yard = NearestYard(here, jd);
@@ -842,6 +1287,7 @@ namespace SolarSystem.Core
             pilotBody = body;
             pilotHelio = world.Ephemeris.HelioAt(body, jd) + offsetKm;
             pilotJd = jd;
+            ProveKills(ship, jd);
             if (ship.Battle != null || !Law.Player.Wanted) return null;
             foreach (var h in Hunters)
             {

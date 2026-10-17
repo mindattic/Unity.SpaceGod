@@ -283,6 +283,9 @@ namespace SolarSystem.Core
         void Hook(Battle b)
         {
             b.UnitDestroyed = OnUnitDestroyed;
+            // Bounty hunters board, and hold their fire on a disabled quarry to take its captain alive (U.SPC-T63).
+            b.Boards = u => u.Ship != null && Hunter(u.Ship);
+            b.WantsAlive = (u, o) => u.Ship != null && o.Ship != null && world.Outlaws != null && world.Outlaws.WantsAlive(u.Ship, o.Ship);
             b.Launch = FighterAI.Launch;
             b.FighterStep = FighterAI.Step;
             b.UnitCaptured = (battle, u, captor) =>
@@ -992,8 +995,10 @@ namespace SolarSystem.Core
             string name = u.Kind == UnitKind.Fighter ? owners.Name + " fighter pilots" : u.Name;
             string merge = u.Kind == UnitKind.Fighter ? $"battle:{b.Id}:fighters:{owners.Name}" : null;
             var haven = owners.IsPirate && u.Ship != null ? HomeHaven(u.Ship) : null;
-            Crews.Launch(name, owners, aboard, c.Spec.Crew + c.Spec.Marines, reactor ? AbandonCause.ReactorLost : AbandonCause.Destroyed,
+            var pod = Crews.Launch(name, owners, aboard, c.Spec.Crew + c.Spec.Marines, reactor ? AbandonCause.ReactorLost : AbandonCause.Destroyed,
                 b.Body, b.Anchor, u.Pos, b.Site, jd, merge, haven);
+            // An outlaw captain may reach the pods; a captain in its brig breaks out into them (U.SPC-T63).
+            if (u.Kind != UnitKind.Fighter) world.Outlaws?.OnHullLost(b, u, pod, reactor, jd);
             c.Interior.TakeCrew(c.Interior.Crew);
             c.Interior.TakeMarines(c.Interior.Marines);
         }

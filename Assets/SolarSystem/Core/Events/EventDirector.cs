@@ -335,6 +335,9 @@ namespace SolarSystem.Core
         {
             string where = pod.Site != null ? "beside the " + pod.Site.Hop.Lane.Name + " lane" : "off " + src.BodyName(pod.Body);
             string pods = pod.Pods == 1 ? "one escape pod" : pod.Pods + " escape pods";
+            string captainAboard = pod.Captain != null
+                ? " " + pod.Captain.Name + " is aboard" + (pod.Captain.Record.Wanted ? ", " + Cr(pod.Captain.Record.TotalBounty) + " cr on their head, paid in full alive: tractor them into your brig." : ".")
+                : "";
             string hook = pod.Owners.IsPirate
                 ? pods + " from the raider " + pod.Name + " drifting " + where + ", " + Cr(pod.People) + " aboard. The pirate hunters pay for raiders handed over."
                 : "Beacon: " + pods + " from the " + pod.Name + " drifting " + where + " with " + Cr(pod.People) + " " + pod.Owners.Name + " crew aboard and "
@@ -347,7 +350,7 @@ namespace SolarSystem.Core
                 Kind = OpportunityKind.EscapePods,
                 SourceKey = "pods:" + pod.Id,
                 Title = "Escape pods: " + pod.Name,
-                Hook = hook,
+                Hook = hook + captainAboard,
                 ExpiresJd = pod.LaunchedJd + pod.LifeSupportDays,
                 Pod = pod,
                 Patron = pod.Owners.IsPirate ? src.PirateHunters : pod.Owners,
@@ -400,14 +403,17 @@ namespace SolarSystem.Core
         {
             string captain = PirateCaptains.NameFor(s);
             string payer = src.PirateHunters != null ? src.PirateHunters.Name : "Every port in the system";
-            // The standing price on a raider captain, plus whatever the law has posted for what they have actually done.
-            double credits = (s.Spec.Class == ShipClass.Breacher ? 400000 : 650000) + RoundThousand(src.PostedBounty(s));
+            // The hunters' standing price on a raider captain. Whatever the law has posted for what they have actually
+            // done is paid by the law on top (U.SPC-T63): in full for the captain alive, half on a scanned wreck.
+            double credits = s.Spec.Class == ShipClass.Breacher ? 400000 : 650000;
+            double posted = RoundThousand(src.PostedBounty(s));
             return new Opportunity
             {
                 Kind = OpportunityKind.Bounty,
                 SourceKey = Key("bounty", s),
                 Title = "Bounty: " + captain,
-                Hook = payer + " posts " + Cr(credits) + " cr for " + captain + ", commanding the raider " + s.Name + ". Dead or taken.",
+                Hook = payer + " posts " + Cr(credits) + " cr for " + captain + ", commanding the raider " + s.Name + ". Dead or taken."
+                    + (posted > 0 ? " The law's " + Cr(posted) + " cr on their head pays in full alive (board the disabled flagship), half dead on a scanned wreck." : ""),
                 ExpiresJd = jd + 12,
                 Ship = s,
                 Captain = captain,

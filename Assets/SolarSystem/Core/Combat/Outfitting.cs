@@ -432,6 +432,27 @@ namespace SolarSystem.Core
         /// <summary>Prisoners this ship's brigs hold.</summary>
         public static double BrigCapacity(Ship ship) => ship?.Loadout == null ? 0 : ship.Loadout.Count(ModuleKind.Brig) * ship.Loadout.BrigBerthsEach;
 
+        /// <summary>Free berths in this ship's brigs: their capacity less the prisoners and captains already in them.</summary>
+        public static double BrigRoom(Ship ship) => ship == null ? 0 : Math.Max(0, BrigCapacity(ship) - ship.Prisoners - ship.CaptainsHeld);
+
+        /// <summary>
+        /// Fits <paramref name="module"/> into the first empty slot that takes it, as part of a new hull's build (no
+        /// yard bill: the hull's price covers it). False if no slot is free for it.
+        /// </summary>
+        public static bool Install(Ship ship, ModuleKind module)
+        {
+            var l = LoadoutOf(ship);
+            if (l == null) return false;
+            for (int i = 0; i < l.Slots.Count; i++)
+            {
+                if (l.Fitted[i] != null || !CanFit(l, i, module)) continue;
+                l.Fitted[i] = module;
+                ship.Combat = ship.Combat.Refitted(l.Build(), l.Class, l.Slots[i].LayoutIndex);
+                return true;
+            }
+            return false;
+        }
+
         /// <summary>Extra trade hold this ship's racks give, tonnes.</summary>
         public static double RackTonnes(Loadout l, int racks) => l.BaseCapacityTonnes * Loadout.RackCapacityShare * racks;
 
@@ -515,7 +536,7 @@ namespace SolarSystem.Core
                 resized = ship.ResizedHold(racks * Loadout.RackRows);
                 if (resized == null) return OutfitOutcome.HoldTooFull;
             }
-            if (ship.Prisoners > brigs * l.BrigBerthsEach + 1e-9) return OutfitOutcome.BrigOccupied;
+            if (ship.Prisoners + ship.CaptainsHeld > brigs * l.BrigBerthsEach + 1e-9) return OutfitOutcome.BrigOccupied;
 
             quote = Quote(ship, yard, slot, module);
             if (!quote.InStock) return OutfitOutcome.NoStock;
@@ -635,7 +656,7 @@ namespace SolarSystem.Core
             foreach (var c in captors)
             {
                 if (c == null || c == prize || c.Destroyed) continue;
-                double room = BrigCapacity(c) - c.Prisoners;
+                double room = BrigRoom(c);
                 double want = Math.Floor(prize.Combat.Interior.Crew * PrisonerShare - taken + 1e-9);
                 double n = Math.Floor(Math.Min(room, want) + 1e-9);
                 if (n < 1) continue;

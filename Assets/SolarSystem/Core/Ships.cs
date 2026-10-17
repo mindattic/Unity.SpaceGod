@@ -356,6 +356,10 @@ namespace SolarSystem.Core
         /// <summary>Prisoners locked in the brig, and the bounty and ransom they will fetch handed over in port.</summary>
         public double Prisoners, PrisonerBounty;
 
+        /// <summary>Named outlaw captains locked in the brig (U.SPC-T63), each taking a berth, handed over to a lawful
+        /// port of a faction that posted a bounty on them for the full price alive (see <see cref="Outlaws.Deliver"/>).</summary>
+        public int CaptainsHeld;
+
         /// <summary>Running trade profit, credits.</summary>
         public double Credits;
 

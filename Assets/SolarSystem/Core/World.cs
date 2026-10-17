@@ -295,6 +295,7 @@ namespace SolarSystem.Core
             war.BattleEnded += Law.OnBattleEnded;
             war.BattleEnded += Outlaws.OnBattleEnded;
             Law.Committed += Outlaws.OnCrime;
+            war.Crews.Resolved += Outlaws.OnPodResolved;
             economy.DockAllowed = Law.AllowsDocking;
             economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);

@@ -513,8 +513,28 @@ namespace SolarSystem.Core
         }
 
         /// <summary>A raider or warship with marines to spare is a combatant even with no guns (a breacher).</summary>
-        static bool CanBoard(BattleUnit u) =>
-            u.Kind == UnitKind.Ship && (u.Faction.IsPirate || u.Faction.IsMilitary) && u.Combat.MarinesAvailable >= 15;
+        bool CanBoard(BattleUnit u) =>
+            u.Kind == UnitKind.Ship && (u.Faction.IsPirate || u.Faction.IsMilitary || (Boards != null && Boards(u))) && u.Combat.MarinesAvailable >= 15;
+
+        /// <summary>Whether a unit holds its fire on a disabled foe it wants taken alive (a bounty hunter after its
+        /// quarry's captain, U.SPC-T63) while its side can still board it, or null.</summary>
+        public Func<BattleUnit, BattleUnit, bool> WantsAlive;
+
+        /// <summary>Whether a unit sends boarders across though its faction is neither a navy nor raiders (bounty hunters), or null.</summary>
+        public Func<BattleUnit, bool> Boards;
+
+        /// <summary>Whether <paramref name="u"/> would board <paramref name="target"/>: a navy or raiders board anything,
+        /// a hunter only the quarry it wants alive (never a lawful hull: that would be piracy).</summary>
+        bool MayBoard(BattleUnit u, BattleUnit target) =>
+            u.Faction.IsPirate || u.Faction.IsMilitary || (u.Ship != null && u.Ship.Spec.Class == ShipClass.Breacher) || (WantsAlive != null && WantsAlive(u, target));
+
+        /// <summary>Whether anyone on <paramref name="side"/> can still send a boarding party.</summary>
+        bool SideCanBoard(int side)
+        {
+            foreach (var o in Units)
+                if (o.Present && o.Side == side && !o.Captured && !o.Combat.Disabled && CanBoard(o)) return true;
+            return false;
+        }
 
         /// <summary>The shooting is over; boarding parties and landing fighters are finishing up.</summary>
         public bool Mopping { get; private set; }
@@ -607,6 +627,8 @@ namespace SolarSystem.Core
             foreach (var o in Units)
             {
                 if (!Hostile(u, o) || o.Captured || o.Surrendering) continue;
+                // A hunter wants its quarry's captain alive: a disabled flagship is boarded, not finished off.
+                if (o.Combat.Disabled && WantsAlive != null && WantsAlive(u, o) && SideCanBoard(u.Side)) continue;
                 double score = (o.Pos - u.Pos).Length;
                 // A disabled hull is a prize, not a threat: shoot it only if nothing else is left.
                 if (o.Combat.Disabled) score += 40;
@@ -1313,7 +1335,7 @@ namespace SolarSystem.Core
             // prize, or the battle would wait on a boarding that never comes.
             if (u.Fleeing || u.Combat.Disabled) { u.BoardTarget = null; return; }
             if (u.BoardTarget != null) return;
-            bool boarder = breacher || u.Faction.IsPirate || u.Faction.IsMilitary;
+            bool boarder = breacher || u.Faction.IsPirate || u.Faction.IsMilitary || (Boards != null && Boards(u));
             if (!boarder || u.Combat.MarinesAvailable < 15) return;
             BattleUnit best = null;
             double bestD = double.MaxValue;
@@ -1321,6 +1343,7 @@ namespace SolarSystem.Core
             {
                 if (!Hostile(u, o) || o.Captured || o.Kind != UnitKind.Ship) continue;
                 if (o.Combat.Interior.Boarder != null && o.Combat.Interior.Boarder != u.Faction) continue;
+                if (!MayBoard(u, o)) continue;
                 bool open = o.Combat.Disabled || o.SurrenderOpenToBoarding || o.Stunned > 10 || (breacher && (o.Combat.Shield <= o.Combat.Spec.Shield * 0.25 || !o.Combat.HasShieldGenerator));
                 if (!open) continue;
                 if (!breacher && ThreatNear(u, o.Pos, 6)) continue;
@@ -1518,7 +1541,7 @@ namespace SolarSystem.Core
         {
             foreach (var o in Units)
                 // A player-flown hull never flies a boarding approach (see Think), so it can't be the one to take it.
-                if (Hostile(u, o) && !o.Captured && !o.Surrendering && !o.Combat.Disabled && !o.PlayerControlled && CanBoard(o)) return true;
+                if (Hostile(u, o) && !o.Captured && !o.Surrendering && !o.Combat.Disabled && !o.PlayerControlled && CanBoard(o) && MayBoard(o, u)) return true;
             return false;
         }
 
