@@ -277,7 +277,10 @@ namespace SolarSystem.Core
 
         Economy Economy => world.Economy;
 
-        public OwnedShip Of(Ship ship) => ship != null && byShip.TryGetValue(ship, out var o) && !o.Lost ? o : null;
+        /// <summary>The house's record of <paramref name="ship"/>, while it is still the house's: one taken (or lost) since
+        /// the last daily round no longer follows the house's orders, even before that round writes it off.</summary>
+        public OwnedShip Of(Ship ship) =>
+            ship != null && byShip.TryGetValue(ship, out var o) && !o.Lost && ship.Faction == House && !ship.Destroyed && !ship.Derelict && !ship.GateDeparted ? o : null;
 
         public bool Owns(Ship ship) => Of(ship) != null;
 
