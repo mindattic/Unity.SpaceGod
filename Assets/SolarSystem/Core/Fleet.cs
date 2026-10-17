@@ -901,6 +901,18 @@ namespace SolarSystem.Core
             ship.LegPropellant = have;
             // A tanker that came out to it stays alongside to the end of the leg, topping it up: it does not run dry twice.
             if (tankerAlongside) return;
+            var conic = ship.Conic;
+            if (conic != null)
+            {
+                // A transfer orbit spends its delta-v in a burn at each end, not evenly along the way: short of the
+                // departure burn it dies leaving, else it coasts the whole arc and dies in the capture burn.
+                double dep = conic.DepartureBurnKmS, rest = dv - dep;
+                if (reach < dep)
+                    ship.StrandJd = ship.PhaseStartJd + conic.DepartureBurnDays * Math.Max(0, reach / Math.Max(dep, 1e-9));
+                else
+                    ship.StrandJd = ship.PhaseEndJd - conic.ArrivalBurnDays * (1 - Math.Max(0, Math.Min(1, rest > 0 ? (reach - dep) / rest : 1)));
+                return;
+            }
             ship.StrandJd = ship.PhaseStartJd + (ship.PhaseEndJd - ship.PhaseStartJd) * Math.Max(0, Math.Min(1, dv > 0 ? reach / dv : 1));
         }
 
