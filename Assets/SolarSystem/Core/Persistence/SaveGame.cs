@@ -140,8 +140,9 @@ namespace SolarSystem.Core
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)));
             string temp = path + ".tmp";
             File.WriteAllBytes(temp, bytes);
-            if (File.Exists(path)) File.Delete(path);
-            File.Move(temp, path);
+            // Swapped in one step: deleting the old first would leave no save at all if the move then failed.
+            if (File.Exists(path)) File.Replace(temp, path, null);
+            else File.Move(temp, path);
         }
 
         static SaveHeader HeaderOf(SaveData data, string slot, string label, DateTime savedUtc)
