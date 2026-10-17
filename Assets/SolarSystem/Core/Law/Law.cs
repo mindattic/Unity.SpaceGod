@@ -496,7 +496,9 @@ namespace SolarSystem.Core
                             if (witness != null) break;
                         }
                     witness ??= FindWitness(where, jd, s => inBattle.Contains(s));
-                    var victim = b.SideLeaders[1 - side] != null && !b.SideLeaders[1 - side].IsPirate ? b.SideLeaders[1 - side] : victims[0].Faction;
+                    // The side's leader, if its own ships were among those wronged (not a power the offender is at war with, fighting beside them).
+                    var leader = b.SideLeaders[1 - side];
+                    var victim = leader != null && !leader.IsPirate && victims.Exists(v => v.Faction == leader) ? leader : victims[0].Faction;
                     var kind = pirate || robbed ? CrimeKind.Piracy : CrimeKind.Assault;
                     Commit(rec, kind, juris, victim, shownBody, jd, witness, b.Name);
                 }
