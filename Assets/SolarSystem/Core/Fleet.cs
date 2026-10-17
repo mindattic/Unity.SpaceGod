@@ -1315,7 +1315,7 @@ namespace SolarSystem.Core
 
                 case ShipRole.Miner:
                     if (here != ship.Ports[0]) return ship.Ports[0];
-                    return ship.Ports[1 + rng.Next(ship.Ports.Length - 1)];
+                    return ship.Ports.Length > 1 ? ship.Ports[1 + rng.Next(ship.Ports.Length - 1)] : here;
 
                 case ShipRole.Free:
                 {
@@ -1359,7 +1359,7 @@ namespace SolarSystem.Core
                         pick -= weights[i];
                         if (weights[i] > 0 && pick <= 0) return ship.Ports[i];
                     }
-                    return ship.Ports[0] == here ? ship.Ports[1] : ship.Ports[0];
+                    return ship.Ports[0] == here ? ship.Ports[Math.Min(1, ship.Ports.Length - 1)] : ship.Ports[0];
                 }
             }
         }
