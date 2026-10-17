@@ -579,10 +579,11 @@ namespace SolarSystem.Core
             if (ship.Spec.IsMilitary && group != null && ship.Phase == group.Phase && ship.Orbit?.Body == group.Orbit?.Body)
             {
                 int index = 0;
-                foreach (var e in Fleet.Ships) if (e.Leader == group) index++;
+                foreach (var e in Fleet.Ships) if (e.Leader == group && !e.Destroyed) index++;
                 if (index < 7)
                 {
-                    Fleet.AddEscort(group, ship, Fleet.SlotFor(index));
+                    // The first slot no living escort holds: the lost and the cut loose leave gaps.
+                    Fleet.AddEscort(group, ship, Fleet.SlotFor(FreeSlot(group)));
                     return true;
                 }
             }
@@ -2255,10 +2256,7 @@ namespace SolarSystem.Core
             if (group != null)
             {
                 ship = Fleet.AddShip(name, cls, yard.Owner, ShipRole.Escort);
-                int index = 0;
-                foreach (var e in Fleet.Ships)
-                    if (e.Leader == group) index++;
-                Fleet.AddEscort(group, ship, Fleet.SlotFor(index));
+                Fleet.AddEscort(group, ship, Fleet.SlotFor(FreeSlot(group)));
             }
             else
             {
