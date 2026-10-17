@@ -44,6 +44,9 @@ namespace SolarSystem.Core
 
         /// <summary>Lasting wrecks left where ships have died, cleared away once each has run its lifetime.</summary>
         public readonly Wrecks Wrecks = new Wrecks();
+
+        /// <summary>Escape pods drifting where hulls died, the hostages and prisoners taken from them, and every faction's manpower.</summary>
+        public readonly Crews Crews;
         public readonly Dictionary<Ship, GroupOrder> Orders = new Dictionary<Ship, GroupOrder>();
         readonly Dictionary<int, double> danger = new Dictionary<int, double>();
         readonly Dictionary<Settlement, double> siegeDays = new Dictionary<Settlement, double>();
@@ -81,7 +84,37 @@ namespace SolarSystem.Core
             lastJd = jd;
             nextDailyJd = jd + 1;
             warStartJd = jd;
+            nextPodSweepJd = jd;
+            Crews = new Crews(unchecked(seed * 31 + 7)) { HavenOf = HomeHaven };
+            Crews.RaidersTaken = (pod, by, when) =>
+            {
+                if (by.IsMilitary && pod.Haven != null) Discover(pod.Haven, by, when, $"raiders picked up from the {pod.Name}'s escape pods give it away");
+            };
+            Crews.Launched += pod => world.Log(pod.LaunchedJd,
+                $"The {pod.Name} launches {pod.Pods} escape pod{(pod.Pods == 1 ? "" : "s")}: {pod.People:0} {pod.Owners.Name} crew adrift and broadcasting", WorldEventKind.Loss, PodBody(pod));
+            Crews.Resolved += (pod, ship) =>
+            {
+                string by = ship != null ? "the " + ship.Name : pod.TakenBy != null ? "the " + pod.TakenBy.Name : "nobody";
+                string text = pod.State switch
+                {
+                    PodState.Rescued => $"{Cap(by)} picks up the {pod.Name}'s escape pods: {pod.People:0} crew safe",
+                    PodState.Hostage => $"{Cap(by)} hauls in the {pod.Name}'s escape pods and holds {pod.People:0} crew for ransom",
+                    PodState.Prisoner => $"{Cap(by)} picks up the {pod.Name}'s escape pods and takes {pod.People:0} prisoners",
+                    _ => $"The {pod.Name}'s escape pods fall silent: their air ran out with {pod.People:0} aboard",
+                };
+                world.Log(pod.ResolvedJd, text, pod.State == PodState.Lost ? WorldEventKind.Loss : WorldEventKind.Info, PodBody(pod));
+            };
+            Crews.CaptivesReleased += (c, how, when) => world.Log(when, how, WorldEventKind.Info, c.Haven?.Body ?? -1);
         }
+
+        static string Cap(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
+
+        /// <summary>The body a pod cluster's log line is filed under: where it drifts, or none on a lane.</summary>
+        static int PodBody(EscapePod pod) => pod.Site == null ? pod.Body : -1;
+
+        /// <summary>How often ships near drifting pods get a chance to find them, days.</summary>
+        public const double PodSweepDays = 0.02;
+        double nextPodSweepJd;
 
         Fleet Fleet => world.Fleet;
         Economy Economy => world.Economy;
@@ -125,6 +158,13 @@ namespace SolarSystem.Core
                 if (b.Over) Resolve(b, jd);
             }
             Interdictions(jd);
+            if (jd >= nextPodSweepJd)
+            {
+                double days = Math.Min(1, jd - nextPodSweepJd + PodSweepDays);
+                Crews.Sweep(Fleet.Ships, Diplomacy, world.PilotedShip, jd, days);
+                Crews.Expire(jd);
+                nextPodSweepJd = jd + PodSweepDays;
+            }
             while (jd >= nextDailyJd)
             {
                 Daily(nextDailyJd);
@@ -347,25 +387,36 @@ namespace SolarSystem.Core
                     }
                     Loot(ship);
                 }
-                if (warship && hull >= 0.3) how = Steal(ship, captor, b) ? $"pressed into {world.Pirates.Name} service" : "scuttled";
-                else if (warship) { Scuttle(ship); how = "scuttled"; }
+                if (warship && hull >= 0.3) how = Steal(ship, captor, b, jd) ? $"pressed into {world.Pirates.Name} service" : "scuttled";
+                else if (warship) { Scuttle(ship, b, u, jd); how = "scuttled, its crew put off in the pods"; }
                 else if (adrift) { LeaveAdrift(ship, b, u, captor, good, left, jd); how = "stripped and left adrift"; }
                 else if (roll < 0.85)
                 {
                     world.Pirates.Treasury += Economy.HullPrice(ship.Spec.Class) * 0.25;
+                    // Its crew go with it, as hostages to be ransomed.
+                    TakeCrewCaptive(ship, captor, jd);
                     Detach(ship);
                     ship.Destroyed = true;
                     how = $"taken to {HavenName()} and sold to the breakers";
                 }
-                else { Scuttle(ship); how = "scuttled"; }
+                else { Scuttle(ship, b, u, jd); how = "scuttled, its crew put off in the pods"; }
             }
             else if (ship.Faction.IsPirate || hull < 0.3)
             {
                 // A raider's surviving crew, taken off before it is scuttled, give away where they sail from.
                 if (ship.Faction.IsPirate && HomeHaven(ship.Controller) is Settlement home)
                     Discover(home, captor, jd, $"prisoners taken off the {ship.Name} give it away");
-                Scuttle(ship);
-                how = "scuttled";
+                if (ship.Faction.IsPirate)
+                {
+                    TakeCrewCaptive(ship, captor, jd);
+                    Scuttle(ship);
+                    how = "scuttled";
+                }
+                else
+                {
+                    Scuttle(ship, b, u, jd);
+                    how = "scuttled, its crew put off in the pods";
+                }
             }
             else
             {
@@ -377,7 +428,7 @@ namespace SolarSystem.Core
                     ship.CargoDestination = null;
                     ship.Cargo = null;
                 }
-                how = Steal(ship, captor, b) ? "taken as a prize" : "scuttled";
+                how = Steal(ship, captor, b, jd) ? "taken as a prize" : "scuttled";
             }
             world.Log(jd, $"The {ship.Name} is {how} by the {captor.Name}", WorldEventKind.Capture, Shown(b));
         }
@@ -392,8 +443,21 @@ namespace SolarSystem.Core
             ship.Cargo = null;
         }
 
-        void Scuttle(Ship ship)
+        /// <summary>
+        /// Sends a hull to the bottom. Given the battle and its unit there, whoever is still aboard is put off in
+        /// the escape pods first, which drift where it was scuttled (see <see cref="Crews"/>).
+        /// </summary>
+        void Scuttle(Ship ship, Battle b = null, BattleUnit u = null, double jd = 0)
         {
+            if (b != null && u != null && ship.Combat != null)
+            {
+                var inside = ship.Combat.Interior;
+                double aboard = inside.Crew + inside.Marines;
+                Crews.Launch(ship.Name, ship.Faction, aboard, Crews.Complement(ship.Spec.Class), AbandonCause.Scuttled,
+                    b.Body, b.Anchor, u.Pos, b.Site, jd, haven: ship.Faction.IsPirate ? HomeHaven(ship.Controller) : null);
+                inside.TakeCrew(inside.Crew);
+                inside.TakeMarines(inside.Marines);
+            }
             // Its group (if it led one) gets a new flagship, so the escorts are not left frozen on a wreck.
             Detach(ship);
             if (ship.HasCargo) Economy.Release(ship);
@@ -432,12 +496,36 @@ namespace SolarSystem.Core
             ship.LaneHoldSide = DVec3.Zero;
             ship.DestinationBody = b.Body;
             ship.PhaseStartJd = ship.PhaseEndJd = jd;
+            double aboard = ship.Combat != null ? ship.Combat.Interior.Crew + ship.Combat.Interior.Marines : 0;
             SalvageSession.Strand(ship, raiders, good, leftTonnes, jd);
+            // Those who did not hide aboard are put off in the pods, to be hauled in for ransom or found by someone kinder.
+            double hid = ship.Combat?.Interior.Survivors ?? 0;
+            if (aboard - hid >= 0.5)
+                Crews.Launch(ship.Name, ship.Faction, aboard - hid, Crews.Complement(ship.Spec.Class), AbandonCause.Scuttled, b.Body, b.Anchor, u.Pos, b.Site, jd);
+        }
+
+        /// <summary>
+        /// The people left aboard a hull its captors are keeping or selling become theirs to hold: pirates' hostages
+        /// (held at their haven for ransom), an enemy navy's prisoners of war, or -- raiders taken by anyone -- lost
+        /// to the Banner in irons.
+        /// </summary>
+        void TakeCrewCaptive(Ship ship, Faction captor, double jd)
+        {
+            if (ship.Combat == null) return;
+            var inside = ship.Combat.Interior;
+            double people = inside.Crew + inside.Marines;
+            if (people < 0.5) return;
+            inside.TakeCrew(inside.Crew);
+            inside.TakeMarines(inside.Marines);
+            if (ship.Faction.IsPirate) Crews.Lose(ship.Faction, people);
+            else if (captor.IsPirate) Crews.Hold(ship.Faction, captor, people, false, FirstLiveHaven(), jd, ship.Name);
+            else Crews.Hold(ship.Faction, captor, people, true, null, jd, ship.Name);
         }
 
         /// <summary>The prize changes hands: a prize crew takes over and it joins the captor (a group of theirs in the fight, if there is room).</summary>
-        bool Steal(Ship ship, Faction captor, Battle b)
+        bool Steal(Ship ship, Faction captor, Battle b, double jd)
         {
+            TakeCrewCaptive(ship, captor, jd);
             Detach(ship);
             var old = ship.Faction;
             losses.TryGetValue(old, out int n);
@@ -832,14 +920,40 @@ namespace SolarSystem.Core
 
         void OnUnitDestroyed(Battle b, BattleUnit u)
         {
+            double jd = b.StartJd + b.Seconds / Astro.SecondsPerDay;
             if (u.Ship != null)
             {
                 u.Ship.Destroyed = true;
                 losses.TryGetValue(u.Faction, out int n);
                 losses[u.Faction] = n + 1;
-                Wrecks.Add(u, b.Body, b.Anchor, b.StartJd + b.Seconds / Astro.SecondsPerDay, site: b.Site);
+                Wrecks.Add(u, b.Body, b.Anchor, jd, site: b.Site);
             }
+            AbandonShip(b, u, jd);
             BumpDanger(b.Body, u.Ship != null && !u.Ship.Spec.IsMilitary ? 2.0 : 0.6);
+        }
+
+        /// <summary>
+        /// A hull is going down in battle: whoever is still aboard runs for the escape pods (fewer make it if the
+        /// reactor went), which launch from where it died and drift there broadcasting (see <see cref="Crews"/>).
+        /// A battle's ejected fighter pilots drift together, one cluster to a side.
+        /// </summary>
+        void AbandonShip(Battle b, BattleUnit u, double jd)
+        {
+            var c = u.Combat;
+            if (c == null) return;
+            double aboard = c.Interior.Crew + c.Interior.Marines;
+            if (aboard < 0.5) return;
+            bool reactor = false;
+            foreach (var sub in c.Subsystems)
+                if (sub.Kind == SubsystemKind.Reactor && sub.Destroyed) reactor = true;
+            var owners = u.Ship?.Faction ?? u.Faction;
+            string name = u.Kind == UnitKind.Fighter ? owners.Name + " fighter pilots" : u.Name;
+            string merge = u.Kind == UnitKind.Fighter ? $"battle:{b.Id}:fighters:{owners.Name}" : null;
+            var haven = owners.IsPirate && u.Ship != null ? HomeHaven(u.Ship) : null;
+            Crews.Launch(name, owners, aboard, c.Spec.Crew + c.Spec.Marines, reactor ? AbandonCause.ReactorLost : AbandonCause.Destroyed,
+                b.Body, b.Anchor, u.Pos, b.Site, jd, merge, haven);
+            c.Interior.TakeCrew(c.Interior.Crew);
+            c.Interior.TakeMarines(c.Interior.Marines);
         }
 
         // ---------------------------------------------------------------- after the battle
@@ -1553,6 +1667,8 @@ namespace SolarSystem.Core
             foreach (var s in Fleet.Ships)
                 if (s.Derelict && !s.Destroyed && jd - s.DerelictSinceJd > 25) s.Destroyed = true;
             Wrecks.AdvanceTo(jd);
+            Crews.Daily(Diplomacy, jd);
+            Crews.Recruit(Fleet.Factions, Economy.Settlements, 1);
             if (Fleet.Lanes != null)
                 foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.SetDanger(lane, Fleet.Lanes.Danger[lane] * 0.85);
             MergeGroups();
@@ -1688,15 +1804,20 @@ namespace SolarSystem.Core
                             if (sub.Def.Weapon != null && sub.Def.Weapon.Missile) sub.Ammo = sub.Def.Weapon.Ammo;
                     }
                 }
-                // Marines lost boarding are replaced; the wounded go to the yard's hospitals.
-                double marinesShort = s.Combat.Spec.Marines - s.Combat.Interior.Marines;
-                if (marinesShort > s.Combat.Spec.Marines * 0.1 && !s.Combat.Interior.UnderBoarding)
+                // Marines lost boarding (and crew lost to breaches) are replaced from the faction's trained
+                // reserve, as far as it goes; the wounded go to the yard's hospitals.
+                var inside = s.Combat.Interior;
+                double marinesShort = s.Combat.Spec.Marines - inside.Marines;
+                double crewShort = Math.Max(0, s.Combat.Spec.Crew - inside.Crew);
+                if ((marinesShort > s.Combat.Spec.Marines * 0.1 || crewShort > s.Combat.Spec.Crew * 0.1) && !inside.UnderBoarding)
                 {
-                    double medical = marinesShort * 0.05;
+                    double marines = Crews.Draft(s.Faction, Math.Max(0, marinesShort));
+                    double crew = Crews.Draft(s.Faction, crewShort);
+                    double medical = marines * 0.05;
                     yard.ExtraDemand[(int)Good.MedicalSupplies] += medical;
                     yard.Stock[(int)Good.MedicalSupplies] = Math.Max(0, yard.Stock[(int)Good.MedicalSupplies] - medical);
-                    s.Faction.Treasury -= marinesShort * 40000;
-                    s.Combat.Interior.Muster(s.Combat.Spec.Crew, s.Combat.Spec.Marines);
+                    s.Faction.Treasury -= marines * 40000;
+                    if (marines + crew > 0) inside.Muster(inside.Crew + crew, inside.Marines + marines);
                 }
                 int fighters = s.Combat.Spec.Squadrons * 6 - s.Combat.Fighters;
                 if (fighters > 0 && yard.Stock[(int)Good.Electronics] > 30)
@@ -1831,8 +1952,13 @@ namespace SolarSystem.Core
             var breacher = Fleet.AddShip(Name(), ShipClass.Breacher, pirates, ShipRole.Escort);
             Fleet.AddEscort(leader, breacher, Fleet.SlotFor(escorts));
             Fleet.Station(leader, body, jd);
+            double hands = Crews.Complement(leader.Spec.Class) + escorts * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher);
+            Crews.Draft(pirates, hands);
             world.NotifyAdded(leader);
         }
+
+        /// <summary>The most hands a new raider band can need (a cruiser, two destroyers and a breacher).</summary>
+        static double BandComplement => Crews.Complement(ShipClass.Cruiser) + 2 * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher);
 
         void PirateRecruiting(double jd)
         {
@@ -1848,6 +1974,8 @@ namespace SolarSystem.Core
             // Smuggling and protection rackets keep the Banner afloat between prizes.
             world.Pirates.Treasury += world.PirateIncomePerDay;
             if (groups >= world.PirateGroupCap || world.Pirates.Treasury < 5e7 || rng.NextDouble() > 0.08) return;
+            // A new band needs hands: hostages pressed into service, and whoever else signs on.
+            if (world.Pirates.Manpower < BandComplement) return;
             // The new band sails from the standing haven with the fewest of its own.
             Settlement from = null;
             int fewest = int.MaxValue;

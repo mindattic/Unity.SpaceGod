@@ -123,6 +123,22 @@ namespace SolarSystem.Core
         /// (stolen goods always are; see <see cref="Law.ContrabandIn"/>).</summary>
         public readonly HashSet<Good> Contraband = new HashSet<Good>();
 
+        /// <summary>
+        /// Trained spacers it can put aboard: new hulls and refits draw their crews and marines from it,
+        /// recruiting tops it up, and crew brought home from escape pods or ransomed back return to it
+        /// (see <see cref="Crews"/>). Infinite (never short) until a world musters real reserves.
+        /// </summary>
+        public double Manpower = double.PositiveInfinity;
+
+        /// <summary>
+        /// How its crews feel about the war, 1 the baseline: heavy losses wear it down (crews then strike
+        /// their colours sooner, see <see cref="Morale.Resolve"/>), rescues lift it, and it recovers with time.
+        /// </summary>
+        public double CrewMorale = 1;
+
+        /// <summary>Spacers it has lost for good (died aboard, in a pod or as hostages), and brought home from pods.</summary>
+        public double CrewLost, CrewRescued;
+
         public Faction(string name, string prefix, Rgb color)
         {
             Name = name;

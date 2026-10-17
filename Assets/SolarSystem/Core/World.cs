@@ -121,6 +121,28 @@ namespace SolarSystem.Core
             return lanes.CurveKm(hop.Lane, a, b, w.Site.Progress, jd) + w.Site.Side + w.Local;
         }
 
+        /// <summary>Where an escape pod cluster is now, heliocentric km: drifting in its body's frame, or beside the lane its hull died by.</summary>
+        public DVec3 PodHelio(EscapePod pod, double jd)
+        {
+            var lanes = Fleet.Lanes;
+            if (pod.Site == null || lanes == null) return Ephemeris.HelioAt(pod.Body, jd) + pod.PosAt(jd);
+            var hop = pod.Site.Hop;
+            var a = Ephemeris.HelioAt(hop.From, jd) + pod.Site.FromOffset;
+            var b = Ephemeris.HelioAt(hop.To, jd) + pod.Site.ToOffset;
+            return lanes.CurveKm(hop.Lane, a, b, pod.Site.Progress, jd) + pod.Site.Side + pod.LocalAt(jd);
+        }
+
+        /// <summary>
+        /// The player's ship (<paramref name="ship"/>) comes alongside drifting escape pods and takes them aboard:
+        /// a friend brings them home, a pirate holds them for ransom, an enemy takes them prisoner (see
+        /// <see cref="Crews.Collect"/>). The player is paid through the adventure, not the owners' rescue fee.
+        /// </summary>
+        public PodState PickUpPods(EscapePod pod, Ship ship, double jd)
+        {
+            if (pod == null || ship == null || War == null) return pod?.State ?? PodState.Lost;
+            return War.Crews.Collect(pod, ship.Faction, ship, Diplomacy, jd, payRescuer: false);
+        }
+
         /// <summary>
         /// The player's ship lets go of a hulk (or has just claimed it): the clamps come off, what came of it
         /// goes in the event log, and the derelict or wreck adventure on it, if one is open, is seen through
@@ -237,6 +259,8 @@ namespace SolarSystem.Core
             // The Banner's second band sails from its biggest belt hideout; recruiting fills the other
             // havens first (it raises each new band at the standing haven with the fewest).
             war.RaisePirateGroup(startJd, w.Catalog[BeltHavens[0].body].Index);
+            // Every hull is crewed; from here on new ones draw on a real reserve of trained spacers.
+            Crews.MusterReserves(fleet.Factions, economy.Settlements);
 
             w.Update(jd);
             return w;
@@ -286,6 +310,7 @@ namespace SolarSystem.Core
             // Yards keep the merchant fleet up first; then the navies take their slips.
             economy.ChooseBuild = yard => TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
             economy.ShipBuilt = OnShipBuilt;
+            economy.CanCrew = (yard, cls) => Crews.CanCrew(yard.Owner, cls);
             fleet.BeforeEvent = economy.AdvanceTo;
             fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip || (ship.Voyage != null && ship.Voyage.AtGate);
             fleet.Dwell = war.Dwell;
@@ -392,6 +417,7 @@ namespace SolarSystem.Core
             w.AddFreeShips(startJd, new[] { "First Light", "Long Look", "Terminator Dawn" }, new[] { "Red Dust" });
             int haven = w.Catalog["Blackhollow"].Index;
             war.RaisePirateGroup(startJd, haven);
+            Crews.MusterReserves(fleet.Factions, w.Economy.Settlements);
 
             w.Update(jd);
             return w;
@@ -827,6 +853,8 @@ namespace SolarSystem.Core
 
         void OnShipBuilt(Settlement yard, ShipClass cls, double jd)
         {
+            // Its crew and marines come out of the owner's trained reserve.
+            Crews.Draft(yard.Owner, Crews.Complement(cls));
             Ship ship;
             if (ShipClassSpec.Of(cls).IsMilitary)
             {

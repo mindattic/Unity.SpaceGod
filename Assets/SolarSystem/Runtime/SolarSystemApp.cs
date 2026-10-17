@@ -212,6 +212,7 @@ namespace SolarSystem
         float[] wreckStart;
         BattleFx battleFx;
         DebrisFields debrisFields;
+        PodBeacons podBeacons;
         DiscView discView;
         FighterViews fighterViews;
         LaneView laneView;
@@ -234,6 +235,9 @@ namespace SolarSystem
 
         /// <summary>Scene position of a lasting wreck: where its battle was drawn, at the spot its unit died.</summary>
         public DVec3 WreckScene(Wreck w) => AnchorScene(w.Site, w.Body, w.Anchor) + w.Local.SwapYZ * BattleKmScale;
+
+        /// <summary>Scene position of a drifting escape pod cluster: where its hull's battle was drawn, drifted away from the hull.</summary>
+        public DVec3 PodScene(EscapePod p) => AnchorScene(p.Site, p.Body, p.Anchor) + p.LocalAt(Clock.Jd).SwapYZ * BattleKmScale;
 
         DVec3 AnchorScene(LaneSite site, int body, DVec3 anchor)
         {
@@ -357,6 +361,7 @@ namespace SolarSystem
             pathLine = new LineStrip("Flight path", systemRoot) { Visible = false };
             battleFx = new BattleFx(this, systemRoot);
             debrisFields = new DebrisFields(this, systemRoot);
+            podBeacons = new PodBeacons(this, systemRoot);
             discView = new DiscView(this, systemRoot);
             fighterViews = new FighterViews(this, systemRoot);
             laneView = new LaneView(this, systemRoot);
@@ -873,6 +878,7 @@ namespace SolarSystem
             scene = default;
             if (op.Ship != null && !op.Ship.Destroyed && op.Ship.Id < shipScene.Length) scene = shipScene[op.Ship.Id];
             else if (op.Wreck != null) scene = WreckScene(op.Wreck);
+            else if (op.Pod != null) scene = PodScene(op.Pod);
             else if (op.Body >= 0 && op.Body < bodyScene.Length) scene = bodyScene[op.Body] + Scale.LocalOffset(Catalog[op.Body], op.OffsetKm);
             else return false;
             return true;
@@ -1962,6 +1968,7 @@ namespace SolarSystem
             embeddedPods.Update();
             battleFx.Update();
             debrisFields.Update();
+            podBeacons.Update();
             Structures.Update(true);
             swarm.Update(ShowSatellites);
             UpdateOrbitLines(dt);

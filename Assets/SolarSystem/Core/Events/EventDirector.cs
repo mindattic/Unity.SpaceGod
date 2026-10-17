@@ -30,6 +30,15 @@ namespace SolarSystem.Core
         /// <summary>How close the player's ship must come to be on the scene, km.</summary>
         public double ArriveKm = 150000;
 
+        /// <summary>How close the player's ship must come to drifting escape pods to take them aboard, km.</summary>
+        public double PodPickupKm = 50;
+
+        /// <summary>Credits per person brought home from escape pods, paid by their owners.</summary>
+        public double PodRescueCredits = 8000;
+
+        /// <summary>Standing with the owners for bringing their people home from the pods.</summary>
+        public double PodRescueReputation = 5;
+
         /// <summary>The most opportunities open at once.</summary>
         public int MaxActive = 5;
 
@@ -95,7 +104,7 @@ namespace SolarSystem.Core
                     op.EngagedBy = playerShip;
                     op.EngagedFaction = playerShip.Faction;
                 }
-                Settle(op, jd, src, playerShip);
+                Settle(op, jd, src, playerShip, playerHelio);
             }
             if (jd < nextScanJd) return;
             nextScanJd = jd + ScanIntervalDays;
@@ -149,6 +158,17 @@ namespace SolarSystem.Core
                 found.Add((op, d));
             }
 
+            foreach (var pod in src.Pods)
+            {
+                if (pod == null || !pod.Drifting || pod.AirLeftDays(jd) < 0.1) continue;
+                var pos = src.PodHelio(pod);
+                double d = (pos - player).Length;
+                if (d > SpawnRadiusKm) continue;
+                var op = PodsOf(pod, jd, src);
+                op.HelioKm = pos;
+                found.Add((op, d));
+            }
+
             if (!anomalyOpen && AnomalyRatePerDay > 0)
             {
                 double dt = double.IsNaN(lastAnomalyRollJd) ? ScanIntervalDays : Math.Min(1, Math.Max(0, jd - lastAnomalyRollJd));
@@ -186,6 +206,7 @@ namespace SolarSystem.Core
             switch (k)
             {
                 case OpportunityKind.Distress: return 0;
+                case OpportunityKind.EscapePods: return 0;
                 case OpportunityKind.ConvoyEscort: return 1;
                 case OpportunityKind.PirateAmbush: return 2;
                 case OpportunityKind.Bounty: return 3;
@@ -310,6 +331,30 @@ namespace SolarSystem.Core
         }
 
         /// <summary>What a hulk's scanned hold shows, for its hook.</summary>
+        Opportunity PodsOf(EscapePod pod, double jd, EventSources src)
+        {
+            string where = pod.Site != null ? "beside the " + pod.Site.Hop.Lane.Name + " lane" : "off " + src.BodyName(pod.Body);
+            string pods = pod.Pods == 1 ? "one escape pod" : pod.Pods + " escape pods";
+            string hook = pod.Owners.IsPirate
+                ? pods + " from the raider " + pod.Name + " drifting " + where + ", " + Cr(pod.People) + " aboard. The pirate hunters pay for raiders handed over."
+                : "Beacon: " + pods + " from the " + pod.Name + " drifting " + where + " with " + Cr(pod.People) + " " + pod.Owners.Name + " crew aboard and "
+                  + pod.AirLeftDays(jd).ToString("0", CultureInfo.InvariantCulture) + " days of air. Any ship, please pick us up.";
+            var reward = pod.Owners.IsPirate
+                ? new OpportunityReward { Credits = RoundThousand(pod.People * Crews.PrisonerBountyPerHead), ReputationWith = src.PirateHunters, Reputation = 3 }
+                : new OpportunityReward { Credits = RoundThousand(pod.People * PodRescueCredits), ReputationWith = pod.Owners, Reputation = PodRescueReputation };
+            return new Opportunity
+            {
+                Kind = OpportunityKind.EscapePods,
+                SourceKey = "pods:" + pod.Id,
+                Title = "Escape pods: " + pod.Name,
+                Hook = hook,
+                ExpiresJd = pod.LaunchedJd + pod.LifeSupportDays,
+                Pod = pod,
+                Patron = pod.Owners.IsPirate ? src.PirateHunters : pod.Owners,
+                Reward = reward,
+            };
+        }
+
         static string HoldReads(IReadOnlyList<SalvageStack> salvage)
         {
             foreach (var stack in salvage)
@@ -411,10 +456,11 @@ namespace SolarSystem.Core
         {
             if (op.Ship != null && !op.Ship.Destroyed) op.HelioKm = src.ShipHelio(op.Ship);
             else if (op.Wreck != null) op.HelioKm = src.WreckHelio(op.Wreck);
+            else if (op.Pod != null) op.HelioKm = src.PodHelio(op.Pod);
             else if (op.Body >= 0) op.HelioKm = src.BodyHelio(op.Body) + op.OffsetKm;
         }
 
-        void Settle(Opportunity op, double jd, EventSources src, Ship player)
+        void Settle(Opportunity op, double jd, EventSources src, Ship player, DVec3 playerHelio)
         {
             var s = op.Ship;
             switch (op.Kind)
@@ -493,12 +539,53 @@ namespace SolarSystem.Core
                     }
                     break;
 
+                case OpportunityKind.EscapePods:
+                {
+                    var pod = op.Pod;
+                    if (!pod.Drifting)
+                    {
+                        string by = pod.TakenBy != null ? "the " + pod.TakenBy.Name : "someone";
+                        Fail(op, jd, pod.State switch
+                        {
+                            PodState.Lost => "The pods from the " + pod.Name + " fell silent before anyone reached them.",
+                            PodState.Hostage => "Raiders hauled in the pods from the " + pod.Name + " first.",
+                            PodState.Prisoner => Cap(by) + " took the crew of the " + pod.Name + " prisoner first.",
+                            _ => Cap(by) + " picked up the pods from the " + pod.Name + " first.",
+                        });
+                        return;
+                    }
+                    if (op.Engaged && player != null && !player.Destroyed && (op.HelioKm - playerHelio).Length <= PodPickupKm)
+                    {
+                        double people = pod.People;
+                        var fate = src.PickUpPod(pod, player);
+                        string aboard = Cr(people) + " " + (pod.Owners.IsPirate ? "raiders" : pod.Owners.Name + " crew");
+                        if (fate == PodState.Rescued && !pod.Owners.IsPirate)
+                            Complete(op, jd, player, "You took " + aboard + " aboard from the " + pod.Name + "'s pods.");
+                        else if (fate == PodState.Prisoner && pod.Owners.IsPirate)
+                            Complete(op, jd, player, "You hauled in " + aboard + " from the " + pod.Name + "'s pods for the pirate hunters.");
+                        else
+                        {
+                            // Raiders picking up their own, or crews taken as hostages or prisoners: nobody pays a
+                            // rescuer for that (a ransom, if any, comes later).
+                            op.Reward = new OpportunityReward();
+                            string what = fate == PodState.Rescued ? "You took " + aboard + " aboard"
+                                : fate == PodState.Hostage ? "You hold " + aboard + " for ransom"
+                                : "You took " + aboard + " prisoner";
+                            Complete(op, jd, player, what + " from the " + pod.Name + "'s pods.");
+                        }
+                        return;
+                    }
+                    break;
+                }
+
                 case OpportunityKind.Anomaly:
                     if (op.Engaged) { Complete(op, jd, player, "You logged the " + op.Title.ToLowerInvariant() + "."); return; }
                     break;
             }
             if (jd >= op.ExpiresJd) Fail(op, jd, "Expired: " + op.Title + ".");
         }
+
+        static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 
         static bool Contains(IReadOnlyList<Wreck> list, Wreck w)
         {

@@ -29,8 +29,9 @@ namespace SolarSystem.Core
         /// </summary>
         public static double Resolve(Faction faction, bool isMilitary)
         {
-            if (faction.IsPirate) return 0.55;
-            return isMilitary ? 1.35 : 0.5;
+            double temperament = faction.IsPirate ? 0.55 : isMilitary ? 1.35 : 0.5;
+            // Crews who have watched their shipmates die (and not come home from the pods) break sooner.
+            return temperament * Math.Max(0.3, faction.CrewMorale);
         }
 
         /// <summary>

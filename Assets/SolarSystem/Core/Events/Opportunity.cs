@@ -25,6 +25,9 @@ namespace SolarSystem.Core
 
         /// <summary>Something odd out in the dark: rare, and the only kind not driven by the sim's own state.</summary>
         Anomaly,
+
+        /// <summary>Escape pods drifting where a hull died (<see cref="EscapePod"/>), broadcasting until someone picks them up or their air runs out.</summary>
+        EscapePods,
     }
 
     /// <summary>Where an <see cref="Opportunity"/> is in its life.</summary>
@@ -112,6 +115,9 @@ namespace SolarSystem.Core
         /// <summary>The wreck to investigate.</summary>
         public Wreck Wreck;
 
+        /// <summary>The escape pods to pick up.</summary>
+        public EscapePod Pod;
+
         /// <summary>The lane an ambush or an escort is on.</summary>
         public Lane Lane;
 
@@ -162,6 +168,7 @@ namespace SolarSystem.Core
                 case OpportunityKind.PirateAmbush: return "AMBUSH";
                 case OpportunityKind.ConvoyEscort: return "ESCORT";
                 case OpportunityKind.Bounty: return "BOUNTY";
+                case OpportunityKind.EscapePods: return "PODS";
                 default: return "ANOMALY";
             }
         }
@@ -176,6 +183,7 @@ namespace SolarSystem.Core
                 case OpportunityKind.PirateAmbush: return new Rgb(1f, 0.2f, 0.55f);
                 case OpportunityKind.ConvoyEscort: return new Rgb(0.45f, 0.9f, 0.55f);
                 case OpportunityKind.Bounty: return new Rgb(1f, 0.85f, 0.3f);
+                case OpportunityKind.EscapePods: return new Rgb(0.35f, 0.95f, 1f);
                 default: return new Rgb(0.6f, 0.55f, 1f);
             }
         }

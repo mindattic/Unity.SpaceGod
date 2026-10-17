@@ -172,7 +172,8 @@ namespace SolarSystem.Core.Tests
             foreach (var power in new[] { w.Sol, w.Reach })
                 Assert.That(w.Fleet.Ships.Any(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == power) ||
                             w.Economy.Settlements.Any(s => s.Owner == power && s.HasShipyard), Is.True, $"the {power.Name} is out of the war");
-            foreach (var s in w.Economy.Settlements)
+            // Nobody starved: a pirate haven a navy has stormed and levelled (empty until it is rebuilt) is not a famine.
+            foreach (var s in w.Economy.Settlements.Where(s => !(s.Kind == SettlementKind.Haven && s.Fallen)))
                 Assert.That(s.Population >= s.InitialPopulation * 0.5, Is.True, $"{s.Name} collapsed to {s.Population:N0}");
         }
 

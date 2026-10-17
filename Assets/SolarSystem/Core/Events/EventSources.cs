@@ -14,6 +14,20 @@ namespace SolarSystem.Core
         public IReadOnlyList<Ship> Ships = Array.Empty<Ship>();
         public IReadOnlyList<Wreck> Wrecks = Array.Empty<Wreck>();
 
+        /// <summary>Escape pods drifting and broadcasting (see <see cref="Crews"/>).</summary>
+        public IReadOnlyList<EscapePod> Pods = Array.Empty<EscapePod>();
+
+        /// <summary>Where a pod cluster is now, heliocentric km.</summary>
+        public Func<EscapePod, DVec3> PodHelio = p => DVec3.Zero;
+
+        /// <summary>The player's ship takes the pods aboard; returns what became of their people (see <see cref="World.PickUpPods"/>).</summary>
+        public Func<EscapePod, Ship, PodState> PickUpPod = (p, s) =>
+        {
+            p.State = PodState.Rescued;
+            p.TakenBy = s?.Faction;
+            return p.State;
+        };
+
         /// <summary>Where a ship is now, heliocentric km.</summary>
         public Func<Ship, DVec3> ShipHelio = s => DVec3.Zero;
 
@@ -68,6 +82,9 @@ namespace SolarSystem.Core
                 WillHire = f => Law.OffersContracts(world.Law.Player, f),
                 PostedBounty = world.Law.BountyOn,
                 WreckHelio = w => world.WreckHelio(w, jd),
+                Pods = war.Crews.Pods,
+                PodHelio = p => world.PodHelio(p, jd),
+                PickUpPod = (p, s) => world.PickUpPods(p, s, jd),
                 LaneDanger = lane =>
                 {
                     double d = 0;

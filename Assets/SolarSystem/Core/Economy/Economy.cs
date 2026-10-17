@@ -41,6 +41,9 @@ namespace SolarSystem.Core
         /// <summary>Raised when a trader sells a load at a port (ship, port, good, tonnes): who supplies whom, for the news and for embargoes.</summary>
         public Action<Ship, Settlement, Good, double> Sold;
 
+        /// <summary>Whether a yard's owner has the hands to crew a hull of this class (see <see cref="Crews"/>); null for always.</summary>
+        public Func<Settlement, ShipClass, bool> CanCrew;
+
         /// <summary>Port tax on every sale and purchase, paid to the port's owner.</summary>
         public const double PortTax = 0.04;
 
@@ -279,6 +282,8 @@ namespace SolarSystem.Core
                 if (s.BuildPoints < cost) continue;
                 double price = HullPrice(cls.Value);
                 if (s.Owner.Treasury < price) continue;
+                // Nor is a hull laid down that nobody could crew.
+                if (CanCrew != null && !CanCrew(s, cls.Value)) continue;
                 s.BuildPoints -= cost;
                 s.Owner.Treasury -= price;
                 ShipBuilt?.Invoke(s, cls.Value, Jd);
