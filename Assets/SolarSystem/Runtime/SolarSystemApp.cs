@@ -24,7 +24,7 @@ namespace SolarSystem
     /// so a 3 km ship next to the camera renders cleanly while Neptune sits 4.5 million units away.
     /// </summary>
     [DefaultExecutionOrder(-100)]
-    public sealed class SolarSystemApp : MonoBehaviour, ICameraWorld
+    public sealed partial class SolarSystemApp : MonoBehaviour, ICameraWorld
     {
         /// <summary>Raised when the galaxy is rebuilt from scratch (a backwards time reset): anything holding
         /// references into the old one (a running tour, a capture) must stop rather than run on stale data.</summary>
@@ -1065,7 +1065,9 @@ namespace SolarSystem
             Propulsion.ApplyManoeuvre(ship, ref pos, ref vel, posBefore, velBefore + gravity * dt, dt);
             pilot.Pos = pos;
             pilot.Vel = vel;
-            KeepPilotAboveSurfaces(ship);
+            // Hulls, stations, rocks and wreckage have volume: what the hull flies into, it hits (U.SPC-T60).
+            if (!KeepPilotAboveSurfaces(ship)) return;
+            if (!UpdatePilotCollisions(ship, posBefore, dt)) return;
             UpdatePropellant(ship, dt);
 
             UpdatePilotBattle(ship, dt);
@@ -1089,8 +1091,9 @@ namespace SolarSystem
         }
 
         /// <summary>A hull its thrusters cannot hold up sinks onto the surface and rests there rather than
-        /// falling through it -- any body it is close enough to feel, not only its own frame's.</summary>
-        void KeepPilotAboveSurfaces(Ship ship)
+        /// falling through it -- any body it is close enough to feel, not only its own frame's. Coming down
+        /// hard does damage (see <see cref="SurfaceImpact"/>); false if the hull did not survive it.</summary>
+        bool KeepPilotAboveSurfaces(Ship ship)
         {
             var frameHelio = Ephemeris.Helio(pilotFrameBody);
             for (int b = 0; b < Catalog.Count; b++)
@@ -1099,8 +1102,10 @@ namespace SolarSystem
                 if (body.Gm <= 0) continue;
                 var centre = Ephemeris.Helio(b) - frameHelio;
                 if ((pilotOffsetKm - centre).Length > body.RadiusKm * PilotFlight.GravityReachRadii) continue;
-                PilotFlight.KeepAboveSurface(ref pilot, centre, body.RadiusKm + Math.Max(0.5, ship.LengthKm));
+                if (!PilotFlight.KeepAboveSurface(ref pilot, centre, body.RadiusKm + Math.Max(0.5, ship.LengthKm), out double sink)) continue;
+                if (!SurfaceImpact(ship, b, (pilotOffsetKm - centre).Normalized, sink)) return false;
             }
+            return true;
         }
 
         /// <summary>Warns as the piloted ship's tanks run low and dry, and brings a called tanker alongside when it is due.</summary>

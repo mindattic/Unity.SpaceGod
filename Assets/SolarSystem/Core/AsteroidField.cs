@@ -109,6 +109,15 @@ namespace SolarSystem.Core
             qz[i] = cw * si;
         }
 
+        /// <summary>The geometric albedo assumed for an asteroid's size from its brightness (a typical belt value).</summary>
+        public const double TypicalAlbedo = 0.14;
+
+        /// <summary>
+        /// One asteroid's diameter, km, from its absolute magnitude: D = 1329 km / √p · 10^(−H/5) with the
+        /// <see cref="TypicalAlbedo"/> (so H 15 is about 3.6 km): the size of the rock a hull can fly into (U.SPC-T60).
+        /// </summary>
+        public double DiameterKm(int i) => 1329 / Math.Sqrt(TypicalAlbedo) * Math.Pow(10, -H[i] / 5.0);
+
         /// <summary>Heliocentric position (AU, ecliptic J2000) of one asteroid.</summary>
         public DVec3 PositionAu(int i, double jd)
         {

@@ -1145,6 +1145,30 @@ namespace SolarSystem.Core
             }
         }
 
+        /// <summary>
+        /// A collision's damage to a unit (U.SPC-T60): <paramref name="hp"/> (see <see cref="Collisions.DamageHp"/>)
+        /// done at battle-local point <paramref name="at"/> to the hardpoints on that side, through its shields there
+        /// (<see cref="Collisions.ApplyDamage"/>), with the same effects and the same death as a shot.
+        /// </summary>
+        public void ApplyImpact(BattleUnit target, DVec3 at, double hp)
+        {
+            if (!target.Present || hp <= 0) return;
+            var c = target.Combat;
+            double shieldBefore = c.Shield;
+            var lost = new List<Subsystem>();
+            double through = Collisions.ApplyDamage(c, target.ToLocal(at), hp, Seconds, lost);
+            if (c.Shield < shieldBefore) Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, -1);
+            if (through > 0) Emit(FxKind.Impact, at, at, through, target.Side, target, -1);
+            foreach (var s in lost) Emit(FxKind.SubsystemDestroyed, at, at, target.LengthKm * 0.12, target.Side, target, s.Index);
+            if (c.Hull <= 0)
+            {
+                c.Hull = 0;
+                target.Dead = true;
+                Emit(FxKind.UnitDestroyed, target.Pos, target.Pos, target.LengthKm, target.Side, target, -1);
+                UnitDestroyed?.Invoke(this, target);
+            }
+        }
+
         void StepMissiles(double dt)
         {
             foreach (var m in Missiles)

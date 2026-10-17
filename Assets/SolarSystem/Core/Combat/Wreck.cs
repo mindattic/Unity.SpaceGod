@@ -62,6 +62,25 @@ namespace SolarSystem.Core
         /// <summary>Bigger hulls scatter more pieces: 6 for a fighter-sized wreck up to 24 for a capital ship.</summary>
         public int DebrisPieces => (int)Math.Clamp(6 + LengthKm * 40, 6, 24);
 
+        /// <summary>A debris piece's radius in hull lengths while the wreck is fresh (as drawn); it shrinks as the wreck fades.</summary>
+        public const double DebrisPieceLengths = 0.035;
+
+        /// <summary>How big each piece of debris is at <paramref name="jd"/>, km: what a hull flying through the field can hit (U.SPC-T60).</summary>
+        public double DebrisPieceRadiusKm(double jd) => LengthKm * DebrisPieceLengths * Fade(jd);
+
+        /// <summary>Each piece's mass, kt: half the hull it was, shared between the pieces (the rest is gone as gas and dust).</summary>
+        public double DebrisPieceMassKt =>
+            0.5 * (Ship?.Combat != null ? Collisions.MassOf(Ship.Combat.Spec) : 3500 * Math.Pow(Math.Max(0.005, LengthKm), 3)) / DebrisPieces;
+
+        /// <summary>Piece <paramref name="k"/> as a collision volume, around a wreck centred at <paramref name="centreKm"/>
+        /// and moving at <paramref name="velKmS"/> in the caller's frame: pinned, since the field drifts on its own.</summary>
+        public CollisionVolume DebrisCollider(int k, double jd, DVec3 centreKm, DVec3 velKmS)
+        {
+            var c = CollisionVolume.Sphere(centreKm + DebrisOffsetKm(k, jd), velKmS, DebrisPieceRadiusKm(jd), DebrisPieceMassKt);
+            c.Pinned = true;
+            return c;
+        }
+
         /// <summary>Radius of the drifting debris cloud at <paramref name="jd"/>, km: it starts at the hull and spreads, slowing as it goes.</summary>
         public double DebrisRadiusKm(double jd)
         {
@@ -137,6 +156,31 @@ namespace SolarSystem.Core
             };
             if (unit.Ship != null && unit.Ship.HasCargo && unit.Ship.CargoTonnes > 0)
                 w.Salvage.Add(new SalvageStack(unit.Ship.CargoGood, unit.Ship.CargoTonnes));
+            Items.Add(w);
+            return w;
+        }
+
+        /// <summary>
+        /// Leaves a wreck where <paramref name="ship"/> broke up outside any battle (in a collision, U.SPC-T60),
+        /// <paramref name="offsetKm"/> from <paramref name="body"/>'s centre, fixed in its frame, with its cargo aboard.
+        /// </summary>
+        public Wreck Add(Ship ship, int body, DVec3 offsetKm, double jd, double lifetimeDays = -1)
+        {
+            var w = new Wreck
+            {
+                Id = nextId++,
+                Name = ship.Name,
+                Faction = ship.Faction,
+                Ship = ship,
+                Body = body,
+                Pos = offsetKm,
+                Anchor = offsetKm,
+                Local = DVec3.Zero,
+                LengthKm = ship.LengthKm,
+                CreatedJd = jd,
+                LifetimeDays = lifetimeDays > 0 ? lifetimeDays : DefaultLifetimeDays,
+            };
+            if (ship.HasCargo && ship.CargoTonnes > 0) w.Salvage.Add(new SalvageStack(ship.CargoGood, ship.CargoTonnes));
             Items.Add(w);
             return w;
         }

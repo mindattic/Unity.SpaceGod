@@ -444,6 +444,21 @@ namespace SolarSystem.Core
         }
 
         /// <summary>
+        /// A hull broken up in a collision outside any battle (U.SPC-T60): it is lost like a scuttled ship,
+        /// leaves a wreck where it struck (<paramref name="offsetKm"/> from <paramref name="body"/>, with whatever
+        /// it carried still aboard to salvage) and the loss goes in the log. A ship already gone, or in a battle
+        /// (whose own <see cref="Battle.ApplyImpact"/> settles it there), is left alone; true if it was lost here.
+        /// </summary>
+        public bool LoseInCollision(Ship ship, int body, DVec3 offsetKm, double jd, string what)
+        {
+            if (ship == null || ship.Destroyed || ship.Battle != null) return false;
+            var wreck = Wrecks.Add(ship, body, offsetKm, jd);
+            Scuttle(ship);
+            world.Log(jd, $"The {ship.Name} breaks up in a collision with {what}", WorldEventKind.Loss, body);
+            return true;
+        }
+
+        /// <summary>
         /// Sends a hull to the bottom. Given the battle and its unit there, whoever is still aboard is put off in
         /// the escape pods first, which drift where it was scuttled (see <see cref="Crews"/>).
         /// </summary>

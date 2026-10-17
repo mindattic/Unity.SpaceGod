@@ -276,15 +276,26 @@ namespace SolarSystem.Core
         /// (<paramref name="bodyKm"/>, in the hull's own frame): a hull that sinks onto the surface comes
         /// to rest on it, its downward speed lost and its sideways speed kept. True if it touched.
         /// </summary>
-        public static bool KeepAboveSurface(ref PilotState s, DVec3 bodyKm, double floorKm)
+        public static bool KeepAboveSurface(ref PilotState s, DVec3 bodyKm, double floorKm) =>
+            KeepAboveSurface(ref s, bodyKm, floorKm, out _);
+
+        /// <summary>As <see cref="KeepAboveSurface(ref PilotState, DVec3, double)"/>, also giving the downward
+        /// speed the hull lost on the surface, km/s: how hard it came down (see
+        /// <see cref="Collisions.SurfaceImpactShareTJ"/>, U.SPC-T60).</summary>
+        public static bool KeepAboveSurface(ref PilotState s, DVec3 bodyKm, double floorKm, out double sinkKmS)
         {
+            sinkKmS = 0;
             var rel = s.Pos - bodyKm;
             double d = rel.Length;
             if (floorKm <= 0 || d >= floorKm) return false;
             var n = d > 1e-9 ? rel / d : s.Up;
             s.Pos = bodyKm + n * floorKm;
             double down = DVec3.Dot(s.Vel, n);
-            if (down < 0) s.Vel -= n * down;
+            if (down < 0)
+            {
+                s.Vel -= n * down;
+                sinkKmS = -down;
+            }
             return true;
         }
 
