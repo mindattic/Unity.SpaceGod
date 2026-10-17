@@ -430,6 +430,9 @@ namespace SolarSystem.Core
                     TakeCrewCaptive(ship, captor, jd);
                     Detach(ship);
                     ship.Destroyed = true;
+                    // A hull lost to its owners like any other.
+                    losses.TryGetValue(ship.Faction, out int lost);
+                    losses[ship.Faction] = lost + 1;
                     how = $"taken to {HavenName()} and sold to the breakers";
                 }
                 else { Scuttle(ship, b, u, jd); how = "scuttled, its crew put off in the pods"; }
