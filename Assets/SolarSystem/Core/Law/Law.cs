@@ -460,6 +460,8 @@ namespace SolarSystem.Core
                 foreach (var u in b.Units)
                 {
                     if (u.Side != side || u.Kind != UnitKind.Ship || u.Ship == null) continue;
+                    // A prize taken by this side is not one of its fighters: its own captain (taken with it) did nothing here.
+                    if (u.Captured && u.FoughtOn != side) continue;
                     object key = u.PlayerFlown ? (object)Player : u.Ship.Controller;
                     if (!offenders.ContainsKey(key)) offenders[key] = u.Faction;
                 }

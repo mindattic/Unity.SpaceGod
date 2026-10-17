@@ -284,6 +284,24 @@ namespace SolarSystem.Core.Tests
             Assert.That(w.Law.FindRecord(hunter)?.Crimes.Count ?? 0, Is.EqualTo(0), "the hunter defended the merchant");
             Assert.That(w.Law.FindRecord(raider).Crimes.Single().Kind, Is.EqualTo(CrimeKind.Piracy));
 
+            // Nor is a hunter's escort that the raiders took: it is their prize, not one of their fighters.
+            var w3 = CreateWorld();
+            var b3 = new Battle(0, earth, "Battle of Earth", new DVec3(20000, 0, 0), StartJd, 1);
+            var raider3 = Hull(ShipClass.Destroyer, w3.Pirates, 9001);
+            b3.AddShip(raider3, 0, new DVec3(-4, 0, 0), DVec3.UnitX);
+            var hunter3 = Hull(ShipClass.Cruiser, w3.Independents, 9002, "Long Arm");
+            b3.AddShip(hunter3, 1, new DVec3(4, 0, 0), -DVec3.UnitX);
+            var escort = b3.AddShip(Hull(ShipClass.Destroyer, w3.Independents, 9003, "Due Process"), 1, new DVec3(5, 0, 0), -DVec3.UnitX);
+            escort.Ship.Leader = hunter3;
+            b3.AddShip(Hull(ShipClass.Freighter, w3.Reach, 9004, "Seam"), 1, new DVec3(6, 0, 0), -DVec3.UnitX);
+            b3.AggressorSide = 0;
+            escort.TakenFromSide = 1;
+            escort.Side = 0;
+            escort.Captured = true;
+            w3.Law.OnBattleEnded(b3, StartJd);
+            Assert.That(w3.Law.FindRecord(hunter3)?.Crimes.Count ?? 0, Is.EqualTo(0), "the hunter's taken escort attacked nobody");
+            Assert.That(w3.Law.FindRecord(escort.Ship)?.Crimes.Count ?? 0, Is.EqualTo(0));
+
             // A lawful hull that boards and takes a ship it is at peace with has robbed it, prize crew and all.
             var w2 = CreateWorld();
             var b2 = new Battle(0, earth, "Battle of Earth", new DVec3(20000, 0, 0), StartJd, 1);
