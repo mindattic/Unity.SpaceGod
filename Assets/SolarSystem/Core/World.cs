@@ -64,6 +64,9 @@ namespace SolarSystem.Core
         /// <summary>Named outlaw captains, the ports' bounty boards and the bounty hunters who work them (see <see cref="Core.Outlaws"/>).</summary>
         public Outlaws Outlaws { get; private set; }
 
+        /// <summary>The trading companies that own and run the merchant fleet (U.SPC-T99; see <see cref="Core.Companies"/>).</summary>
+        public Companies Companies { get; private set; }
+
         /// <summary>The most bounty hunter groups the free traders keep in service.</summary>
         public int HunterCap = 3;
 
@@ -99,6 +102,7 @@ namespace SolarSystem.Core
         {
             Fleet.Update(jd);
             Economy.AdvanceTo(jd);
+            Companies.Update(jd);
             War.Update(jd);
             Sensors?.Update(jd);
             Shocks.Update(jd);
@@ -264,6 +268,14 @@ namespace SolarSystem.Core
             w.BuildMilitary(startJd);
             w.BuildMerchants(startJd, FreighterNames, MinerNames, CourierNames, new[] { w.Independents, w.Independents, w.Sol, w.Belt, w.Reach, w.Independents },
                 i => i % 3 == 2 ? w.Reach : w.Belt);
+            w.FoundCompanies(startJd,
+                ("Kepler Freight Lines", "KFL", "Earth Orbital", w.Sol, false),
+                ("Ares Haulage", "AH", "Ares Prime", w.Sol, true),
+                ("Jovian Bulk Carriers", "JBC", "Ganymede Union", w.Belt, false),
+                ("Vesta Ore and Haulage", "VOH", "Ceres Hub", w.Belt, true),
+                ("Kraken Hydrocarbon Company", "KHC", "Kraken Port", w.Reach, false),
+                ("Meridian Free Traders", "MFT", "Tycho City", w.Independents, false),
+                ("Long Haul Carrying Company", "LHC", "Ares Prime", w.Independents, false));
             w.AddFreeShips(startJd, new[] { "Kestrel's Folly", "Wanderlust", "Far Horizon", "Stargazer", "Solitaire", "Driftwood", "Errant", "Idle Hours" },
                 new[] { "Prospector Nine", "Lucky Strike" });
             int haven = w.Catalog["Deimos"].Index;
@@ -328,8 +340,18 @@ namespace SolarSystem.Core
             fleet.Leaked = (ship, tonnes, when) =>
                 Log(when, $"{ship.Name} vents {tonnes:N0} t of reaction mass from a holed tank", WorldEventKind.Info, ship.Orbit?.Body ?? -1);
             economy.Danger = body => war.Danger(body) * 0.08;
-            // Yards keep the merchant fleet up first; then the navies take their slips.
-            economy.ChooseBuild = yard => TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
+            // The merchant fleet belongs to trading companies, which buy hulls from their profits: a yard lays down a
+            // company's order first, then the navies take their slips. A system without companies keeps the old way:
+            // the yards' owners keep the merchant fleet up to strength before the navies get theirs.
+            Companies = new Companies(this, seed + 13);
+            economy.Loaded += Companies.OnLoaded;
+            economy.Sold += Companies.OnSold;
+            economy.RouteFactor = Companies.RouteFactor;
+            economy.PaidFor = Companies.PaidFor;
+            ShipAdded += Companies.OnShipAdded;
+            economy.ChooseBuild = yard => Companies.Enabled
+                ? Companies.OrderAt(yard) ?? war.ChooseWarship(yard)
+                : TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
             economy.ShipBuilt = OnShipBuilt;
             economy.CanCrew = (yard, cls) => Crews.CanCrew(yard.Owner, cls);
             fleet.BeforeEvent = economy.AdvanceTo;
@@ -436,6 +458,11 @@ namespace SolarSystem.Core
             w.BuildMerchants(startJd, freighters, haulers, couriers,
                 new[] { w.Independents, w.Independents, combine, w.Independents, accord }, i => combine);
 
+            w.Companies.MaxCompanies = 5;
+            w.FoundCompanies(startJd,
+                ("Kentaurus Carrying Company", "KCC", "New Kentaurus", w.Independents, false),
+                ("Toliman Bulk", "TB", "Toliman Forge", combine, true),
+                ("Proxima Line", "PL", "New Kentaurus", accord, false));
             w.AddFreeShips(startJd, new[] { "First Light", "Long Look", "Terminator Dawn" }, new[] { "Red Dust" });
             int haven = w.Catalog["Blackhollow"].Index;
             war.RaisePirateGroup(startJd, haven);
@@ -857,6 +884,41 @@ namespace SolarSystem.Core
             return ship;
         }
 
+        /// <summary>
+        /// Founds the system's first trading companies (name, house mark, headquarters, flag, whether it is in the ore
+        /// trade) and hands each the merchant hulls already sailing under its flag: ore haulers to the miners, the rest
+        /// to the carriers, each to whichever has fewest. A hull whose flag has no company stays its faction's own.
+        /// </summary>
+        void FoundCompanies(double jd, params (string name, string tag, string home, Faction flag, bool mining)[] table)
+        {
+            var made = new List<(Company c, bool mining)>();
+            foreach (var (name, tag, home, flag, mining) in table)
+            {
+                Settlement port = null;
+                foreach (var s in Economy.Settlements)
+                    if (s.Name == home) port = s;
+                made.Add((Companies.Found(name, tag, Companies.LiveryFor(made.Count), port, flag, Companies.FoundingCapital, jd), mining));
+            }
+            foreach (var ship in Fleet.Ships)
+            {
+                if (ship.Destroyed || !IsTrader(ship)) continue;
+                bool ore = ship.Spec.Class == ShipClass.Miner;
+                Company best = null;
+                int bestRank = int.MaxValue;
+                foreach (var (c, mining) in made)
+                {
+                    if (c.Flag != ship.Faction) continue;
+                    int rank = (mining == ore ? 0 : 1000) + c.Ships.Count;
+                    if (rank < bestRank)
+                    {
+                        bestRank = rank;
+                        best = c;
+                    }
+                }
+                if (best != null) Companies.Enlist(best, ship);
+            }
+        }
+
         // ---------------------------------------------------------------- shipbuilding
 
         public int TraderCount()
@@ -886,15 +948,19 @@ namespace SolarSystem.Core
                 return;
             }
             builtCount++;
+            Company company = null;
             if (cls == ShipClass.Freighter || cls == ShipClass.Miner || cls == ShipClass.Courier)
             {
                 var role = cls == ShipClass.Miner ? ShipRole.Miner : cls == ShipClass.Courier ? ShipRole.Courier : ShipRole.Trader;
                 var names = cls == ShipClass.Miner ? minerNames : merchantNames;
-                string name = names[builtCount % names.Length] + " " + Roman(2 + builtCount / names.Length);
-                ship = AddMerchant(name, cls, yard.Owner, role, PortBodies(), jd, yard.Body, yard);
+                // The company that ordered it pays the yard and takes it; else it is the yard owner's own.
+                company = Companies.TakeDelivery(yard, cls, jd);
+                string name = company != null ? Companies.HullName(company, names) : names[builtCount % names.Length] + " " + Roman(2 + builtCount / names.Length);
+                ship = AddMerchant(name, cls, company?.Flag ?? yard.Owner, role, PortBodies(), jd, yard.Body, yard);
+                if (company != null) Companies.Enlist(company, ship);
             }
             else return;
-            Log(jd, $"{yard.Name} launches the {ship.Spec.DisplayName.ToLowerInvariant()} {ship.Name}", WorldEventKind.Launch, yard.Body);
+            Log(jd, $"{yard.Name} launches the {ship.Spec.DisplayName.ToLowerInvariant()} {ship.Name}" + (company != null ? $" for {company.Name}" : ""), WorldEventKind.Launch, yard.Body);
             ShipAdded?.Invoke(ship);
         }
 

@@ -363,6 +363,21 @@ namespace SolarSystem.Core
         /// <summary>Running trade profit, credits.</summary>
         public double Credits;
 
+        /// <summary>The trading company that owns this hull (U.SPC-T99), or null for one its faction runs itself.</summary>
+        public Company Company;
+
+        /// <summary>How much of <see cref="Credits"/> its company has already booked.</summary>
+        public double CompanyBookedCredits;
+
+        /// <summary>Where the cargo in the hold was loaded, when, and the running profit then: a company reckons each
+        /// run from these (see <see cref="Companies.OnSold"/>).</summary>
+        public Settlement LoadedFrom;
+        public double LoadedJd, LoadedCredits;
+
+        /// <summary>Set alongside <see cref="Destroyed"/> (and <see cref="GateDeparted"/>, so nothing draws a wreck) when
+        /// its company sold it to the breakers.</summary>
+        public bool Scrapped;
+
         /// <summary>Running dark (U.SPC-T66): transponder off, active systems down, hull heat damped, so its signature
         /// is a fraction of what it was (see <see cref="Signatures"/>). A burn still shows.</summary>
         public bool SilentRunning;
@@ -485,6 +500,9 @@ namespace SolarSystem.Core
             Prisoners = Prisoners,
             PrisonerBounty = PrisonerBounty,
             SilentRunning = SilentRunning,
+            // Still its company's hull over there; the company books its trade as before.
+            Company = Company,
+            CompanyBookedCredits = CompanyBookedCredits,
         };
 
         public override string ToString() => Name;

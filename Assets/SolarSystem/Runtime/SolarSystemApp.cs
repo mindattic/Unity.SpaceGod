@@ -2164,7 +2164,8 @@ namespace SolarSystem
                 double u = progress + (1 - progress) * k / (pathPoints.Length - 1);
                 pathPoints[k] = Relative(ship.Phase == ShipPhase.Lane ? Scale.LaneScene(Ephemeris, bodyScene, Fleet.Lanes, ship, u, out _) : TransitScene(ship, u, out _));
             }
-            var c = ship.Faction.Color;
+            // A company hull's path is drawn in its company's livery.
+            var c = ship.Company?.Livery ?? ship.Faction.Color;
             pathLine.SetPoints(pathPoints, pathPoints.Length, new Color(c.R, c.G, c.B, 0.9f), 1f, 0.35f);
             pathLine.SetTint(Color.white);
             pathLine.Root.transform.localPosition = Vector3.zero;

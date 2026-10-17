@@ -44,6 +44,22 @@ namespace SolarSystem.Core
         /// <summary>Whether a yard's owner has the hands to crew a hull of this class (see <see cref="Crews"/>); null for always.</summary>
         public Func<Settlement, ShipClass, bool> CanCrew;
 
+        /// <summary>Whether a buyer (a trading company, see <see cref="Companies"/>) has already paid for the hull a yard is
+        /// about to lay down, so its owner's treasury is not charged; null for nobody.</summary>
+        public Func<Settlement, ShipClass, double, bool> PaidFor;
+
+        /// <summary>Raised when a ship loads a cargo for sale (the ship and the settlement it bought at).</summary>
+        public Action<Ship, Settlement> Loaded;
+
+        /// <summary>
+        /// How a ship's owners weigh a run from one settlement (null: the cargo already aboard) to another: multiplies a
+        /// paying run's score in <see cref="PlanTrade"/>, and 0 rules the run out (see <see cref="Companies.RouteFactor"/>).
+        /// Null for 1.
+        /// </summary>
+        public Func<Ship, Settlement, Settlement, double> RouteFactor;
+
+        double RouteFactorOf(Ship ship, Settlement from, Settlement to) => RouteFactor == null ? 1 : RouteFactor(ship, from, to);
+
         /// <summary>Port tax on every sale and purchase, paid to the port's owner.</summary>
         public const double PortTax = 0.04;
 
@@ -281,11 +297,13 @@ namespace SolarSystem.Core
                 double cost = HullCost(cls.Value);
                 if (s.BuildPoints < cost) continue;
                 double price = HullPrice(cls.Value);
-                if (s.Owner.Treasury < price) continue;
+                // A hull a company ordered is already paid for; the owner pays for its own.
+                bool prepaid = PaidFor != null && PaidFor(s, cls.Value, price);
+                if (!prepaid && s.Owner.Treasury < price) continue;
                 // Nor is a hull laid down that nobody could crew.
                 if (CanCrew != null && !CanCrew(s, cls.Value)) continue;
                 s.BuildPoints -= cost;
-                s.Owner.Treasury -= price;
+                if (!prepaid) s.Owner.Treasury -= price;
                 ShipBuilt?.Invoke(s, cls.Value, Jd);
             }
         }
@@ -503,8 +521,11 @@ namespace SolarSystem.Core
                     if (to.Body == here || !CanTrade(ship, to) || to.Demand[(int)ship.CargoGood] <= 0) continue;
                     var run = PriceRun(ship, here, to.Body, jd, ship.CargoTonnes, ship.Propellant, fuelHere);
                     if (!run.Reachable) continue;
+                    double factor = RouteFactorOf(ship, null, to);
+                    if (factor <= 0) continue;
                     double value = to.SaleValue(ship.CargoGood, ship.CargoTonnes) * (1 - DangerAt(to.Body));
-                    options.Add(new Option { To = to, Good = ship.CargoGood, Tonnes = ship.CargoTonnes, Score = (value - run.Cost) / run.Days });
+                    double score = (value - run.Cost) / run.Days;
+                    options.Add(new Option { To = to, Good = ship.CargoGood, Tonnes = ship.CargoTonnes, Score = score > 0 ? score * factor : score });
                 }
                 if (options.Count == 0) return LowOnPropellant(ship, here, jd);
                 var pick = Choose(options);
@@ -567,6 +588,8 @@ namespace SolarSystem.Core
                 foreach (var to in Settlements)
                 {
                     if (to.Body == fromBody || !CanTrade(ship, to)) continue;
+                    double factor = RouteFactorOf(ship, from, to);
+                    if (factor <= 0) continue;
                     double tonnes = Math.Min(Math.Min(capacity, available), to.Absorb(good));
                     if (tonnes < minimum) continue;
                     var run = PriceRun(ship, fromBody, to.Body, jd, tonnes, tanks, fuelPrice);
@@ -576,7 +599,8 @@ namespace SolarSystem.Core
                     double bonus = ContractBonus(to, good, tonnes);
                     double value = (SaleEstimate(to, good, tonnes) + bonus) * (1 - DangerAt(to.Body));
                     double profit = value - cost - run.Cost - extraCost - extraDays * RunningCostPerDay(cls);
-                    into.Add(new Option { From = from, To = to, Good = good, Tonnes = tonnes, Cost = cost, Bonus = bonus, Score = profit / days });
+                    double score = profit / days;
+                    into.Add(new Option { From = from, To = to, Good = good, Tonnes = tonnes, Cost = cost, Bonus = bonus, Score = score > 0 ? score * factor : score });
                 }
             }
         }
@@ -625,6 +649,7 @@ namespace SolarSystem.Core
             ship.CargoDestination = o.To;
             ship.Cargo = CargoText(ship);
             o.From.RefreshPrices();
+            Loaded?.Invoke(ship, o.From);
         }
 
         /// <summary>
@@ -649,6 +674,7 @@ namespace SolarSystem.Core
             ship.CargoDestination = null;
             ship.Cargo = tonnes.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " t " + GoodInfo.Of(good).Name + " for " + bound;
             from.RefreshPrices();
+            Loaded?.Invoke(ship, from);
             return ship.CargoCost;
         }
 

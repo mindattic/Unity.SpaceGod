@@ -683,6 +683,19 @@ namespace SolarSystem.UI
                         if (escort.Leader == ship && !escort.Destroyed) rows.Add((escort.Name + "  · " + escort.Spec.DisplayName, Target.OfShip(escort), 2, Color.Lerp(fc, Color.gray, 0.35f)));
                 }
             }
+            // The trading companies that own the merchant fleet, in their liveries.
+            var companies = app.World.Companies;
+            if (companies != null && companies.Enabled)
+            {
+                rows.Add(("", Target.None, 0, Color.clear));
+                rows.Add(("TRADING COMPANIES", Target.None, 0, new Color(0.9f, 0.86f, 0.7f)));
+                foreach (var co in companies.All)
+                {
+                    var lc = new Color(co.Livery.R, co.Livery.G, co.Livery.B);
+                    if (!co.Trading) lc = Color.Lerp(lc, Color.gray, 0.6f);
+                    rows.Add((CompanyText(co), Target.None, 1, lc));
+                }
+            }
             // Ships from other systems, come through the gates (their factions belong to their own worlds).
             bool visitorsHeader = false;
             var local = new HashSet<Faction>(app.Fleet.Factions);
@@ -874,8 +887,12 @@ namespace SolarSystem.UI
                 var c = ship.Controller;
                 var st = app.ShipStateOf(ship);
                 heading = ship.Name;
-                sub = ship.Faction.Name + " " + ship.Spec.DisplayName.ToLowerInvariant();
-                headingColor = new Color(ship.Faction.Color.R, ship.Faction.Color.G, ship.Faction.Color.B);
+                var company = c.Company;
+                sub = company != null
+                    ? company.Name + " " + ship.Spec.DisplayName.ToLowerInvariant() + ", under the " + ship.Faction.Name + " flag"
+                    : ship.Faction.Name + " " + ship.Spec.DisplayName.ToLowerInvariant();
+                var livery = company?.Livery ?? ship.Faction.Color;
+                headingColor = new Color(livery.R, livery.G, livery.B);
                 lines.Add(("Length", Km(ship.LengthKm)));
                 lines.Add(("Drive", ship.Spec.AccelG.ToString("0.##", CultureInfo.InvariantCulture) + " g, flip-and-burn; hyperlanes between systems"));
                 lines.Add(("Propellant", PropellantText(ship)));
@@ -992,6 +1009,7 @@ namespace SolarSystem.UI
                     lines.Add(("Hold", Tonnes(c.CapacityTonnes)));
                     if (c.HasCargo) lines.Add(("Paid", Credits(c.CargoCost) + (c.CargoBonus > 0 ? "  (+" + Credits(c.CargoBonus) + " contract)" : "")));
                     lines.Add(("Trade profit", Credits(c.Credits)));
+                    if (c.Company != null) lines.Add(("Owner", CompanyText(c.Company)));
                 }
                 lines.Add(("Trips", c.TripsCompleted.ToString(CultureInfo.InvariantCulture)));
                 // The law's file on whoever commands it: the player's own record for the ship they fly.
@@ -1105,10 +1123,24 @@ namespace SolarSystem.UI
             lines.Add(("", "Merchants and couriers land through the rings; warships and pirates hold orbit."));
         }
 
+        /// <summary>A trading company in a line: name, home port, hulls, cash, income, standing with its flag, or its fate.</summary>
+        string CompanyText(Company co)
+        {
+            if (co.Fate == CompanyFate.Merged) return co.Name + "  · merged into " + co.MergedInto?.Name;
+            if (co.Fate == CompanyFate.Bankrupt) return co.Name + "  · bankrupt";
+            string order = co.OnOrder != null ? ",  " + co.OnOrder.Value.ToString().ToLowerInvariant() + " on order at " + co.OrderYard?.Name : "";
+            return co.Name + " (" + co.HomePort?.Name + ")  " + co.Hulls + (co.Hulls == 1 ? " hull" : " hulls") + ",  " + Credits(co.Cash) +
+                   ",  " + Credits(co.IncomePerDay) + "/day" + order;
+        }
+
         void AddSettlementLines(List<(string key, string value)> lines, Settlement s)
         {
             lines.Add(("", ""));
             lines.Add((s.Name, s.Owner.Name + " " + KindName(s.Kind) + ", pop " + People(s.Population)));
+            var houses = app.World.Companies;
+            if (houses != null)
+                foreach (var co in houses.All)
+                    if (co.Trading && co.HomePort == s) lines.Add(("Company", CompanyText(co)));
             if (s.Kind != SettlementKind.Haven && !s.Fallen)
             {
                 double moving = s.NetMigration;

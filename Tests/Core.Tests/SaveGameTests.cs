@@ -147,7 +147,8 @@ namespace SolarSystem.Core.Tests
                 Assert.That(lw.PilotedShip, Is.SameAs(loaded.Session.Piloted), "the session's ship is the world's piloted ship");
                 Assert.That(lw.PilotedShip.Credits, Is.EqualTo(4321.5));
                 Assert.That(lw.PilotedShip.Faction.Treasury, Is.EqualTo(player.Faction.Treasury));
-                Assert.That(lw.PilotedShip.Faction, Is.SameAs(lw.Sol));
+                // Whichever trader it is (the companies' trade decides who is free first), its faction is the loaded world's own.
+                Assert.That(lw.PilotedShip.Faction, Is.SameAs(lw.Fleet.Factions.First(f => f.Name == player.Faction.Name)));
                 Assert.That(lw.Adventures.ReputationWith(lw.Sol), Is.EqualTo(17.5));
                 Assert.That(lw.Adventures.ReputationWith(lw.Pirates), Is.EqualTo(-4));
                 Assert.That(loaded.Session.Pilot.Vel.Y, Is.EqualTo(7.5));
