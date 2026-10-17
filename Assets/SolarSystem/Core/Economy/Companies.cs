@@ -411,7 +411,8 @@ namespace SolarSystem.Core
                 double delta = s.Credits - s.CompanyBookedCredits;
                 s.CompanyBookedCredits = s.Credits;
                 trade += delta;
-                if (s.Faction != null) s.Faction.Treasury -= delta;
+                // Its takings went to the flag it flew when it earned them: the company's, even if it has since been taken.
+                c.Flag.Treasury -= delta;
                 if (s.Destroyed || s.Derelict || s.Faction != c.Flag)
                 {
                     c.Ships.RemoveAt(i);
