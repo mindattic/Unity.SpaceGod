@@ -187,6 +187,9 @@ namespace SolarSystem.Core
         /// <summary>A settlement losing people faster than this (a day) posts a colony party; any loss at all posts passengers.</summary>
         public const double ColonistOutflow = 20;
 
+        /// <summary>The share of its founding people a settlement keeps whatever passage is posted from it.</summary>
+        public const double MinPeopleShare = 0.6;
+
         /// <summary>Danger (0..1) at a settlement past which its owner posts a patrol, and into which a valuable cargo wants an escort.</summary>
         public const double PatrolDanger = 0.3, EscortDanger = 0.3;
 
@@ -449,7 +452,8 @@ namespace SolarSystem.Core
 
         void PostPeopleLot(ContractKind kind, Settlement from, Settlement to, int people, Faction patron, double urgency, double jd)
         {
-            if (people > from.Population * 0.5) return;
+            // Passage is how migrants travel, not more of them: never more than a sliver, nor below six tenths of the founding people.
+            if (people > from.Population * 0.05 || from.Population - people < from.InitialPopulation * MinPeopleShare) return;
             double km = Km(from.Body, to.Body, jd);
             double danger = DangerAt(to.Body);
             double fare = kind == ContractKind.Passengers ? 2500 : 150;
@@ -695,6 +699,7 @@ namespace SolarSystem.Core
                 case ContractKind.Passengers:
                 case ContractKind.Colonists:
                     c.Board.Population -= c.People;
+                    c.Board.Emigrated += c.People;
                     c.Aboard = true;
                     if (!player) taker.Cargo = c.Title;
                     break;
@@ -1011,7 +1016,7 @@ namespace SolarSystem.Core
                 }
                 case ContractKind.Passengers:
                 case ContractKind.Colonists:
-                    return Lawful(c.Destination) && c.Board.Population > c.People * 2;
+                    return Lawful(c.Destination) && c.Board.Population - c.People >= c.Board.InitialPopulation * MinPeopleShare;
                 case ContractKind.Escort:
                     return c.Client != null && !c.Client.Destroyed && double.IsNaN(c.ClientArrivedJd) && c.Client.Faction == c.Patron;
                 case ContractKind.Patrol:
@@ -1134,7 +1139,11 @@ namespace SolarSystem.Core
             if (c.Aboard)
             {
                 bool lostWithHull = c.Taker == null || c.Taker.Destroyed;
-                if (!lostWithHull) c.Board.Population += c.People;
+                if (!lostWithHull)
+                {
+                    c.Board.Population += c.People;
+                    c.Board.Emigrated = Math.Max(0, c.Board.Emigrated - c.People);
+                }
                 c.Aboard = false;
                 if (lostWithHull) world.Log(jd, $"{c.People:N0} {(c.Kind == ContractKind.Colonists ? "colonists" : "passengers")} bound for {c.Destination.Name} are lost with the {c.Taker?.Name}", WorldEventKind.Loss, -1);
             }

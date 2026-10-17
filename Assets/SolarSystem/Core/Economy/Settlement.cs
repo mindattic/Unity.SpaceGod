@@ -180,6 +180,10 @@ namespace SolarSystem.Core
         /// <summary>How strongly this place pulls migrants (living standard times earnings), set at each review.</summary>
         public double Attraction = 1;
 
+        /// <summary>People who have left on contract passage (<see cref="Contracts"/>) and not yet been counted against the
+        /// migration that would have taken them anyway: the next migration takes that many fewer from here.</summary>
+        public double Emigrated;
+
         /// <summary>Net people a day arriving (positive) or leaving (negative) by migration, over the last review.</summary>
         public double NetMigration;
 

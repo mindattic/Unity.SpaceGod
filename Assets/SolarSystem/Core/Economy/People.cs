@@ -277,6 +277,15 @@ namespace SolarSystem.Core
                     moves[i, j] = m;
                     leaving[i] += m;
                 }
+                // Those who already left on contract passage were part of this flow: that many fewer go on their own.
+                if (from.Emigrated > 0 && leaving[i] > 0)
+                {
+                    double counted = Math.Min(from.Emigrated, leaving[i]);
+                    from.Emigrated -= counted;
+                    double k = (leaving[i] - counted) / leaving[i];
+                    for (int j = 0; j < n; j++) moves[i, j] *= k;
+                    leaving[i] -= counted;
+                }
                 // Nobody leaves below the floor.
                 double spare = Math.Max(0, from.Population - from.InitialPopulation * MinShare);
                 if (leaving[i] > spare)
