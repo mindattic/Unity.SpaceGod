@@ -413,6 +413,9 @@ namespace SolarSystem.Core
                     if (adrift)
                     {
                         left = ship.CargoTonnes * SalvageSession.LeftAboardShare;
+                        // The whole load it was bringing is off the port's books, not just the part looted.
+                        Economy.Release(ship);
+                        ship.CargoDestination = null;
                         ship.CargoTonnes -= left;
                     }
                     Loot(ship);
