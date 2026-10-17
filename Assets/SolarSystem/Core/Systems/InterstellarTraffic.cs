@@ -592,7 +592,9 @@ namespace SolarSystem.Core
         /// <summary>A ship that can be sent: its own master (not an escort, not the player's), idle in port, not fighting.</summary>
         static bool Idle(World world, Ship s) =>
             !s.Destroyed && !s.IsEscort && !s.Derelict && s.Battle == null && s != world.PilotedShip && s.Voyage == null && s.GateKm == null &&
-            (s.Phase == ShipPhase.Parked || s.Phase == ShipPhase.Landed) && s.Orbit != null;
+            (s.Phase == ShipPhase.Parked || s.Phase == ShipPhase.Landed) && s.Orbit != null
+            // Nor one of the player's own fleet: it sails where its captain's standing orders take it.
+            && (world.Holdings == null || !world.Holdings.Owns(s));
 
         /// <summary>The body a ship in port is at (its ring's world when landed).</summary>
         static int PortOf(Ship s) => s.Phase == ShipPhase.Landed && s.Ring != null ? s.Ring.Body : s.Orbit.Body;
