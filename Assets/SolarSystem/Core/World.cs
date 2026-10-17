@@ -50,6 +50,10 @@ namespace SolarSystem.Core
         /// (see <see cref="EventDirector"/>), advanced by <see cref="UpdateAdventures"/>.</summary>
         public EventDirector Adventures { get; private set; }
 
+        /// <summary>Economic events driven by the sim (accidents, worked-out seams, blights, strikes, war rationing,
+        /// blockades and embargoes) and the price spikes they and the war cause, reported in <see cref="Events"/>.</summary>
+        public MarketShocks Shocks { get; }
+
         /// <summary>Raised when a ship joins the fleet after the start (a yard finished it, or it came through a gate).</summary>
         public event Action<Ship> ShipAdded;
 
@@ -70,6 +74,7 @@ namespace SolarSystem.Core
             Fleet = new Fleet(ephemeris, seed);
             Economy = new Economy(Diplomacy, startJd, seed + 1);
             Adventures = new EventDirector(seed + 5);
+            Shocks = new MarketShocks(this, seed + 7);
             Adventures.Spawned += op => Log(op.SpawnJd, op.MarkerLabel + ": " + op.Hook, WorldEventKind.Opportunity, op.Ship?.Orbit?.Body ?? op.Body);
             Adventures.Resolved += op => Log(op.ResolvedJd, op.MarkerLabel + (op.State == OpportunityState.Completed ? " done: " : " lost: ") + op.Outcome,
                 WorldEventKind.Opportunity, op.Ship?.Orbit?.Body ?? op.Body);
@@ -82,6 +87,7 @@ namespace SolarSystem.Core
             Fleet.Update(jd);
             Economy.AdvanceTo(jd);
             War.Update(jd);
+            Shocks.Update(jd);
             if (jd >= nextRecountJd)
             {
                 Economy.RecountInbound(Fleet.Ships);
@@ -128,10 +134,15 @@ namespace SolarSystem.Core
 
         public void NotifyAdded(Ship ship) => ShipAdded?.Invoke(ship);
 
+        /// <summary>Raised for every entry in <see cref="Events"/> as it is logged (the log itself keeps only the latest 400).</summary>
+        public event Action<WorldEvent> Logged;
+
         public void Log(double jd, string text, WorldEventKind kind = WorldEventKind.Info, int body = -1)
         {
-            Events.Add(new WorldEvent(jd, text, kind, body));
+            var e = new WorldEvent(jd, text, kind, body);
+            Events.Add(e);
             if (Events.Count > 400) Events.RemoveRange(0, Events.Count - 400);
+            Logged?.Invoke(e);
         }
 
         public bool IsTrader(Ship s) => !s.IsEscort && (s.Role == ShipRole.Trader || s.Role == ShipRole.Miner || s.Role == ShipRole.Courier);
@@ -845,6 +856,12 @@ namespace SolarSystem.Core
 
         /// <summary>An adventure offered to the player, or how one ended (see <see cref="EventDirector"/>).</summary>
         Opportunity,
+
+        /// <summary>An economic event: an accident, a blight, a strike, rationing, a blockade (see <see cref="MarketShocks"/>).</summary>
+        Economy,
+
+        /// <summary>A price spike at a port, or across the system.</summary>
+        Market,
     }
 
     public readonly struct WorldEvent

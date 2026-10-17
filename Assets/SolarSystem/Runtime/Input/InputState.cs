@@ -55,6 +55,9 @@ namespace SolarSystem.Input
         public bool ToggleMarket;
         public bool ToggleCargo;
 
+        /// <summary>The news feed: the full log of what has happened, filterable (X).</summary>
+        public bool ToggleNews;
+
         /// <summary>Dev/sandbox panel: spawn a ship of any class at the camera and pilot it.</summary>
         public bool ToggleSpawn;
         public bool WatchBattle;
@@ -161,6 +164,7 @@ namespace SolarSystem.Input
             ToggleHud = kb.uKey.wasPressedThisFrame;
             ToggleMarket = kb.mKey.wasPressedThisFrame;
             ToggleCargo = kb.iKey.wasPressedThisFrame;
+            ToggleNews = kb.xKey.wasPressedThisFrame;
             ToggleSpawn = kb.vKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;
             ToggleLanes = kb.nKey.wasPressedThisFrame;
@@ -189,7 +193,7 @@ namespace SolarSystem.Input
             Boost = Slow = Fire = Cruise = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
             NumberKey = -1;
         }
 

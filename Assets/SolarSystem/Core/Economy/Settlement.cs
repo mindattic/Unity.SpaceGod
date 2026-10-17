@@ -63,6 +63,31 @@ namespace SolarSystem.Core
 
         public double TradeVolumeCredits;
 
+        /// <summary>Share of industry working (a strike idles all but life support); 1 normally. See <see cref="MarketShocks"/>.</summary>
+        public double IndustryFactor = 1;
+
+        /// <summary>Under war rationing: the share of essentials (food, water, medicine) people are allowed; 1 normally.</summary>
+        public double Ration = 1;
+
+        /// <summary>What a day's work buys, as an index of the cost of living it last caught up with (0 until first set).
+        /// Wages follow prices slowly; a wide gap brings strikes (see <see cref="MarketShocks"/>).</summary>
+        public double WageIndex;
+
+        /// <summary>Per-person use of <paramref name="g"/> under rationing: essentials are cut, the rest untouched.</summary>
+        public double RationOf(Good g) => GoodInfo.Of(g).Category == GoodCategory.Essential ? Ration : 1;
+
+        /// <summary>The price of a day's living here (what <see cref="PersonNeeds"/> cost) against its price at base prices (1 = normal).</summary>
+        public double CostOfLiving()
+        {
+            double now = 0, normal = 0;
+            foreach (var (g, perPerson) in PersonNeeds)
+            {
+                now += perPerson * Price[(int)g];
+                normal += perPerson * GoodInfo.Of(g).BasePrice;
+            }
+            return normal > 0 ? now / normal : 1;
+        }
+
         /// <summary>Orbital defence platforms (gun stations) that fight any hostile force at this body.</summary>
         public readonly List<ShipCombat> Platforms = new List<ShipCombat>();
         public int MaxPlatforms;

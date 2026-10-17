@@ -156,11 +156,14 @@ namespace SolarSystem
         public bool ShowHud { get; set; } = true;
         public bool ShowMarket { get; set; }
         public bool ShowCargo { get; set; }
+
+        /// <summary>The news feed panel in place of the four-line ticker (X).</summary>
+        public bool ShowNews { get; set; }
         public bool ShowSpawn { get; set; }
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || (ShowHud && (ShowMarket || ShowCargo)); // market and cargo are HUD panels, hidden with it
+        bool ClickPanelOpen => ShowSpawn || (ShowHud && (ShowMarket || ShowCargo || ShowNews)); // market, cargo and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -617,6 +620,7 @@ namespace SolarSystem
             if (i.ToggleHud) ShowHud = !ShowHud;
             if (i.ToggleMarket) ShowMarket = !ShowMarket;
             if (i.ToggleCargo) ShowCargo = !ShowCargo;
+            if (i.ToggleNews) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
             if (i.LevelView) LevelView();

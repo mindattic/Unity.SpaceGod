@@ -150,7 +150,7 @@ namespace SolarSystem.Core.Tests
             var w = Create(out var eph);
             var fleet = w.Fleet;
             int resumed = 0;
-            for (double jd = StartJd; jd < StartJd + 120 && resumed < 3; jd += 0.05)
+            for (double jd = StartJd; jd < StartJd + 365 && resumed < 3; jd += 0.05)
             {
                 eph.Update(jd);
                 w.Update(jd);

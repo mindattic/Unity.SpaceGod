@@ -681,7 +681,7 @@ namespace SolarSystem.Core
                     if (available < minimum) continue;
                     foreach (var dst in to.World.Economy.Settlements)
                     {
-                        if (dst.Kind == SettlementKind.Haven || !to.World.Diplomacy.CanDock(ship.Faction, dst.Owner)) continue;
+                        if (dst.Kind == SettlementKind.Haven || !to.World.Diplomacy.CanDockAt(ship.Faction, dst)) continue;
                         double t = Math.Min(Math.Min(ship.CapacityTonnes, available), dst.Absorb(gd));
                         if (t < minimum) continue;
                         double landed = src.PurchaseCost(gd, t) * (1 + Economy.PortTax) * markup;

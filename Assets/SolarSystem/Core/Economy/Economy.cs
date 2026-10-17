@@ -38,6 +38,9 @@ namespace SolarSystem.Core
         /// <summary>Raised when a yard completes a hull; the world puts it into service.</summary>
         public Action<Settlement, ShipClass, double> ShipBuilt;
 
+        /// <summary>Raised when a trader sells a load at a port (ship, port, good, tonnes): who supplies whom, for the news and for embargoes.</summary>
+        public Action<Ship, Settlement, Good, double> Sold;
+
         /// <summary>Port tax on every sale and purchase, paid to the port's owner.</summary>
         public const double PortTax = 0.04;
 
@@ -141,7 +144,7 @@ namespace SolarSystem.Core
         {
             Array.Clear(s.Demand, 0, s.Demand.Length);
             Array.Clear(s.Supply, 0, s.Supply.Length);
-            foreach (var (g, perPerson) in s.PersonNeeds) s.Demand[(int)g] += perPerson * s.Population;
+            foreach (var (g, perPerson) in s.PersonNeeds) s.Demand[(int)g] += perPerson * s.Population * s.RationOf(g);
             for (int i = 0; i < GoodInfo.Count; i++) s.Demand[i] += s.ExtraDemand[i] + s.PropellantDemand[i];
             foreach (var f in s.Facilities)
             {
@@ -172,7 +175,8 @@ namespace SolarSystem.Core
                 // Life support keeps running through a change of owner; industry does not. Neither runs
                 // past its crew: an understaffed facility makes less, and below a minimum crew nothing.
                 bool lifeSupport = f.LifeSupport;
-                double run = (lifeSupport ? 1 : disruption) * People.CrewFactor(f.Staffing), efficiency = 1;
+                // A shock to the facility itself (an accident, a blight) and a strike (which life support works through).
+                double run = (lifeSupport ? 1 : disruption * s.IndustryFactor) * f.Impairment * People.CrewFactor(f.Staffing), efficiency = 1;
                 var inputs = f.Recipe.Inputs;
                 for (int k = 0; k < inputs.Length; k++)
                 {
@@ -193,6 +197,7 @@ namespace SolarSystem.Core
                 f.Utilisation = run * efficiency;
                 foreach (var (g, rate) in f.Recipe.Inputs) s.Stock[(int)g] = Math.Max(0, s.Stock[(int)g] - rate * f.Level * dt * run * efficiency);
                 foreach (var (g, rate) in f.Recipe.Outputs) s.Stock[(int)g] += rate * f.Level * dt * run * efficiency;
+                if (f.Recipe.Kind == IndustryKind.Mine) f.Extracted += f.Recipe.Outputs[0].perDay * f.Level * dt * run * efficiency;
                 if (f.Recipe.Kind == IndustryKind.Shipyard)
                 {
                     double points = f.Recipe.Inputs[0].perDay * f.Level * dt * run;
@@ -213,7 +218,7 @@ namespace SolarSystem.Core
             foreach (var (g, perPerson) in s.PersonNeeds)
             {
                 int i = (int)g;
-                double need = perPerson * s.Population * dt;
+                double need = perPerson * s.Population * s.RationOf(g) * dt;
                 if (need <= 0) continue;
                 double eaten = Math.Min(need, s.Stock[i]);
                 s.Stock[i] -= eaten;
@@ -383,7 +388,7 @@ namespace SolarSystem.Core
             };
         }
 
-        public bool CanTrade(Ship ship, Settlement s) => Diplomacy.CanDock(ship.Faction, s.Owner);
+        public bool CanTrade(Ship ship, Settlement s) => Diplomacy.CanDockAt(ship.Faction, s);
 
         /// <summary>Sells whatever is in the hold at the best market at the body the ship has reached.</summary>
         public void OnArrive(Ship ship, int body, double jd)
@@ -429,6 +434,7 @@ namespace SolarSystem.Core
             ship.Credits += profit;
             ship.Faction.Treasury += value - tax;
             s.TradeVolumeCredits += value;
+            Sold?.Invoke(ship, s, ship.CargoGood, ship.CargoTonnes);
             ship.HasCargo = false;
             ship.CargoTonnes = 0;
             ship.CargoCost = 0;

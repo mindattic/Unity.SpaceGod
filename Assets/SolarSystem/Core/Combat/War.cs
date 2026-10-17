@@ -47,6 +47,9 @@ namespace SolarSystem.Core
         public readonly Dictionary<Ship, GroupOrder> Orders = new Dictionary<Ship, GroupOrder>();
         readonly Dictionary<int, double> danger = new Dictionary<int, double>();
         readonly Dictionary<Settlement, double> siegeDays = new Dictionary<Settlement, double>();
+
+        /// <summary>Ports with a hostile besieging group parked over them and none of the owner's warships there.</summary>
+        readonly Dictionary<Settlement, Faction> besiegers = new Dictionary<Settlement, Faction>();
         readonly Dictionary<Faction, int> losses = new Dictionary<Faction, int>();
         readonly Dictionary<int, int> battleCount = new Dictionary<int, int>();
         readonly Dictionary<Ship, double> retreating = new Dictionary<Ship, double>();
@@ -1641,15 +1644,17 @@ namespace SolarSystem.Core
             {
                 if (st.Kind == SettlementKind.Haven) continue;
                 Faction besieger = null;
-                bool defended = st.Platforms.Count > 0 || BattleAt(st.Body) != null || st.DaysSinceCapture < CaptureGraceDays;
+                bool defended = st.Platforms.Count > 0 || BattleAt(st.Body) != null || st.DaysSinceCapture < CaptureGraceDays, guarded = false;
                 foreach (var s in Fleet.Ships)
                 {
                     if (s.Destroyed || s.IsEscort || !s.Spec.IsMilitary || s.Faction.IsPirate) continue;
                     var c = s.Controller;
                     if (c.Phase != ShipPhase.Parked || c.Orbit.Body != st.Body) continue;
                     if (Diplomacy.Hostile(s.Faction, st.Owner) && Orders.TryGetValue(s, out var o) && o.Kind == OrderKind.Siege) besieger = s.Faction;
-                    else if (s.Faction == st.Owner) defended = true;
+                    else if (s.Faction == st.Owner) defended = guarded = true;
                 }
+                if (besieger != null && !guarded) besiegers[st] = besieger;
+                else besiegers.Remove(st);
                 if (besieger == null || defended)
                 {
                     siegeDays.Remove(st);
@@ -1663,6 +1668,7 @@ namespace SolarSystem.Core
                     var old = st.Owner;
                     Economy.Capture(st, besieger);
                     siegeDays.Remove(st);
+                    besiegers.Remove(st);
                     RevokeBookings();
                     world.Log(jd, $"{st.Name} ({Catalog[st.Body].Name}) falls to the {besieger.Name}, taken from the {old.Name}", WorldEventKind.Capture, st.Body);
                     BumpDanger(st.Body, 1);
@@ -1671,7 +1677,7 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Traders bound for a port that is now closed to them (it changed hands, or a war resumed) look elsewhere.</summary>
-        void RevokeBookings()
+        public void RevokeBookings()
         {
             foreach (var t in Fleet.Ships)
             {
@@ -1683,6 +1689,10 @@ namespace SolarSystem.Core
         }
 
         public double SiegeDays(Settlement s) => siegeDays.TryGetValue(s, out var d) ? d : 0;
+
+        /// <summary>The faction whose besieging group holds the space over <paramref name="s"/> with none of the owner's
+        /// warships there to contest it (it may still be fighting the platforms), or null. Such a group blockades the port.</summary>
+        public Faction Besieger(Settlement s) => besiegers.TryGetValue(s, out var f) ? f : null;
 
         void RebuildPlatforms(double jd)
         {

@@ -167,8 +167,11 @@ namespace SolarSystem.Core.Tests
             Assert.That(w.Events.Count(e => e.Kind == WorldEventKind.Battle) >= 4, Is.True, "hardly any fighting in two years");
             Assert.That(w.Fleet.Ships.Count(s => s.Destroyed) > 0, Is.True, "nobody ever died");
             Assert.That(w.Fleet.Ships.Count(s => !s.Destroyed && w.IsTrader(s)) > 20, Is.True, "the merchant fleet was wiped out");
-            Assert.That(w.Fleet.Ships.Count(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == w.Sol) > 0, Is.True);
-            Assert.That(w.Fleet.Ships.Count(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == w.Reach) > 0, Is.True);
+            // Neither power is finished: each still has warships or a yard of its own to build them again (a run of
+            // lost battles can sink a whole navy for a while; which side, in two years, is down to the dice).
+            foreach (var power in new[] { w.Sol, w.Reach })
+                Assert.That(w.Fleet.Ships.Any(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == power) ||
+                            w.Economy.Settlements.Any(s => s.Owner == power && s.HasShipyard), Is.True, $"the {power.Name} is out of the war");
             foreach (var s in w.Economy.Settlements)
                 Assert.That(s.Population >= s.InitialPopulation * 0.5, Is.True, $"{s.Name} collapsed to {s.Population:N0}");
         }

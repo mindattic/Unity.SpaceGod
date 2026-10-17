@@ -59,7 +59,8 @@ namespace SolarSystem.UI
             if (!app.ShowHud) return;
             DrawFlightMarkers();
             DrawTopBar();
-            DrawTicker();
+            if (app.ShowNews) DrawNews();
+            else DrawTicker();
             DrawNavigator();
             DrawSelection();
             DrawStatus();
@@ -1052,9 +1053,16 @@ namespace SolarSystem.UI
             // over at right now -- not one merely being looked at from across the system.
             bool canTrade = market != null && app.CanTradeNow(market);
 
+            // What is shaking this market right now (a strike, a blight, a blockade, rationing), from the sim's own events.
+            string shocks = null;
+            if (market != null)
+                foreach (var e in app.World.Shocks.At(market))
+                    shocks = shocks == null ? e.Label : shocks + "  ·  " + e.Label;
+            float extra = shocks != null ? 18 : 0;
+
             const float rowH = 17;
             float w = canTrade ? 600 : 430;
-            float h = marketOpen ? 62 + GoodInfo.Count * rowH + (canTrade ? 20 : 0) : 34;
+            float h = marketOpen ? 62 + GoodInfo.Count * rowH + (canTrade ? 20 : 0) + extra : 34;
             var r = Panel(new Rect(Screen.width - w - 10, 72, w, h));
             string heading = market != null ? "MARKET  ·  " + market.Name : "MARKET  ·  system average";
             if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (marketOpen ? "[-]  " : "[+]  ") + heading, title)) marketOpen = !marketOpen;
@@ -1064,21 +1072,27 @@ namespace SolarSystem.UI
             GUI.Label(new Rect(r.x + 12, r.y + 30, w - 24, 18), market != null
                 ? market.Owner.Name + "   (select a body or a trader to change, M to close)"
                 : "Select a port to see its market.   M to close", small);
+            if (shocks != null)
+            {
+                GUI.contentColor = new Color(1f, 0.72f, 0.4f);
+                GUI.Label(new Rect(r.x + 12, r.y + 48, w - 24, 18), "NOW:  " + shocks, small);
+            }
+            float top = r.y + 50 + extra;
             if (canTrade)
             {
                 GUI.contentColor = Color.white;
                 var pilotShip = app.World.PilotedShip;
-                GUI.Label(new Rect(r.x + 12, r.y + 50, 200, 18), "Your credits: " + Credits(pilotShip.Faction.Treasury), small);
+                GUI.Label(new Rect(r.x + 12, top, 200, 18), "Your credits: " + Credits(pilotShip.Faction.Treasury), small);
                 // Fill the tanks here: water or hydrocarbons and their helium-3, at this market's price.
-                GUI.Label(new Rect(r.x + 215, r.y + 50, 110, 18), "Tanks " + Percent(pilotShip.PropellantFraction), small);
+                GUI.Label(new Rect(r.x + 215, top, 110, 18), "Tanks " + Percent(pilotShip.PropellantFraction), small);
                 string refuel = "Refuel  ~" + Credits(Economy.PropellantPrice(market) * (pilotShip.PropellantCapacity - pilotShip.Propellant));
-                if (GUI.Button(new Rect(r.x + 300, r.y + 48, 140, 20), refuel, button)) ClickRefuel(market);
-                GUI.Label(new Rect(r.xMax - 150, r.y + 50, 40, 18), "Qty", small);
-                if (GUI.Button(new Rect(r.xMax - 95, r.y + 48, 22, 20), "-", button)) tradeCrates = Math.Max(1, tradeCrates - 1);
-                GUI.Label(new Rect(r.xMax - 70, r.y + 50, 30, 18), tradeCrates.ToString(CultureInfo.InvariantCulture), small);
-                if (GUI.Button(new Rect(r.xMax - 40, r.y + 48, 22, 20), "+", button)) tradeCrates++;
+                if (GUI.Button(new Rect(r.x + 300, top - 2, 140, 20), refuel, button)) ClickRefuel(market);
+                GUI.Label(new Rect(r.xMax - 150, top, 40, 18), "Qty", small);
+                if (GUI.Button(new Rect(r.xMax - 95, top - 2, 22, 20), "-", button)) tradeCrates = Math.Max(1, tradeCrates - 1);
+                GUI.Label(new Rect(r.xMax - 70, top, 30, 18), tradeCrates.ToString(CultureInfo.InvariantCulture), small);
+                if (GUI.Button(new Rect(r.xMax - 40, top - 2, 22, 20), "+", button)) tradeCrates++;
             }
-            float y = r.y + 50 + (canTrade ? 20 : 0);
+            float y = top + (canTrade ? 20 : 0);
             GUI.contentColor = Dim;
             GUI.Label(new Rect(r.x + 12, y, 150, rowH), "Good", small);
             GUI.Label(new Rect(r.x + 170, y, 80, rowH), market != null ? "Stock" : "", small);
@@ -1351,15 +1365,100 @@ namespace SolarSystem.UI
             for (int i = 0; i < n; i++)
             {
                 var e = events[events.Count - n + i];
-                GUI.contentColor = e.Kind == WorldEventKind.Battle ? new Color(1f, 0.7f, 0.6f) : e.Kind == WorldEventKind.Capture ? new Color(1f, 0.85f, 0.4f)
-                    : e.Kind == WorldEventKind.Opportunity ? new Color(0.65f, 1f, 0.75f)
-                    : e.Kind == WorldEventKind.Diplomacy ? new Color(0.7f, 0.9f, 1f) : Dim;
+                GUI.contentColor = KindColor(e.Kind);
                 tickerStyle ??= new GUIStyle(small) { wordWrap = false, clipping = TextClipping.Clip };
-                GUI.Label(new Rect(r.x + 10, r.y + 5 + i * rowH, w - 20, rowH), app.Clock.Utc.Year == Astro.ToDateTime(e.Jd).Year
-                    ? Astro.ToDateTime(e.Jd).ToString("MMM dd", CultureInfo.InvariantCulture) + "   " + e.Text
-                    : Astro.ToDateTime(e.Jd).ToString("yyyy MMM dd", CultureInfo.InvariantCulture) + "   " + e.Text, tickerStyle);
+                GUI.Label(new Rect(r.x + 10, r.y + 5 + i * rowH, w - 20, rowH), NewsLine(e), tickerStyle);
             }
             GUI.contentColor = old;
+        }
+
+        static Color KindColor(WorldEventKind k) => k switch
+        {
+            WorldEventKind.Battle => new Color(1f, 0.7f, 0.6f),
+            WorldEventKind.Capture => new Color(1f, 0.85f, 0.4f),
+            WorldEventKind.Opportunity => new Color(0.65f, 1f, 0.75f),
+            WorldEventKind.Diplomacy => new Color(0.7f, 0.9f, 1f),
+            WorldEventKind.Economy => new Color(1f, 0.72f, 0.4f),
+            WorldEventKind.Market => new Color(0.95f, 0.95f, 0.55f),
+            _ => Dim,
+        };
+
+        string NewsLine(WorldEvent e) => app.Clock.Utc.Year == Astro.ToDateTime(e.Jd).Year
+            ? Astro.ToDateTime(e.Jd).ToString("MMM dd", CultureInfo.InvariantCulture) + "   " + e.Text
+            : Astro.ToDateTime(e.Jd).ToString("yyyy MMM dd", CultureInfo.InvariantCulture) + "   " + e.Text;
+
+        // ---------------------------------------------------------------- news feed
+
+        static readonly string[] NewsFilters = { "ALL", "MARKETS", "WAR", "SHIPS & OTHER" };
+        int newsFilter;
+        Vector2 newsScroll;
+        GUIStyle newsRow;
+        readonly List<WorldEvent> newsShown = new List<WorldEvent>();
+
+        /// <summary>Which filter tabs a report shows under: diplomacy (ceasefires, embargoes) is both markets and war news.</summary>
+        static bool InFilter(WorldEventKind k, int filter) => filter switch
+        {
+            1 => k == WorldEventKind.Economy || k == WorldEventKind.Market || k == WorldEventKind.Diplomacy,
+            2 => k == WorldEventKind.Battle || k == WorldEventKind.Capture || k == WorldEventKind.Loss || k == WorldEventKind.Diplomacy,
+            3 => k == WorldEventKind.Info || k == WorldEventKind.Launch || k == WorldEventKind.Opportunity,
+            _ => true,
+        };
+
+        /// <summary>
+        /// The news feed (X), in place of the ticker: everything the sim has reported, newest first, filtered
+        /// to markets (shocks, price spikes, embargoes), war (battles, captures, surrenders) or the rest. Every
+        /// report is what actually happened; clicking one selects where it happened (and opens the market for
+        /// market news) so the player can act on it.
+        /// </summary>
+        void DrawNews()
+        {
+            const float w = 760;
+            float h = Mathf.Min(Screen.height * 0.5f, 420);
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, 70, w, h));
+            var events = app.World.Events;
+            if (GUI.Button(new Rect(r.x + 8, r.y + 6, 120, 22), "[-]  NEWS", title)) app.ShowNews = false;
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 130, r.y + 9, w - 140, 18), "as it happens  ·  click a report to select where it happened  ·  X to close", small);
+            GUI.contentColor = old;
+            for (int i = 0; i < NewsFilters.Length; i++)
+                if (GUI.Button(new Rect(r.x + 10 + i * 128, r.y + 32, 122, 20), NewsFilters[i], newsFilter == i ? buttonActive : button))
+                {
+                    newsFilter = i;
+                    newsScroll = Vector2.zero;
+                }
+
+            newsRow ??= new GUIStyle(row) { fontSize = 11, wordWrap = true, padding = new RectOffset(6, 4, 2, 2) };
+            newsShown.Clear();
+            for (int i = events.Count - 1; i >= 0 && newsShown.Count < 200; i--)
+                if (InFilter(events[i].Kind, newsFilter)) newsShown.Add(events[i]);
+
+            var view = new Rect(r.x + 4, r.y + 58, w - 8, h - 62);
+            float width = view.width - 20, total = 0;
+            var heights = new float[newsShown.Count];
+            for (int i = 0; i < newsShown.Count; i++) total += heights[i] = newsRow.CalcHeight(new GUIContent(NewsLine(newsShown[i])), width);
+            newsScroll = GUI.BeginScrollView(view, newsScroll, new Rect(0, 0, width, Mathf.Max(total, 1)));
+            float y = 0;
+            for (int i = 0; i < newsShown.Count; i++)
+            {
+                var e = newsShown[i];
+                var rr = new Rect(0, y, width, heights[i]);
+                y += heights[i];
+                GUI.contentColor = KindColor(e.Kind);
+                if (e.Body < 0 || e.Body >= app.Catalog.Count)
+                {
+                    GUI.Label(rr, NewsLine(e), newsRow);
+                    continue;
+                }
+                if (GUI.Button(rr, NewsLine(e), newsRow))
+                {
+                    app.Select(Target.OfBody(e.Body));
+                    if (e.Kind == WorldEventKind.Economy || e.Kind == WorldEventKind.Market) app.ShowMarket = true;
+                }
+            }
+            GUI.contentColor = old;
+            if (newsShown.Count == 0) GUI.Label(new Rect(8, 4, width, 18), "Nothing to report yet.", small);
+            GUI.EndScrollView();
         }
 
         static string JourneyText(Ship s)
@@ -1498,6 +1597,7 @@ namespace SolarSystem.UI
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
+                "X   news feed: shocks, price spikes, embargoes, battles and captures as they happen",
                 "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",
             };
             float w = 610, h = helpOpen ? 42 + help.Length * 17 : 34;

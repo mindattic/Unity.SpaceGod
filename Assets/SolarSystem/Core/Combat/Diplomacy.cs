@@ -9,10 +9,26 @@ namespace SolarSystem.Core
         War,
     }
 
-    /// <summary>Who is at war with whom. Pirates are hostile to everyone and everyone to them.</summary>
+    /// <summary>One faction closing its ports to another's ships (see <see cref="Diplomacy.DeclareEmbargo"/>).</summary>
+    public sealed class Embargo
+    {
+        public Faction By, Against;
+        public double SinceJd, UntilJd;
+
+        /// <summary>Why it was declared, for the news ("running munitions to the Outer Reach Compact").</summary>
+        public string Reason;
+    }
+
+    /// <summary>
+    /// Who is at war with whom. Pirates are hostile to everyone and everyone to them. Besides war and
+    /// peace a faction can declare an embargo (its ports refuse another faction's ships) and a besieger
+    /// can declare a blockade of a port (nobody docks there until it is lifted).
+    /// </summary>
     public sealed class Diplomacy
     {
         readonly Dictionary<(Faction, Faction), Relation> relations = new Dictionary<(Faction, Faction), Relation>();
+        readonly List<Embargo> embargoes = new List<Embargo>();
+        readonly Dictionary<Settlement, Faction> blockades = new Dictionary<Settlement, Faction>();
 
         static (Faction, Faction) Key(Faction a, Faction b) =>
             string.CompareOrdinal(a.Name, b.Name) <= 0 ? (a, b) : (b, a);
@@ -38,7 +54,54 @@ namespace SolarSystem.Core
             if (ship == port) return true;
             if (port.IsPirate) return ship.IsPirate;
             if (ship.IsPirate) return false;
+            if (IsEmbargoed(port, ship)) return false;
             return Get(ship, port) != Relation.War;
         }
+
+        /// <summary>A ship of <paramref name="ship"/> may trade at <paramref name="port"/>: its owner lets it in and no blockade shuts it.</summary>
+        public bool CanDockAt(Faction ship, Settlement port) => !blockades.ContainsKey(port) && CanDock(ship, port.Owner);
+
+        // ---------------------------------------------------------------- embargoes
+
+        public IReadOnlyList<Embargo> Embargoes => embargoes;
+
+        /// <summary>Whether <paramref name="by"/>'s ports are closed to <paramref name="against"/>'s ships.</summary>
+        public bool IsEmbargoed(Faction by, Faction against)
+        {
+            foreach (var e in embargoes)
+                if (e.By == by && e.Against == against) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// <paramref name="by"/> closes its ports to <paramref name="against"/> until <paramref name="untilJd"/>
+        /// (or until lifted). Returns the embargo, or null if one is already in force.
+        /// </summary>
+        public Embargo DeclareEmbargo(Faction by, Faction against, double jd, double untilJd, string reason)
+        {
+            if (by == null || against == null || by == against || IsEmbargoed(by, against)) return null;
+            var e = new Embargo { By = by, Against = against, SinceJd = jd, UntilJd = untilJd, Reason = reason };
+            embargoes.Add(e);
+            return e;
+        }
+
+        public bool LiftEmbargo(Embargo e) => embargoes.Remove(e);
+
+        // ---------------------------------------------------------------- blockades
+
+        public IReadOnlyDictionary<Settlement, Faction> Blockades => blockades;
+
+        /// <summary>The faction blockading <paramref name="port"/>, or null.</summary>
+        public Faction BlockadedBy(Settlement port) => port != null && blockades.TryGetValue(port, out var f) ? f : null;
+
+        /// <summary><paramref name="by"/> declares <paramref name="port"/> blockaded: no ship docks there. False if it already was.</summary>
+        public bool DeclareBlockade(Settlement port, Faction by)
+        {
+            if (port == null || by == null || blockades.ContainsKey(port)) return false;
+            blockades[port] = by;
+            return true;
+        }
+
+        public bool LiftBlockade(Settlement port) => port != null && blockades.Remove(port);
     }
 }

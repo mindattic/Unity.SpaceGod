@@ -107,6 +107,12 @@ namespace SolarSystem.Core
         /// <summary>Fraction of capacity achieved over the last tick (inputs, crew or storage permitting).</summary>
         public double Utilisation;
 
+        /// <summary>Share of capacity a shock leaves working (an accident in a mine, a blight in the farms); 1 normally.</summary>
+        public double Impairment = 1;
+
+        /// <summary>For a mine: tonnes taken from the current seam, and what it held (0 until <see cref="MarketShocks"/> surveys it).</summary>
+        public double Extracted, Reserve;
+
         /// <summary>Share of its crew it had over the last tick (see <see cref="People.AssignLabour"/>).</summary>
         public double Staffing = 1;
 

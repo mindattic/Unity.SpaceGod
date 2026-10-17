@@ -152,9 +152,12 @@ namespace SolarSystem.Core.Tests
             Assert.That(trader.Faction, Is.SameAs(v.Faction));
             Assert.That(there.World.Fleet.Factions, Does.Not.Contain(trader.Faction), "it keeps its own system's colours");
             double credits = trader.Credits;
-            RunUntil(g, jd, 60, () => trader.Destroyed || !trader.HasCargo);
+            // Watched at the market rather than by an empty hold: a trader that sells may load its next cargo in the same step.
+            bool sold = false;
+            there.World.Economy.Sold += (ship, port, good, tonnes) => sold |= ship == trader;
+            RunUntil(g, jd, 60, () => trader.Destroyed || sold);
             Assume.That(trader.Destroyed, Is.False, "lost on the way to market");
-            Assert.That(trader.HasCargo, Is.False, "never sold its cargo");
+            Assert.That(sold, Is.True, "never sold its cargo");
             Assert.That(trader.Credits, Is.Not.EqualTo(credits), "the sale was booked to the ship");
             Assert.That(trader.Cargo == null || !trader.Cargo.Contains(" for " + there.Name), Is.True);
         }
