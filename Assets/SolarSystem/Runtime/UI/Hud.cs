@@ -1348,7 +1348,7 @@ namespace SolarSystem.UI
         Vector2 fleetScroll;
 
         /// <summary>
-        /// The player's fleet and property (F9): the house account and its books, every owned ship with its captain,
+        /// The player's fleet and property (F10): the house account and its books, every owned ship with its captain,
         /// standing orders and running profit, and what else the house owns. At the port in view (the selected world's
         /// biggest, else the one the piloted ship is alongside) it buys hulls, a warehouse or a share; on a selected
         /// world it stakes a claim. A ship's Orders button steps through what it can be told to do, using the selected
@@ -1439,7 +1439,7 @@ namespace SolarSystem.UI
                 }
             }
             GUI.contentColor = Dim;
-            GUI.Label(new Rect(x, y + 26, 460, 18), "Orders use the selected world (a route or patrol to it) or the selected ship (escort).   F9 to close", small);
+            GUI.Label(new Rect(x, y + 26, 460, 18), "Orders use the selected world (a route or patrol to it) or the selected ship (escort).   F10 to close", small);
 
             // Ships and property.
             var view = new Rect(r.x + 8, y + 48, w - 16, listH);
@@ -2307,7 +2307,7 @@ namespace SolarSystem.UI
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
                 "F7  contracts board of the port in view: freight, passengers, colonists, escorts, patrols, surveys, bounties",
-                "F9  your fleet: buy hulls, warehouses, station shares and claims; hire captains and give them standing orders",
+                "F10  your fleet: buy hulls, warehouses, station shares and claims; hire captains and give them standing orders",
                 "F4  bounty board of the port in view: outlaws wanted there, their records, where last seen, who hunts them",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",

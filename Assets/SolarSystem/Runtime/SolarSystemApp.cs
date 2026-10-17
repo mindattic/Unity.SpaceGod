@@ -166,7 +166,7 @@ namespace SolarSystem
         /// <summary>The contracts board (F7) of the port in view: jobs to take, and the player's own to see through or give up.</summary>
         public bool ShowContracts { get; set; }
 
-        /// <summary>The player's fleet and property (F9): buy hulls and property, hire captains, give standing orders, read the books.</summary>
+        /// <summary>The player's fleet and property (F10): buy hulls and property, hire captains, give standing orders, read the books.</summary>
         public bool ShowFleet { get; set; }
 
         /// <summary>The news feed panel in place of the four-line ticker (X).</summary>
