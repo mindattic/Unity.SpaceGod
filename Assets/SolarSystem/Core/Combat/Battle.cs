@@ -477,8 +477,9 @@ namespace SolarSystem.Core
                 var c = u.Combat;
                 if (u.Stunned > 0) u.Stunned -= dt;
                 else c.RegenShields(Seconds, dt);
-                // No escape with boarders fighting aboard (or a breacher stuck in the hull).
-                if (u.Kind == UnitKind.Ship && u.Latched == null && !c.Disabled && !c.Interior.UnderBoarding && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
+                // No escape with boarders fighting aboard (or a breacher stuck in the hull), nor for a hull that has struck
+                // its colours or been taken: drifting off with its drives cold is not running.
+                if (u.Kind == UnitKind.Ship && u.Latched == null && !c.Disabled && !c.Interior.UnderBoarding && !u.Surrendering && !u.Captured && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
                     u.Fled = true;
             }
             if (Fx.Count > 600) Fx.RemoveRange(0, Fx.Count - 600);
