@@ -394,6 +394,8 @@ namespace SolarSystem.Core
             why = null;
             if (Ended) why = "the clamps are off";
             else if (Derelict == null) why = "a wreck will never fly again";
+            // Broken up (a derelict's days adrift ran out) or taken back under way since the clamps went on.
+            else if (Derelict.Destroyed || !Derelict.Derelict) why = "it is gone";
             else if (Hostile) why = "raiders still hold it";
             else if (!Derelict.Combat.Alive || Derelict.Combat.Disabled)
                 why = Derelict.Combat.EngineFactor <= 0 ? "its engines are gone" : "it is too badly holed to fly";
