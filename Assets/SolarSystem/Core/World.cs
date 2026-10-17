@@ -781,7 +781,8 @@ namespace SolarSystem.Core
             if (water < waterNeed) mine(s, Good.Water, (waterNeed - water) * 1.05);
             // Air leaks away: the nitrogen to top it up is a need like the farms' own.
             nitrogen -= s.Population * People.NeedOf(s.Kind, Good.Nitrogen) * share;
-            if (nitrogen < 0) mine(s, Good.Nitrogen, -nitrogen * share);
+            // The people's share is already in the need above, and the farms want all the nitrogen they draw.
+            if (nitrogen < 0) mine(s, Good.Nitrogen, -nitrogen);
         }
 
         void BuildMilitary(double jd)
