@@ -365,6 +365,7 @@ namespace SolarSystem.Core
                     if (c.Taken && c.Crew + c.Marines <= 0.01) c.Taken = false;
                 }
                 Boarder = null;
+                SealBreaches();
             }
             return false;
         }
@@ -464,6 +465,16 @@ namespace SolarSystem.Core
                 c.Taken = false;
             }
             Boarder = null;
+            SealBreaches();
+        }
+
+        /// <summary>The bulkheads round every breach still venting close (they take seconds, and nothing aboard stops
+        /// them once the boarders are gone): its timer would otherwise stand frozen, as <see cref="Step"/> runs only
+        /// while boarders are aboard, and go on killing crew at the start of the next boarding.</summary>
+        void SealBreaches()
+        {
+            foreach (var c in Compartments)
+                if (c.Vented && c.SealIn > 0) c.SealIn = 0;
         }
 
         /// <summary>A prize crew takes over: the boarders become the ship's people; the old crew are prisoners.</summary>
