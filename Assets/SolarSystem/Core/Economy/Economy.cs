@@ -22,6 +22,13 @@ namespace SolarSystem.Core
         /// <summary>Estimated days for a ship to fly between two bodies (ship, from, to, departure date).</summary>
         public Func<Ship, int, int, double, double> EstimateTravelDays;
 
+        /// <summary>
+        /// What a trip takes (days, the delta-v of its own burns, the lanes it rides) for a ship between two
+        /// bodies at a date. When set, traders price every run by its real propellant, lane tolls and days
+        /// (and drop runs their tanks cannot cover); when null, by days alone.
+        /// </summary>
+        public Func<Ship, int, int, double, TripEstimate> EstimateTrip;
+
         /// <summary>Extra cost a trader puts on a body (pirates, battles), as a fraction of a trip's value.</summary>
         public Func<int, double> Danger;
 
@@ -35,6 +42,12 @@ namespace SolarSystem.Core
         public const double PortTax = 0.04;
 
         public const double TickDays = 0.25;
+
+        /// <summary>Ships' propellant purchases count toward a market's demand averaged over about this many days.</summary>
+        public const double PropellantDemandDays = 10;
+
+        /// <summary>A hyperlane's toll for one ride: a flat fee plus so much per tonne of ship (hull, tanks and hold).</summary>
+        public const double LaneTollBase = 5000, LaneTollPerTonne = 0.5;
 
         readonly Random rng;
         double nextReviewJd, lastReviewJd;
@@ -113,6 +126,7 @@ namespace SolarSystem.Core
                     s.DaysSinceCapture += dt;
                     continue;
                 }
+                FoldPropellantSales(s, dt);
                 RecomputeFlows(s);
                 People.AssignLabour(s);
                 Produce(s, dt);
@@ -128,11 +142,23 @@ namespace SolarSystem.Core
             Array.Clear(s.Demand, 0, s.Demand.Length);
             Array.Clear(s.Supply, 0, s.Supply.Length);
             foreach (var (g, perPerson) in s.PersonNeeds) s.Demand[(int)g] += perPerson * s.Population;
-            for (int i = 0; i < GoodInfo.Count; i++) s.Demand[i] += s.ExtraDemand[i];
+            for (int i = 0; i < GoodInfo.Count; i++) s.Demand[i] += s.ExtraDemand[i] + s.PropellantDemand[i];
             foreach (var f in s.Facilities)
             {
                 foreach (var (g, rate) in f.Recipe.Inputs) s.Demand[(int)g] += rate * f.Level;
                 foreach (var (g, rate) in f.Recipe.Outputs) s.Supply[(int)g] += rate * f.Level;
+            }
+        }
+
+        /// <summary>Folds what ships bought as propellant since the last tick into the market's smoothed propellant demand.</summary>
+        static void FoldPropellantSales(Settlement s, double dt)
+        {
+            double k = 1 - Math.Exp(-dt / PropellantDemandDays);
+            for (int i = 0; i < GoodInfo.Count; i++)
+            {
+                double rate = s.PropellantSold[i] / dt;
+                s.PropellantDemand[i] += (rate - s.PropellantDemand[i]) * k;
+                s.PropellantSold[i] = 0;
             }
         }
 
@@ -316,7 +342,46 @@ namespace SolarSystem.Core
             }
         }
 
+        /// <summary>Crew, upkeep and insurance a day under way (propellant and tolls are counted separately).</summary>
         static double RunningCostPerDay(ShipClass c) => c == ShipClass.Courier ? 400 : c == ShipClass.Miner ? 1200 : 1500;
+
+        /// <summary>The toll for one hyperlane ride by a ship of <paramref name="massTonnes"/>, credits.</summary>
+        public static double LaneToll(double massTonnes) => LaneTollBase + LaneTollPerTonne * Math.Max(0, massTonnes);
+
+        /// <summary>What a run costs and whether the tanks cover it (see <see cref="PriceRun"/>).</summary>
+        struct Run
+        {
+            public double Days, Propellant, Cost;
+            public bool Reachable;
+        }
+
+        /// <summary>
+        /// Prices a run from <paramref name="from"/> to <paramref name="to"/> by what it really takes: the
+        /// days under way at the ship's running cost, the propellant its burns throw out with
+        /// <paramref name="cargoTonnes"/> aboard and <paramref name="tanks"/> in the tanks (rocket equation)
+        /// at <paramref name="fuelPrice"/> a tonne, and a toll for every lane it rides. Unreachable if the
+        /// tanks do not hold that propellant and a reserve. Without <see cref="EstimateTrip"/>, days alone.
+        /// </summary>
+        Run PriceRun(Ship ship, int from, int to, double jd, double cargoTonnes, double tanks, double fuelPrice)
+        {
+            var cls = ship.Spec.Class;
+            if (EstimateTrip == null)
+            {
+                double d = TravelDays(ship, from, to, jd);
+                return new Run { Days = d, Cost = d * RunningCostPerDay(cls), Reachable = true };
+            }
+            var trip = EstimateTrip(ship, from, to, jd);
+            double days = Math.Max(0.05, trip.Days) + 1.0;
+            double burn = Propulsion.PropellantFor(ship, trip.DeltaVKmS, cargoTonnes, tanks);
+            double mass = ship.DryMassTonnes + cargoTonnes + tanks;
+            return new Run
+            {
+                Days = days,
+                Propellant = burn,
+                Cost = days * RunningCostPerDay(cls) + burn * fuelPrice + trip.LaneHops * LaneToll(mass),
+                Reachable = burn * (1 + Propulsion.PlanningReserve) <= tanks,
+            };
+        }
 
         public bool CanTrade(Ship ship, Settlement s) => Diplomacy.CanDock(ship.Faction, s.Owner);
 
@@ -406,17 +471,19 @@ namespace SolarSystem.Core
             var cls = ship.Spec.Class;
             var options = new List<Option>();
 
+            double fuelHere = PropellantPriceAt(ship, here);
             if (ship.HasCargo)
             {
                 // Already loaded (nobody here wanted it): find where it sells best.
                 foreach (var to in Settlements)
                 {
                     if (to.Body == here || !CanTrade(ship, to) || to.Demand[(int)ship.CargoGood] <= 0) continue;
-                    double days = TravelDays(ship, here, to.Body, jd);
+                    var run = PriceRun(ship, here, to.Body, jd, ship.CargoTonnes, ship.Propellant, fuelHere);
+                    if (!run.Reachable) continue;
                     double value = to.SaleValue(ship.CargoGood, ship.CargoTonnes) * (1 - DangerAt(to.Body));
-                    options.Add(new Option { To = to, Good = ship.CargoGood, Tonnes = ship.CargoTonnes, Score = (value - days * RunningCostPerDay(cls)) / days });
+                    options.Add(new Option { To = to, Good = ship.CargoGood, Tonnes = ship.CargoTonnes, Score = (value - run.Cost) / run.Days });
                 }
-                if (options.Count == 0) return -1;
+                if (options.Count == 0) return LowOnPropellant(ship, here, jd);
                 var pick = Choose(options);
                 Release(ship);
                 ship.CargoBonus = 0;
@@ -429,7 +496,7 @@ namespace SolarSystem.Core
             foreach (var from in At(here))
             {
                 if (!CanTrade(ship, from)) continue;
-                AddLoadedOptions(ship, from, here, jd, 0, options);
+                AddLoadedOptions(ship, from, here, jd, 0, 0, ship.Propellant, fuelHere, options);
             }
 
             if (options.Count == 0 || Best(options) <= 0)
@@ -438,23 +505,32 @@ namespace SolarSystem.Core
                 foreach (var from in Settlements)
                 {
                     if (from.Body == here || !CanTrade(ship, from)) continue;
-                    double leg = TravelDays(ship, here, from.Body, jd);
+                    var leg = PriceRun(ship, here, from.Body, jd, 0, ship.Propellant, fuelHere);
+                    if (!leg.Reachable) continue;
+                    // It fills up again there if the port sells propellant; else it goes on with what is left.
+                    double fuelThere = PropellantPriceAt(ship, from.Body);
+                    double tanks = HasPropellant(ship, from) ? ship.PropellantCapacity : ship.Propellant - leg.Propellant;
                     var onward = new List<Option>();
-                    AddLoadedOptions(ship, from, from.Body, jd + leg, leg, onward);
+                    AddLoadedOptions(ship, from, from.Body, jd + leg.Days, leg.Days, leg.Cost - leg.Days * RunningCostPerDay(cls), tanks, fuelThere, onward);
                     double best = Best(onward);
                     if (best > 0) options.Add(new Option { To = from, Score = best * 0.85, Empty = true });
                 }
             }
 
             options.RemoveAll(o => o.Score <= 0);
-            if (options.Count == 0) return -1;
+            if (options.Count == 0) return LowOnPropellant(ship, here, jd);
             var choice = Choose(options);
             if (!choice.Empty) Load(ship, choice);
             else ship.Cargo = "Empty, repositioning to " + choice.To.Name;
             return choice.To.Body;
         }
 
-        void AddLoadedOptions(Ship ship, Settlement from, int fromBody, double jd, double extraDays, List<Option> into)
+        /// <summary>
+        /// The loads a ship could take from <paramref name="from"/> and where to: each priced by its run
+        /// (<see cref="PriceRun"/>) plus <paramref name="extraDays"/> and <paramref name="extraCost"/> already
+        /// spent getting there, leaving out any its <paramref name="tanks"/> cannot carry that far.
+        /// </summary>
+        void AddLoadedOptions(Ship ship, Settlement from, int fromBody, double jd, double extraDays, double extraCost, double tanks, double fuelPrice, List<Option> into)
         {
             var cls = ship.Spec.Class;
             double capacity = ship.CapacityTonnes;
@@ -470,11 +546,13 @@ namespace SolarSystem.Core
                     if (to.Body == fromBody || !CanTrade(ship, to)) continue;
                     double tonnes = Math.Min(Math.Min(capacity, available), to.Absorb(good));
                     if (tonnes < minimum) continue;
+                    var run = PriceRun(ship, fromBody, to.Body, jd, tonnes, tanks, fuelPrice);
+                    if (!run.Reachable) continue;
                     double cost = from.PurchaseCost(good, tonnes);
-                    double days = TravelDays(ship, fromBody, to.Body, jd) + extraDays;
+                    double days = run.Days + extraDays;
                     double bonus = ContractBonus(to, good, tonnes);
                     double value = (SaleEstimate(to, good, tonnes) + bonus) * (1 - DangerAt(to.Body));
-                    double profit = value - cost - days * RunningCostPerDay(cls);
+                    double profit = value - cost - run.Cost - extraCost - extraDays * RunningCostPerDay(cls);
                     into.Add(new Option { From = from, To = to, Good = good, Tonnes = tonnes, Cost = cost, Bonus = bonus, Score = profit / days });
                 }
             }
@@ -558,6 +636,41 @@ namespace SolarSystem.Core
                    (ship.CargoDestination != null ? " for " + ship.CargoDestination.Name : "");
         }
 
+        /// <summary>
+        /// Nothing worth doing from here: a ship running low makes for the nearest port it can reach that sells
+        /// propellant, so it is not stranded somewhere with none; otherwise -1 (it waits for work).
+        /// </summary>
+        int LowOnPropellant(Ship ship, int here, double jd)
+        {
+            if (ship.PropellantFraction >= 0.5) return -1;
+            var port = NearestPropellantPort(ship, here, jd);
+            if (port == null) return -1;
+            if (!ship.HasCargo) ship.Cargo = "Low on propellant, making for " + port.Name;
+            return port.Body;
+        }
+
+        /// <summary>
+        /// The quickest port from <paramref name="here"/> that sells <paramref name="ship"/> propellant and that
+        /// its tanks can still reach, or -1 (also -1 if it can fill up where it is, or trips are not priced).
+        /// </summary>
+        public int NearestPropellant(Ship ship, int here, double jd) => NearestPropellantPort(ship, here, jd)?.Body ?? -1;
+
+        Settlement NearestPropellantPort(Ship ship, int here, double jd)
+        {
+            if (EstimateTrip == null || HasPropellantAt(ship, here)) return null;
+            Settlement best = null;
+            double bestDays = double.MaxValue;
+            foreach (var s in Settlements)
+            {
+                if (s.Body == here || !HasPropellant(ship, s)) continue;
+                var run = PriceRun(ship, here, s.Body, jd, ship.HasCargo ? ship.CargoTonnes : 0, ship.Propellant, 0);
+                if (!run.Reachable || run.Days >= bestDays) continue;
+                bestDays = run.Days;
+                best = s;
+            }
+            return best;
+        }
+
         double TravelDays(Ship ship, int from, int to, double jd) =>
             Math.Max(0.05, EstimateTravelDays != null ? EstimateTravelDays(ship, from, to, jd) : 10) + 1.0;
 
@@ -591,6 +704,136 @@ namespace SolarSystem.Core
                 if (pick <= 0) return options[i];
             }
             return options[0];
+        }
+
+        // ---------------------------------------------------------------- propellant
+
+        /// <summary>Whether <paramref name="ship"/> can buy any propellant at <paramref name="s"/> (it may dock, and there is reaction mass to spare).</summary>
+        public bool HasPropellant(Ship ship, Settlement s)
+        {
+            if (s.Fallen || !CanTrade(ship, s)) return false;
+            foreach (var g in Propulsion.ReactionMass)
+                if (s.Available(g) >= 1) return true;
+            return false;
+        }
+
+        /// <summary>Whether any market at <paramref name="body"/> sells <paramref name="ship"/> propellant.</summary>
+        public bool HasPropellantAt(Ship ship, int body)
+        {
+            foreach (var s in At(body))
+                if (HasPropellant(ship, s)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// A tonne of propellant at <paramref name="s"/>, credits: the cheaper reaction mass it has to spare
+        /// (water or hydrocarbons) and the helium-3 that burns it, with the port tax.
+        /// </summary>
+        public static double PropellantPrice(Settlement s)
+        {
+            double mass = double.MaxValue;
+            foreach (var g in Propulsion.ReactionMass)
+                if (s.Available(g) >= 1) mass = Math.Min(mass, s.Price[(int)g]);
+            if (mass == double.MaxValue)
+                foreach (var g in Propulsion.ReactionMass) mass = Math.Min(mass, s.Price[(int)g]);
+            return (mass + Propulsion.HeliumThreePerTonne * s.Price[(int)Good.HeliumThree]) * (1 + PortTax);
+        }
+
+        /// <summary>The best price <paramref name="ship"/> can fill its tanks at <paramref name="body"/>, or the systemwide base price if nowhere there sells it.</summary>
+        public double PropellantPriceAt(Ship ship, int body)
+        {
+            double best = double.MaxValue;
+            foreach (var s in At(body))
+                if (HasPropellant(ship, s)) best = Math.Min(best, PropellantPrice(s));
+            return best == double.MaxValue ? Propulsion.PropellantBasePrice * (1 + PortTax) : best;
+        }
+
+        /// <summary>
+        /// Tops up a ship's tanks at <paramref name="body"/> (an AI ship in port): from the cheapest market
+        /// there it may trade at, reaction mass from what it can spare beyond its own reserve, paid from the
+        /// ship's faction. Returns the tonnes taken on.
+        /// </summary>
+        public double Refuel(Ship ship, int body, double jd)
+        {
+            if (ship.PropellantCapacity <= 0 || ship.PropellantFraction >= Propulsion.TopUpBelow) return 0;
+            var markets = new List<Settlement>();
+            foreach (var s in At(body))
+                if (HasPropellant(ship, s)) markets.Add(s);
+            markets.Sort((a, b) => PropellantPrice(a).CompareTo(PropellantPrice(b)));
+            double taken = 0;
+            foreach (var s in markets)
+            {
+                double room = ship.PropellantCapacity - ship.Propellant;
+                if (room < 1) break;
+                taken += BuyPropellant(ship, s, room, mustAfford: false, out _);
+            }
+            return taken;
+        }
+
+        /// <summary>
+        /// Fills the player's piloted <paramref name="ship"/> at <paramref name="s"/>, as far as the market can
+        /// spare and the faction's credits stretch. Reports the tonnes and what they cost.
+        /// </summary>
+        public TradeOutcome RefuelAt(Ship ship, Settlement s, out double tonnes, out double cost)
+        {
+            tonnes = cost = 0;
+            if (!CanTrade(ship, s)) return TradeOutcome.CannotDock;
+            double room = ship.PropellantCapacity - ship.Propellant;
+            if (room < 0.01) return TradeOutcome.NoRoom;
+            if (!HasPropellant(ship, s)) return TradeOutcome.NoStock;
+            tonnes = BuyPropellant(ship, s, room, mustAfford: true, out cost);
+            return tonnes > 0 ? TradeOutcome.Ok : TradeOutcome.CantAfford;
+        }
+
+        /// <summary>
+        /// Buys up to <paramref name="tonnes"/> of propellant into a ship's tanks at <paramref name="s"/>:
+        /// reaction mass cheapest first from what the market can spare, and the helium-3 that burns it from
+        /// what it has (a port short of helium-3 still fills the tanks). Stock, prices, the port's tax and its
+        /// propellant demand all follow; the ship's faction pays (only what it can, if <paramref name="mustAfford"/>).
+        /// </summary>
+        double BuyPropellant(Ship ship, Settlement s, double tonnes, bool mustAfford, out double cost)
+        {
+            cost = 0;
+            double got = 0;
+            var order = new List<Good>(Propulsion.ReactionMass);
+            order.Sort((a, b) => s.Price[(int)a].CompareTo(s.Price[(int)b]));
+            var payer = ship.Faction;
+            foreach (var g in order)
+            {
+                double t = Math.Min(tonnes - got, s.Available(g));
+                if (t < 0.01) continue;
+                // Each tonne also takes its helium-3, where there is any, so price the pair together.
+                double heRatio = s.Available(Good.HeliumThree) > 0 ? Propulsion.HeliumThreePerTonne : 0;
+                double total = (s.PurchaseCost(g, t) + s.PurchaseCost(Good.HeliumThree, t * heRatio)) * (1 + PortTax);
+                if (mustAfford && total > payer.Treasury - cost)
+                {
+                    double afford = Math.Max(0, payer.Treasury - cost);
+                    if (afford <= 0 || total <= 0) break;
+                    t *= afford / total * 0.99;
+                    if (t < 0.01) break;
+                }
+                got += t;
+                cost += Purchase(s, g, t);
+                double he = Math.Min(t * heRatio, s.Available(Good.HeliumThree));
+                if (he > 0) cost += Purchase(s, Good.HeliumThree, he);
+            }
+            if (got <= 0) return 0;
+            ship.Propellant += got;
+            payer.Treasury -= cost;
+            ship.Credits -= cost;
+            s.RefreshPrices();
+            return got;
+        }
+
+        /// <summary>Takes <paramref name="tonnes"/> of a good out of a market as propellant; returns what it cost with tax.</summary>
+        static double Purchase(Settlement s, Good g, double tonnes)
+        {
+            double price = s.PurchaseCost(g, tonnes);
+            s.Stock[(int)g] = Math.Max(0, s.Stock[(int)g] - tonnes);
+            s.Owner.Treasury += price * PortTax;
+            s.TradeVolumeCredits += price;
+            s.PropellantSold[(int)g] += tonnes;
+            return price * (1 + PortTax);
         }
 
         // ---------------------------------------------------------------- player trade

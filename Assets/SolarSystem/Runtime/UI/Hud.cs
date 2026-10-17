@@ -779,6 +779,7 @@ namespace SolarSystem.UI
                 headingColor = new Color(ship.Faction.Color.R, ship.Faction.Color.G, ship.Faction.Color.B);
                 lines.Add(("Length", Km(ship.LengthKm)));
                 lines.Add(("Drive", ship.Spec.AccelG.ToString("0.##", CultureInfo.InvariantCulture) + " g, flip-and-burn; hyperlanes between systems"));
+                lines.Add(("Propellant", PropellantText(ship)));
                 if (ship.IsEscort) lines.Add(("Escorting", ship.Leader.Name));
                 if (app.IsPiloting && app.Piloted.Ship == ship && ship.Battle == null)
                 {
@@ -837,6 +838,7 @@ namespace SolarSystem.UI
                 {
                     var body = app.Catalog[c.Orbit.Body];
                     lines.Add(("Status", ship.Battle != null ? "Fighting in the " + ship.Battle.Name
+                        : c.OutOfPropellant ? "Drifting off " + body.Name + " with dry tanks; a tanker is " + Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + " out"
                         : (c.Orbit.Fixed ? "Holding position at " : "Holding orbit at ") + body.Name));
                     // From where it actually is: a held position (a released or spawned hull) is a fixed point
                     // with no orbit radius, and a ring's holding point sits off the body's centre.
@@ -913,6 +915,14 @@ namespace SolarSystem.UI
             bool focused = app.SpaceCamera.FocusTarget == t && app.SpaceCamera.Mode != SpaceCamera.CameraMode.Free;
             if (GUI.Button(new Rect(r.x + 14, r.yMax - 32, 150, 24), focused ? "Re-frame  [F]" : "Focus  [F]", buttonActive)) app.FocusSelected();
             if (GUI.Button(new Rect(r.x + 172, r.yMax - 32, 150, 24), "Deselect  [Esc]", button)) app.Select(Target.None);
+        }
+
+        /// <summary>The tanks: how full, how many tonnes, and the delta-v that leaves at the ship's present mass.</summary>
+        static string PropellantText(Ship ship)
+        {
+            if (ship.OutOfPropellant || ship.Propellant <= 1e-6) return "DRY  ·  0 of " + Tonnes(ship.PropellantCapacity);
+            return Percent(ship.PropellantFraction) + "  ·  " + Tonnes(ship.Propellant) + " of " + Tonnes(ship.PropellantCapacity) +
+                   "  ·  Δv " + ship.DeltaVBudgetKmS.ToString("N0", CultureInfo.InvariantCulture) + " km/s";
         }
 
         string QueuePosition(Ship ship)
@@ -1057,7 +1067,12 @@ namespace SolarSystem.UI
             if (canTrade)
             {
                 GUI.contentColor = Color.white;
-                GUI.Label(new Rect(r.x + 12, r.y + 50, 260, 18), "Your credits: " + Credits(app.World.PilotedShip.Faction.Treasury), small);
+                var pilotShip = app.World.PilotedShip;
+                GUI.Label(new Rect(r.x + 12, r.y + 50, 200, 18), "Your credits: " + Credits(pilotShip.Faction.Treasury), small);
+                // Fill the tanks here: water or hydrocarbons and their helium-3, at this market's price.
+                GUI.Label(new Rect(r.x + 215, r.y + 50, 110, 18), "Tanks " + Percent(pilotShip.PropellantFraction), small);
+                string refuel = "Refuel  ~" + Credits(Economy.PropellantPrice(market) * (pilotShip.PropellantCapacity - pilotShip.Propellant));
+                if (GUI.Button(new Rect(r.x + 300, r.y + 48, 140, 20), refuel, button)) ClickRefuel(market);
                 GUI.Label(new Rect(r.xMax - 150, r.y + 50, 40, 18), "Qty", small);
                 if (GUI.Button(new Rect(r.xMax - 95, r.y + 48, 22, 20), "-", button)) tradeCrates = Math.Max(1, tradeCrates - 1);
                 GUI.Label(new Rect(r.xMax - 70, r.y + 50, 30, 18), tradeCrates.ToString(CultureInfo.InvariantCulture), small);
@@ -1114,6 +1129,22 @@ namespace SolarSystem.UI
                     Economy.TradeOutcome.CannotDock => "Not welcome to trade here",
                     _ => "Can't buy that right now",
                 });
+        }
+
+        void ClickRefuel(Settlement market)
+        {
+            var ship = app.World.PilotedShip;
+            var outcome = app.Economy.RefuelAt(ship, market, out double tonnes, out double cost);
+            app.ShowToast(outcome switch
+            {
+                Economy.TradeOutcome.Ok => "Took on " + Tonnes(tonnes) + " of propellant for " + Credits(cost) +
+                    (ship.PropellantFraction < 0.99 ? "  (" + (market.Available(Good.Water) + market.Available(Good.Hydrocarbons) < 1 ? "the port ran out" : "credits ran out") + ")" : ""),
+                Economy.TradeOutcome.NoRoom => "Tanks are already full",
+                Economy.TradeOutcome.NoStock => market.Name + " has no reaction mass to spare",
+                Economy.TradeOutcome.CantAfford => "Not enough credits",
+                Economy.TradeOutcome.CannotDock => "Not welcome to trade here",
+                _ => "Can't refuel right now",
+            });
         }
 
         void ClickSell(Settlement market, Good good)
@@ -1353,7 +1384,8 @@ namespace SolarSystem.UI
             switch (cam.Mode)
             {
                 case SpaceCamera.CameraMode.Focus when cam.PilotLocked:
-                    s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + "   (WASD throttle/strafe, mouse to steer, Z/X roll, F flight assist, Shift boost, P to release)";
+                    s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + (app.Piloted.Ship != null ? "  ·  PROPELLANT " + (app.Piloted.Ship.Propellant <= 1e-6 ? "DRY" : Percent(app.Piloted.Ship.PropellantFraction)) : "") +
+                        "   (WASD throttle/strafe, mouse to steer, Z/X roll, F flight assist, Shift boost, P to release)";
                     break;
                 case SpaceCamera.CameraMode.Focus:
                     s = "FOCUS  ·  " + TargetName(cam.FocusTarget) + "   (WASD to swim free, wheel to zoom, right-drag to orbit)";
@@ -1371,6 +1403,15 @@ namespace SolarSystem.UI
             float w = text.CalcSize(content).x + 28;
             var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 40, w, 30));
             GUI.Label(new Rect(r.x + 14, r.y + 6, w, 20), content, text);
+
+            // Tanks running low under the player's own hand: an emergency tanker can be called out.
+            var flown = app.IsPiloting ? app.Piloted.Ship : null;
+            if (flown != null && flown.Battle == null && (flown.PropellantFraction < 0.15 || app.TankerDueS >= 0))
+            {
+                var call = Panel(new Rect(r.x - 178, r.y, 170, 30));
+                string label = app.TankerDueS >= 0 ? "TANKER IN " + Mathf.CeilToInt(app.TankerDueS) + " s" : "CALL A TANKER";
+                if (GUI.Button(new Rect(call.x + 4, call.y + 4, call.width - 8, 22), label, app.TankerDueS >= 0 ? buttonActive : button)) app.CallTanker();
+            }
 
             // Level the view to the system's plane (a smooth swing, not a snap).
             var level = Panel(new Rect(r.xMax + 8, r.y, 120, 30));
@@ -1456,7 +1497,7 @@ namespace SolarSystem.UI
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
-                "M   market  Buy/Sell appear while piloting near the shown settlement's body",
+                "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
                 "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",
             };
             float w = 610, h = helpOpen ? 42 + help.Length * 17 : 34;

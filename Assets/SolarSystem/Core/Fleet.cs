@@ -36,6 +36,7 @@ namespace SolarSystem.Core
             this.ephemeris = ephemeris;
             catalog = ephemeris.Catalog;
             rng = new Random(seed);
+            leaks = new Random(seed ^ 0x5eed);
         }
 
         // ---------------------------------------------------------------- simulation
@@ -66,6 +67,40 @@ namespace SolarSystem.Core
 
         /// <summary>Which ships go down to the surface at ringed worlds (merchants); null for none.</summary>
         public Func<Ship, bool> Lands;
+
+        /// <summary>
+        /// Which ships fly on real propellant (see <see cref="Propulsion"/>): every transit is charged its
+        /// delta-v from the tanks by the rocket equation, a ship that cannot cover a trip waits in port for
+        /// propellant, and one that runs dry in flight drifts until a tanker reaches it. Null for none (the
+        /// classic fleet, whose drives never run out).
+        /// </summary>
+        public Func<Ship, bool> BurnsPropellant;
+
+        /// <summary>Whether a ship short of propellant for its next trip can wait at a body for its tanks to be filled (a port that sells it).</summary>
+        public Func<Ship, int, bool> CanRefuelAt;
+
+        /// <summary>Raised when a ship runs dry: it drifts where its tanks gave out and calls for a tanker.</summary>
+        public Action<Ship, double> RanDry;
+
+        /// <summary>Raised when a tanker reaches a dry ship, with the tonnes it pumped across (0 if someone else already had).</summary>
+        public Action<Ship, double, double> TankerArrived;
+
+        /// <summary>Raised as a ship joins a hyperlane (where its toll is paid).</summary>
+        public Action<Ship, LaneHop, double> LaneJoined;
+
+        /// <summary>
+        /// The chance a transit on propellant springs a leak (a micrometeoroid through a tank, a stuck valve)
+        /// and vents most of what it carries, so it runs dry part way and drifts until a tanker comes. 0 for never.
+        /// </summary>
+        public double LeakChance;
+
+        /// <summary>Raised when a transit springs a leak (see <see cref="LeakChance"/>), with the tonnes vented.</summary>
+        public Action<Ship, double, double> Leaked;
+
+        /// <summary>Rolls for leaks apart from the schedule's own dice, so turning them on changes nothing else.</summary>
+        readonly Random leaks;
+
+        bool Burns(Ship ship) => BurnsPropellant != null && BurnsPropellant(ship);
 
         /// <summary>Ships see each other coming and sidestep (see <see cref="StepAvoidance"/>).</summary>
         public bool AvoidCollisions = true;
@@ -104,9 +139,10 @@ namespace SolarSystem.Core
                 foreach (var ship in ships)
                 {
                     if (!RunsSchedule(ship)) continue;
-                    if (ship.PhaseEndJd <= when)
+                    double at = NextEventJd(ship);
+                    if (at <= when)
                     {
-                        when = ship.PhaseEndJd;
+                        when = at;
                         next = ship;
                     }
                 }
@@ -469,8 +505,21 @@ namespace SolarSystem.Core
         /// <summary>Time remaining in the current phase, days.</summary>
         public static double RemainingDays(Ship ship, double jd) => Math.Max(0, ship.Controller.PhaseEndJd - jd);
 
+        /// <summary>When the ship's schedule next needs attention: the end of its phase, or the moment its tanks run dry part way through a transit.</summary>
+        static double NextEventJd(Ship s) => s.Phase == ShipPhase.Transit && s.StrandJd < s.PhaseEndJd ? s.StrandJd : s.PhaseEndJd;
+
         void AdvancePhase(Ship ship)
         {
+            if (ship.Phase == ShipPhase.Transit && ship.StrandJd < ship.PhaseEndJd)
+            {
+                Strand(ship, ship.StrandJd);
+                return;
+            }
+            if (ship.Phase == ShipPhase.Parked && ship.OutOfPropellant)
+            {
+                TankerArrives(ship);
+                return;
+            }
             if (ship.Phase == ShipPhase.Parked)
             {
                 // Holding position (a siege, a refit, an ambush): decide again rather than fly to itself.
@@ -642,6 +691,7 @@ namespace SolarSystem.Core
             ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
             ship.PhaseStartJd = jd;
             ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm) * ship.LaneEndProgress;
+            LaneJoined?.Invoke(ship, hop, jd);
         }
 
         /// <summary>Back into the lane from where the ship stopped (a lurk over, or an ambush survived), and on to its end.</summary>
@@ -718,6 +768,7 @@ namespace SolarSystem.Core
             var here = BaseStateOf(ship, jd).HelioKm;
             var velocity = (BaseStateOf(ship, jd + h).HelioKm - BaseStateOf(ship, jd - h).HelioKm) / (2 * h)
                            - (ephemeris.HelioAt(frame, jd + h) - ephemeris.HelioAt(frame, jd - h)) / (2 * h);
+            RefundUnflown(ship, jd);
             ship.Orbit = FixedPoint(frame, here - ephemeris.HelioAt(frame, jd));
             ship.Journey = null;
             ship.JourneyIndex = 0;
@@ -759,7 +810,137 @@ namespace SolarSystem.Core
             ship.Phase = ShipPhase.Transit;
             ship.FrameBody = frame;
             ship.PhaseStartJd = departJd;
+            ChargePropellant(ship);
         }
+
+        // ---------------------------------------------------------------- propellant
+
+        /// <summary>
+        /// Takes the transit just planned out of the tanks: its delta-v (<see cref="Propulsion.TransitDeltaV"/>)
+        /// at the ship's present mass, by the rocket equation. If the tanks cannot cover it all, the ship
+        /// sets out anyway and its drive cuts out when they run dry (<see cref="Ship.StrandJd"/>): the burn
+        /// is constant thrust, so that is the same share of the way through in time as of the delta-v.
+        /// </summary>
+        void ChargePropellant(Ship ship)
+        {
+            ship.StrandJd = double.NaN;
+            ship.LegPropellant = 0;
+            if (!Burns(ship)) return;
+            double dv = Propulsion.TransitDeltaV(ship);
+            if (!(dv > 0)) return;
+            double need = Propulsion.PropellantFor(ship, dv);
+            if (LeakChance > 0 && !tankerAlongside && leaks.NextDouble() < LeakChance)
+            {
+                // A holed tank: what is left sees the ship only part of the way (a fifth to four fifths of the leg's delta-v).
+                double share = 0.2 + 0.6 * leaks.NextDouble();
+                double kept = Math.Min(ship.Propellant, (ship.MassTonnes - ship.Propellant) * (Propulsion.MassRatio(dv * share, ship.ExhaustVelocityKmS) - 1));
+                double vented = ship.Propellant - kept;
+                ship.Propellant = kept;
+                Leaked?.Invoke(ship, vented, ship.PhaseStartJd);
+            }
+            if (need <= ship.Propellant)
+            {
+                ship.Propellant -= need;
+                ship.LegPropellant = need;
+                return;
+            }
+            double have = ship.Propellant, mass = ship.MassTonnes;
+            double reach = Propulsion.DeltaV(ship.ExhaustVelocityKmS, mass, mass - have);
+            ship.Propellant = 0;
+            ship.LegPropellant = have;
+            // A tanker that came out to it stays alongside to the end of the leg, topping it up: it does not run dry twice.
+            if (tankerAlongside) return;
+            ship.StrandJd = ship.PhaseStartJd + (ship.PhaseEndJd - ship.PhaseStartJd) * Math.Max(0, Math.Min(1, dv > 0 ? reach / dv : 1));
+        }
+
+        /// <summary>Gives back the propellant of the part of a transit that will not now be flown (a change of course).</summary>
+        void RefundUnflown(Ship ship, double jd)
+        {
+            if (!Burns(ship) || ship.LegPropellant <= 0) return;
+            double end = ship.StrandJd < ship.PhaseEndJd ? ship.StrandJd : ship.PhaseEndJd;
+            double span = end - ship.PhaseStartJd;
+            if (span > 0) ship.Propellant += ship.LegPropellant * Math.Max(0, Math.Min(1, (end - jd) / span));
+            ship.LegPropellant = 0;
+            ship.StrandJd = double.NaN;
+        }
+
+        /// <summary>
+        /// The tanks have run dry part way through a transit: the ship drifts dead where the drive cut out,
+        /// fixed in the transit's frame, still bound where it was going, and calls for a tanker
+        /// (<see cref="RanDry"/>), which reaches it in a couple of days.
+        /// </summary>
+        void Strand(Ship ship, double jd)
+        {
+            int frame = ship.FrameBody;
+            var here = BaseStateOf(ship, jd).HelioKm;
+            ship.StrandJd = double.NaN;
+            ship.LegPropellant = 0;
+            ship.Orbit = FixedPoint(frame, here - ephemeris.HelioAt(frame, jd));
+            ship.Path = null;
+            ship.Phase = ShipPhase.Parked;
+            CallTanker(ship, jd);
+        }
+
+        /// <summary>Calls a tanker out to a ship that cannot move for want of propellant: it waits where it is until one comes.</summary>
+        public void CallTanker(Ship ship, double jd)
+        {
+            ship.OutOfPropellant = true;
+            ship.OutOfPropellantSinceJd = jd;
+            ship.PhaseStartJd = jd;
+            ship.PhaseEndJd = jd + Propulsion.TankerDays * (1 + rng.NextDouble());
+            RanDry?.Invoke(ship, jd);
+        }
+
+        /// <summary>
+        /// The tanker is alongside (or a passing pilot answered the call first): it fills the ship's tanks
+        /// and the ship carries on to where it was bound.
+        /// </summary>
+        void TankerArrives(Ship ship)
+        {
+            double jd = ship.PhaseEndJd;
+            // A ship someone already refuelled (a pilot answering the call) needs no tanker, and pays for none.
+            double load = ship.PropellantFraction >= 0.25 ? 0 : Propulsion.TankerLoad(ship);
+            ship.Propellant += load;
+            ship.OutOfPropellant = false;
+            TankerArrived?.Invoke(ship, load, jd);
+            Resume(ship, jd);
+        }
+
+        /// <summary>Set while a ship a tanker has reached plans the rest of its leg (see <see cref="ChargePropellant"/>).</summary>
+        bool tankerAlongside;
+
+        /// <summary>Back under way from wherever the ship is: the rest of the leg it was flying (to its next ramp, or its destination).</summary>
+        void Resume(Ship ship, double jd)
+        {
+            tankerAlongside = true;
+            try { ResumeLeg(ship, jd); }
+            finally { tankerAlongside = false; }
+        }
+
+        void ResumeLeg(Ship ship, double jd)
+        {
+            if (ship.Journey != null && ship.JourneyIndex < ship.Journey.Count)
+            {
+                var hop = ship.Journey[ship.JourneyIndex];
+                Burn(ship, jd, hop.From, () => RampOrbit(hop, hop.From, jd));
+            }
+            else if (ship.FinalBody >= 0 && ship.FinalBody != ship.Orbit.Body)
+            {
+                int to = ship.FinalBody;
+                if (ship.Wander) Burn(ship, jd, to, () => WanderOrbit(to, ship));
+                else Burn(ship, jd, to, () => ArrivalFor(ship, to));
+            }
+            else
+            {
+                ship.DestinationBody = ship.Orbit.Body;
+                ship.Journey = null;
+                ScheduleNext(ship, jd);
+            }
+        }
+
+        /// <summary>Whether a ship flying on propellant lacks what its drive needs to get from <paramref name="from"/> to <paramref name="to"/>.</summary>
+        public bool ShortOfPropellant(Ship ship, int from, int to, double jd) =>
+            Burns(ship) && Propulsion.PropellantFor(ship, EstimateTrip(ship, from, to, jd).DeltaVKmS) > ship.Propellant;
 
         /// <summary>
         /// How wide a transit flown in a frame gives its centre: <see cref="SunKeepOutKm"/> for a star
@@ -902,6 +1083,17 @@ namespace SolarSystem.Core
             // Mid-descent or mid-climb the schedule is fixed; a queued ship (after a fight, say) just
             // takes its turn again.
             if (ship.Phase == ShipPhase.Descent || ship.Phase == ShipPhase.Ascent) return;
+            if (ship.OutOfPropellant)
+            {
+                // Dead in space (back from a fight, or let go by its pilot): it waits on for its tanker, unless
+                // somebody has filled its tanks meanwhile.
+                if (ship.PropellantFraction < 0.25 || ship.Phase != ShipPhase.Parked)
+                {
+                    ship.PhaseEndJd = Math.Max(ship.PhaseEndJd, nowJd + 0.05);
+                    return;
+                }
+                ship.OutOfPropellant = false;
+            }
             if (ship.Phase == ShipPhase.Queued && ship.Ring == null)
             {
                 // Lost track of its ring (it changed hands mid-queue): hold where it is, as in orbit.
@@ -961,6 +1153,36 @@ namespace SolarSystem.Core
                 ship.DestinationBody = here;
                 ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.05);
                 return;
+            }
+            // The fleet's own pick (a free ship's whim, a trader with no work) it cannot reach on what is in its
+            // tanks: a few more picks, for somewhere it can.
+            for (int k = 0; k < 6 && chosen < 0 && !nowhere && next != here && ShortOfPropellant(ship, here, next, nowJd); k++)
+                next = ChooseDestination(ship, here, nowJd);
+            if (next == here)
+            {
+                ship.DestinationBody = here;
+                ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.05);
+                return;
+            }
+            if (ShortOfPropellant(ship, here, next, nowJd))
+            {
+                // Not enough in the tanks for the trip. In port, it waits for propellant to be had; anywhere
+                // else, with next to nothing left, it calls a tanker; with some, it sets out and gets as far as it can.
+                if (CanRefuelAt != null && CanRefuelAt(ship, here))
+                {
+                    ship.DestinationBody = here;
+                    if (!ship.HasCargo) ship.Cargo = "Waiting for propellant";
+                    ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.5);
+                    return;
+                }
+                if (ship.PropellantFraction < 0.01 && ship.Phase == ShipPhase.Parked)
+                {
+                    ship.DestinationBody = next;
+                    ship.FinalBody = next;
+                    ship.Journey = null;
+                    CallTanker(ship, nowJd);
+                    return;
+                }
             }
             ship.DestinationBody = next;
             if (ChooseNext == null) ship.Cargo = CargoFor(ship, here);
@@ -1438,10 +1660,29 @@ namespace SolarSystem.Core
         /// Rough flight time between two bodies for planning: the brachistochrone over their current
         /// separation, plus a day of manoeuvring.
         /// </summary>
-        public double EstimateTravelDays(Ship ship, int from, int to, double jd)
+        public double EstimateTravelDays(Ship ship, int from, int to, double jd) => EstimateTrip(ship, from, to, jd).Days;
+
+        /// <summary>A planned burn's delta-v runs this much over the straight flip-and-burn (dog-legs round worlds), plus <see cref="LegMatchKmS"/>.</summary>
+        public const double LegMargin = 1.2;
+
+        /// <summary>Delta-v a planner allows per burn for matching velocity with its parking orbits and ramps, km/s.</summary>
+        public const double LegMatchKmS = 3;
+
+        /// <summary>
+        /// A trip as a planner sees it: the days of <see cref="EstimateTravelDays"/>, plus the delta-v its own
+        /// drive supplies (each burn's 2·√(a·d) over the straight distance, with a margin for dog-legs and
+        /// velocity matching) and the lanes it rides. Hyperlane rides cost no delta-v; they are tolled instead.
+        /// </summary>
+        public TripEstimate EstimateTrip(Ship ship, int from, int to, double jd)
         {
             double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
-            double Burn(double km) => 2 * Math.Sqrt(Math.Max(km, 1) / accel);
+            double deltaV = 0;
+            double Burn(double km)
+            {
+                double days = 2 * Math.Sqrt(Math.Max(km, 1) / accel);
+                deltaV += accel * days / Astro.SecondsPerDay * LegMargin + LegMatchKmS;
+                return days;
+            }
             if (Lanes != null)
             {
                 int a = Lanes.SystemOf(from), b = Lanes.SystemOf(to);
@@ -1455,12 +1696,12 @@ namespace SolarSystem.Core
                         if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5);
                     }
                     days += Burn((Lanes.RampHelio(route[route.Count - 1].Lane, b, jd) - ephemeris.HelioAt(to, jd)).Length);
-                    return days + 0.3 + RingOverheadDays(ship, to, jd + days);
+                    return new TripEstimate(days + 0.3 + RingOverheadDays(ship, to, jd + days), deltaV, route.Count);
                 }
             }
             double d = (ephemeris.HelioAt(to, jd) - ephemeris.HelioAt(from, jd)).Length;
             double direct = Burn(d) + 1.0;
-            return direct + RingOverheadDays(ship, to, jd + direct);
+            return new TripEstimate(direct + RingOverheadDays(ship, to, jd + direct), deltaV, 0);
         }
 
         /// <summary>Where the first leg of a trip heads: the first lane's ramp, or the destination itself.</summary>

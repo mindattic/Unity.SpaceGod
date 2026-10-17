@@ -291,6 +291,58 @@ namespace SolarSystem.Core
         /// <summary>Running trade profit, credits.</summary>
         public double Credits;
 
+        // ---------------------------------------------------------------- propulsion (see Propulsion)
+
+        /// <summary>The design whose drive and tanks this hull has (its combat design, or its class's first).</summary>
+        CombatSpec Design => Combat?.Spec ?? CombatSpec.Of(Spec.Class);
+
+        /// <summary>Mass with empty tanks and an empty hold, tonnes.</summary>
+        public double DryMassTonnes => Design.DryMassTonnes;
+
+        /// <summary>What the tanks hold when full, tonnes of reaction mass.</summary>
+        public double PropellantCapacity => Design.PropellantTonnes;
+
+        /// <summary>The speed the drive throws reaction mass out at, km/s.</summary>
+        public double ExhaustVelocityKmS => Math.Max(1, Design.ExhaustVelocityKmS);
+
+        /// <summary>Reaction mass in the tanks, tonnes (a new hull leaves its yard full).</summary>
+        public double Propellant
+        {
+            get => propellant ?? PropellantCapacity;
+            set => propellant = Math.Max(0, Math.Min(PropellantCapacity, value));
+        }
+        double? propellant;
+
+        /// <summary>How full the tanks are, 0..1.</summary>
+        public double PropellantFraction => PropellantCapacity > 0 ? Propellant / PropellantCapacity : 0;
+
+        /// <summary>Tonnes in the holds: the trade cargo and whatever is in the personal grid hold.</summary>
+        public double CarriedTonnes
+        {
+            get
+            {
+                double t = HasCargo ? CargoTonnes : 0;
+                if (personalHold != null) foreach (var item in personalHold.Items) t += item.Tonnes;
+                return t;
+            }
+        }
+
+        /// <summary>All-up mass now: hull, tanks and holds, tonnes.</summary>
+        public double MassTonnes => DryMassTonnes + Propellant + CarriedTonnes;
+
+        /// <summary>The delta-v (km/s) left in the tanks at the ship's present mass (Tsiolkovsky).</summary>
+        public double DeltaVBudgetKmS => Propulsion.DeltaV(ExhaustVelocityKmS, MassTonnes, MassTonnes - Propellant);
+
+        /// <summary>Ran dry in flight: drifting dead where the tanks gave out, calling for a tanker.</summary>
+        public bool OutOfPropellant;
+        public double OutOfPropellantSinceJd;
+
+        /// <summary>The propellant the current transit was charged when it was planned (refunded in part on a diversion).</summary>
+        public double LegPropellant;
+
+        /// <summary>When the current transit runs dry part way (its tanks could not cover it all), or NaN.</summary>
+        public double StrandJd = double.NaN;
+
         /// <summary>Lost in battle: kept in the list (ids are indices) but no longer simulated or drawn.</summary>
         public bool Destroyed;
 
@@ -332,7 +384,7 @@ namespace SolarSystem.Core
         /// <summary>
         /// A copy for a jump gate to hand to the destination system's fleet (see <see cref="GateTransit"/>):
         /// everything that makes it feel like the same ship to the player -- name, hull class, combat
-        /// state (hull, shields, hardpoints), cargo and the personal hold, credits -- but none of the
+        /// state (hull, shields, hardpoints), cargo and the personal hold, credits, propellant -- but none of the
         /// origin system's scheduling state (orbit, route, journey), which the caller sets fresh for
         /// wherever the ship actually arrives. Nor the cargo's booking: that market (and the contract
         /// bonus it posted) belongs to the origin system's economy, so the goods arrive unbooked.
@@ -352,6 +404,7 @@ namespace SolarSystem.Core
             Credits = Credits,
             TripsCompleted = TripsCompleted,
             personalHold = personalHold,
+            propellant = propellant,
         };
 
         public override string ToString() => Name;

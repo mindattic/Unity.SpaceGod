@@ -40,6 +40,15 @@ namespace SolarSystem.Core
         /// <summary>Daily use by things other than people and industry (navies refitting and rearming here), tonnes.</summary>
         public readonly double[] ExtraDemand = new double[GoodInfo.Count];
 
+        /// <summary>
+        /// Ships' propellant bought here, tonnes a day, smoothed over about <see cref="Economy.PropellantDemandDays"/>:
+        /// reaction mass (water, hydrocarbons) and the helium-3 that burns it, part of what the market expects to sell.
+        /// </summary>
+        public readonly double[] PropellantDemand = new double[GoodInfo.Count];
+
+        /// <summary>Propellant sold since the last market tick, tonnes (folded into <see cref="PropellantDemand"/>).</summary>
+        public readonly double[] PropellantSold = new double[GoodInfo.Count];
+
         /// <summary>Share of the last tick's needs that was met, per good (1 where nothing was needed).</summary>
         public readonly double[] Satisfaction = new double[GoodInfo.Count];
 

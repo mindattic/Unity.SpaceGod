@@ -92,6 +92,49 @@ namespace SolarSystem.Core.Tests
             Assert.That(op.MarkerLabel, Is.EqualTo("DISTRESS"));
         }
 
+        /// <summary>U.SPC-T57: a merchant whose tanks ran dry drifts and calls for help; a pilot who comes
+        /// alongside pumps some of their own reaction mass across and sees it through.</summary>
+        [Test]
+        public void AShipDriftingWithDryTanksCallsForHelpAndAPilotCanRefuelIt()
+        {
+            var s = Add(ShipClass.Freighter, traders, Near);
+            s.OutOfPropellant = true;
+            s.Propellant = 0;
+            s.PhaseEndJd = Jd + 2;
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            Assert.That(op.Kind, Is.EqualTo(OpportunityKind.Distress));
+            Assert.That(op.DryTanks, Is.True);
+            Assert.That(op.UnderAttack, Is.False);
+            Assert.That(op.Title, Does.Contain("Dry tanks"));
+            Assert.That(op.ExpiresJd, Is.EqualTo(Jd + 2), "open until the tanker gets there");
+
+            double before = player.Propellant;
+            Tick(Jd + 0.01, player, Near);
+            Assert.That(op.State, Is.EqualTo(OpportunityState.Completed));
+            double moved = s.PropellantCapacity * director.DryTanksTransfer;
+            Assert.That(s.Propellant, Is.EqualTo(moved).Within(1e-9));
+            Assert.That(player.Propellant, Is.EqualTo(before - moved).Within(1e-9));
+            Assert.That(s.PhaseEndJd, Is.EqualTo(Jd + 0.01).Within(1e-9), "with that in its tanks it does not wait for the tanker");
+            Assert.That(op.Outcome, Does.Contain("reaction mass"));
+        }
+
+        [Test]
+        public void ADryShipsCallLapsesWhenItsTankerGetsThereFirst()
+        {
+            var s = Add(ShipClass.Freighter, traders, Near);
+            s.OutOfPropellant = true;
+            s.Propellant = 0;
+            s.PhaseEndJd = Jd + 2;
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            s.OutOfPropellant = false;
+            s.Propellant = s.PropellantCapacity;
+            Tick(Jd + 0.5);
+            Assert.That(op.State, Is.EqualTo(OpportunityState.Failed));
+            Assert.That(op.Outcome, Does.Contain("tanker"));
+        }
+
         [Test]
         public void NothingIsOfferedBeyondTheSpawnRadius()
         {
@@ -612,7 +655,7 @@ namespace SolarSystem.Core.Tests
                 switch (op.Kind)
                 {
                     case OpportunityKind.Distress:
-                        Assert.That(s.Battle != null || s.Phase == ShipPhase.Adrift, Is.True, $"{s.Name} is really in trouble");
+                        Assert.That(s.Battle != null || s.Phase == ShipPhase.Adrift || s.OutOfPropellant, Is.True, $"{s.Name} is really in trouble");
                         break;
                     case OpportunityKind.Derelict: Assert.That(s.Derelict, Is.True); break;
                     case OpportunityKind.Wreck: Assert.That(w.War.Wrecks.Items, Does.Contain(op.Wreck)); break;

@@ -127,6 +127,7 @@ namespace SolarSystem.Core
                 {
                     if (s.Derelict) op = DerelictOf(s, jd);
                     else if (s.Battle != null && !s.Battle.Over && !s.Spec.IsMilitary) op = DistressUnderAttack(s, jd, src);
+                    else if (s.OutOfPropellant && s.Battle == null) op = DistressDry(s, jd, src);
                     else if (s.Phase == ShipPhase.Adrift && s.Battle == null) op = DistressAdrift(s, jd, src);
                     else if (s.Phase == ShipPhase.Lane && s.Battle == null && src.IsMerchant(s) && s.LaneLeg.Lane is Lane lane
                              && src.LaneDanger(lane) >= EscortDanger && s.PhaseEndJd - jd >= MinEscortDays)
@@ -250,6 +251,26 @@ namespace SolarSystem.Core
                 Ship = s,
                 Patron = s.Faction,
                 Reward = new OpportunityReward { Credits = 60000, ReputationWith = s.Faction, Reputation = 3 },
+            };
+        }
+
+        /// <summary>The share of a dry ship's tanks a pilot answering its call pumps across (as much as they can spare).</summary>
+        public double DryTanksTransfer = 0.3;
+
+        Opportunity DistressDry(Ship s, double jd, EventSources src)
+        {
+            string near = s.Orbit != null ? " off " + src.BodyName(s.Orbit.Body) : "";
+            return new Opportunity
+            {
+                Kind = OpportunityKind.Distress,
+                SourceKey = Key("distress", s),
+                Title = "Dry tanks: " + s.Name,
+                Hook = s.Name + " here, drifting" + near + " with our tanks run dry. The tanker is still a way out. Can anyone spare reaction mass?",
+                ExpiresJd = Math.Max(jd + 0.1, s.PhaseEndJd),
+                Ship = s,
+                Patron = s.Faction,
+                DryTanks = true,
+                Reward = new OpportunityReward { Credits = 50000, ReputationWith = s.Faction, Reputation = 3 },
             };
         }
 
@@ -406,6 +427,21 @@ namespace SolarSystem.Core
                             else Fail(op, jd, s.Name + " fought clear without you.");
                             return;
                         }
+                    }
+                    else if (op.DryTanks)
+                    {
+                        if (op.Engaged && player != null && !player.Destroyed && s.OutOfPropellant)
+                        {
+                            double moved = Propulsion.Transfer(player, s, s.PropellantCapacity * DryTanksTransfer);
+                            if (moved > 0)
+                            {
+                                // Enough to get going on: it does not wait for the tanker.
+                                if (s.PropellantFraction >= 0.25) s.PhaseEndJd = Math.Min(s.PhaseEndJd, jd);
+                                Complete(op, jd, player, "You pumped " + Cr(moved) + " t of reaction mass across to " + s.Name + ".");
+                                return;
+                            }
+                        }
+                        if (!s.OutOfPropellant) { Fail(op, jd, "A tanker reached " + s.Name + " first."); return; }
                     }
                     else
                     {

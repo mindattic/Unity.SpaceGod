@@ -138,6 +138,10 @@ namespace SolarSystem.Core
         /// <summary>A distress call from a ship actually in a fight (rather than one drifting after interdiction).</summary>
         public bool UnderAttack;
 
+        /// <summary>A distress call from a ship that has run out of propellant and drifts waiting for a tanker:
+        /// seen through by pumping some of the player's own reaction mass across.</summary>
+        public bool DryTanks;
+
         public bool IsActive => State == OpportunityState.Active;
 
         public double DaysLeft(double jd) => Math.Max(0, ExpiresJd - jd);

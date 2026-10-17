@@ -136,6 +136,45 @@ namespace SolarSystem.Core
 
         public bool IsTrader(Ship s) => !s.IsEscort && (s.Role == ShipRole.Trader || s.Role == ShipRole.Miner || s.Role == ShipRole.Courier);
 
+        /// <summary>The chance any one civilian transit springs a leak and leaves the ship to run dry (see <see cref="Fleet.LeakChance"/>).</summary>
+        public const double PropellantLeakChance = 0.003;
+
+        /// <summary>
+        /// Ships whose transits burn real propellant from their tanks (see <see cref="Propulsion"/>): every civilian
+        /// hull in its own system. One on an interstellar voyage is not charged on the way: its run in to a jump gate
+        /// hard by the star is a direct crossing of the whole system, far past any tank, flown on the gate network's
+        /// own approach (it pays the gates' tolls instead) until fuel for it is modelled too.
+        /// </summary>
+        public bool BurnsPropellant(Ship s) => !s.IsEscort && !s.Spec.IsMilitary && s.Voyage == null;
+
+        /// <summary>
+        /// A ship joins a hyperlane: civilian traffic pays the ride's toll (<see cref="Economy.LaneToll"/>, by its
+        /// all-up mass) to whoever keeps the system's ramps, the owner of its biggest settlement. Navies and
+        /// raiders ride free; so does the player's ship (the helm is local flight, never a lane).
+        /// </summary>
+        void PayToll(Ship ship, LaneHop hop, double jd)
+        {
+            if (ship.Spec.IsMilitary || ship.Faction.IsPirate || ship == PilotedShip) return;
+            double toll = Economy.LaneToll(ship.MassTonnes);
+            ship.Faction.Treasury -= toll;
+            ship.Credits -= toll;
+            var keeper = LaneKeeper(hop.From);
+            if (keeper != null) keeper.Treasury += toll;
+        }
+
+        /// <summary>Who keeps a planetary system's hyperlane ramps (and takes their tolls): the owner of its most populous settlement, or nobody.</summary>
+        public Faction LaneKeeper(int system)
+        {
+            var lanes = Fleet.Lanes;
+            Settlement best = null;
+            foreach (var s in Economy.Settlements)
+            {
+                if (s.Fallen || s.Owner == null || s.Owner.IsPirate || lanes == null || lanes.SystemOf(s.Body) != system) continue;
+                if (best == null || s.Population > best.Population) best = s;
+            }
+            return best?.Owner;
+        }
+
         // ---------------------------------------------------------------- the default system
 
         public static World CreateDefault(Ephemeris ephemeris, double jd, int seed = 1977)
@@ -203,6 +242,26 @@ namespace SolarSystem.Core
 
             fleet.Lanes = lanes;
             economy.EstimateTravelDays = fleet.EstimateTravelDays;
+            // Civilian hulls fly on real propellant and buy it in port; traders price every run by it.
+            // (Navies' own supply -- tankers and depots -- is a war-logistics matter, left to their stores for now.)
+            fleet.BurnsPropellant = BurnsPropellant;
+            fleet.CanRefuelAt = economy.HasPropellantAt;
+            economy.EstimateTrip = fleet.EstimateTrip;
+            fleet.RanDry = (ship, when) =>
+                Log(when, $"{ship.Name} has run its tanks dry off {Catalog[ship.Orbit.Body].Name} and calls for a tanker", WorldEventKind.Info, ship.Orbit.Body);
+            fleet.TankerArrived = (ship, tonnes, when) =>
+            {
+                if (tonnes <= 0) return;
+                double fee = Propulsion.TankerFee(tonnes);
+                ship.Faction.Treasury -= fee;
+                ship.Credits -= fee;
+                Log(when, $"A tanker reaches {ship.Name} with {tonnes:N0} t of reaction mass", WorldEventKind.Info, ship.Orbit.Body);
+            };
+            fleet.LaneJoined = PayToll;
+            // Now and then a tank is holed on the way: the ship runs dry and calls for help.
+            fleet.LeakChance = PropellantLeakChance;
+            fleet.Leaked = (ship, tonnes, when) =>
+                Log(when, $"{ship.Name} vents {tonnes:N0} t of reaction mass from a holed tank", WorldEventKind.Info, ship.Orbit?.Body ?? -1);
             economy.Danger = body => war.Danger(body) * 0.08;
             // Yards keep the merchant fleet up first; then the navies take their slips.
             economy.ChooseBuild = yard => TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
@@ -226,13 +285,17 @@ namespace SolarSystem.Core
             war.BattleStarted += b => DivertAround(b, b.StartJd);
             fleet.ChooseNext = (ship, here, when) =>
             {
+                // In port, a ship on propellant tops up its tanks before it plans the next run.
+                if (BurnsPropellant(ship)) economy.Refuel(ship, here, when);
                 if (ship.Voyage != null && VoyageOrders != null)
                 {
                     int ordered = VoyageOrders(ship, here, when);
                     if (ordered >= 0) return ordered;
                 }
-                // Free ships follow their own whims (the fleet's built-in choice), not orders or markets.
-                if (ship.Role == ShipRole.Free) return -1;
+                // Free ships follow their own whims (the fleet's built-in choice), not orders or markets -- unless
+                // their tanks are getting low, when even an idle wanderer heads for somewhere to fill them.
+                if (ship.Role == ShipRole.Free)
+                    return ship.PropellantFraction < 0.4 && !economy.HasPropellantAt(ship, here) ? economy.NearestPropellant(ship, here, when) : -1;
                 if (!IsTrader(ship)) return war.ChooseNext(ship, here, when);
                 int next = economy.PlanTrade(ship, here, when);
                 if (next < 0 && !ship.HasCargo) ship.Cargo = "Empty, looking for work";

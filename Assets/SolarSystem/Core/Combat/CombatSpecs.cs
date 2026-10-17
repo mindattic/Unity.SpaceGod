@@ -235,6 +235,13 @@ namespace SolarSystem.Core
         /// <summary>People aboard: the ship's company, and the marines who board and repel boarders.</summary>
         public double Crew, Marines;
 
+        /// <summary>
+        /// Propulsion (see <see cref="Propulsion"/>): the hull's mass with empty tanks and an empty hold, its
+        /// tanks' capacity, both in tonnes, and the speed its fusion drive throws reaction mass out at, km/s.
+        /// Torch-drive fiction on real rocketry: the rocket equation sets what every manoeuvre costs.
+        /// </summary>
+        public double DryMassTonnes, PropellantTonnes, ExhaustVelocityKmS;
+
         static readonly Dictionary<ShipClass, CombatSpec[]> Specs = new Dictionary<ShipClass, CombatSpec[]>
         {
             [ShipClass.Carrier] = new[] { new CombatSpec
@@ -244,6 +251,7 @@ namespace SolarSystem.Core
                 Hull = 26000, Shield = 11000, ShieldRegen = 75, Armor = 6, MaxSpeed = 0.07, Accel = 0.0025, Decel = 0.0025,
                 BoostSpeedMultiplier = 1.3, BoostDurationS = 30, TurnRateDegS = 4, Squadrons = 3,
                 Crew = 3800, Marines = 320,
+                DryMassTonnes = 140000, PropellantTonnes = 70000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.035, 0.25),
@@ -281,6 +289,7 @@ namespace SolarSystem.Core
                 Hull = 30000, Shield = 13000, ShieldRegen = 90, Armor = 10, MaxSpeed = 0.09, Accel = 0.003, Decel = 0.003,
                 BoostSpeedMultiplier = 1.3, BoostDurationS = 32, TurnRateDegS = 5,
                 Crew = 2400, Marines = 260,
+                DryMassTonnes = 120000, PropellantTonnes = 60000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.045, -0.3),
@@ -317,6 +326,7 @@ namespace SolarSystem.Core
                 Hull = 13000, Shield = 6000, ShieldRegen = 54, Armor = 6, MaxSpeed = 0.14, Accel = 0.005, Decel = 0.006,
                 BoostSpeedMultiplier = 1.4, BoostDurationS = 28, TurnRateDegS = 8,
                 Crew = 900, Marines = 140,
+                DryMassTonnes = 45000, PropellantTonnes = 22000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.03, 0.05),
@@ -347,6 +357,7 @@ namespace SolarSystem.Core
                 Hull = 5500, Shield = 2500, ShieldRegen = 30, Armor = 3, MaxSpeed = 0.24, Accel = 0.009, Decel = 0.011,
                 BoostSpeedMultiplier = 1.5, BoostDurationS = 25, TurnRateDegS = 14,
                 Crew = 280, Marines = 50,
+                DryMassTonnes = 9000, PropellantTonnes = 5000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.035, 0.0),
@@ -373,6 +384,7 @@ namespace SolarSystem.Core
                 Hull = 4500, Shield = 750, ShieldRegen = 9, Armor = 2, MaxSpeed = 0.05, Accel = 0.0015, Decel = 0.0018,
                 BoostSpeedMultiplier = 1.25, BoostDurationS = 36, TurnRateDegS = 3,
                 Crew = 40, Marines = 4,
+                DryMassTonnes = 9000, PropellantTonnes = 6000, ExhaustVelocityKmS = 2500,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.07, 0),
@@ -392,6 +404,7 @@ namespace SolarSystem.Core
                 Hull = 6500, Shield = 500, ShieldRegen = 6, Armor = 4, MaxSpeed = 0.04, Accel = 0.0012, Decel = 0.0014,
                 BoostSpeedMultiplier = 1.2, BoostDurationS = 38, TurnRateDegS = 3,
                 Crew = 30, Marines = 0,
+                DryMassTonnes = 8000, PropellantTonnes = 7000, ExhaustVelocityKmS = 2200,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.09, 0.3),
@@ -409,6 +422,7 @@ namespace SolarSystem.Core
                 Hull = 3000, Shield = 900, ShieldRegen = 15, Armor = 12, MaxSpeed = 0.3, Accel = 0.012, Decel = 0.014,
                 BoostSpeedMultiplier = 1.6, BoostDurationS = 22, TurnRateDegS = 18,
                 Crew = 20, Marines = 70,
+                DryMassTonnes = 1800, PropellantTonnes = 900, ExhaustVelocityKmS = 3500,
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.Drill, 0, 0, 0.45),
@@ -431,6 +445,7 @@ namespace SolarSystem.Core
                 Hull = 1300, Shield = 600, ShieldRegen = 12, Armor = 0, MaxSpeed = 0.35, Accel = 0.02, Decel = 0.024,
                 BoostSpeedMultiplier = 1.8, BoostDurationS = 14, TurnRateDegS = 30,
                 Crew = 6, Marines = 0,
+                DryMassTonnes = 220, PropellantTonnes = 180, ExhaustVelocityKmS = 4500,
                 Layout = new[]
                 {
                     // The "light fighter": the fastest, most agile hull in the game carries the
@@ -451,6 +466,7 @@ namespace SolarSystem.Core
                 Hull = 1800, Shield = 700, ShieldRegen = 12, Armor = 1, MaxSpeed = 0.32, Accel = 0.018, Decel = 0.02,
                 BoostSpeedMultiplier = 1.7, BoostDurationS = 16, TurnRateDegS = 26,
                 Crew = 2, Marines = 0,
+                DryMassTonnes = 60, PropellantTonnes = 30, ExhaustVelocityKmS = 3000,
                 Layout = new[]
                 {
                     // A dedicated dogfighter: twin forward guns rather than the Courier's single gun,

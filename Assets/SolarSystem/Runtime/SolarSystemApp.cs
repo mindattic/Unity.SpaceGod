@@ -109,6 +109,15 @@ namespace SolarSystem
         /// across frames like <see cref="pilotVelKmS"/> does, and only while piloting.</summary>
         PilotCruiseState pilotCruise { get => pilot.Cruise; set => pilot.Cruise = value; }
 
+        /// <summary>Real seconds until the emergency tanker the pilot called reaches the ship, or below 0 for none on its way.</summary>
+        public float TankerDueS { get; private set; } = -1;
+
+        /// <summary>The propellant warning last shown (0 none, 1 low, 2 dry), so each is toasted once as it is crossed.</summary>
+        int propellantWarning;
+
+        /// <summary>Real seconds a tanker the pilot calls takes to come alongside.</summary>
+        public const float TankerCallS = 20f;
+
         /// <summary>Seconds until the next check for a hostile worth proactively starting a fight over
         /// (see <see cref="War.TryStartPlayerBattle"/>) -- a few times a second is plenty responsive
         /// and cheap enough not to bother running every single frame.</summary>
@@ -903,6 +912,8 @@ namespace SolarSystem
         {
             EndSalvage(null);
             SalvageApproach = null;
+            TankerDueS = -1;
+            propellantWarning = 0;
             var ship = Piloted.Ship;
             Piloted = Target.None;
             World.PilotedShip = null;
@@ -1005,8 +1016,19 @@ namespace SolarSystem
             // Mirrors PilotFlight.Step's own "boosting" condition, read before Step drains the
             // charge further this frame, purely to drive the camera's FOV kick below.
             pilotBoosting = input.Boost && tuning.BoostDurationS > 0 && ship.Combat.BoostFraction > 0;
-            PilotFlight.Step(ref pilot, ship.Combat, HullDynamics.Of(ship.Combat.Spec), tuning, input, PilotGravity(), dt);
+            var gravity = PilotGravity();
+            var posBefore = pilot.Pos;
+            var velBefore = pilot.Vel;
+            PilotFlight.Step(ref pilot, ship.Combat, HullDynamics.Of(ship.Combat.Spec), tuning, input, gravity, dt);
+            // The drive runs on the ship's own tanks: every change of velocity its thrusters make (not gravity's
+            // pull, which is free) is paid for in reaction mass by the rocket equation, and a dry hull only coasts.
+            var pos = pilot.Pos;
+            var vel = pilot.Vel;
+            Propulsion.ApplyManoeuvre(ship, ref pos, ref vel, posBefore, velBefore + gravity * dt, dt);
+            pilot.Pos = pos;
+            pilot.Vel = vel;
             KeepPilotAboveSurfaces(ship);
+            UpdatePropellant(ship, dt);
 
             UpdatePilotBattle(ship, dt);
             UpdateGateActivation(ship);
@@ -1039,6 +1061,39 @@ namespace SolarSystem
                 if ((pilotOffsetKm - centre).Length > body.RadiusKm * PilotFlight.GravityReachRadii) continue;
                 PilotFlight.KeepAboveSurface(ref pilot, centre, body.RadiusKm + Math.Max(0.5, ship.LengthKm));
             }
+        }
+
+        /// <summary>Warns as the piloted ship's tanks run low and dry, and brings a called tanker alongside when it is due.</summary>
+        void UpdatePropellant(Ship ship, float dt)
+        {
+            if (TankerDueS >= 0)
+            {
+                TankerDueS -= dt;
+                if (TankerDueS < 0)
+                {
+                    double tonnes = Propulsion.TankerLoad(ship);
+                    double fee = Propulsion.TankerFee(tonnes);
+                    ship.Propellant += tonnes;
+                    ship.Faction.Treasury -= fee;
+                    ShowToast("A tanker comes alongside: " + tonnes.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " t of reaction mass for " +
+                        fee.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " cr");
+                }
+            }
+            int level = ship.Propellant <= 1e-6 ? 2 : ship.PropellantFraction < 0.15 ? 1 : 0;
+            if (level > propellantWarning)
+                ShowToast(level == 2 ? "PROPELLANT DRY: drifting. Refuel at a port's market, or call a tanker" : "Propellant low: " + Mathf.RoundToInt((float)(ship.PropellantFraction * 100)) + "% left");
+            propellantWarning = level;
+        }
+
+        /// <summary>Calls an emergency tanker out to the piloted ship (dearer than a port: a call-out fee and three times the going rate).</summary>
+        public void CallTanker()
+        {
+            if (!IsPiloting || TankerDueS >= 0) return;
+            var ship = Piloted.Ship;
+            if (ship == null || Propulsion.TankerLoad(ship) < 1) { ShowToast("Tanks are full"); return; }
+            TankerDueS = TankerCallS;
+            ShowToast("Tanker called: about " + Mathf.RoundToInt(TankerCallS) + " s out, " +
+                Propulsion.TankerFee(Propulsion.TankerLoad(ship)).ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " cr to fill the tanks");
         }
 
         /// <summary>
