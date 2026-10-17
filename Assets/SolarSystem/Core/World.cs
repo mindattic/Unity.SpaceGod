@@ -366,7 +366,10 @@ namespace SolarSystem.Core
                     ReachedGate?.Invoke(ship, when);
                     return;
                 }
-                if (IsTrader(ship)) economy.OnArrive(ship, ship.Orbit.Body, when);
+                // A freighter bound for a jump gate carries goods for another system's markets: it keeps them through
+                // any port it passes on the way to the gate (selling there skipped the gate's toll and the far market).
+                bool bound = ship.Voyage != null && ship.GateKm != null;
+                if (IsTrader(ship) && !bound) economy.OnArrive(ship, ship.Orbit.Body, when);
                 war.OnArrived(ship, when);
             };
             fleet.ReachedRing = war.OnArrived;

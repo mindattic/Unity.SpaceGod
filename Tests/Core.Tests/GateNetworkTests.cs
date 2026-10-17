@@ -163,6 +163,40 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AFreighterBoundForAGateKeepsItsCargoThroughThePortsOnTheWay()
+        {
+            var g = Create();
+            var sol = g.Find("Sol System");
+            var ac = g.Find("Alpha Centauri");
+            var w = sol.World;
+            int earth = w.Catalog["Earth"].Index;
+            var ship = w.Fleet.Ships.First(s => !s.Destroyed && w.IsTrader(s) && s.Spec.Class == ShipClass.Freighter);
+            void Load()
+            {
+                ship.HasCargo = true;
+                ship.CargoGood = Good.Food;
+                ship.CargoTonnes = 200;
+                ship.CargoCost = 30000;
+                ship.Orbit = new ParkingOrbit { Body = earth };
+            }
+            var earthPort = w.Economy.Settlements.First(s => s.Name == "Earth Orbital");
+            Assume.That(earthPort.Demand[(int)Good.Food], Is.GreaterThan(0), "Earth buys food");
+
+            // On its way to the Centauri Gate it passes Earth: the food is for Centauri's markets.
+            Load();
+            ship.Voyage = new Voyage { Purpose = VoyagePurpose.Trade, Home = sol, Destination = ac, Faction = ship.Faction };
+            ship.GateKm = sol.GateTo(ac).PositionKm;
+            w.Fleet.Arrived(ship, StartJd);
+            Assert.That(ship.HasCargo, Is.True, "sold at a port on the way to the gate");
+
+            // An ordinary trader sells at Earth.
+            ship.Voyage = null;
+            ship.GateKm = null;
+            w.Fleet.Arrived(ship, StartJd);
+            Assert.That(ship.HasCargo, Is.False);
+        }
+
+        [Test]
         public void TheBestCargoPaysOnlyWhenThePriceGapBeatsTheDistanceMarkup()
         {
             var g = Create();
