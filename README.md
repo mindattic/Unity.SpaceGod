@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 775 passing](https://img.shields.io/badge/core%20tests-775%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 793 passing](https://img.shields.io/badge/core%20tests-793%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -72,6 +72,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Weapons that travel.** Railgun and gun rounds fly a lead-compensated straight line and land only when they arrive; a miss keeps flying and fades, and the miss rate depends on the target's size. Beams sweep onto their target and leave a scorch, with muzzle flash and recoil. Destroyers carry a fixed spinal railgun.
 - **Wrecks.** A ship destroyed in battle leaves a slowly tumbling hull inside a drifting debris field where it died, at a body or beside a hyperlane, carrying its cargo as salvage until it breaks up and is cleared.
 - **Surrender.** An outgunned, battered hull can strike its colours instead of fighting to the last: it breaks off, powers down its weapons and hails. How soon depends on its damage, the odds and its faction's temperament (pirates break first, navy crews last). Its captor ransoms the cargo, takes the ship through the boarding path, or lets it go.
+- **Outfitting.** Every hull has slots: its weapon hardpoints (light mounts take point defence or a laser, heavy ones any turret, and only a mount bearing on the bow a spinal railgun), its shield and engine mounts, and one to six internal bays by class. A shipyard (or a raider haven) fits lasers, heavy lasers, railguns, missile launchers and point defence, hardened shield generators (half again a stock one's share of shield and regen), torch drives (30% more thrust), armour plate (more armour and hull points, and mass to push), cargo racks (more hold), scanner suites (a million km more reach for hidden havens) and a brig. Each module is bought from that yard's own market, its alloys, electronics, machinery and munitions at the yard's prices, plus a quarter again for labour, less half the old part's materials sold back (nothing for one shot away); a yard short of a material cannot fit what needs it. The loadout rebuilds the hull's combat spec, and every added tonne costs acceleration and delta-v. Navies and raiders upgrade their own warships while they refit at their yards, out of a flush treasury and the yard's surplus. A brig takes prisoners off a prize, handed over in port for 50,000 credits a head for raiders (20,000 ransom for anyone else).
 - **Escape pods and crews.** Every crewed hull carries escape pods, one for every 20 people aboard (17 on a destroyer, over 200 on a carrier). As a hull goes down in battle, or is scuttled or cast adrift, whoever is still aboard makes for them: about half to four fifths when it is shot apart, a fifth to under half when the reactor goes, nearly everyone when the crew are put off in good order. The pods drift away from the hull and broadcast for ten days of air. Whoever finds them decides what happens next. Their own side or a friendly ship (patrols search, merchants come across them) brings the crew home and is paid by their owners. Pirates haul them in as hostages and ransom them back for 60,000 cr a head; hostages nobody can pay for are pressed into pirate crews, and hostages held at a haven go free if it falls. An enemy navy keeps them as prisoners of war until the fighting stops. Raiders picked up by a navy may give their haven away. If nobody comes in time, everyone aboard is lost. Crews of hulls that are kept or sold go the same way as hostages or prisoners. Every death wears down the faction's crew morale (crews strike their colours sooner) and is gone for good from its manpower: a reserve of trained spacers, recruited from its settlements' people, that new hulls and refits draw their crews and marines from. A navy bleeding crews builds fewer ships.
 - **Escort fighters.** Besides carrier squadrons, each of the six navy patrol groups flies two named fighters as escorts.
 - **Fighters.** Carriers launch their squadrons (two of interceptors to one of torpedo bombers) as they enter a battle. Each squadron flies attack runs on capital ships (approach from the side, dive in guns firing or torpedoes away, pass close, break off, swing round from a new side) or dogfights enemy fighters. Wingmen fly a loose vee: each pilot has their own wander, reaction lag and discipline, so formations breathe and stretch, and spread out on the run.
@@ -162,6 +163,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Hails.** In a battle, the number keys answer: to a pirate demand for your cargo, 1 hands it over and 2 refuses; to an enemy that strikes its colours, 1 demands its cargo, 2 takes the ship and 3 lets it go.
 - **Cargo and trade.** I opens the ship's grid cargo hold (a per-class grid; click a crate, then a cell, to move it). Near a settlement's world, the M market board shows Buy and Sell buttons that trade whole crates at the same prices and port tax the AI traders pay.
 - **Spawn and pilot.** V opens a screen of every ship class with a rendered preview; click one to spawn it at the camera and fly it.
+- **Outfitting.** At a shipyard F2 (or Outfit on the market board) opens the ship's slots: pick one, see every module that fits it priced at this yard's market, and Fit. Prisoners in the brig are handed over there too.
 - **Jump gates.** Every system's gates sit 5,000 km from its centre, each facing the star it leads to (Sol's Centauri Gate, Alpha Centauri's Sol Gate, and so on). Fly within 300 km of one and press Y to come out at its far gate at once, ship, cargo and credits intact, unless it is shut to you.
 - **Model viewer.** F9 (or `-modelviewer <name>` on the command line) shows any ship model on its own for visual checks.
 
@@ -273,6 +275,7 @@ While piloting:
 | Fire forward guns | Hold left mouse |
 | Lock a target | T |
 | Cargo hold | I |
+| Outfit the ship | F2, at a shipyard (or Outfit on the market board) |
 | Buy and sell crates | M, near a settlement's world |
 | Refuel | M, near a settlement's world (Refuel), or CALL A TANKER when the tanks are low |
 | Activate a jump gate | Y, within 300 km of it |
@@ -295,7 +298,7 @@ Assets/SolarSystem/
     Systems/              Alpha Centauri, the Galaxy of star systems, nearby stars, the jump-gate lattice and the traffic across it
     Infrastructure/       orbital yards, factories, habitats, real spacecraft, constellations, docking rings
     Economy/              goods, recipes, settlements and markets, trade planning, propellant (the rocket equation), the player's cargo hold
-    Combat/               hardpoints, battles, fighters, boarding, morale and surrender, wrecks, war, diplomacy, piloted flight
+    Combat/               hardpoints, outfitting, battles, fighters, boarding, morale and surrender, wrecks, war, diplomacy, piloted flight
     SimClock.cs           Julian-date clock and time warp
     BodyOrientation.cs    IAU prime meridians and parent-facing moons, so maps face the right way
     GasGiantWeather.cs    zonal wind profiles and the Great Red Spot's position
@@ -327,7 +330,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-775 NUnit tests, run in parallel in under two minutes, cover the following:
+793 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -350,6 +353,7 @@ dotnet test
 - Combat: the stronger group winning and hardpoints taking the damage, reactor and shield-generator losses, hardpoints sitting on the hull, shield arcs, coarse steps at high warp, and two years of war with battles, losses and a working economy
 - Weapons: railgun and gun rounds' travel time, lead and size-dependent misses
 - Salvage: latching only alongside with velocities matched, what a derelict is left with (cargo, stores, survivors, raiders aboard), fighting through raiders before anything is taken, the grid hold filling, stripped parts fitted or scrapped, claiming a flyable hull with a prize crew, a live derelict lying where it was taken, and the adventure on a hulk seen through only by working it
+- Outfitting: slots from each design, modules only where they fit (a railgun only bearing on the bow), materials bought from the yard's stock at its prices and the old part sold back, a yard short of a material or an owner short of credits fitting nothing, hardened shields, armour plate (and the delta-v its mass costs), torch drives, racks that enlarge both holds and cannot come out full, scanner reach, the brig's prisoners and their bounty, damage and crew carried through a refit, and navies and raiders upgrading their warships at their own yards
 - Wrecks and surrender: lasting wrecks with salvage and expiry, hulls striking their colours, ransom, prize-taking and pirate cargo demands
 - Escape pods and crews: pods fitted per 20 aboard, more escaping a slow death than a reactor going up and nearly all a scuttling, the pods launched where the hull died and drifting off, a battle's fighter pilots in one cluster, rescue paid by the owners with the crew back in the pool, pirates' hostages ransomed (or pressed into service when nobody pays, or freed when their haven falls), prisoners going home at a ceasefire, raiders' pods giving their haven away, pods lost when their air runs out, only ships at the pods' body (not the player's, not one in a fight) finding them, yards that cannot crew a hull laying none down, recruiting up to the reserve, morale falling with deaths, the pod adventure (picked up alongside, lost to someone else or to the air running out, held for ransom by a pirate pilot, raiders handed to the hunters), and five months of the live system with pods rescued, taken and lost
 - War and diplomacy: siege length and port capture, symmetric relations, docking rules

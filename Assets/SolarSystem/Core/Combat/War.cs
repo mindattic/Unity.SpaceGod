@@ -367,6 +367,11 @@ namespace SolarSystem.Core
                 if (u.Kind == UnitKind.Platform) u.Platform.Platforms.Remove(u.Combat);
                 return;
             }
+            // Captors with a brig lock up some of its people first, for bounty or ransom in port (U.SPC-T65).
+            var captors = new List<Ship>();
+            foreach (var cu in b.Units)
+                if (cu.Ship != null && !cu.Dead && cu.Ship != ship && cu.Ship.Faction == captor) captors.Add(cu.Ship);
+            double prisoners = Outfitting.TakePrisoners(ship, captors);
             string how;
             double hull = ship.Combat.HullFraction;
             bool warship = ship.Spec.IsMilitary;
@@ -430,7 +435,7 @@ namespace SolarSystem.Core
                 }
                 how = Steal(ship, captor, b, jd) ? "taken as a prize" : "scuttled";
             }
-            world.Log(jd, $"The {ship.Name} is {how} by the {captor.Name}", WorldEventKind.Capture, Shown(b));
+            world.Log(jd, $"The {ship.Name} is {how} by the {captor.Name}" + (prisoners >= 1 ? $", {prisoners:0} of its crew taken prisoner" : ""), WorldEventKind.Capture, Shown(b));
         }
 
         void Loot(Ship ship)
@@ -1407,15 +1412,15 @@ namespace SolarSystem.Core
         }
 
         /// <summary>A ship of <paramref name="by"/> sweeps its scanners from a heliocentric position: every hidden
-        /// haven within <see cref="ScanRangeKm"/> is found. Returns the havens found this time.</summary>
-        public List<Settlement> ScanFrom(Faction by, DVec3 helioKm, double jd, string who = null)
+        /// haven within <paramref name="rangeKm"/> (<see cref="ScanRangeKm"/>, more with scanner suites fitted) is found. Returns the havens found this time.</summary>
+        public List<Settlement> ScanFrom(Faction by, DVec3 helioKm, double jd, string who = null, double rangeKm = ScanRangeKm)
         {
             var found = new List<Settlement>();
             if (by == null || by.IsPirate) return found;
             foreach (var st in Economy.Settlements)
             {
                 if (!st.Hidden || st.KnownTo.Contains(by)) continue;
-                if ((world.Ephemeris.HelioAt(st.Body, jd) - helioKm).Length > ScanRangeKm) continue;
+                if ((world.Ephemeris.HelioAt(st.Body, jd) - helioKm).Length > rangeKm) continue;
                 if (Discover(st, by, jd, (who != null ? "the " + who + "'s" : "a ship's") + " scanners pick it out")) found.Add(st);
             }
             return found;
@@ -1435,10 +1440,19 @@ namespace SolarSystem.Core
             bool anyHidden = false;
             foreach (var st in Economy.Settlements) anyHidden |= st.Hidden;
             if (!anyHidden) return;
+            // A group sweeps as far as the best scanners in it reach.
+            var reach = new Dictionary<Ship, double>();
+            foreach (var e in Fleet.Ships)
+                if (e.IsEscort && !e.Destroyed && e.Loadout != null)
+                {
+                    reach.TryGetValue(e.Leader, out double r);
+                    reach[e.Leader] = Math.Max(r, Outfitting.ScanRangeKm(e));
+                }
             foreach (var s in Fleet.Ships)
             {
                 if (s.Destroyed || s.IsEscort || s.Derelict || s == world.PilotedShip || !s.Spec.IsMilitary || s.Faction.IsPirate) continue;
-                ScanFrom(s.Faction, Fleet.StateOf(s, jd).HelioKm, jd, s.Name);
+                reach.TryGetValue(s, out double escorts);
+                ScanFrom(s.Faction, Fleet.StateOf(s, jd).HelioKm, jd, s.Name, Math.Max(escorts, Outfitting.ScanRangeKm(s)));
             }
         }
 
@@ -1781,12 +1795,18 @@ namespace SolarSystem.Core
             foreach (var s in Fleet.Ships)
             {
                 if (s.Destroyed || s.Battle != null || !(s.Spec.IsMilitary || s.Faction.IsPirate)) continue;
-                if (s.Faction.Treasury <= 0) continue;
                 var c = s.Controller;
                 if (c.Phase != ShipPhase.Parked) continue;
-                Settlement yard = null;
+                Settlement yard = null, port = null;
                 foreach (var st in Economy.At(c.Orbit.Body))
-                    if (st.Owner == s.Faction && (st.HasShipyard || st.Kind == SettlementKind.Haven)) yard = st;
+                {
+                    if (st.Owner != s.Faction || st.Fallen) continue;
+                    port = st;
+                    if (st.HasShipyard || st.Kind == SettlementKind.Haven) yard = st;
+                }
+                // Prisoners in the brig go ashore at any port of the owner's, for their bounty or ransom (U.SPC-T65).
+                if (port != null && s.Prisoners > 0 && s != world.PilotedShip) Outfitting.HandOverPrisoners(Economy, s, port);
+                if (s.Faction.Treasury <= 0) continue;
                 if (yard == null) continue;
 
                 double scale = s.LengthKm;
@@ -1843,8 +1863,14 @@ namespace SolarSystem.Core
                     s.Faction.Treasury -= add * 2.5e6;
                     s.Combat.RestoreFighters(add);
                 }
+                // A sound, rearmed hull of a flush owner takes an upgrade now and then (U.SPC-T65); the player fits their own.
+                if (s != world.PilotedShip && s.Combat.Damage <= 0.001 && missing == 0 && rng.NextDouble() < AiOutfitChance)
+                    Outfitting.AiRefit(Economy, s, yard);
             }
         }
+
+        /// <summary>Chance a day a warship idle at its own yard looks at an upgrade.</summary>
+        public const double AiOutfitChance = 0.05;
 
         /// <summary>Days a captured port is garrisoned and cannot be taken again.</summary>
         public const double CaptureGraceDays = 90;

@@ -16,6 +16,9 @@ namespace SolarSystem.Views
     {
         public readonly Ship Ship;
         public readonly GameObject Root;
+
+        /// <summary>The combat state the hardpoints were built from: a yard refit (U.SPC-T65) gives the ship a new one, and the view is rebuilt.</summary>
+        public readonly ShipCombat BuiltFor;
         readonly List<Renderer> renderers = new List<Renderer>();
         readonly MeshRenderer plume;
         readonly ParticleSystem exhaust;
@@ -71,6 +74,7 @@ namespace SolarSystem.Views
         public ShipView(Ship ship, Transform parent)
         {
             Ship = ship;
+            BuiltFor = ship.Combat;
             Root = new GameObject(ship.Name);
             Root.transform.SetParent(parent, false);
             ShipModels.Build(ship, Root.transform, renderers, out stern, out bow);

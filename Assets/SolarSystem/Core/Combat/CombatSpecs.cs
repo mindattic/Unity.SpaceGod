@@ -89,6 +89,11 @@ namespace SolarSystem.Core
         /// can fire into. The default (0, 360) covers every direction, matching omnidirectional coverage.</summary>
         public double ArcCenterDeg, ArcWidthDeg = 360;
 
+        /// <summary>The grade of what is fitted here (U.SPC-T65), 1 for the design's own part: a hardened
+        /// shield generator's share of the hull's shield and regen against a stock one's, or a torch drive's
+        /// thrust against a stock engine's (see <see cref="Loadout"/>). Ignored for other kinds.</summary>
+        public double Rating = 1;
+
         public SubsystemDef(SubsystemKind kind, double x, double y, double z, bool facesAft = false, double arcCenterDeg = 0, double arcWidthDeg = 360)
         {
             Kind = kind;
@@ -481,6 +486,15 @@ namespace SolarSystem.Core
                 },
             } },
         };
+
+        /// <summary>A copy to refit (U.SPC-T65): every figure the same, the hardpoint list its own array
+        /// (sharing the unchanged <see cref="SubsystemDef"/>s, which are never mutated).</summary>
+        public CombatSpec Clone()
+        {
+            var c = (CombatSpec)MemberwiseClone();
+            c.Layout = (SubsystemDef[])Layout.Clone();
+            return c;
+        }
 
         public static CombatSpec Of(ShipClass c) => Specs.TryGetValue(c, out var s) ? s[0] : Specs[ShipClass.Destroyer][0];
 

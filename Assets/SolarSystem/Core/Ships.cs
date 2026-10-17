@@ -305,8 +305,36 @@ namespace SolarSystem.Core
         /// <summary>The player's personal grid-based cargo hold (<see cref="CargoHold"/>) -- separate
         /// from the single-slot cargo fields above that the AI trade loop owns, and built only once
         /// asked for, since only the ship currently being piloted ever needs one.</summary>
-        public CargoHold PersonalHold => personalHold ??= new CargoHold(CargoHoldSpec.Of(Spec.Class));
+        public CargoHold PersonalHold => personalHold ??= EmptyHold(Loadout == null ? 0 : Loadout.Count(ModuleKind.CargoRack) * Loadout.RackRows);
         CargoHold personalHold;
+
+        CargoHold EmptyHold(int extraRows)
+        {
+            var spec = CargoHoldSpec.Of(Spec.Class);
+            return new CargoHold(spec.Width, spec.Height + extraRows);
+        }
+
+        /// <summary>The grid hold rebuilt with <paramref name="extraRows"/> rows of racks (U.SPC-T65), every crate
+        /// where it was (or, if its cells are gone, wherever it first fits); null if they will not all fit.</summary>
+        internal CargoHold ResizedHold(int extraRows)
+        {
+            var hold = EmptyHold(extraRows);
+            if (personalHold == null) return hold;
+            var moved = new List<CargoItem>();
+            foreach (var item in personalHold.Items)
+                if (hold.Add(item.Good, item.X, item.Y, item.Rotated) == null) moved.Add(item);
+            foreach (var item in moved)
+                if (hold.AddFirstFit(item.Good) == null) return null;
+            return hold;
+        }
+
+        internal void SetHold(CargoHold hold) => personalHold = hold;
+
+        /// <summary>What a yard has fitted into this hull's slots (U.SPC-T65), or null while it is as built.</summary>
+        public Loadout Loadout;
+
+        /// <summary>Prisoners locked in the brig, and the bounty and ransom they will fetch handed over in port.</summary>
+        public double Prisoners, PrisonerBounty;
 
         /// <summary>Running trade profit, credits.</summary>
         public double Credits;
@@ -425,6 +453,9 @@ namespace SolarSystem.Core
             TripsCompleted = TripsCompleted,
             personalHold = personalHold,
             propellant = propellant,
+            Loadout = Loadout?.Copy(),
+            Prisoners = Prisoners,
+            PrisonerBounty = PrisonerBounty,
         };
 
         public override string ToString() => Name;

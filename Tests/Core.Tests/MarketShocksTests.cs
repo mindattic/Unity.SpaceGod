@@ -288,8 +288,9 @@ namespace SolarSystem.Core.Tests
             TestContext.Out.WriteLine(string.Join("\n", economic.Select(e => e.Text)));
             Assert.That(economic.Count, Is.InRange(5, 400));
             Assert.That(news.Count(e => e.Kind == WorldEventKind.Market), Is.GreaterThan(0));
+            // A haven a navy has stormed is emptied by the war, not by hunger (its scanners may find one in a year).
             foreach (var s in w.Economy.Settlements)
-                Assert.That(s.Population, Is.GreaterThan(s.InitialPopulation * 0.5), s.Name);
+                if (!s.Fallen) Assert.That(s.Population, Is.GreaterThan(s.InitialPopulation * 0.5), s.Name);
         }
     }
 }

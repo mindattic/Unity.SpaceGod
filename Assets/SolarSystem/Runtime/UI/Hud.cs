@@ -41,6 +41,10 @@ namespace SolarSystem.UI
         /// be shrunk to just their title bar without closing them outright.</summary>
         bool marketOpen = true, cargoOpen = true, helpOpen = true;
 
+        /// <summary>The outfitting panel's chosen slot (-1: none) and how far its slot list is scrolled.</summary>
+        int outfitSlot = -1;
+        Vector2 outfitScroll;
+
         static readonly Color Accent = new Color(0.45f, 0.85f, 1f);
         static readonly Color Dim = new Color(0.62f, 0.7f, 0.78f);
 
@@ -69,6 +73,7 @@ namespace SolarSystem.UI
             if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
             if (app.ShowCargo) DrawCargo();
+            if (app.ShowOutfit) DrawOutfit();
             if (app.ShowHelp) DrawHelp();
             DrawToast();
         }
@@ -1085,6 +1090,9 @@ namespace SolarSystem.UI
             GUI.Label(new Rect(r.x + 12, r.y + 30, w - 24, 18), market != null
                 ? market.Owner.Name + (pilotRecord != null && lawful ? StandingText(pilotRecord, market.Owner) : "   (select a body or a trader to change, M to close)")
                 : "Select a port to see its market.   M to close", small);
+            // At a yard the ship can refit: open the outfitting panel (F2) from here too.
+            if (canTrade && Outfitting.IsYard(market) && GUI.Button(new Rect(r.xMax - 110, r.y + 28, 98, 18), app.ShowOutfit ? "Outfit  [-]" : "Outfit", button))
+                app.ShowOutfit = !app.ShowOutfit;
             if (shocks != null)
             {
                 GUI.contentColor = new Color(1f, 0.72f, 0.4f);
@@ -1212,6 +1220,132 @@ namespace SolarSystem.UI
                     Economy.TradeOutcome.Contraband => "No lawful market will take stolen goods",
                     _ => "Can't sell that right now",
                 });
+        }
+
+        // ---------------------------------------------------------------- outfitting (U.SPC-T65)
+
+        /// <summary>
+        /// The yard's outfitting panel: the piloted hull's slots and what is in each, and for the chosen slot every
+        /// module that fits with its price at this yard's market (materials at its prices, labour, less what the
+        /// old part fetches). Prisoners in the brig are handed over here too, at any port the ship may dock at.
+        /// </summary>
+        void DrawOutfit()
+        {
+            var ship = app.World.PilotedShip;
+            const float w = 600;
+            if (ship == null || ship.Combat == null)
+            {
+                var r0 = Panel(new Rect((Screen.width - w) * 0.5f, 190, w, 52));
+                GUI.Label(new Rect(r0.x + 12, r0.y + 6, w - 24, 22), "OUTFITTING", title);
+                GUI.Label(new Rect(r0.x + 12, r0.y + 28, w - 24, 18), "Pilot a ship (P) and bring it to a shipyard to refit it.   F2 to close", small);
+                return;
+            }
+            Settlement yard = null, port = null;
+            foreach (var st in app.Economy.Settlements)
+            {
+                if (!st.Discovered || !app.CanTradeNow(st)) continue;
+                port ??= st;
+                if (yard == null && Outfitting.IsYard(st)) yard = st;
+            }
+            var loadout = Outfitting.LoadoutOf(ship);
+            var spec = ship.Combat.Spec;
+            const float rowH = 18;
+            int options = 0;
+            if (yard != null && outfitSlot >= 0 && outfitSlot < loadout.Slots.Count)
+            {
+                foreach (var m in ModuleSpec.Catalogue) if (Outfitting.CanFit(loadout, outfitSlot, m.Kind)) options++;
+                if (Outfitting.CanFit(loadout, outfitSlot, null)) options++;
+            }
+            else outfitSlot = -1;
+            float listH = Mathf.Min(loadout.Slots.Count * rowH, 230);
+            float h = 112 + listH + (options > 0 ? 26 + options * rowH : 0);
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, 190, w, h));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 22), "OUTFITTING  ·  " + ship.Name + "  ·  " + (yard != null ? yard.Name : port != null ? port.Name + " (no yard)" : "not alongside a port"), title);
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 12, r.y + 28, w - 24, 18),
+                "Hull " + spec.Hull.ToString("N0", CultureInfo.InvariantCulture) + "  ·  shield " + spec.Shield.ToString("N0", CultureInfo.InvariantCulture) +
+                "  ·  armour " + spec.Armor.ToString("0", CultureInfo.InvariantCulture) + "  ·  dry mass " + Tonnes(spec.DryMassTonnes) +
+                "  ·  delta-v " + ship.DeltaVBudgetKmS.ToString("N0", CultureInfo.InvariantCulture) + " km/s  ·  scan " + (Outfitting.ScanRangeKm(ship) / 1e6).ToString("0.#", CultureInfo.InvariantCulture) + " M km", small);
+            GUI.contentColor = Color.white;
+            GUI.Label(new Rect(r.x + 12, r.y + 46, 220, 18), "Credits: " + Credits(ship.Faction.Treasury), small);
+            double brig = Outfitting.BrigCapacity(ship);
+            if (brig > 0 || ship.Prisoners > 0)
+            {
+                GUI.Label(new Rect(r.x + 230, r.y + 46, 200, 18), "Brig " + ship.Prisoners.ToString("0", CultureInfo.InvariantCulture) + " / " + brig.ToString("0", CultureInfo.InvariantCulture) + " prisoners", small);
+                if (ship.Prisoners > 0 && port != null && GUI.Button(new Rect(r.xMax - 170, r.y + 44, 158, 20), "Hand over  +" + Credits(ship.PrisonerBounty), button))
+                {
+                    double paid = Outfitting.HandOverPrisoners(app.Economy, ship, port);
+                    app.ShowToast(paid > 0 ? "Prisoners handed over at " + port.Name + " for " + Credits(paid) : "Not welcome here");
+                }
+            }
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 12, r.y + 64, w - 24, 18), yard != null
+                ? "Pick a slot, then a module to fit.   Prices are this yard's market.   F2 to close"
+                : "Bring the ship alongside a shipyard (or a haven) to refit.   F2 to close", small);
+
+            // The slots and what is in them.
+            var view = new Rect(r.x + 8, r.y + 84, w - 16, listH);
+            var content = new Rect(0, 0, w - 36, loadout.Slots.Count * rowH);
+            outfitScroll = GUI.BeginScrollView(view, outfitScroll, content);
+            for (int i = 0; i < loadout.Slots.Count; i++)
+            {
+                var slot = loadout.Slots[i];
+                string fitted = loadout.Fitted[i] is ModuleKind m ? ModuleSpec.Of(m).Name : "(empty)";
+                if (slot.LayoutIndex >= 0 && slot.LayoutIndex < ship.Combat.Subsystems.Count)
+                {
+                    var sub = ship.Combat.Subsystems[slot.LayoutIndex];
+                    fitted += sub.Destroyed ? "  (shot away)" : sub.Health < 0.99 ? "  (" + Percent(sub.Health) + ")" : "";
+                }
+                if (slot.Stock != null && loadout.Fitted[i] != slot.Stock) fitted += "   was " + ModuleSpec.Of(slot.Stock.Value).Name.ToLowerInvariant();
+                var rr = new Rect(0, i * rowH, content.width, rowH - 1);
+                string where = slot.BearsOnBow && slot.Kind == SlotKind.HeavyMount ? " (bow)" : "";
+                if (GUI.Button(rr, "  " + slot.Name + where + "   " + fitted, i == outfitSlot ? rowSelected : row))
+                    outfitSlot = i == outfitSlot ? -1 : i;
+            }
+            GUI.EndScrollView();
+
+            if (options == 0) { GUI.contentColor = old; return; }
+            float y = r.y + 92 + listH;
+            GUI.contentColor = Accent;
+            GUI.Label(new Rect(r.x + 12, y, w - 24, 18), "Fit into " + loadout.Slots[outfitSlot].Name.ToLowerInvariant() + ":", small);
+            y += 22;
+            foreach (var m in ModuleSpec.Catalogue)
+                if (Outfitting.CanFit(loadout, outfitSlot, m.Kind))
+                {
+                    OutfitOption(ship, yard, loadout, m.Kind, m.Name, r.x, y, w, rowH);
+                    y += rowH;
+                }
+            if (Outfitting.CanFit(loadout, outfitSlot, null)) OutfitOption(ship, yard, loadout, null, "Empty the bay", r.x, y, w, rowH);
+            GUI.contentColor = old;
+        }
+
+        void OutfitOption(Ship ship, Settlement yard, Loadout loadout, ModuleKind? module, string name, float x, float y, float w, float rowH)
+        {
+            bool current = loadout.Fitted[outfitSlot] == module;
+            var q = Outfitting.Quote(ship, yard, outfitSlot, module);
+            GUI.contentColor = current ? Accent : Color.white;
+            GUI.Label(new Rect(x + 20, y, 200, rowH), name, small);
+            GUI.contentColor = Dim;
+            string price = current ? "fitted"
+                : !q.InStock ? "yard is short of " + GoodInfo.Of(q.Short).Name.ToLowerInvariant()
+                : q.Net >= 0 ? Credits(q.Net) : "+" + Credits(-q.Net) + " back";
+            GUI.Label(new Rect(x + 220, y, 250, rowH), price, small);
+            GUI.contentColor = Color.white;
+            if (current || !q.InStock) return;
+            if (!GUI.Button(new Rect(x + w - 100, y - 1, 84, rowH - 1), module == null ? "Strip" : "Fit", button)) return;
+            var outcome = Outfitting.Fit(app.Economy, ship, yard, outfitSlot, module, out var paid);
+            app.ShowToast(outcome switch
+            {
+                OutfitOutcome.Ok => (module == null ? "Bay emptied" : name + " fitted") + (paid.Net >= 0 ? " for " + Credits(paid.Net) : ", " + Credits(-paid.Net) + " back"),
+                OutfitOutcome.CantAfford => "Not enough credits",
+                OutfitOutcome.NoStock => yard.Name + " is short of the materials",
+                OutfitOutcome.HoldTooFull => "Empty the hold before taking the racks out",
+                OutfitOutcome.BrigOccupied => "Hand over the prisoners before taking the brig out",
+                OutfitOutcome.Busy => "Not while fighting or boarded",
+                OutfitOutcome.CannotDock => "Not welcome to refit here",
+                _ => "Can't fit that here",
+            });
         }
 
         // ---------------------------------------------------------------- spawn (dev/sandbox)
@@ -1666,6 +1800,7 @@ namespace SolarSystem.UI
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
+                "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
                 "X   news feed: shocks, price spikes, embargoes, battles and captures as they happen",

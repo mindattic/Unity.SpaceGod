@@ -157,13 +157,16 @@ namespace SolarSystem
         public bool ShowMarket { get; set; }
         public bool ShowCargo { get; set; }
 
+        /// <summary>The shipyard's outfitting panel (F2): fit modules into the piloted hull's slots at a yard, hand over prisoners.</summary>
+        public bool ShowOutfit { get; set; }
+
         /// <summary>The news feed panel in place of the four-line ticker (X).</summary>
         public bool ShowNews { get; set; }
         public bool ShowSpawn { get; set; }
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || (ShowHud && (ShowMarket || ShowCargo || ShowNews)); // market, cargo and news are HUD panels, hidden with it
+        bool ClickPanelOpen => ShowSpawn || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit)); // market, cargo, outfitting and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -626,6 +629,7 @@ namespace SolarSystem
             if (i.ToggleHud) ShowHud = !ShowHud;
             if (i.ToggleMarket) ShowMarket = !ShowMarket;
             if (i.ToggleCargo) ShowCargo = !ShowCargo;
+            if (i.ToggleOutfit) ShowOutfit = !ShowOutfit;
             if (i.ToggleNews) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
@@ -1214,7 +1218,7 @@ namespace SolarSystem
                 if (pilotBattleCheckTimer > 0) return;
                 pilotBattleCheckTimer = PilotBattleCheckIntervalS;
                 // The piloted ship's scanners: a hidden haven within range goes on the map.
-                foreach (var found in World.War.ScanFrom(ship.Faction, Ephemeris.HelioAt(pilotFrameBody, Clock.Jd) + pilotOffsetKm, Clock.Jd, ship.Name))
+                foreach (var found in World.War.ScanFrom(ship.Faction, Ephemeris.HelioAt(pilotFrameBody, Clock.Jd) + pilotOffsetKm, Clock.Jd, ship.Name, Outfitting.ScanRangeKm(ship)))
                     ShowToast("Scanners pick out a hidden pirate haven: " + found.Name + " on " + Catalog[found.Body].Name);
                 World.War.TryStartPlayerBattle(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
                 return;
@@ -1930,9 +1934,10 @@ namespace SolarSystem
                 }
                 if (viewFaction.Length != shipViews.Length) Array.Resize(ref viewFaction, shipViews.Length);
                 if (viewFaction[i] == null) viewFaction[i] = ship.Faction;
-                if (viewFaction[i] != ship.Faction)
+                if (viewFaction[i] != ship.Faction || shipViews[i].BuiltFor != ship.Combat)
                 {
                     // Taken as a prize: repaint in the captor's livery (freeing the old view's own meshes and materials).
+                    // Refitted at a yard: rebuild its hardpoints from the new loadout.
                     Materials.DestroyOwned(shipViews[i].Root.transform);
                     Destroy(shipViews[i].Root);
                     shipViews[i] = new ShipView(ship, systemRoot);

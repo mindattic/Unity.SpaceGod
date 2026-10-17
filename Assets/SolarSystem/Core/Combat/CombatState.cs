@@ -57,21 +57,60 @@ namespace SolarSystem.Core
         public readonly Interior Interior;
 
         /// <param name="hull">The ship class, or null for a defence platform.</param>
-        public ShipCombat(CombatSpec spec, ShipClass? hull = null)
+        public ShipCombat(CombatSpec spec, ShipClass? hull = null) : this(spec, hull, null) { }
+
+        ShipCombat(CombatSpec spec, ShipClass? hull, Interior interior)
         {
             Spec = spec;
             Hull = spec.Hull;
             Fighters = spec.Squadrons * 6;
             for (int i = 0; i < spec.Layout.Length; i++) Subsystems.Add(new Subsystem(spec.Layout[i], i));
-            int generators = 0;
-            foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) generators++;
-            if (generators > 0)
-            {
-                double share = spec.Shield / generators;
+            double ratings = GeneratorRatings;
+            if (ratings > 0)
                 foreach (var s in Subsystems)
-                    if (s.Kind == SubsystemKind.ShieldGenerator) { s.MaxShield = share; s.Shield = share; }
+                    if (s.Kind == SubsystemKind.ShieldGenerator) s.MaxShield = s.Shield = spec.Shield * s.Def.Rating / ratings;
+            Interior = interior ?? (hull.HasValue ? Interior.For(hull.Value, spec.Crew, spec.Marines) : Interior.ForPlatform(spec.Crew, spec.Marines));
+        }
+
+        /// <summary>
+        /// The same hull after a yard refit (U.SPC-T65) to <paramref name="spec"/>, whose hardpoint list lines up
+        /// with the old one slot for slot: its people (the same <see cref="Interior"/>), the share of its hull
+        /// still standing, its fighters and boost carry over, and so does every hardpoint but
+        /// <paramref name="changed"/> (its health, rounds and its share of shield charge); the part fitted at
+        /// <paramref name="changed"/> is new, whole and loaded.
+        /// </summary>
+        public ShipCombat Refitted(CombatSpec spec, ShipClass hull, int changed)
+        {
+            var c = new ShipCombat(spec, hull, Interior)
+            {
+                Hull = spec.Hull * HullFraction,
+                Fighters = Math.Min(spec.Squadrons * 6, Fighters),
+                BoostFraction = BoostFraction,
+            };
+            for (int i = 0; i < c.Subsystems.Count && i < Subsystems.Count; i++)
+            {
+                if (i == changed) continue;
+                var was = Subsystems[i];
+                var now = c.Subsystems[i];
+                if (was.Kind != now.Kind) continue;
+                now.Hp = now.Def.MaxHp * (was.Hp <= 0 ? 0 : was.Health);
+                now.Ammo = Math.Min(now.Ammo, was.Ammo);
+                now.Cooldown = was.Cooldown;
+                now.LastHitSeconds = was.LastHitSeconds;
+                if (now.Kind == SubsystemKind.ShieldGenerator) now.Shield = was.MaxShield > 0 ? now.MaxShield * Math.Min(1, was.Shield / was.MaxShield) : 0;
             }
-            Interior = hull.HasValue ? Interior.For(hull.Value, spec.Crew, spec.Marines) : Interior.ForPlatform(spec.Crew, spec.Marines);
+            return c;
+        }
+
+        /// <summary>The hull's shield generators' grades summed: each holds and regenerates its rating's share.</summary>
+        double GeneratorRatings
+        {
+            get
+            {
+                double total = 0;
+                foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) total += s.Def.Rating;
+                return total;
+            }
         }
 
         /// <summary>
@@ -128,17 +167,15 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Regens every live generator that has not been hit in the last 8 battle-seconds, each
-        /// toward its own cap, sharing the hull's total regen rate evenly across its generators.</summary>
+        /// toward its own cap, sharing the hull's total regen rate across its generators by their ratings (evenly, on a stock hull).</summary>
         public void RegenShields(double nowSeconds, double dt)
         {
-            int generators = 0;
-            foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) generators++;
-            if (generators == 0) return;
-            double share = Spec.ShieldRegen / generators;
+            double ratings = GeneratorRatings;
+            if (ratings <= 0) return;
             foreach (var s in Subsystems)
             {
                 if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed) continue;
-                if (nowSeconds - s.LastHitSeconds > 8) s.Shield = Math.Min(s.MaxShield, s.Shield + share * dt);
+                if (nowSeconds - s.LastHitSeconds > 8) s.Shield = Math.Min(s.MaxShield, s.Shield + Spec.ShieldRegen * s.Def.Rating / ratings * dt);
             }
         }
 

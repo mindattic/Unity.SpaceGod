@@ -54,6 +54,7 @@ namespace SolarSystem.Input
         public bool ToggleHud;
         public bool ToggleMarket;
         public bool ToggleCargo;
+        public bool ToggleOutfit;
 
         /// <summary>The news feed: the full log of what has happened, filterable (X).</summary>
         public bool ToggleNews;
@@ -164,6 +165,7 @@ namespace SolarSystem.Input
             ToggleHud = kb.uKey.wasPressedThisFrame;
             ToggleMarket = kb.mKey.wasPressedThisFrame;
             ToggleCargo = kb.iKey.wasPressedThisFrame;
+            ToggleOutfit = kb.f2Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;
             ToggleSpawn = kb.vKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;
@@ -193,7 +195,7 @@ namespace SolarSystem.Input
             Boost = Slow = Fire = Cruise = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
             NumberKey = -1;
         }
 
