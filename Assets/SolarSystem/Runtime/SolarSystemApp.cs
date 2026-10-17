@@ -645,7 +645,8 @@ namespace SolarSystem
             if (i.ToggleBounties) ShowBounties = !ShowBounties;
             if (i.ToggleContracts) ShowContracts = !ShowContracts;
             if (i.ToggleFleet) ShowFleet = !ShowFleet;
-            if (i.ToggleNews) ShowNews = !ShowNews;
+            // At the helm X rolls the hull (Z/X): the news feed would free the cursor and take the stick and guns.
+            if (i.ToggleNews && !IsPiloting) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
             if (i.LevelView) LevelView();
