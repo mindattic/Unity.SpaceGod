@@ -862,6 +862,8 @@ namespace SolarSystem.Core
             c.Destination.RefreshPrices();
             ship.HasCargo = false;
             ship.CargoTonnes = 0;
+            // What the lot cost comes off its earnings (as a sale's would), the pay going on below: its profit, not its takings.
+            ship.Credits -= ship.CargoCost;
             ship.CargoCost = 0;
             ship.CargoBonus = 0;
             ship.CargoDestination = null;

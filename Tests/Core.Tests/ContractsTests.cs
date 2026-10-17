@@ -290,11 +290,13 @@ namespace SolarSystem.Core.Tests
             Assert.That(ship.HasCargo, Is.True);
 
             double stock = mars.Stock[(int)Good.Food];
+            double cost = ship.CargoCost;
+            Assert.That(cost, Is.GreaterThan(0));
             Assert.That(w.Contracts.OnArrived(ship, mars.Body, StartJd + 4), Is.True);
             Assert.That(c.State, Is.EqualTo(ContractState.Completed));
             Assert.That(ship.HasCargo, Is.False);
             Assert.That(mars.Stock[(int)Good.Food], Is.EqualTo(stock + c.Tonnes).Within(1e-6));
-            Assert.That(ship.Credits, Is.EqualTo(credits + c.Pay).Within(1e-3));
+            Assert.That(ship.Credits, Is.EqualTo(credits + c.Pay - cost).Within(1e-3), "its earnings are the pay less what the lot cost");
         }
 
         [Test]
