@@ -1480,6 +1480,10 @@ namespace SolarSystem.Core
             u.BoardTarget = null;
             // Taken while still hailing: there are no terms left to settle.
             u.Surrendering = false;
+            // Its escorts no longer keep station on it (it fights for the other side now), nor it on its old flagship.
+            u.Leader = null;
+            foreach (var o in Units)
+                if (o.Leader == u) o.Leader = null;
             // A surrendered hull is taken without a fight aboard: mark it held so the fight stops there too.
             u.Combat.Interior.Captured = true;
             u.Combat.Interior.Settle();
