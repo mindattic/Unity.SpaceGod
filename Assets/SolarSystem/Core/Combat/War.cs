@@ -1363,9 +1363,10 @@ namespace SolarSystem.Core
         /// <summary>The navy's oldest surviving group, which never leaves home.</summary>
         public bool IsHomeGuard(Ship leader)
         {
-            // Each navy keeps its oldest surviving group at home.
+            // Each navy keeps its oldest surviving group at home: one it still commands (not the hull the player
+            // is flying, nor a derelict), or every other group would be free to leave.
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && !s.IsEscort && s.Faction == leader.Faction && s.Spec.IsMilitary)
+                if (!s.Destroyed && !s.IsEscort && !s.Derelict && s != world.PilotedShip && s.Faction == leader.Faction && s.Spec.IsMilitary)
                     return s == leader;
             return false;
         }
