@@ -339,6 +339,10 @@ namespace SolarSystem.Core
         /// <summary>Running trade profit, credits.</summary>
         public double Credits;
 
+        /// <summary>Running dark (U.SPC-T66): transponder off, active systems down, hull heat damped, so its signature
+        /// is a fraction of what it was (see <see cref="Signatures"/>). A burn still shows.</summary>
+        public bool SilentRunning;
+
         // ---------------------------------------------------------------- propulsion (see Propulsion)
 
         /// <summary>The design whose drive and tanks this hull has (its combat design, or its class's first).</summary>
@@ -456,6 +460,7 @@ namespace SolarSystem.Core
             Loadout = Loadout?.Copy(),
             Prisoners = Prisoners,
             PrisonerBounty = PrisonerBounty,
+            SilentRunning = SilentRunning,
         };
 
         public override string ToString() => Name;

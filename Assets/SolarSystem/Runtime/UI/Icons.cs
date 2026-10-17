@@ -12,7 +12,7 @@ namespace SolarSystem.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde, blip;
 
         public static Texture2D White => white ??= Solid();
 
@@ -25,6 +25,14 @@ namespace SolarSystem.UI
             var q = new Vector2((p.x + p.y) * 0.70710678f, (p.y - p.x) * 0.70710678f);
             float cross = Mathf.Min(Box(q, new Vector2(0.045f, 0.38f)), Box(q, new Vector2(0.38f, 0.045f)));
             return Mathf.Min(Mathf.Min(Ring(p, 0.42f, 0.12f), cross), Ticks(p));
+        });
+
+        /// <summary>A sensor contact not yet resolved to a hull class (U.SPC-T66): a small cross in a broken square.</summary>
+        public static Texture2D Blip => blip ??= Draw(p =>
+        {
+            float cross = Mathf.Min(Box(p, new Vector2(0.05f, 0.3f)), Box(p, new Vector2(0.3f, 0.05f)));
+            float corners = Mathf.Max(Outline(Box(p, new Vector2(0.62f, 0.62f)), 0.1f), -Mathf.Min(Box(p, new Vector2(0.3f, 0.8f)), Box(p, new Vector2(0.8f, 0.3f))));
+            return Mathf.Min(cross, corners);
         });
 
         static float Ticks(Vector2 p) => Mathf.Min(Box(p - new Vector2(0, 0.72f), new Vector2(0.05f, 0.2f)),

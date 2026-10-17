@@ -239,12 +239,20 @@ namespace SolarSystem.Core
             Join(b, lurker, 0, false);
             foreach (var v in victims) Join(b, v, 1, false);
             BattleUnit source = b.UnitOf(lurker);
+            // A victim whose scanners made the raiders out lying dark beside the lane as it closed (by class at least,
+            // at the lurk's stand-off from the lane line) was braced for the pulse: drives and shields ride it out.
+            var warned = new HashSet<Ship>();
+            foreach (var v in victims)
+                if (Forewarned(v, lurker, jd)) warned.Add(v.Controller);
             foreach (var u in b.Units)
             {
                 if (u.Side != 1) continue;
+                if (u.Ship != null && warned.Contains(u.Ship.Controller)) continue;
                 u.Stunned = 60 + rng.NextDouble() * 60;
                 u.Combat.ZeroAllShields();
             }
+            foreach (var v in warned)
+                world.Log(jd, $"The {v.Name} spotted the raiders lying dark off the {lane.Name} lane and was braced for the pulse", WorldEventKind.Battle, lane.A);
             if (source != null) b.Emit(FxKind.Pulse, source.Pos, source.Pos, 30, 0, source, -1);
             Battles.Add(b);
             pulseReady[lurker] = jd + 1;
@@ -254,6 +262,20 @@ namespace SolarSystem.Core
             BumpDanger(lane.A, 1);
             BumpDanger(lane.B, 1);
             BattleStarted?.Invoke(b);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="victim"/>'s group made out <paramref name="lurker"/> (by class at least) as it passed:
+        /// the raider lies dark (<see cref="Signatures.Silent"/>) at its stand-off from the lane line, so a merchant's
+        /// navigation sensors see only a blip there, if that, while a warship's suite, or a merchant with a scanner suite
+        /// fitted, picks out a hull.
+        /// </summary>
+        public bool Forewarned(Ship victim, Ship lurker, double jd)
+        {
+            var sensors = world.Sensors;
+            if (sensors == null || victim == null || lurker == null) return false;
+            double pass = Math.Max(lurker.LaneHoldSide.Length, 1);
+            return Sensors.Resolve(sensors.GroupSuite(victim), Signatures.Of(lurker, false, false), pass, Signatures.Transponder(lurker)) >= ContactLevel.Class;
         }
 
         Hyperlanes lanes0() => Fleet.Lanes;
@@ -1244,9 +1266,9 @@ namespace SolarSystem.Core
                 if (target >= 0) return new GroupOrder { Kind = OrderKind.Attack, Body = target };
             }
 
-            // Hunt pirates working an own port.
+            // Hunt pirates working an own port -- that its ships or stations have seen there (U.SPC-T66).
             foreach (var s in Economy.Settlements)
-                if (s.Owner == f && s.Body != here && PiratesAt(s.Body))
+                if (s.Owner == f && s.Body != here && PiratesSeenAt(s.Body, f, jd))
                     return new GroupOrder { Kind = OrderKind.Hunt, Body = s.Body };
 
             // Strike a hidden haven this navy has found, if the group can take its garrison.
@@ -1608,6 +1630,17 @@ namespace SolarSystem.Core
         {
             foreach (var s in Fleet.Ships)
                 if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate && s.Phase == ShipPhase.Parked && s.Orbit.Body == body) return true;
+            return false;
+        }
+
+        /// <summary>Raiders parked at <paramref name="body"/> that <paramref name="f"/>'s picture makes out (by class
+        /// at least: a warship with no transponder over its port): what a navy can act on, rather than what is there.</summary>
+        bool PiratesSeenAt(int body, Faction f, double jd)
+        {
+            var sensors = world.Sensors;
+            foreach (var s in Fleet.Ships)
+                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate && s.Phase == ShipPhase.Parked && s.Orbit.Body == body
+                    && (sensors == null || sensors.Knows(f, s, jd) >= ContactLevel.Class)) return true;
             return false;
         }
 

@@ -30,7 +30,8 @@ namespace SolarSystem.Core
         /// <summary>Racks in a bay: more trade hold and two more rows in the grid hold.</summary>
         CargoRack,
 
-        /// <summary>A sensor suite: a ship's scanners reach a million km further for hidden havens.</summary>
+        /// <summary>A sensor suite: half the hull's base scanner range again and finer resolution (see <see cref="SensorSuite.Of"/>),
+        /// so contacts are seen further off and made out sooner, and a warship's sweep for hidden havens reaches a million km further.</summary>
         Scanner,
 
         /// <summary>Cells for prisoners taken off prizes, handed over in port for bounty or ransom.</summary>
@@ -277,7 +278,8 @@ namespace SolarSystem.Core
         public const double RackCapacityShare = 0.15;
         public const int RackRows = 2;
 
-        /// <summary>Extra reach each scanner suite gives a ship's sweep for hidden havens, km.</summary>
+        /// <summary>Extra reach each scanner suite gives a warship's sweep for hidden havens, km (half its base
+        /// <see cref="SensorSuite.Military"/> range on a <see cref="Signatures.Haven"/> signature).</summary>
         public const double ScannerRangeKm = 1e6;
 
         /// <summary>Prisoners each brig holds (more on a bigger hull).</summary>
@@ -423,8 +425,9 @@ namespace SolarSystem.Core
             return ship.Loadout;
         }
 
-        /// <summary>How far this ship's scanners pick out a hidden haven, km.</summary>
-        public static double ScanRangeKm(Ship ship) => War.ScanRangeKm + (ship?.Loadout?.Count(ModuleKind.Scanner) ?? 0) * Loadout.ScannerRangeKm;
+        /// <summary>How far this ship's scanners pick out a hidden haven, km: its suite's reach on a haven's signature
+        /// (<see cref="Sensors.HavenReachKm"/>; <see cref="War.ScanRangeKm"/> for a warship as built).</summary>
+        public static double ScanRangeKm(Ship ship) => Sensors.HavenReachKm(ship);
 
         /// <summary>Prisoners this ship's brigs hold.</summary>
         public static double BrigCapacity(Ship ship) => ship?.Loadout == null ? 0 : ship.Loadout.Count(ModuleKind.Brig) * ship.Loadout.BrigBerthsEach;

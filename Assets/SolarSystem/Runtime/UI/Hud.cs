@@ -48,6 +48,12 @@ namespace SolarSystem.UI
         static readonly Color Accent = new Color(0.45f, 0.85f, 1f);
         static readonly Color Dim = new Color(0.62f, 0.7f, 0.78f);
 
+        /// <summary>An unidentified contact: no faction colour until the scanners know whose it is.</summary>
+        static readonly Color ContactGrey = new Color(0.78f, 0.8f, 0.82f);
+
+        /// <summary>The piloted ship's own sensor picture, or null when only watching (then everything is shown).</summary>
+        ContactBook Picture => app.IsPiloting && app.Piloted.Ship != null ? app.World.Sensors?.Player : null;
+
         public Hud(SolarSystemApp app) => this.app = app;
 
         public void Draw()
@@ -146,10 +152,15 @@ namespace SolarSystem.UI
             }
 
             var ships = app.Fleet.Ships;
+            // At the helm the player sees only what the ship's own scanners hold (U.SPC-T66): an unknown blip, a hull
+            // class, or -- identified -- whose it is; a track gone cold is drawn faded where it was last seen.
+            var picture = Picture;
             for (int i = 0; i < ships.Count; i++)
             {
                 var ship = ships[i];
                 if (ship.Destroyed || ship.Controller.Phase == ShipPhase.Landed) continue;
+                var contact = picture != null && ship != app.Piloted.Ship ? picture.Of(ship) : null;
+                if (picture != null && ship != app.Piloted.Ship && contact == null) continue;
                 var scene = app.ShipScene(ship);
                 if (!app.ToGui(scene, out var p, out var depth)) continue;
                 float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
@@ -157,7 +168,18 @@ namespace SolarSystem.UI
                 if (app.Occluded(scene)) continue;
                 if (ship.IsEscort && app.ToGui(app.ShipScene(ship.Leader), out var lp, out _) && (lp - p).magnitude < 7f) continue;
                 var c = ship.Faction.Color;
-                DrawIcon(Icons.ForShip(ship.Spec.Class), p, Icons.PixelSize(ship.Spec.Class), new Color(c.R, c.G, c.B, 0.95f));
+                if (contact == null)
+                {
+                    DrawIcon(Icons.ForShip(ship.Spec.Class), p, Icons.PixelSize(ship.Spec.Class), new Color(c.R, c.G, c.B, 0.95f));
+                    continue;
+                }
+                float alpha = contact.Cold ? 0.4f : 0.95f;
+                if (contact.Level == ContactLevel.Blip) DrawIcon(Icons.Blip, p, 12, new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, alpha));
+                else
+                {
+                    var tint = contact.Level == ContactLevel.Identified ? new Color(c.R, c.G, c.B, alpha) : new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, alpha);
+                    DrawIcon(Icons.ForShip(ship.Spec.Class), p, Icons.PixelSize(ship.Spec.Class), tint);
+                }
             }
 
             DrawTargetMarker(app.Hovered, false);
@@ -169,9 +191,12 @@ namespace SolarSystem.UI
                 foreach (var ship in ships)
                 {
                     if (ship.Destroyed) continue;
+                    var contact = picture != null && ship != app.Piloted.Ship ? picture.Of(ship) : null;
+                    if (picture != null && ship != app.Piloted.Ship && contact == null) continue;
                     var t = Target.OfShip(ship);
                     bool named = t == app.Hovered || t == app.Selected || app.SpaceCamera.FocusTarget == t;
-                    if (!named && !ship.IsEscort && ship.Spec.IsMilitary)
+                    // A flagship is named on sight only once the scanners have identified it.
+                    if (!named && !ship.IsEscort && ship.Spec.IsMilitary && (contact == null || contact.Level == ContactLevel.Identified))
                     {
                         // Name fleet flagships once they are big enough on screen to be a thing, not a dot.
                         if (app.ToGui(app.ShipScene(ship), out _, out var d))
@@ -181,7 +206,15 @@ namespace SolarSystem.UI
                     if (!app.ToGui(app.ShipScene(ship), out var p, out var depth) || app.Occluded(app.ShipScene(ship))) continue;
                     float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
                     var c = ship.Faction.Color;
-                    DrawLabel(ship.Name, p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), new Color(c.R, c.G, c.B), false);
+                    if (contact == null)
+                    {
+                        DrawLabel(ship.Name, p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), new Color(c.R, c.G, c.B), false);
+                        continue;
+                    }
+                    // A contact is named by what the scanners make of it: unknown, its class, or its name.
+                    var tint = contact.Level == ContactLevel.Identified ? new Color(c.R, c.G, c.B) : ContactGrey;
+                    if (contact.Cold) tint.a = 0.5f;
+                    DrawLabel(contact.Label + (contact.Cold ? "  (contact lost)" : ""), p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), tint, contact.Level != ContactLevel.Identified);
                 }
             }
         }
@@ -1657,7 +1690,8 @@ namespace SolarSystem.UI
                 case SpaceCamera.CameraMode.Focus when cam.PilotLocked:
                     s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + (app.Piloted.Ship != null ? "  ·  PROPELLANT " + (app.Piloted.Ship.Propellant <= 1e-6 ? "DRY" : Percent(app.Piloted.Ship.PropellantFraction)) : "") +
                         (app.World.Law != null && app.World.Law.Player.Wanted ? "  ·  WANTED " + Credits(app.World.Law.Player.TotalBounty) : "") +
-                        "   (WASD throttle/strafe, mouse to steer, Z/X roll, F flight assist, Shift boost, P to release)";
+                        SensorText() +
+                        "   (WASD throttle/strafe, mouse to steer, Z/X roll, F flight assist, Shift boost, F3 silent running, P to release)";
                     break;
                 case SpaceCamera.CameraMode.Focus:
                     s = "FOCUS  ·  " + TargetName(cam.FocusTarget) + "   (WASD to swim free, wheel to zoom, right-drag to orbit)";
@@ -1689,6 +1723,20 @@ namespace SolarSystem.UI
             var level = Panel(new Rect(r.xMax + 8, r.y, 120, 30));
             if (GUI.Button(new Rect(level.x + 4, level.y + 4, level.width - 8, 22), cam.Levelling ? "LEVELLING…" : "LEVEL  [R]", cam.Levelling ? buttonActive : button))
                 app.LevelView();
+        }
+
+        /// <summary>The helm's sensor readout: running silent or not, the ship's own signature (lit up by a burn or a
+        /// fight), and the contacts its scanners hold -- identified, by class only, and unknown blips.</summary>
+        string SensorText()
+        {
+            var sensors = app.World.Sensors;
+            var ship = app.Piloted.Ship;
+            if (sensors == null || ship == null) return "";
+            var book = sensors.Player;
+            int id = book.CountLive(ContactLevel.Identified), cls = book.CountLive(ContactLevel.Class), blips = book.CountLive(ContactLevel.Blip);
+            return (ship.SilentRunning ? "  ·  SILENT RUNNING" : "") +
+                "  ·  SIG " + sensors.PilotSignature.ToString(sensors.PilotSignature < 10 ? "0.00" : "0", CultureInfo.InvariantCulture) +
+                "  ·  CONTACTS " + id + " id / " + cls + " class / " + blips + " unknown";
         }
 
         /// <summary>A patrol's hail of the piloted ship, above the salvage readout: hold still for a scan, or pay the fine (1) or be fired on.</summary>
@@ -1801,6 +1849,7 @@ namespace SolarSystem.UI
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
+                "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
                 "X   news feed: shocks, price spikes, embargoes, battles and captures as they happen",

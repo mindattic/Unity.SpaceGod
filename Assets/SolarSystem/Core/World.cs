@@ -57,6 +57,10 @@ namespace SolarSystem.Core
         /// the patrols that act on them (see <see cref="Core.Law"/>).</summary>
         public Law Law { get; private set; }
 
+        /// <summary>Sensors, signatures and stealth: what each faction's ships and stations, and the player's own ship,
+        /// can see of every other ship (see <see cref="Core.Sensors"/>).</summary>
+        public Sensors Sensors { get; private set; }
+
         /// <summary>Raised when a ship joins the fleet after the start (a yard finished it, or it came through a gate).</summary>
         public event Action<Ship> ShipAdded;
 
@@ -90,6 +94,7 @@ namespace SolarSystem.Core
             Fleet.Update(jd);
             Economy.AdvanceTo(jd);
             War.Update(jd);
+            Sensors?.Update(jd);
             Shocks.Update(jd);
             Law.Update(jd);
             if (jd >= nextRecountJd)
@@ -274,6 +279,7 @@ namespace SolarSystem.Core
             economy.Initialise();
             War = new War(this, startJd, seed + 2);
             var war = War;
+            Sensors = new Sensors(this);
             // The player's standing is one table: adventures seen through raise it, crimes lower it.
             Law = new Law(this, Adventures.Reputation);
             war.BattleEnded += Law.OnBattleEnded;

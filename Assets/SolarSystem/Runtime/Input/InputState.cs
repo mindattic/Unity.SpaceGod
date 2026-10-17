@@ -56,6 +56,9 @@ namespace SolarSystem.Input
         public bool ToggleCargo;
         public bool ToggleOutfit;
 
+        /// <summary>While piloting: switches silent running on or off (F3; see <see cref="SolarSystem.Core.Ship.SilentRunning"/>).</summary>
+        public bool ToggleSilent;
+
         /// <summary>The news feed: the full log of what has happened, filterable (X).</summary>
         public bool ToggleNews;
 
@@ -166,6 +169,7 @@ namespace SolarSystem.Input
             ToggleMarket = kb.mKey.wasPressedThisFrame;
             ToggleCargo = kb.iKey.wasPressedThisFrame;
             ToggleOutfit = kb.f2Key.wasPressedThisFrame;
+            ToggleSilent = kb.f3Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;
             ToggleSpawn = kb.vKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;
@@ -195,7 +199,7 @@ namespace SolarSystem.Input
             Boost = Slow = Fire = Cruise = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
             NumberKey = -1;
         }
 

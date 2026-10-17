@@ -163,12 +163,6 @@ namespace SolarSystem.Core
 
         // ---------------------------------------------------------------- tuning
 
-        /// <summary>How far a ship's sensors see a crime, km.</summary>
-        public double ShipSensorKm = 1e6;
-
-        /// <summary>How far a station's (a settlement's traffic control) sensors see one, km.</summary>
-        public double StationSensorKm = 3e6;
-
         /// <summary>How close a patrol comes before it hails the player's ship, km.</summary>
         public double PatrolHailKm = 100000;
 
@@ -336,26 +330,15 @@ namespace SolarSystem.Core
         // ---------------------------------------------------------------- witnesses
 
         /// <summary>
-        /// The first ship or station that could see something at <paramref name="helioKm"/>: a lawful settlement
-        /// within <see cref="StationSensorKm"/>, or a lawful ship (not destroyed, adrift as a hulk, down on a
-        /// planet, nor the player's own) within <see cref="ShipSensorKm"/> that <paramref name="exclude"/> lets
-        /// count. Pirates report nothing. Returns its name, or null when nobody saw.
+        /// The first ship or station that could see something as bright as <paramref name="signature"/> (a battle's
+        /// weapons fire, by default) at <paramref name="helioKm"/>: a lawful settlement or a lawful ship (not destroyed,
+        /// adrift as a hulk, down on a planet, nor the player's own) that <paramref name="exclude"/> lets count, whose
+        /// scanners reach that far (see <see cref="Sensors.FindWitness"/>: a station's traffic control sees a fight 3
+        /// million km off, a merchant one million, a warship two). Pirates report nothing. Returns its name, or null
+        /// when nobody saw.
         /// </summary>
-        public string FindWitness(DVec3 helioKm, double jd, Func<Ship, bool> exclude = null)
-        {
-            foreach (var s in world.Economy.Settlements)
-            {
-                if (s.Fallen || s.Owner == null || s.Owner.IsPirate || s.Population <= 0) continue;
-                if ((world.Ephemeris.HelioAt(s.Body, jd) - helioKm).Length <= StationSensorKm) return s.Name;
-            }
-            foreach (var ship in world.Fleet.Ships)
-            {
-                if (ship.Destroyed || ship.GateDeparted || ship.Derelict || ship.Faction == null || ship.Faction.IsPirate || ship.Planetside) continue;
-                if (ship == world.PilotedShip || (exclude != null && exclude(ship))) continue;
-                if ((world.Fleet.StateOf(ship, jd).HelioKm - helioKm).Length <= ShipSensorKm) return "the " + ship.Name;
-            }
-            return null;
-        }
+        public string FindWitness(DVec3 helioKm, double jd, Func<Ship, bool> exclude = null, double signature = Signatures.Battle) =>
+            (world.Sensors ?? new Sensors(world)).FindWitness(helioKm, jd, signature, exclude);
 
         // ---------------------------------------------------------------- crimes
 
@@ -626,7 +609,10 @@ namespace SolarSystem.Core
                 bool wanted = Player.WantedBy(f);
                 // Scans are routine only in a patrol's own space; and a navy does not stop its own warships.
                 if (!wanted && (JurisdictionAt(body) != f || (ship.Faction == f && ship.Spec.IsMilitary))) continue;
-                if ((world.Fleet.StateOf(p, jd).HelioKm - helio).Length > PatrolHailKm) continue;
+                double range = (world.Fleet.StateOf(p, jd).HelioKm - helio).Length;
+                if (range > PatrolHailKm) continue;
+                // It has to make the ship out first: a hull running silent can slip past a patrol that only holds a blip.
+                if (PatrolSees(p, ship, range, jd) < ContactLevel.Class) continue;
                 Hail = new PatrolHail
                 {
                     Patrol = p, By = f, Interdiction = wanted, StartJd = jd, Fine = Player.BountyBy(f),
@@ -637,6 +623,16 @@ namespace SolarSystem.Core
                     : $"{f.Name} patrol {p.Name}: \"{ship.Name}, hold your position for a cargo scan.\"");
                 return;
             }
+        }
+
+        /// <summary>What patrol <paramref name="p"/>'s group makes of the player's <paramref name="ship"/> at <paramref name="rangeKm"/>,
+        /// by its signature as the helm last reported it (drive lit or not; silent running or not).</summary>
+        ContactLevel PatrolSees(Ship p, Ship ship, double rangeKm, double jd)
+        {
+            var sensors = world.Sensors;
+            if (sensors == null) return ContactLevel.Identified;
+            bool burning = ship == world.PilotedShip ? sensors.PilotBurning : sensors.Burning(ship, jd);
+            return Sensors.Resolve(sensors.GroupSuite(p), Signatures.Of(ship, burning), rangeKm, Signatures.Transponder(ship));
         }
 
         bool IsPatrol(Ship p, Ship player) =>
@@ -660,7 +656,8 @@ namespace SolarSystem.Core
                 return;
             }
             double d = (world.Fleet.StateOf(p, jd).HelioKm - helio).Length;
-            if (d > PatrolHoldKm)
+            // Run out of range, or gone dark under its nose: either way the patrol saw it go.
+            if (d > PatrolHoldKm || PatrolSees(p, ship, d, jd) == ContactLevel.None)
             {
                 Hail = null;
                 scannedUntil[f] = jd + ScanCooldownDays;

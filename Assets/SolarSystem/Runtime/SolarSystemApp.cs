@@ -1006,7 +1006,14 @@ namespace SolarSystem
         /// position every frame piloting is active, before <see cref="UpdateShips"/> reads it.</summary>
         void UpdatePiloting(float dt)
         {
-            if (!IsPiloting) { pilotBoosting = false; pilotCruise = default; nearGate = null; return; }
+            if (!IsPiloting)
+            {
+                pilotBoosting = false;
+                pilotCruise = default;
+                nearGate = null;
+                World.Sensors?.UpdatePilot(null, default, false, Clock.Jd);
+                return;
+            }
             var ship = Piloted.Ship;
             // Taken this very frame (the war let go of it on capture) -- even if its captors then scuttled it
             // at once: the session ends, as a loss, before anything here hands the hull back to the player.
@@ -1036,6 +1043,14 @@ namespace SolarSystem
             {
                 pilotFlightAssistOff = !pilotFlightAssistOff;
                 ShowToast(pilotFlightAssistOff ? "FLIGHT ASSIST OFF: the hull drifts on its momentum  (F to turn it back on)" : "FLIGHT ASSIST ON");
+            }
+
+            if (Input.ToggleSilent)
+            {
+                ship.SilentRunning = !ship.SilentRunning;
+                ShowToast(ship.SilentRunning
+                    ? "SILENT RUNNING: transponder off, systems down, heat damped -- a burn still shows  (F3 to light up again)"
+                    : "SILENT RUNNING OFF: transponder on");
             }
 
             if (Input.LockTarget) ToggleLockTarget();
@@ -1075,10 +1090,17 @@ namespace SolarSystem
             UpdatePropellant(ship, dt);
 
             UpdatePilotBattle(ship, dt);
+            // What the ship's own scanners make of everything else, and what everyone else can see of it: its drive is
+            // lit whenever its thrusters changed its velocity beyond what gravity did this frame (U.SPC-T66).
+            bool burning = dt > 0 && (vel - (velBefore + gravity * dt)).Length / dt > PilotBurnKmS2;
+            World.Sensors?.UpdatePilot(ship, Ephemeris.HelioAt(pilotFrameBody, Clock.Jd) + pilotOffsetKm, burning, Clock.Jd);
             // The law around the ship: trespass, and patrols that scan it or, if it is wanted, hail it to pay up.
             World.Law.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
             UpdateGateActivation(ship);
         }
+
+        /// <summary>Thrust, km/s^2, above which the piloted ship's drive shows as a burn on others' scanners (about 0.01 g).</summary>
+        const double PilotBurnKmS2 = 1e-4;
 
         /// <summary>The pull on the piloted hull of every body it is close to (see <see cref="PilotFlight.Gravity"/>),
         /// km/s² -- its own frame's body above all, but a moon or a neighbour too when it flies near one.</summary>
@@ -2252,11 +2274,14 @@ namespace SolarSystem
             }
 
             var ships = Fleet.Ships;
+            // At the helm only what the scanners hold can be picked (U.SPC-T66), unless it is close enough to see.
+            var picture = IsPiloting && Piloted.Ship != null ? World.Sensors?.Player : null;
             for (int i = 0; i < ships.Count; i++)
             {
                 if (ships[i].Destroyed || ships[i].Controller.Phase == ShipPhase.Landed) continue;
                 if (!ToGui(shipScene[i], out var p, out var depth)) continue;
                 double px = shipLength[i] / depth * ppu;
+                if (picture != null && ships[i] != Piloted.Ship && px < 5 && picture.Of(ships[i]) == null) continue;
                 double pickRadius = Math.Max(px * 0.5, Icons.PixelSize(ships[i].Spec.Class) * 0.5 + 4);
                 double d = (p - gui).magnitude;
                 if (d > pickRadius) continue;
