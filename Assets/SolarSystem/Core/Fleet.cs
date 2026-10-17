@@ -1170,6 +1170,9 @@ namespace SolarSystem.Core
             ship.LaneHoldSide = DVec3.Zero;
             ship.Wander = false;
             ship.DestinationBody = body;
+            // Bound only where it is now: a tanker that later fills it does not send it on the old trip.
+            ship.FinalBody = body;
+            ship.StrandedInFlight = false;
             ship.PhaseStartJd = ship.PhaseEndJd = jd;
         }
 
