@@ -322,6 +322,9 @@ namespace SolarSystem.Core
         /// <summary>A supply-contract bonus the destination's owner pays on delivery, credits.</summary>
         public double CargoBonus;
 
+        /// <summary>Who offered <see cref="CargoBonus"/>: the destination's owner when the load was booked, the only one who pays it.</summary>
+        public Faction CargoBonusPayer;
+
         /// <summary>The player's personal grid-based cargo hold (<see cref="CargoHold"/>) -- separate
         /// from the single-slot cargo fields above that the AI trade loop owns, and built only once
         /// asked for, since only the ship currently being piloted ever needs one.</summary>

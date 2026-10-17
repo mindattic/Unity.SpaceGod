@@ -461,7 +461,8 @@ namespace SolarSystem.Core
             s.Stock[g] += ship.CargoTonnes;
             double tax = value * PortTax;
             s.Owner.Treasury += tax;
-            if (s == ship.CargoDestination && ship.CargoBonus > 0)
+            // Paid by the owner who offered it: a port taken since the load was booked does not pay its old owner's bonus.
+            if (s == ship.CargoDestination && ship.CargoBonus > 0 && s.Owner == ship.CargoBonusPayer)
             {
                 s.Owner.Treasury -= ship.CargoBonus;
                 value += ship.CargoBonus;
@@ -693,6 +694,7 @@ namespace SolarSystem.Core
             ship.CargoCost = o.Cost * (1 + PortTax);
             ship.Faction.Treasury -= ship.CargoCost;
             ship.CargoBonus = o.Bonus;
+            ship.CargoBonusPayer = o.To.Owner;
             ship.CargoDestination = o.To;
             ship.Cargo = CargoText(ship);
             o.From.RefreshPrices();
