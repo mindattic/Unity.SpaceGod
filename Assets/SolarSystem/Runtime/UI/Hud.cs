@@ -698,9 +698,26 @@ namespace SolarSystem.UI
                     rows.Add((CompanyText(co), Target.None, 1, lc));
                 }
             }
+            // The player's own fleet: its house flag is no faction of the system's, but its ships are no visitors.
+            var house = app.World.Holdings?.House;
+            bool houseHeader = false;
+            if (house != null)
+                foreach (var ship in app.Fleet.Ships)
+                {
+                    if (ship.IsEscort || ship.Destroyed || ship.Faction != house) continue;
+                    if (!houseHeader)
+                    {
+                        rows.Add(("", Target.None, 0, Color.clear));
+                        rows.Add(("YOUR FLEET", Target.None, 0, new Color(0.85f, 0.95f, 0.7f)));
+                        houseHeader = true;
+                    }
+                    var hc = new Color(house.Color.R, house.Color.G, house.Color.B);
+                    rows.Add((ship.Name + "  " + ShortStatus(ship), Target.OfShip(ship), 1, hc));
+                }
             // Ships from other systems, come through the gates (their factions belong to their own worlds).
             bool visitorsHeader = false;
             var local = new HashSet<Faction>(app.Fleet.Factions);
+            if (house != null) local.Add(house);
             foreach (var ship in app.Fleet.Ships)
             {
                 if (ship.IsEscort || ship.Destroyed || local.Contains(ship.Faction)) continue;
