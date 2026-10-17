@@ -1118,6 +1118,35 @@ namespace SolarSystem.Core
             ScheduleNext(ship, arriveJd);
         }
 
+        /// <summary>
+        /// Holds a hull fixed at <paramref name="offsetKm"/> in <paramref name="body"/>'s frame, nose on
+        /// <paramref name="forward"/>, as of <paramref name="jd"/>: where a pilot let go of it, the raiders cast it
+        /// off, or its captors took it. Whatever trip it had planned before is forgotten -- its departure is due
+        /// now and it is bound nowhere but here -- so the next <see cref="ScheduleNext"/> plans afresh from this
+        /// spot (for its new owner, if it changed hands) rather than the hull sitting frozen until the old plan's
+        /// departure and then setting off on it (U.SPC-T178).
+        /// </summary>
+        public static void PinAt(Ship ship, int body, DVec3 offsetKm, DVec3 forward, double jd)
+        {
+            var v = forward.LengthSquared > 1e-12 ? forward.Normalized : DVec3.UnitX;
+            var u = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
+            ship.Orbit = new ParkingOrbit
+            {
+                Body = body, Center = offsetKm, RadiusKm = 0,
+                U = u, V = v, EpochJd = jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
+            };
+            ship.Phase = ShipPhase.Parked;
+            ship.Path = null;
+            ship.Journey = null;
+            ship.JourneyIndex = 0;
+            ship.Ring = null;
+            ship.HoldPoint = null;
+            ship.LaneHoldSide = DVec3.Zero;
+            ship.Wander = false;
+            ship.DestinationBody = body;
+            ship.PhaseStartJd = ship.PhaseEndJd = jd;
+        }
+
         /// <summary>Picks the next destination and the departure time: dwell, then wait for the parking orbit to face the target.</summary>
         public void ScheduleNext(Ship ship, double nowJd)
         {

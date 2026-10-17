@@ -243,6 +243,44 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AShipLetGoMidFightPlansAfreshFromWhereItWasLeftOnceTheFightIsOver()
+        {
+            var w = CreateWorld();
+            var player = MakeFaction(w, "Player Navy 6");
+            var enemy = MakeFaction(w, "Enemy Navy 6");
+            w.Diplomacy.Set(player, enemy, Relation.War);
+            int here = w.Catalog["Pluto"].Index, oldPlan = w.Catalog["Mercury"].Index;
+            ParkWarship(w, enemy, ShipClass.Destroyer, here);
+            var flown = ParkWarship(w, player, ShipClass.Battleship, here);
+            // Its schedule before the helm was taken: bound for Mercury, leaving in a month.
+            flown.DestinationBody = oldPlan;
+            flown.PhaseEndJd = StartJd + 30;
+            w.PilotedShip = flown;
+            var b = w.War.TryStartPlayerBattle(flown, here, new DVec3(5000, 0, 0), DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+
+            // Released mid-fight: pinned where the pilot left it, the crew fighting on.
+            double releaseJd = StartJd + 1.0 / 1440;
+            w.War.Update(releaseJd);
+            Assert.That(flown.Battle, Is.SameAs(b));
+            var unit = b.UnitOf(flown);
+            unit.PlayerControlled = false;
+            w.PilotedShip = null;
+            Fleet.PinAt(flown, here, b.Anchor + unit.Pos, unit.Forward, releaseJd);
+            Assert.That(flown.DestinationBody, Is.EqualTo(here), "the pin kept the old trip's destination");
+            Assert.That(flown.PhaseEndJd, Is.EqualTo(releaseJd), "the pin kept the old trip's departure time");
+
+            foreach (var u in b.Units) if (u.Ship != null && u.Ship != flown) b.ApplyDamage(u, null, 1e9, u.Pos);
+            double jd = releaseJd;
+            for (int i = 0; i < 400 && w.War.Battles.Contains(b); i++) w.War.Update(jd += 1.0 / 1440);
+            Assert.That(w.War.Battles, Does.Not.Contain(b));
+            Assert.That(flown.Destroyed, Is.False);
+            Assert.That(flown.Battle, Is.Null);
+            Assert.That(flown.PhaseEndJd, Is.Not.EqualTo(StartJd + 30), "it sat frozen until the old plan's departure");
+            Assert.That(flown.PhaseEndJd, Is.GreaterThan(releaseJd), "the fight's end did not plan its next trip");
+        }
+
+        [Test]
         public void AnAmbushOutOnALaneIsNotTheBattleAtTheSystemRoot()
         {
             var w = CreateWorld();

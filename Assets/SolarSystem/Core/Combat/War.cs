@@ -522,22 +522,7 @@ namespace SolarSystem.Core
             ship.DerelictSinceJd = jd;
             ship.DerelictBy = raiders;
             ship.Cargo = "Derelict: boarded, stripped and abandoned";
-            var v = u.Forward.LengthSquared > 1e-12 ? u.Forward.Normalized : DVec3.UnitX;
-            var w = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
-            ship.Orbit = new ParkingOrbit
-            {
-                Body = b.Body, Center = b.Anchor + u.Pos, RadiusKm = 0,
-                U = w, V = v, EpochJd = jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
-            };
-            ship.Phase = ShipPhase.Parked;
-            ship.Path = null;
-            ship.Journey = null;
-            ship.JourneyIndex = 0;
-            ship.Ring = null;
-            ship.HoldPoint = null;
-            ship.LaneHoldSide = DVec3.Zero;
-            ship.DestinationBody = b.Body;
-            ship.PhaseStartJd = ship.PhaseEndJd = jd;
+            Fleet.PinAt(ship, b.Body, b.Anchor + u.Pos, u.Forward, jd);
             double aboard = ship.Combat != null ? ship.Combat.Interior.Crew + ship.Combat.Interior.Marines : 0;
             SalvageSession.Strand(ship, raiders, good, leftTonnes, jd);
             // Those who did not hide aboard are put off in the pods, to be hauled in for ransom or found by someone kinder.

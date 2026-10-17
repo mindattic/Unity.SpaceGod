@@ -760,23 +760,7 @@ namespace SolarSystem
         /// stale and dropped: done on taking the helm, so nothing treats a flown hull as landed (hidden,
         /// unpickable) or reads an escort's missing orbit, and again on release.
         /// </summary>
-        void PinWherePiloted(Ship ship)
-        {
-            var v = pilotForward;
-            var u = DVec3.Cross(Math.Abs(v.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX, v).Normalized;
-            ship.Orbit = new ParkingOrbit
-            {
-                Body = pilotFrameBody, Center = pilotOffsetKm, RadiusKm = 0,
-                U = u, V = v, EpochJd = Clock.Jd, PhaseAtEpoch = 0, RateRadPerDay = 0, Fixed = true,
-            };
-            ship.Phase = ShipPhase.Parked;
-            ship.Path = null;
-            ship.Journey = null;
-            ship.JourneyIndex = 0;
-            ship.Ring = null;
-            ship.HoldPoint = null;
-            ship.LaneHoldSide = DVec3.Zero;
-        }
+        void PinWherePiloted(Ship ship) => Fleet.PinAt(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
 
         /// <summary>The body whose frame best describes a ship's current position, and its offset
         /// there in true km -- the same per-phase placement <see cref="UpdateShips"/> computes for
