@@ -103,6 +103,9 @@ namespace SolarSystem.Core
         /// whether that is the player.</summary>
         public Ship Taker;
         public LawRecord TakerRecord;
+
+        /// <summary>The colours the taker flew when it took the job: a hull taken as a prize since is lost to it.</summary>
+        public Faction TakerFaction;
         public bool ByPlayer;
 
         public bool IsOpen => State == ContractState.Open;
@@ -692,6 +695,7 @@ namespace SolarSystem.Core
             c.Taker = taker;
             c.ByPlayer = player;
             c.TakerRecord = RecordFor(ship, player);
+            c.TakerFaction = taker.Faction;
             c.TakenJd = jd;
             c.DueJd = jd + c.DeadlineDays;
             switch (c.Kind)
@@ -970,7 +974,9 @@ namespace SolarSystem.Core
                 }
                 if (!c.IsActive) continue;
                 var t = c.Taker;
-                bool lost = t == null || t.Destroyed || t.Derelict || t.GateDeparted || (c.TakerRecord != null && !c.ByPlayer && t.Faction != null && t.Faction.IsPirate);
+                // Taken as a prize (by pirates, or a navy at war with its flag), the hull is its captor's, not the taker's.
+                bool lost = t == null || t.Destroyed || t.Derelict || t.GateDeparted || (c.TakerRecord != null && !c.ByPlayer && t.Faction != null && t.Faction.IsPirate)
+                            || (!c.ByPlayer && c.TakerFaction != null && t.Faction != c.TakerFaction);
                 if (c.ByPlayer && lost && t != null && !t.Destroyed && !t.Derelict) lost = false;
                 if (lost)
                 {
