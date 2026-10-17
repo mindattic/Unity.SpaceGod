@@ -1234,7 +1234,10 @@ namespace SolarSystem
                 // so the next battle's demand or surrender gets its own prompt.
                 demandPrompted = false;
                 termsPrompted = null;
-                if (!UpdateSalvage(ship, dt) && !UpdateLawHail(ship)) UpdateHavenAssault(ship);
+                // A patrol's order to heave to has the number keys (1 pays the fine) even alongside or latched to a hulk.
+                bool salvaging = UpdateSalvage(ship, dt);
+                bool hailed = UpdateLawHail(ship);
+                if (!salvaging && !hailed) UpdateHavenAssault(ship);
                 // Holding fire on a locked ship the player's flag has no quarrel with opens fire on it anyway: an
                 // attack on a lawful ship, a crime if anyone sees it. An enemy is fought as usual (below), and one
                 // alone with nobody armed to start that fight, a lone merchant, is attacked the same way.
@@ -1390,7 +1393,7 @@ namespace SolarSystem
                 salvagePrompted = hulk;
                 ShowToast("Alongside " + (derelict != null ? "the derelict " + derelict.Name : "the wreck of " + wreck.Name) + ", velocity matched:  1 latch on");
             }
-            if (Input.NumberKey != 1) return true;
+            if (SalvageKey != 1) return true;
             Salvage = derelict != null ? SalvageSession.Latch(ship, derelict) : SalvageSession.Latch(ship, wreck);
             if (Salvage == null) return true;
             salvageLatchOffsetKm = rel;
@@ -1399,6 +1402,9 @@ namespace SolarSystem
             ShowSalvageLog();
             return true;
         }
+
+        /// <summary>The number key for the salvage choices: none while a patrol's interdiction has the keys.</summary>
+        int SalvageKey => World.Law?.Hail?.Interdiction == true ? -1 : Input.NumberKey;
 
         bool UpdateLatched(Ship ship, float dt)
         {
@@ -1420,7 +1426,7 @@ namespace SolarSystem
             s.Step(Math.Min(10, dt * Clock.Warp.SimSecondsPerSecond * Clock.Speed));
             ShowSalvageLog();
 
-            int key = Input.NumberKey;
+            int key = SalvageKey;
             if (key == 4) { EndSalvage("Clamps released"); return true; }
             if (s.Hostile)
             {
