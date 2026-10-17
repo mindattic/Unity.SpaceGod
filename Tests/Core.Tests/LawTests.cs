@@ -597,5 +597,25 @@ namespace SolarSystem.Core.Tests
             Assert.That(w.Law.Player.WantedBy(w.Sol), Is.True);
             Assert.That(w.Law.Player.StandingWith(w.Belt), Is.LessThan(0));
         }
+
+        [Test]
+        public void ThePlayerCanOpenFireOnALoneEnemyMerchantWithNobodyArmedThereToStartAFight()
+        {
+            var w = CreateWorld();
+            ClearNavies(w);
+            int earth = Body(w, "Earth");
+            var ship = Pilot(w, ShipClass.Cruiser, w.Sol);
+            var target = w.Fleet.AddShip("Far Trader", ShipClass.Freighter, w.Reach, ShipRole.Trader);
+            target.Orbit = new ParkingOrbit { Body = earth };
+            target.Phase = ShipPhase.Parked;
+            w.Diplomacy.Set(w.Sol, w.Reach, Relation.War);
+            Assert.That(w.War.TryStartPlayerBattle(ship, earth, new DVec3(5000, 0, 0), DVec3.UnitX, StartJd), Is.Null, "no warship or platform of its own to start a fight");
+            var b = w.War.TryStartPlayerAttack(ship, target, earth, new DVec3(5000, 0, 0), DVec3.UnitX, StartJd);
+            Assert.That(b, Is.Not.Null);
+            Assert.That(b.UnitOf(target).Side, Is.EqualTo(1 - b.UnitOf(ship).Side));
+            // An enemy at war is no lawful victim.
+            w.Law.OnBattleEnded(b, StartJd);
+            Assert.That(w.Law.Player.Crimes, Is.Empty);
+        }
     }
 }

@@ -731,7 +731,13 @@ namespace SolarSystem.Core
         {
             if (ship == null || target == null || ship == target || ship.Destroyed || ship.Battle != null || ship.Planetside) return null;
             if (target.Destroyed || target.GateDeparted || target.Derelict || target.Planetside) return null;
-            if (Diplomacy.Hostile(ship.Faction, target.Faction)) return TryStartPlayerBattle(ship, body, offsetFromBodyKm, forward, jd);
+            // An enemy is fought as usual where anyone there is armed and willing; an enemy merchant alone, with no
+            // escort or platforms to start that fight, is attacked as any other ship the player opens fire on.
+            if (Diplomacy.Hostile(ship.Faction, target.Faction))
+            {
+                var fight = TryStartPlayerBattle(ship, body, offsetFromBodyKm, forward, jd);
+                if (fight != null || ship.Battle != null) return fight;
+            }
             var neighbourhood = ScaleModel.NeighbourhoodKm(Catalog[body]);
             if (offsetFromBodyKm.Length > neighbourhood) return null;
             var existing = BattleAt(body);

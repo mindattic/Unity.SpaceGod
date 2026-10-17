@@ -1230,13 +1230,16 @@ namespace SolarSystem
                 termsPrompted = null;
                 if (!UpdateSalvage(ship, dt) && !UpdateLawHail(ship)) UpdateHavenAssault(ship);
                 // Holding fire on a locked ship the player's flag has no quarrel with opens fire on it anyway: an
-                // attack on a lawful ship, a crime if anyone sees it (enemies and pirates are fought as usual below).
+                // attack on a lawful ship, a crime if anyone sees it. An enemy is fought as usual (below), and one
+                // alone with nobody armed to start that fight, a lone merchant, is attacked the same way.
                 var locked = pilotLockTarget.IsShip ? pilotLockTarget.Ship : null;
-                if (locked != null && Input.Fire && !pilotCruise.Active && !ClickPanelOpen && !World.Diplomacy.Hostile(ship.Faction, locked.Faction))
+                if (locked != null && Input.Fire && !pilotCruise.Active && !ClickPanelOpen)
                 {
+                    bool enemy = World.Diplomacy.Hostile(ship.Faction, locked.Faction);
                     if (World.War.TryStartPlayerAttack(ship, locked, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd) != null)
                     {
-                        ShowToast("Weapons free on the " + locked.Name + ": an attack on a lawful ship is a crime if anyone sees it");
+                        ShowToast(enemy ? "Weapons free on the " + locked.Name
+                            : "Weapons free on the " + locked.Name + ": an attack on a lawful ship is a crime if anyone sees it");
                         return;
                     }
                 }
