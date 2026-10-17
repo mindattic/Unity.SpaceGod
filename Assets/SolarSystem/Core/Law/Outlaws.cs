@@ -596,7 +596,8 @@ namespace SolarSystem.Core
             if (b == null || u == null || rec == null || !rec.Wanted) return false;
             BountyHunter hunter = null;
             foreach (var o in b.Units)
-                if (o.Side == 1 - u.FoughtOn && o.Ship != null && HunterOf(o.Ship) is BountyHunter h && (hunter == null || !o.Dead)) hunter = h;
+                // Only a hunter still there to scan the wreck or take the prize collects: one lost in the fight claims nothing.
+                if (o.Side == 1 - u.FoughtOn && !o.Dead && !o.Captured && o.Ship != null && HunterOf(o.Ship) is BountyHunter h) hunter = h;
             if (hunter == null) return false;
             double total = Pay(rec, u.Dead ? DeadShare : 1, hunter.Ship);
             var outlaw = Of(rec);
