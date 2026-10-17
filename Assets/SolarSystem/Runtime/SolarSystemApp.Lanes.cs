@@ -54,6 +54,124 @@ namespace SolarSystem
 
         float fovKick;
 
+        // ---------------------------------------------------------------- interdiction (U.SPC-T42)
+
+        /// <summary>The armed interdictor the ride's scanners have picked up ahead, or null (see <see cref="War.ThreatAhead"/>).</summary>
+        public LaneThreat? RideThreat { get; private set; }
+
+        /// <summary>Real seconds, at the clock's present rate, until the pulse ahead can reach the hull (0 with none).</summary>
+        public double ThreatRealSeconds =>
+            RideThreat is LaneThreat t ? t.SecondsToPulse / Math.Max(Clock.Warp.SimSecondsPerSecond, 1e-9) : 0;
+
+        /// <summary>Seconds left with drives and shields knocked out by a pulse (0 when they are up).</summary>
+        public double PilotStunSeconds
+        {
+            get
+            {
+                var ship = IsPiloting ? Piloted.Ship : null;
+                var unit = ship?.Battle?.UnitOf(ship);
+                return unit != null && unit.Stunned > 0 ? unit.Stunned : 0;
+            }
+        }
+
+        /// <summary>Whether the hull, out of its lane part-way (dropped out, or thrown out and fought clear), can get back in where it left (Y).</summary>
+        public bool CanRejoinLane =>
+            IsPiloting && laneRejoinable && nearGate == null && Piloted.Ship != null &&
+            Fleet.CanRejoin(Piloted.Ship, Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm, Clock.Jd);
+
+        /// <summary>A warning shows long enough to answer: the clock slows until the countdown takes at least this many real seconds.</summary>
+        const double WarningRealSeconds = 10;
+
+        /// <summary>The interdictor last warned of (a new one warns afresh), and whether this hull left a lane part-way and may get back in.</summary>
+        Ship warnedOf;
+        bool laneRejoinable;
+
+        bool rideBoostHeld, rideDropHeld;
+
+        /// <summary>
+        /// The scanners' look ahead along the lane: an interdictor's field picked up slows the clock so its countdown can be
+        /// read and answered (Shift to surge through, Ctrl to drop out short of it); once it is behind, the ride's pace comes back.
+        /// </summary>
+        void UpdateRideThreat(Ship ship, double jd)
+        {
+            var threat = World.War?.ThreatAhead(ship, jd);
+            RideThreat = threat;
+            if (threat is LaneThreat t)
+            {
+                if (t.Lurker == warnedOf) return;
+                warnedOf = t.Lurker;
+                int i = Clock.WarpIndex;
+                while (i > 0 && t.SecondsToPulse / SimClock.Levels[i].SimSecondsPerSecond < WarningRealSeconds) i--;
+                Clock.SetWarp(i);
+                ShowToast("SENSORS: interdiction field ahead on the " + ship.LaneLeg.Lane.Name + " lane, " + Math.Round(t.DistanceKm / 1000) + " thousand km" +
+                          (t.Braced ? " (a raider's hull made out: braced for the pulse)" : "") +
+                          "  ·  Shift surge through, Ctrl drop out, or ride on");
+                return;
+            }
+            if (warnedOf == null) return;
+            warnedOf = null;
+            // Clear of it: back to the pace that gets the rest of the ride over within the minute.
+            double simSeconds = Math.Max(0, ship.PhaseEndJd - jd) * Astro.SecondsPerDay;
+            Clock.SetWarp(SimClock.WarpToCover(simSeconds, RideRealSeconds, Math.Max(0, rideWarpBefore)));
+        }
+
+        /// <summary>Shift: the rest of the ride surged through at <see cref="Fleet.SurgeFactor"/> times the pace, the boost charge spent on it.</summary>
+        void SurgeThroughLane(Ship ship)
+        {
+            if (!Fleet.SurgeRide(ship, Clock.Jd))
+            {
+                if (ship.LaneSurged) ShowToast("Already surging: the drive has nothing more to give on this lane");
+                return;
+            }
+            ship.Combat.BoostFraction = 0;
+            fovKick = GateFovKick * 0.6f;
+            ShowToast("SURGE: the drive pours everything into the lane, " + Fleet.SurgeFactor.ToString("0.#") + "x the pace" +
+                      (RideThreat.HasValue ? " -- through the field before the pulse closes, with luck" : ""));
+        }
+
+        /// <summary>Ctrl: off the lane right here, on the pilot's own terms, coasting out at the hull's own top speed.</summary>
+        void DropOutOfLane(Ship ship)
+        {
+            double jd = Clock.Jd;
+            var hop = ship.LaneLeg;
+            var facing = pilot.Forward;
+            bool threatened = RideThreat.HasValue;
+            Fleet.DropOut(ship, jd, facing);
+            EndRide();
+            pilotFrameBody = ship.Orbit.Body;
+            var tuning = PilotTuning.Of(ship.Spec.Class);
+            var up = pilot.Up;
+            pilot = PilotState.At(ship.Orbit.OffsetAt(jd), facing * tuning.MaxSpeed, facing);
+            var level = up - facing * DVec3.Dot(up, facing);
+            if (level.LengthSquared > 1e-9) pilot.Up = level.Normalized;
+            pilotAim = pilot.Forward;
+            insideRampGate = false;
+            laneRejoinable = true;
+            LaneExitFade = 1;
+            fovKick = GateFovKick * 0.5f;
+            ShowToast("Dropped out of the " + hop.Lane.Name + " lane" + (threatened ? " short of the field" : "") +
+                      "  (Y to get back in where you left it)");
+        }
+
+        /// <summary>Y, out of a lane near where the hull left it: back in, easing onto the lane line, and on to the far ramp.</summary>
+        void UpdateLaneRejoin(Ship ship)
+        {
+            if (!Input.ActivateGate || !CanRejoinLane) return;
+            if (!Fleet.RejoinLane(ship, Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm, Clock.Jd)) return;
+            laneRejoinable = false;
+            SalvageApproach = null;
+            BeginRide(ship, false);
+            fovKick = GateFovKick;
+            ShowToast("Back into the " + ship.LaneLeg.Lane.Name + " lane, bound for " + Catalog[ship.LaneLeg.To].Name);
+        }
+
+        /// <summary>What the war has to say about the lane ridden (a pulse slipped, or one that caught the hull), as toasts.</summary>
+        void ShowWarNotices()
+        {
+            var notices = World.War?.TakePilotNotices();
+            if (notices != null && notices.Count > 0) ShowToast(string.Join("   ·   ", notices));
+        }
+
         /// <summary>Flying in through an on-ramp's ring gate, out of any fight or salvage, starts a ride.</summary>
         void UpdateLaneEntry(Ship ship)
         {
@@ -82,6 +200,11 @@ namespace SolarSystem
             RideOnward.Clear();
             RideOnward.AddRange(Fleet.Lanes.OnwardHops(hop.To, hop.Lane));
             RideChoice = -1;
+            warnedOf = null;
+            RideThreat = null;
+            laneRejoinable = false;
+            // A key already held as the ride starts (boosting in through the ring) is not a press.
+            rideBoostHeld = rideDropHeld = true;
             pilotFrameBody = hop.From;
             pilotCruise = default;
             pilotBoosting = false;
@@ -97,6 +220,8 @@ namespace SolarSystem
             RideOnward.Clear();
             RideChoice = -1;
             LaneRideSpeed = 0;
+            RideThreat = null;
+            warnedOf = null;
         }
 
         void GateEffect(Lane lane, int at)
@@ -115,15 +240,31 @@ namespace SolarSystem
             double jd = Clock.Jd;
             if (ship.Battle != null)
             {
-                // Pulled into a fight mid-ride: off the lane where the hull is, and the fight is flown from there.
+                // Pulled into a fight mid-ride (an interdiction pulse, U.SPC-T42): off the lane where the hull is, and the
+                // fight is flown from there, at the pace of a fight; out of it, the hull can get back into the lane.
                 var at = Fleet.StateOf(ship, jd).HelioKm;
                 EndRide();
                 pilotFrameBody = Catalog.Root.Index;
                 pilotOffsetKm = at - Ephemeris.Helio(pilotFrameBody);
                 PinWherePiloted(ship);
                 EnterPiloting(Piloted);
+                laneRejoinable = true;
+                GateFlash = 0.8f;
+                fovKick = GateFovKick;
+                LaneExitFade = 1;
                 return;
             }
+            UpdateRideThreat(ship, jd);
+            bool boost = Input.Boost, drop = Input.Slow;
+            bool boostPressed = boost && !rideBoostHeld, dropPressed = drop && !rideDropHeld;
+            rideBoostHeld = boost;
+            rideDropHeld = drop;
+            if (dropPressed)
+            {
+                DropOutOfLane(ship);
+                return;
+            }
+            if (boostPressed) SurgeThroughLane(ship);
             if (Input.NumberKey == 1 && RideChoice != -1)
             {
                 RideChoice = -1;

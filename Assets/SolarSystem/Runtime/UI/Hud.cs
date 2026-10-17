@@ -82,6 +82,7 @@ namespace SolarSystem.UI
             DrawSalvage();
             DrawHail();
             DrawLaneRide();
+            DrawInterdiction();
             if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
             if (app.ShowCargo) DrawCargo();
@@ -449,6 +450,48 @@ namespace SolarSystem.UI
             float w = Mathf.Max(text.CalcSize(a).x, small.CalcSize(b).x) + 28;
             var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 128, w, 50));
             GUI.contentColor = StreakColor;
+            GUI.Label(new Rect(r.x + 14, r.y + 5, w, 20), a, text);
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 14, r.y + 27, w, 18), b, small);
+            GUI.contentColor = Color.white;
+        }
+
+        static readonly Color InterdictColor = new Color(1f, 0.45f, 0.35f);
+
+        /// <summary>
+        /// A lane interdiction at the helm (U.SPC-T42): the field picked up ahead with its countdown and the answers to it
+        /// (surge through, drop out), the drives knocked out after a pulse with the seconds until they come back, and, out
+        /// of the lane near where the hull left it, the key to get back in.
+        /// </summary>
+        void DrawInterdiction()
+        {
+            if (!app.IsPiloting) return;
+            string head = null, tail = null;
+            if (app.RidingLane && app.RideThreat is LaneThreat t)
+            {
+                var ship = app.Piloted.Ship;
+                head = "INTERDICTION FIELD AHEAD  ·  " + Mathf.RoundToInt((float)(t.DistanceKm / 1000)).ToString("N0", CultureInfo.InvariantCulture) + " thousand km  ·  pulse in " +
+                       Mathf.CeilToInt((float)app.ThreatRealSeconds) + " s" + (ship.LaneSurged ? "  ·  SURGING" : "");
+                tail = (t.Braced ? "a raider's hull made out lying dark: braced, the drives should hold    " : "") +
+                       (ship.LaneSurged ? "" : "Shift surge through (" + Fleet.SurgeFactor.ToString("0.#", CultureInfo.InvariantCulture) + "x pace)    ") +
+                       "Ctrl drop out here    or ride on into it";
+            }
+            else if (app.PilotStunSeconds > 0)
+            {
+                head = "EMP  ·  DRIVES AND SHIELDS DOWN  ·  " + Mathf.CeilToInt((float)app.PilotStunSeconds) + " s";
+                tail = "thrown out of the lane by the pulse: drifting, no thrust, no turning, no guns until the systems come back";
+            }
+            else if (app.CanRejoinLane)
+            {
+                head = "BESIDE THE " + app.Piloted.Ship.LaneLeg.Lane.Name.ToUpperInvariant() + " LANE";
+                tail = "Y  back into the lane where you left it, on to " + app.Catalog[app.Piloted.Ship.LaneLeg.To].Name;
+            }
+            if (head == null) return;
+            var a = new GUIContent(head);
+            var b = new GUIContent(tail);
+            float w = Mathf.Max(text.CalcSize(a).x, small.CalcSize(b).x) + 28;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 184, w, 50));
+            GUI.contentColor = app.CanRejoinLane && !app.RidingLane && app.PilotStunSeconds <= 0 ? StreakColor : InterdictColor;
             GUI.Label(new Rect(r.x + 14, r.y + 5, w, 20), a, text);
             GUI.contentColor = Dim;
             GUI.Label(new Rect(r.x + 14, r.y + 27, w, 18), b, small);
@@ -2397,6 +2440,7 @@ namespace SolarSystem.UI
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
+                "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",

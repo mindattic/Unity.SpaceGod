@@ -715,6 +715,7 @@ namespace SolarSystem.Core
             ship.Path = null;
             ship.Conic = null;
             ship.Phase = ShipPhase.Lane;
+            ship.LaneSurged = false;
             ship.LaneStartProgress = 0;
             ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
             ship.PhaseStartJd = jd;
@@ -726,6 +727,7 @@ namespace SolarSystem.Core
         public void ResumeLane(Ship ship, double jd)
         {
             ship.Phase = ShipPhase.Lane;
+            ship.LaneSurged = false;
             ship.LaneStartProgress = ship.LaneHold;
             ship.LaneEndProgress = 1;
             // LaneHoldSide is kept: the ship eases back in from beside the lane over the first hours.
@@ -827,6 +829,72 @@ namespace SolarSystem.Core
                 return;
             }
             PinAt(ship, hop.To, ship.LaneToOffset, facing, jd);
+        }
+
+        // ---------------------------------------------------------------- the player's answers to an interdiction (U.SPC-T42)
+
+        /// <summary>How many times the lane's pace a surging rider goes (<see cref="SurgeRide"/>).</summary>
+        public const double SurgeFactor = 2.5;
+
+        /// <summary>How far from the lane line, km, a hull out of it (dropped out, or pulled out and fought clear) can still get back in where it left.</summary>
+        public const double RejoinKm = 100000;
+
+        /// <summary>
+        /// A pilot boosting through: the rest of the ride goes at <see cref="SurgeFactor"/> times its pace, from right where
+        /// the hull is (its progress along the lane does not jump), so it reaches every point ahead, and its off-ramp, sooner.
+        /// Once a ride; false if the hull is not riding or has already surged.
+        /// </summary>
+        public static bool SurgeRide(Ship ship, double jd)
+        {
+            if (ship.Phase != ShipPhase.Lane || ship.LaneSurged || jd >= ship.PhaseEndJd) return false;
+            double span = Math.Max(ship.PhaseEndJd - ship.PhaseStartJd, 1e-9);
+            double u = Math.Max(0, Math.Min(1, (jd - ship.PhaseStartJd) / span));
+            double surged = span / SurgeFactor;
+            ship.PhaseStartJd = jd - u * surged;
+            ship.PhaseEndJd = ship.PhaseStartJd + surged;
+            ship.LaneSurged = true;
+            return true;
+        }
+
+        /// <summary>
+        /// A pilot drops out of the lane early, on their own terms: off it right where the hull is, pinned there in the
+        /// system root's frame facing <paramref name="facing"/>, the point it left kept (<see cref="Ship.LaneHold"/>) so it
+        /// can get back in there (<see cref="RejoinLane"/>).
+        /// </summary>
+        public void DropOut(Ship ship, double jd, DVec3 facing)
+        {
+            if (ship.Phase != ShipPhase.Lane) return;
+            var helio = StateOf(ship, jd).HelioKm;
+            ship.LaneHold = LaneProgress(ship, jd);
+            int root = catalog.Root.Index;
+            PinAt(ship, root, helio - ephemeris.HelioAt(root, jd), facing, jd);
+        }
+
+        /// <summary>Where a hull out of its lane would get back in: the lane line at the point it left, true heliocentric km.</summary>
+        public DVec3 RejoinPoint(Ship ship, double jd) => LanePoint(ship, jd, ship.LaneHold);
+
+        /// <summary>Whether a hull at <paramref name="helioKm"/> that left its lane part-way can get back in where it left.</summary>
+        public bool CanRejoin(Ship ship, DVec3 helioKm, double jd) =>
+            ship.LaneLeg.Lane != null && ship.Phase != ShipPhase.Lane && ship.Battle == null && !ship.Destroyed &&
+            ship.LaneHold > 0 && ship.LaneHold < 1 && (helioKm - RejoinPoint(ship, jd)).Length <= RejoinKm;
+
+        /// <summary>
+        /// Back into the lane a hull left part-way (dropped out, or pulled out by a pulse and fought clear): it eases in from
+        /// where it is (<paramref name="helioKm"/>) to the point it left and rides on from there to the far ramp, like a
+        /// ship that survived an ambush (<see cref="ResumeLane"/>). False if it is not near enough (<see cref="CanRejoin"/>).
+        /// </summary>
+        public bool RejoinLane(Ship ship, DVec3 helioKm, double jd)
+        {
+            if (!CanRejoin(ship, helioKm, jd)) return false;
+            var hop = ship.LaneLeg;
+            ship.Journey = new List<LaneHop> { hop };
+            ship.JourneyIndex = 0;
+            ship.FinalBody = hop.To;
+            ship.DestinationBody = hop.To;
+            ship.Orbit = FixedPoint(hop.From, ship.LaneFromOffset);
+            ship.LaneHoldSide = helioKm - RejoinPoint(ship, jd);
+            ResumeLane(ship, jd);
+            return true;
         }
 
         /// <summary>

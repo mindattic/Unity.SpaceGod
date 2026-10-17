@@ -226,6 +226,9 @@ namespace SolarSystem
             rideWarpBefore = -1;
             RideOnward.Clear();
             RideChoice = -1;
+            RideThreat = null;
+            warnedOf = null;
+            laneRejoinable = false;
             SpaceCamera.PilotLockTarget = Target.None;
             Salvage = null;
             SalvageApproach = null;

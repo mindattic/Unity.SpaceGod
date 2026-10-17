@@ -20,6 +20,26 @@ namespace SolarSystem.Core
         Assault,
     }
 
+    /// <summary>
+    /// An armed interdictor a lane rider's scanners have picked up ahead (see <see cref="War.ThreatAhead"/>): who, how many
+    /// seconds of the ride until its pulse can reach the rider, how far ahead along the lane it is, and whether the rider
+    /// has made out its hull well enough to be braced for the pulse (<see cref="War.Forewarned"/>).
+    /// </summary>
+    public readonly struct LaneThreat
+    {
+        public readonly Ship Lurker;
+        public readonly double SecondsToPulse, DistanceKm;
+        public readonly bool Braced;
+
+        public LaneThreat(Ship lurker, double secondsToPulse, double distanceKm, bool braced)
+        {
+            Lurker = lurker;
+            SecondsToPulse = secondsToPulse;
+            DistanceKm = distanceKm;
+            Braced = braced;
+        }
+    }
+
     /// <summary>What a fleet group (a flagship and its escorts) is doing, and where.</summary>
     public sealed class GroupOrder
     {
@@ -63,6 +83,26 @@ namespace SolarSystem.Core
 
         /// <summary>An interdiction pulse pulls out every ship within this distance along the lane.</summary>
         public const double PulseRadiusKm = 600000;
+
+        /// <summary>
+        /// What a raider's pulse emitter gives off as it sits charged beside a lane, in signature units: far brighter than the
+        /// dark hull it is fitted to, so a rider's scanners pick up the field ahead (as a blip) long before the hull itself,
+        /// at <see cref="SensorSuite.ReachKm"/> of this (U.SPC-T42).
+        /// </summary>
+        public const double EmitterSignature = 400;
+
+        /// <summary>The chance a hull surging through the lane (<see cref="Fleet.SurgeRide"/>) is past and gone before the pulse's shell closes on it.</summary>
+        public double SurgeSlipChance = 0.6;
+
+        readonly List<string> pilotNotices = new List<string>();
+
+        /// <summary>What the war has to tell the player about the lane they ride (a pulse ridden out, slipped, or that caught them), taken once.</summary>
+        public List<string> TakePilotNotices()
+        {
+            var list = new List<string>(pilotNotices);
+            pilotNotices.Clear();
+            return list;
+        }
         readonly Dictionary<int, double> lastBattleEndJd = new Dictionary<int, double>();
         readonly Random rng;
 
@@ -187,9 +227,9 @@ namespace SolarSystem.Core
             var seen = new Dictionary<Ship, double>();
             foreach (var v in Fleet.Ships)
             {
-                // The player's ship is never an ambush's victim or lurker: its phase is a frozen leftover
-                // from wherever the helm was taken, not what the player is doing.
-                if (v.Destroyed || v.IsEscort || v.Phase != ShipPhase.Lane || v.Battle != null || v == world.PilotedShip) continue;
+                // The player's ship is never a lurker, but riding a lane at the helm (U.SPC-T41) it is a rider like any
+                // other, and a pulse throws it out (U.SPC-T42): a piloted hull is in the lane phase only while it rides.
+                if (v.Destroyed || v.IsEscort || v.Phase != ShipPhase.Lane || v.Battle != null) continue;
                 double p = Fleet.LaneProgress(v, jd);
                 seen[v] = v.LaneLeg.From == v.LaneLeg.Lane.A ? p : 1 - p;
             }
@@ -219,6 +259,16 @@ namespace SolarSystem.Core
         void Interdict(Ship lurker, double station, List<Ship> victims, double jd)
         {
             var lane = lurker.LaneLeg.Lane;
+            pulseReady[lurker] = jd + 1;
+            // A pilot surging through may be past before the shell closes: the pulse goes off, and misses.
+            var pilot = world.PilotedShip;
+            if (pilot != null && victims.Contains(pilot) && pilot.LaneSurged && rng.NextDouble() < SurgeSlipChance)
+            {
+                victims.Remove(pilot);
+                pilotNotices.Add($"Through! The {lurker.Name}'s pulse goes off astern as you surge clear of the {lane.Name} lane's interdiction field");
+                world.Log(jd, $"The {pilot.Name} surges through an interdiction pulse on the {lane.Name} lane", WorldEventKind.Battle, lane.A);
+                if (victims.Count == 0) return;
+            }
             foreach (var v in victims)
             {
                 double at = v.LaneLeg.From == lane.A ? station : 1 - station;
@@ -238,6 +288,14 @@ namespace SolarSystem.Core
             b.ApproachAxis = approach.LengthSquared > 0 ? approach.Normalized : DVec3.UnitX;
             Join(b, lurker, 0, false);
             foreach (var v in victims) Join(b, v, 1, false);
+            // The pilot's hull, caught riding at the helm, is flown in the fight that follows: placed with the others the
+            // pulse caught, but its pose is the helm's from here (U.SPC-T42).
+            if (pilot != null && victims.Contains(pilot) && pilot.Battle == null)
+            {
+                var spot = Spot(b, 1) + new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, (rng.NextDouble() - 0.5) * 0.4) * 6;
+                var unit = b.AddShip(pilot, 1, spot, -spot.Normalized);
+                unit.PlayerControlled = true;
+            }
             BattleUnit source = b.UnitOf(lurker);
             // A victim whose scanners made the raiders out lying dark beside the lane as it closed (by class at least,
             // at the lurk's stand-off from the lane line) was braced for the pulse: drives and shields ride it out.
@@ -253,9 +311,15 @@ namespace SolarSystem.Core
             }
             foreach (var v in warned)
                 world.Log(jd, $"The {v.Name} spotted the raiders lying dark off the {lane.Name} lane and was braced for the pulse", WorldEventKind.Battle, lane.A);
+            if (pilot != null && pilot.Battle == b)
+            {
+                var pu = b.UnitOf(pilot);
+                pilotNotices.Add(pu != null && pu.Stunned > 0
+                    ? $"INTERDICTED: the {lurker.Name}'s pulse throws you out of the {lane.Name} lane, drives and shields dead for {pu.Stunned:0} s. Raiders closing"
+                    : $"INTERDICTED: thrown out of the {lane.Name} lane, but braced for the pulse: drives and shields held. Raiders closing");
+            }
             if (source != null) b.Emit(FxKind.Pulse, source.Pos, source.Pos, 30, 0, source, -1);
             Battles.Add(b);
-            pulseReady[lurker] = jd + 1;
             lanes0().Danger.TryGetValue(lane, out double danger);
             lanes0().SetDanger(lane, danger + 3);
             world.Log(jd, $"{world.Pirates.Name} raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
@@ -276,6 +340,57 @@ namespace SolarSystem.Core
             if (sensors == null || victim == null || lurker == null) return false;
             double pass = Math.Max(lurker.LaneHoldSide.Length, 1);
             return Sensors.Resolve(sensors.GroupSuite(victim), Signatures.Of(lurker, false, false), pass, Signatures.Transponder(lurker)) >= ContactLevel.Class;
+        }
+
+        /// <summary>
+        /// What a lane rider's scanners make of the nearest armed interdictor ahead on its lane (U.SPC-T42), or null if
+        /// there is none it can see, it has passed them all, or its ride ends short of every pulse. The emitter's field is
+        /// picked up at <see cref="SensorSuite.ReachKm"/> of <see cref="EmitterSignature"/> (better scanners see it sooner),
+        /// and the countdown is the ride's own time to the edge of the pulse's reach, at its present pace.
+        /// </summary>
+        public LaneThreat? ThreatAhead(Ship rider, double jd)
+        {
+            if (rider == null || rider.Destroyed || rider.Phase != ShipPhase.Lane || rider.Battle != null || Fleet.Lanes == null) return null;
+            var lane = rider.LaneLeg.Lane;
+            bool forward = rider.LaneLeg.From == lane.A;
+            double now = Fleet.LaneProgress(rider, jd);
+            var suite = world.Sensors != null ? world.Sensors.GroupSuite(rider) : SensorSuite.Of(rider);
+            double reach = suite.ReachKm(EmitterSignature);
+            LaneThreat? best = null;
+            foreach (var lurker in Fleet.Ships)
+            {
+                if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Phase != ShipPhase.Lurk || lurker.Battle != null || lurker == world.PilotedShip) continue;
+                if (lurker.LaneLeg.Lane != lane) continue;
+                if (pulseReady.TryGetValue(lurker, out double ready) && ready > jd) continue;
+                // The lurker's station and the pulse's reach, as fractions of the rider's own leg.
+                double stationA = lurker.LaneLeg.From == lane.A ? lurker.LaneHold : 1 - lurker.LaneHold;
+                double station = forward ? stationA : 1 - stationA;
+                double window = PulseRadiusKm / Math.Max(lurker.LaneLengthKm, 1);
+                if (now >= station + window) continue;
+                double edge = station - window;
+                if (rider.LaneEndProgress < edge) continue;
+                double km = Math.Max(0, station - now) * rider.LaneLengthKm;
+                if (km > reach) continue;
+                double pulseJd = now >= edge ? jd : RideReaches(rider, edge, jd);
+                double seconds = (pulseJd - jd) * Astro.SecondsPerDay;
+                if (best == null || seconds < best.Value.SecondsToPulse)
+                    best = new LaneThreat(lurker, seconds, km, Forewarned(rider, lurker, jd));
+            }
+            return best;
+        }
+
+        /// <summary>When a rider's progress along its leg reaches <paramref name="progress"/> (at its present pace), by bisection.</summary>
+        static double RideReaches(Ship rider, double progress, double jd)
+        {
+            double lo = jd, hi = Math.Max(jd, rider.PhaseEndJd);
+            if (Fleet.LaneProgress(rider, hi) < progress) return hi;
+            for (int i = 0; i < 50; i++)
+            {
+                double mid = (lo + hi) * 0.5;
+                if (Fleet.LaneProgress(rider, mid) < progress) lo = mid;
+                else hi = mid;
+            }
+            return hi;
         }
 
         Hyperlanes lanes0() => Fleet.Lanes;

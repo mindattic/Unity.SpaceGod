@@ -294,6 +294,10 @@ namespace SolarSystem.Core
         public double LaneHold;
         public DVec3 LaneHoldSide;
 
+        /// <summary>The rest of this ride surged through at <see cref="Fleet.SurgeFactor"/> times the lane's pace (a pilot boosting
+        /// through an interdiction field, U.SPC-T42): once a ride, and a surging hull may outrun a pulse.</summary>
+        public bool LaneSurged;
+
         /// <summary>A lurk planned for this trip: stop part-way along this lane and wait.</summary>
         public Lane LurkLane;
         public double LurkAt, LurkDays;

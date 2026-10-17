@@ -844,6 +844,7 @@ namespace SolarSystem
             // In one, the battle owns its pose, but an escort cut loose still needs an orbit of its own.
             rideWarpBefore = -1;
             insideRampGate = true;
+            laneRejoinable = false;
             if (!riding && (ship.Battle == null || ship.Orbit == null)) PinWherePiloted(ship);
 
             Select(t);
@@ -1051,9 +1052,11 @@ namespace SolarSystem
                 ExitPiloting();
                 return;
             }
-            if (ship.Phase == ShipPhase.Lane)
+            // Riding a lane, or thrown out of one this frame into an ambush (U.SPC-T42).
+            if (ship.Phase == ShipPhase.Lane || (rideWarpBefore >= 0 && ship.Battle != null))
             {
                 UpdateLaneRide(ship);
+                ShowWarNotices();
                 return;
             }
 
@@ -1099,6 +1102,15 @@ namespace SolarSystem
                 InCombat = ship.Battle != null,
                 FlightAssistOff = pilotFlightAssistOff,
             };
+            // An interdiction pulse has knocked the drives out (U.SPC-T42): no thrust, no turning, no boost or cruise
+            // until they come back; the hull drifts on what way it had, and the stick waits for them.
+            if (PilotStunSeconds > 0)
+            {
+                input.DesiredForward = pilot.Forward;
+                input.Throttle = input.StrafeRight = input.StrafeUp = input.Roll = 0;
+                input.Boost = input.Cruise = false;
+                input.FlightAssistOff = true;
+            }
             // Mirrors PilotFlight.Step's own "boosting" condition, read before Step drains the
             // charge further this frame, purely to drive the camera's FOV kick below.
             pilotBoosting = input.Boost && tuning.BoostDurationS > 0 && ship.Combat.BoostFraction > 0;
@@ -1131,6 +1143,8 @@ namespace SolarSystem
             World.Contracts?.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, Clock.Jd);
             UpdateGateActivation(ship);
             UpdateLaneEntry(ship);
+            UpdateLaneRejoin(ship);
+            ShowWarNotices();
         }
 
         /// <summary>Thrust, km/s^2, above which the piloted ship's drive shows as a burn on others' scanners (about 0.01 g).</summary>
@@ -1295,7 +1309,8 @@ namespace SolarSystem
             unit.Vel = pilotVelKmS;
             unit.Forward = pilotForward;
             // No firing while cruising -- the cruise drive is a travel tier, not a combat one.
-            unit.PlayerFireHeld = Input.Fire && !pilotCruise.Active && !ClickPanelOpen;
+            // Nor while a pulse has the hull's systems down.
+            unit.PlayerFireHeld = Input.Fire && !pilotCruise.Active && !ClickPanelOpen && unit.Stunned <= 0;
             unit.PlayerLockTarget = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
             UpdateSurrenderPrompts(ship.Battle, unit);
         }
