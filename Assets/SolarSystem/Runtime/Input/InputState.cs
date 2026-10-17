@@ -84,6 +84,9 @@ namespace SolarSystem.Input
         /// <summary>While piloting, in range of one of this system's jump gates: activates it.</summary>
         public bool ActivateGate;
 
+        /// <summary>F5 saves to the quicksave slot, F8 loads it, F6 opens the save slots.</summary>
+        public bool QuickSave, QuickLoad, ToggleSaves;
+
         Vector2 pressPosition;
         float lastClickTime = -10f;
         Vector2 lastClickPosition;
@@ -181,6 +184,9 @@ namespace SolarSystem.Input
             Home = kb.homeKey.wasPressedThisFrame || kb.backspaceKey.wasPressedThisFrame;
             Pilot = kb.pKey.wasPressedThisFrame;
             ActivateGate = kb.yKey.wasPressedThisFrame;
+            QuickSave = kb.f5Key.wasPressedThisFrame;
+            QuickLoad = kb.f8Key.wasPressedThisFrame;
+            ToggleSaves = kb.f6Key.wasPressedThisFrame;
 
             Key[] digits = { Key.Digit0, Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
             for (int i = 0; i < digits.Length; i++)
@@ -200,6 +206,7 @@ namespace SolarSystem.Input
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
             ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
+            QuickSave = QuickLoad = ToggleSaves = false;
             NumberKey = -1;
         }
 

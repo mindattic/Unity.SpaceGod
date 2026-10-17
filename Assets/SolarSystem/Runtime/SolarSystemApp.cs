@@ -166,7 +166,7 @@ namespace SolarSystem
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit)); // market, cargo, outfitting and news are HUD panels, hidden with it
+        bool ClickPanelOpen => ShowSpawn || ShowSaves || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit)); // market, cargo, outfitting and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -315,6 +315,7 @@ namespace SolarSystem
             var look = (bodyScene[earth] - start).Normalized;
             SpaceCamera.PlaceFree(start, (float)(Math.Atan2(look.X, look.Z) * Mathf.Rad2Deg), (float)(-Math.Asin(look.Y) * Mathf.Rad2Deg));
             Select(Target.OfBody(earth));
+            InitSaves();
         }
 
         /// <summary>Battle toasts from whichever system is being watched.</summary>
@@ -497,6 +498,7 @@ namespace SolarSystem
 
             Clock.Advance(dt);
             Galaxy.Update(Clock.Jd);
+            UpdateSaves(dt);
             SyncShipViews();
 
             AnimateScale(dt);
@@ -609,6 +611,7 @@ namespace SolarSystem
         void HandleCommands()
         {
             var i = Input;
+            HandleSaveCommands();
             if (Travel.Active)
             {
                 // Between the stars only time and the escape hatch work.

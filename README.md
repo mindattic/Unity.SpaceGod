@@ -2,7 +2,7 @@
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
-![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 804 passing](https://img.shields.io/badge/core%20tests-804%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
+![Unity 6000.4](https://img.shields.io/badge/Unity-6000.4-000000) ![URP 17](https://img.shields.io/badge/URP-17.4-2b6cb0) ![C# 9](https://img.shields.io/badge/C%23-9-512BD4) ![Tests 809 passing](https://img.shields.io/badge/core%20tests-809%20passing-2ea44f) ![Platform Windows](https://img.shields.io/badge/platform-Windows-0078D6) ![Status prototype](https://img.shields.io/badge/status-prototype-yellow)
 
 ![The inner solar system at gameplay scale, with orbit trails, planet labels and faction-coloured ship icons](docs/images/02-inner-system-gameplay.jpg)
 
@@ -176,6 +176,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - Selection brackets, hover highlight, an off-screen pointer to the selected target, and the flight path of the selected ship (lanes included).
 - Body panels show each settlement's exports, shortages and defences; ship panels show cargo and trade profit, or hull, shields, lost hardpoints, fighters aboard and orders. **M** opens a market board, **B** jumps to the biggest battle and drops to battle time (real time), a ticker reports battles, captures, surrenders, launches, ceasefires, economic shocks and price spikes, and **X** opens the full news feed.
 - The market board, cargo hold and controls panel collapse to their title bar with their [-] button.
+- **Save and load.** The whole simulation saves to a file and resumes exactly where it was: the clock and warp, every system's world (ships and their cargo, holds, tanks and loadouts, battles in progress, markets, factions and treasuries, wars and sieges, wrecks, escape pods and prisoners, the law's records and bounties, adventures and reputation), the gates and the traffic between the stars, and the ship you were flying, moving as it was. F5 quicksaves and F8 loads the quicksave; F6 opens the slots (the quicksave, three slots of your own and three autosaves, each showing where and when it was saved, who was flying and their purse). An autosave is taken every five minutes and when the app closes, the oldest of the three making way; `-continue` resumes the latest save. Saves live in `%USERPROFILE%\AppData\LocalLow\MindAttic\Unity Solar System\Saves`.
 
 | Carrier group in formation | Freighter mid-burn | Saturn |
 | --- | --- | --- |
@@ -221,6 +222,7 @@ powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 | --- | --- |
 | `-demo` | plays the scripted camera tour once (inner system, ships, Saturn, Earth at both scales, Jupiter, docking rings, Alpha Centauri, real surfaces, battles and three staged combat showcases), then quits |
 | `-modelviewer <name>` | opens straight into the model viewer on that ship model from `Resources/Ships` |
+| `-continue` | resumes the latest save (quicksave, slot or autosave) instead of starting at today's date |
 | `-capture ...` | records the session through MindAttic.Capture (below); independent of `-demo` |
 
 Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Capture is compiled into capture-enabled players only: build one with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/UnitySolarSystem.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`). Capture is off unless `-capture` is on the command line.
@@ -263,6 +265,8 @@ Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`; each tour screensho
 | Pilot the selected ship / hand it back | P |
 | Spawn and pilot any ship class | V |
 | Model viewer | F9 |
+| Quicksave / quickload | F5 / F8 |
+| Save and load slots | F6 |
 
 While piloting:
 
@@ -303,6 +307,7 @@ Assets/SolarSystem/
     Economy/              goods, recipes, settlements and markets, trade planning, propellant (the rocket equation), the player's cargo hold
     Combat/               hardpoints, outfitting, battles, fighters, boarding, morale and surrender, wrecks, war, diplomacy, piloted flight
     Sensors/              signatures, scanner suites and the contact pictures every faction and the player's ship hold
+    Persistence/          save and load: the object-graph writer and reader, the save file and its slots
     SimClock.cs           Julian-date clock and time warp
     BodyOrientation.cs    IAU prime meridians and parent-facing moons, so maps face the right way
     GasGiantWeather.cs    zonal wind profiles and the Great Red Spot's position
@@ -334,7 +339,7 @@ cd Tests/Core.Tests
 dotnet test
 ```
 
-804 NUnit tests, run in parallel in under two minutes, cover the following:
+809 NUnit tests, run in parallel in under two minutes, cover the following:
 
 - Kepler solver accuracy up to e = 0.97
 - Earth's distance and heliocentric longitude at J2000
@@ -377,6 +382,7 @@ dotnet test
 - Law: jurisdictions (worlds, lane keepers, lawless havens), witnesses in sensor range or none, a recorded crime's notoriety, standing and bounty, lawless space falling to the victim's faction, notoriety fading and bounties lapsing, piracy charged to the raider captain with the bounty on their head, nothing recorded with no survivor or witness, war and self-defence exempt but an attack at peace an assault, ransom as piracy, hunting a wanted ship lawful, the patrol enforcing the law exempt and a captured wanted ship's bounty collected, docking refused and fines paid, standing moving prices, contracts withheld, stolen goods from a haven refused at lawful markets, a patrol's scan confiscating contraband, running from a scan, the order to heave to paid off or ending in an interdiction, trespass, and the player opening fire on a lawful ship
 - Adventures: each kind offered only from real sim state (a ship actually in a fight or adrift, a derelict, a wreck with salvage, raiders lurking on a lane past the danger threshold, a merchant on a dangerous lane with time left, a raider captain), within range, never twice at once, capped, rested after it ends; ignored ones failing at expiry or when the situation settles without the player; completed ones paying credits, cargo and standing; and twenty days of the live system where every offer traces to something real
 - Jump gates: a gate pair per link at each system's outer edge, activation range, arrival inside the far gate, and the ship moving between fleets
+- Save and load: a world saved and loaded byte for byte the same, then both run on for 20 days in step; the whole galaxy saved to a slot mid-battle and loaded with the clock, the warp, the pilot's ship, purse, reputation and motion, its battles still reporting to the loaded war, then both run on for 10 days in step; the loaded world wired to itself (its callbacks point at its own parts) and still sharing the static ship designs; autosaves taking turns over three slots, the slots listed newest first, and a file that is not a save refused; and the graph writer's shared references, cycles, comparers, queues, stacks, grids, nullables, boxed values, empty arrays, delegates and random number state
 - Gate network: a sparse, connected lattice linking each system to its nearest, gates facing their partners and owned by each system's power, crossing time growing with distance, routes going round a blockade and never through an enemy's gate, the distance markup deciding whether a cargo pays, a freighter selling its goods in the other system's markets, a survey ship crossing several gates and coming home, raiders getting a gate shut behind them and a navy sent after them, a ship turning for another gate when its own shuts, and a year of traffic with every ship somewhere real
 
 ## Limitations
@@ -389,6 +395,7 @@ dotnet test
 - **The game layer is fiction.** Settlements, factions, production rates and prices are invented (on plausible worlds); hyperlanes and torch drives are not physics. Battles are fought at bodies and, by pirate interdiction, beside hyperlanes; patrols hail and interdict only the player's ship (NPC raiders are fought by the war as before), and a crime's witness is whoever was in range, without line of sight or reporting delays; ships on flip-and-burn transits cannot be intercepted. Marines are not drawn yet (the interior model is ready for a shipboard view). There is no campaign or win condition; you observe, or fly one ship at a time.
 - **Navies do not burn propellant yet.** Civilian ships fly on real propellant; warships' tanks are carried for when they are piloted, but their fleets do not draw on the markets until they have a supply chain of their own. Nor does a ship on an interstellar voyage while it runs in to a jump gate (a crossing of the whole system that no tank would cover), and the tank masses are an economic scale, apart from the flight model's much heavier hull masses.
 - **Piloting is partial.** A piloted ship cannot ride hyperlanes yet and gets no warning of a lane ambush. Only ships can be piloted. Stripping a part takes the soundest (or the one that fits your hull); there is no picking from a list yet.
+- **Saves belong to their build.** A save is the simulation's own objects written field by field, so it survives fields being added or removed, but a later build whose code has moved (its lambdas renamed by the compiler) may refuse an older save. A salvage latch in progress is let go when a save is loaded, and a save cannot be made between the stars (the autosave waits until the trip is over).
 - **Surfaces are wrapped on spheres.** Phobos, Deimos and the other small irregular moons are drawn round. Relief is shading only (exaggerated about 5×), never displacement, and lunar libration is not modelled.
 - **Weather is a model on a 2015 snapshot.** Jupiter's map is Hubble's of January 2015, turned so the Great Red Spot is where it is today; the other storms on it are 2015 weather. The flow map reproduces real band speeds and the spot's rotation, not real storm evolution. The Saturn, Uranus and Neptune maps are stylized (CC BY), so only their motion is data.
 - **Asteroids ignore Jupiter.** They fly two-body orbits from the 2026 osculating elements, drifting from their true places by roughly 0.01 AU a year. Only numbered objects brighter than H 15.5 (about 2 to 5 km) are included, and asteroids are labelled but not selectable.

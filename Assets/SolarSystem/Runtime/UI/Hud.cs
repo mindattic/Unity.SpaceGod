@@ -66,7 +66,11 @@ namespace SolarSystem.UI
 
             if (app.Travel.Active) DrawTravel();
             else DrawWorldOverlay();
-            if (!app.ShowHud) return;
+            if (!app.ShowHud)
+            {
+                if (app.ShowSaves) DrawSaves();
+                return;
+            }
             DrawFlightMarkers();
             DrawTopBar();
             if (app.ShowNews) DrawNews();
@@ -81,7 +85,61 @@ namespace SolarSystem.UI
             if (app.ShowCargo) DrawCargo();
             if (app.ShowOutfit) DrawOutfit();
             if (app.ShowHelp) DrawHelp();
+            if (app.ShowSaves) DrawSaves();
             DrawToast();
+        }
+
+        // ---------------------------------------------------------------- save and load (U.SPC-T67)
+
+        SaveHeader[] saveHeaders;
+        float savesReadAt = -10f;
+
+        /// <summary>
+        /// The save slots (F6): the quicksave, three slots to save into and the rotating autosaves, each with
+        /// where and when it was saved, who was flying and their purse. Save and Load act at the next frame.
+        /// </summary>
+        void DrawSaves()
+        {
+            var slots = app.Saves;
+            if (slots == null) return;
+            var names = new System.Collections.Generic.List<string>(SaveSlots.AllSlots());
+            if (saveHeaders == null || saveHeaders.Length != names.Count || Time.unscaledTime - savesReadAt > 1f)
+            {
+                saveHeaders = new SaveHeader[names.Count];
+                for (int i = 0; i < names.Count; i++) saveHeaders[i] = slots.Header(names[i]);
+                savesReadAt = Time.unscaledTime;
+            }
+            const float w = 720, rowH = 24;
+            float h = 82 + names.Count * rowH;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, 170, w, h));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 60, 22), "SAVE & LOAD", title);
+            if (GUI.Button(new Rect(r.xMax - 34, r.y + 6, 24, 22), "X", button)) app.ShowSaves = false;
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            string blocked = app.SaveBlocker();
+            GUI.Label(new Rect(r.x + 12, r.y + 30, w - 24, 18), blocked ??
+                "F5 quicksave   F8 quickload   F6 close   ·   autosaves every " + (SolarSystemApp.AutosaveIntervalS / 60f).ToString("0", CultureInfo.InvariantCulture) + " minutes and on quit", small);
+            GUI.contentColor = old;
+            for (int i = 0; i < names.Count; i++)
+            {
+                string slot = names[i];
+                var hdr = saveHeaders[i];
+                var row0 = new Rect(r.x + 8, r.y + 54 + i * rowH, w - 16, rowH - 2);
+                GUI.Box(row0, GUIContent.none, row);
+                GUI.Label(new Rect(row0.x + 6, row0.y + 2, 100, 18), SolarSystemApp.SlotName(slot), text);
+                GUI.contentColor = hdr == null ? Dim : Color.white;
+                string line = hdr == null ? "empty" : SolarSystemApp.DescribeSave(hdr) + "   ·   saved " + hdr.SavedUtc.ToLocalTime().ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
+                GUI.Label(new Rect(row0.x + 108, row0.y + 3, w - 290, 18), line, small);
+                GUI.contentColor = old;
+                bool autosave = slot.StartsWith("autosave-", StringComparison.Ordinal);
+                if (!autosave && blocked == null && GUI.Button(new Rect(row0.xMax - 150, row0.y + 1, 70, 20), "Save", button))
+                {
+                    app.RequestSave(slot);
+                    savesReadAt = -10f;
+                }
+                if (hdr != null && blocked == null && GUI.Button(new Rect(row0.xMax - 74, row0.y + 1, 70, 20), "Load", button))
+                    app.RequestLoad(slot);
+            }
         }
 
         // ---------------------------------------------------------------- world overlay
@@ -1855,6 +1913,7 @@ namespace SolarSystem.UI
                 "X   news feed: shocks, price spikes, embargoes, battles and captures as they happen",
                 "Law   T lock a ship, hold fire on it to attack (a crime if seen)   patrols scan: hold still   1 pay a fine when hailed",
                 "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",
+                "F5  quicksave   F8  quickload   F6  save slots   (autosaves every 5 minutes and on quit; -continue resumes the latest)",
             };
             float w = 610, h = helpOpen ? 42 + help.Length * 17 : 34;
             var r = Panel(new Rect(10, Screen.height - h - 10, w, h));

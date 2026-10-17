@@ -1,0 +1,251 @@
+using System;
+using System.IO;
+using SolarSystem.Core;
+using SolarSystem.Rendering;
+using SolarSystem.Views;
+using UnityEngine;
+
+namespace SolarSystem
+{
+    /// <summary>
+    /// Save and load (U.SPC-T67): the whole simulation (the clock, every system's world and the traffic
+    /// between them) and the player's session at the helm go to a save slot, and come back from one.
+    /// F5 quicksaves, F8 loads the quicksave, F6 opens the slots; an autosave is taken every few minutes
+    /// and when the app closes, and <c>-continue</c> on the command line resumes the latest save.
+    /// </summary>
+    public sealed partial class SolarSystemApp
+    {
+        /// <summary>The save slots, in the player's data folder.</summary>
+        public SaveSlots Saves { get; private set; }
+
+        /// <summary>The save and load panel (F6).</summary>
+        public bool ShowSaves { get; set; }
+
+        /// <summary>Real seconds between autosaves.</summary>
+        public const float AutosaveIntervalS = 300f;
+
+        float autosaveDueS = AutosaveIntervalS;
+
+        /// <summary>Off for the scripted tour and captures, so a demo run never rotates the player's autosaves out.</summary>
+        bool autosaveEnabled = true;
+
+        void InitSaves()
+        {
+            Saves = new SaveSlots(Path.Combine(Application.persistentDataPath, "Saves"));
+            autosaveEnabled = !Bootstrap.HasCommandLineFlag("-demo") && !Bootstrap.HasCommandLineFlag("-capture");
+            var latest = Saves.Latest();
+            if (latest == null) return;
+            if (Bootstrap.HasCommandLineFlag("-continue")) LoadFrom(latest.Slot);
+            else ShowToast("Saved game found (" + DescribeSave(latest) + "): F6 to load it, F8 for the quicksave");
+        }
+
+        void UpdateSaves(float dt)
+        {
+            if (!autosaveEnabled) return;
+            autosaveDueS -= dt;
+            // Between the stars there is no system to come back to: try again once the trip is over.
+            if (autosaveDueS > 0 || Travel.Active) return;
+            autosaveDueS = AutosaveIntervalS;
+            Autosave(false);
+        }
+
+        void OnApplicationQuit()
+        {
+            if (autosaveEnabled && Galaxy != null && !Travel.Active) Autosave(true);
+        }
+
+        string pendingSave, pendingLoad;
+
+        /// <summary>Saves to <paramref name="slot"/> at the start of the next frame (the HUD asks from inside its draw, where views must not be rebuilt).</summary>
+        public void RequestSave(string slot) => pendingSave = slot;
+
+        /// <summary>Loads <paramref name="slot"/> at the start of the next frame.</summary>
+        public void RequestLoad(string slot) => pendingLoad = slot;
+
+        void HandleSaveCommands()
+        {
+            if (pendingSave != null)
+            {
+                SaveTo(pendingSave);
+                pendingSave = null;
+            }
+            if (pendingLoad != null)
+            {
+                LoadFrom(pendingLoad);
+                pendingLoad = null;
+            }
+            if (Input.QuickSave) SaveTo(SaveSlots.Quick, "Quicksave");
+            if (Input.QuickLoad)
+            {
+                if (Saves.Exists(SaveSlots.Quick)) LoadFrom(SaveSlots.Quick);
+                else ShowToast("No quicksave yet (F5 to quicksave)");
+            }
+            if (Input.ToggleSaves) ShowSaves = !ShowSaves;
+        }
+
+        /// <summary>Why the game cannot be saved or loaded right now, or null when it can.</summary>
+        public string SaveBlocker() => Travel.Active ? "Not between the stars: wait until the trip is over" : null;
+
+        void Autosave(bool quiet)
+        {
+            try
+            {
+                var h = Saves.Autosave(CaptureSave());
+                if (!quiet) ShowToast("Autosaved  (" + DescribeSave(h) + ")");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[SolarSystem] Autosave failed: " + e);
+                if (!quiet) ShowToast("Autosave failed: " + e.Message);
+            }
+        }
+
+        /// <summary>Saves the whole simulation and the session into <paramref name="slot"/>.</summary>
+        public bool SaveTo(string slot, string label = null)
+        {
+            string blocked = SaveBlocker();
+            if (blocked != null)
+            {
+                ShowToast(blocked);
+                return false;
+            }
+            try
+            {
+                var h = Saves.Save(slot, CaptureSave(), label ?? SlotName(slot));
+                ShowToast("Saved to " + SlotName(slot) + "  (" + DescribeSave(h) + ")");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[SolarSystem] Save to " + slot + " failed: " + e);
+                ShowToast("Save failed: " + e.Message);
+                return false;
+            }
+        }
+
+        /// <summary>Replaces the running simulation with the one saved in <paramref name="slot"/>.</summary>
+        public bool LoadFrom(string slot)
+        {
+            string blocked = SaveBlocker();
+            if (blocked != null)
+            {
+                ShowToast(blocked);
+                return false;
+            }
+            SaveData data;
+            SaveHeader header;
+            try
+            {
+                data = Saves.Load(slot, out header);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[SolarSystem] Loading " + slot + " failed: " + e);
+                ShowToast("Could not load " + SlotName(slot) + ": " + e.Message);
+                return false;
+            }
+            ApplyLoaded(data);
+            ShowSaves = false;
+            ShowToast("Loaded " + SlotName(slot) + "  (" + DescribeSave(header) + ")");
+            return true;
+        }
+
+        SaveData CaptureSave()
+        {
+            var data = new SaveData { Clock = Clock, Galaxy = Galaxy };
+            var s = data.Session;
+            s.ActiveSystem = ActiveSystem.Name;
+            s.ScaleGoal = ScaleGoal;
+            if (IsPiloting)
+            {
+                s.Piloted = Piloted.Ship;
+                s.PilotFrameBody = pilotFrameBody;
+                s.Pilot = pilot;
+                s.PilotAim = pilotAim;
+                s.FlightAssistOff = pilotFlightAssistOff;
+            }
+            return data;
+        }
+
+        /// <summary>
+        /// Swaps the loaded galaxy and clock in, rebuilds every view around the system that was being watched,
+        /// and takes the helm again of the ship that was being flown, exactly where and how it was moving.
+        /// </summary>
+        void ApplyLoaded(SaveData data)
+        {
+            DropSession();
+            Clock = data.Clock;
+            Galaxy = data.Galaxy;
+            Materials.DestroyOwned(Interstellar.Root.transform);
+            Destroy(Interstellar.Root);
+            Interstellar = new InterstellarView(Galaxy, worldRoot);
+            SubscribeWorlds();
+
+            var session = data.Session ?? new SaveSession();
+            Activate(Galaxy.Find(session.ActiveSystem) ?? Galaxy.Systems[0]);
+            ScaleGoal = session.ScaleGoal;
+            scaleFrom = ScaleGoal;
+            scaleT = 1f;
+            Scale.Blend = ScaleGoal;
+            Scale.Layout(Ephemeris, bodyScene);
+            UpdateRadii();
+            GalaxyRebuilt?.Invoke();
+
+            var ship = session.Piloted;
+            if (ship != null && !ship.Destroyed && ship.Id < Fleet.Ships.Count && Fleet.Ships[ship.Id] == ship)
+            {
+                EnterPiloting(Target.OfShip(ship));
+                // Its motion as it was, not the spot its schedule was pinned at when the helm was first taken.
+                pilotFrameBody = session.PilotFrameBody;
+                pilot = session.Pilot;
+                pilotAim = session.PilotAim;
+                pilotFlightAssistOff = session.FlightAssistOff;
+                if (ship.Battle == null) PinWherePiloted(ship);
+            }
+            else
+            {
+                World.PilotedShip = null;
+                FocusSystemOverview();
+            }
+            autosaveDueS = AutosaveIntervalS;
+        }
+
+        /// <summary>Lets go of everything the session held in the old galaxy, without touching it (it is about to be dropped).</summary>
+        void DropSession()
+        {
+            Piloted = Target.None;
+            pilotLockTarget = Target.None;
+            pilotBoosting = false;
+            pilot = default;
+            SpaceCamera.PilotLockTarget = Target.None;
+            Salvage = null;
+            SalvageApproach = null;
+            salvagePrompted = null;
+            salvageLogShown = 0;
+            TankerDueS = -1;
+            propellantWarning = 0;
+            termsPrompted = null;
+            demandPrompted = false;
+            havenPrompted = null;
+            nearGate = null;
+            SpaceCamera.ExitFocus();
+        }
+
+        public static string SlotName(string slot)
+        {
+            if (slot == SaveSlots.Quick) return "Quicksave";
+            if (slot.StartsWith("slot-", StringComparison.Ordinal)) return "Slot " + slot.Substring(5);
+            if (slot.StartsWith("autosave-", StringComparison.Ordinal)) return "Autosave " + slot.Substring(9);
+            return slot;
+        }
+
+        /// <summary>One line for a save: where and when in the simulation, who was flying and their purse.</summary>
+        public static string DescribeSave(SaveHeader h)
+        {
+            if (h == null) return "empty";
+            string text = h.ActiveSystem + ", " + h.SimUtc.ToString("yyyy-MM-dd HH:mm") + " UTC";
+            if (h.PilotedShip != null) text += ", flying " + h.PilotedShip + " (" + h.Credits.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " cr)";
+            return text;
+        }
+    }
+}
