@@ -137,12 +137,13 @@ namespace SolarSystem.Core.Tests
             Assert.That(b.Over, Is.True);
         }
 
-        [Test]
-        public void TwoYearsOfWarHaveBattlesLossesAndAStillWorkingEconomy()
+        [Parallelizable(ParallelScope.Children)]
+        [TestCase(1977), TestCase(1978), TestCase(1979), TestCase(1980), TestCase(1981), TestCase(1982)]
+        public void TwoYearsOfWarHaveBattlesLossesAndAStillWorkingEconomy(int seed)
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
             eph.Update(StartJd);
-            var w = World.CreateDefault(eph, StartJd);
+            var w = World.CreateDefault(eph, StartJd, seed);
             int maxBattles = 0;
             for (double jd = StartJd; jd <= StartJd + 730; jd += 0.25)
             {
@@ -167,8 +168,8 @@ namespace SolarSystem.Core.Tests
             Assert.That(w.Events.Count(e => e.Kind == WorldEventKind.Battle) >= 4, Is.True, "hardly any fighting in two years");
             Assert.That(w.Fleet.Ships.Count(s => s.Destroyed) > 0, Is.True, "nobody ever died");
             Assert.That(w.Fleet.Ships.Count(s => !s.Destroyed && w.IsTrader(s)) > 20, Is.True, "the merchant fleet was wiped out");
-            // Neither power is finished: each still has warships or a yard of its own to build them again (a run of
-            // lost battles can sink a whole navy for a while; which side, in two years, is down to the dice).
+            // Neither power is finished, whatever the dice: each still has warships or a yard of its own to build them
+            // again, because a navy beaten down to a handful of hulls (or to its last, besieged yard) sues for peace.
             foreach (var power in new[] { w.Sol, w.Reach })
                 Assert.That(w.Fleet.Ships.Any(s => !s.Destroyed && s.Spec.IsMilitary && s.Faction == power) ||
                             w.Economy.Settlements.Any(s => s.Owner == power && s.HasShipyard), Is.True, $"the {power.Name} is out of the war");

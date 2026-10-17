@@ -2077,6 +2077,40 @@ namespace SolarSystem.Core
             world.Log(jd, $"A new {world.Pirates.Name} raider group sails from {(from.Discovered ? from.Name : "somewhere in the dark")}", WorldEventKind.Info, from.Discovered ? from.Body : -1);
         }
 
+        /// <summary>A navy at or below this many warships, and outnumbered three to one, is beaten (see <see cref="Beaten"/>).</summary>
+        public const int BeatenNavyShips = 4;
+
+        /// <summary>Warships <paramref name="f"/> still has afloat.</summary>
+        public int Warships(Faction f)
+        {
+            int n = 0;
+            foreach (var s in Fleet.Ships)
+                if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="f"/> has lost its war with <paramref name="enemy"/> for now: after real losses its
+        /// navy is down to a handful of hulls outnumbered three to one, or its last yard is under siege by a stronger
+        /// navy. A beaten power sues for peace and rebuilds instead of being annihilated.
+        /// </summary>
+        public bool Beaten(Faction f, Faction enemy)
+        {
+            if (Losses(f) <= 2) return false;
+            int own = Warships(f), them = Warships(enemy);
+            if (own <= BeatenNavyShips && own * 3 < them) return true;
+            if (own >= them) return false;
+            int yards = 0;
+            bool besieged = false;
+            foreach (var st in Economy.Settlements)
+            {
+                if (st.Owner != f || !st.HasShipyard) continue;
+                yards++;
+                besieged |= besiegers.TryGetValue(st, out var by) && by == enemy;
+            }
+            return yards <= 1 && besieged;
+        }
+
         /// <summary>Wars wind down to ceasefires when both sides have bled, and flare up again months later.</summary>
         void DiplomacyCycle(double jd)
         {
@@ -2086,7 +2120,16 @@ namespace SolarSystem.Core
             var r = Diplomacy.Get(a, b);
             if (r == Relation.War)
             {
-                if (jd - warStartJd > 240 && Losses(a) > 2 && Losses(b) > 2 && rng.NextDouble() < 0.012)
+                // A navy that has been beaten sues for peace rather than fight on to the last hull and the last yard.
+                var loser = Beaten(a, b) ? a : Beaten(b, a) ? b : null;
+                if (loser != null)
+                {
+                    var winner = loser == a ? b : a;
+                    Diplomacy.Set(a, b, Relation.Ceasefire);
+                    ceasefireUntilJd = jd + 120 + rng.NextDouble() * 120;
+                    world.Log(jd, $"The {loser.Name}, its navy broken, sues for peace: ceasefire with the {winner.Name}", WorldEventKind.Diplomacy);
+                }
+                else if (jd - warStartJd > 240 && Losses(a) > 2 && Losses(b) > 2 && rng.NextDouble() < 0.012)
                 {
                     Diplomacy.Set(a, b, Relation.Ceasefire);
                     ceasefireUntilJd = jd + 90 + rng.NextDouble() * 120;
@@ -2095,6 +2138,12 @@ namespace SolarSystem.Core
             }
             else if (r == Relation.Ceasefire && jd > ceasefireUntilJd)
             {
+                // Neither side goes back to war while one of them is still too weak to fight: it rebuilds first.
+                if (Beaten(a, b) || Beaten(b, a))
+                {
+                    ceasefireUntilJd = jd + 30;
+                    return;
+                }
                 Diplomacy.Set(a, b, Relation.War);
                 RevokeBookings();
                 warStartJd = jd;
