@@ -428,6 +428,10 @@ namespace SolarSystem.Core
         public bool OutOfPropellant;
         public double OutOfPropellantSinceJd;
 
+        /// <summary>The drive cut out part way through a transit: it drifts in open space, not at the world its
+        /// fixed point is kept by, so when the tanker comes it still has the way to that world to fly.</summary>
+        public bool StrandedInFlight;
+
         /// <summary>The propellant the current transit was charged when it was planned (refunded in part on a diversion).</summary>
         public double LegPropellant;
 

@@ -918,6 +918,7 @@ namespace SolarSystem.Core
             ship.Path = null;
             ship.Conic = null;
             ship.Phase = ShipPhase.Parked;
+            ship.StrandedInFlight = true;
             CallTanker(ship, jd);
         }
 
@@ -953,18 +954,22 @@ namespace SolarSystem.Core
         void Resume(Ship ship, double jd)
         {
             tankerAlongside = true;
-            try { ResumeLeg(ship, jd); }
+            bool inFlight = ship.StrandedInFlight;
+            ship.StrandedInFlight = false;
+            try { ResumeLeg(ship, jd, inFlight); }
             finally { tankerAlongside = false; }
         }
 
-        void ResumeLeg(Ship ship, double jd)
+        void ResumeLeg(Ship ship, double jd, bool inFlight)
         {
             if (ship.Journey != null && ship.JourneyIndex < ship.Journey.Count)
             {
                 var hop = ship.Journey[ship.JourneyIndex];
                 Burn(ship, jd, hop.From, () => RampOrbit(hop, hop.From, jd));
             }
-            else if (ship.FinalBody >= 0 && ship.FinalBody != ship.Orbit.Body)
+            // Dead in open space short of the world its frame is kept by (a moon's hop in to its planet, or the
+            // last burn from a lane's ramp in to the world itself), it still has the way there to fly.
+            else if (ship.FinalBody >= 0 && (ship.FinalBody != ship.Orbit.Body || inFlight))
             {
                 int to = ship.FinalBody;
                 if (ship.Wander) Burn(ship, jd, to, () => WanderOrbit(to, ship));
