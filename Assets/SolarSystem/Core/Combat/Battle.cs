@@ -1334,7 +1334,8 @@ namespace SolarSystem.Core
             if (u.BoardTarget != null)
             {
                 var bt = u.BoardTarget;
-                bool stillOpen = bt.Present && !bt.Captured &&
+                // A hull waiting on terms is not boarded until they open it to boarding (as it is not fired on, pods included).
+                bool stillOpen = bt.Present && !bt.Captured && (!bt.Surrendering || bt.SurrenderOpenToBoarding) &&
                     (bt.Combat.Disabled || bt.SurrenderOpenToBoarding || bt.Stunned > 10 || (breacher && (bt.Combat.Shield <= bt.Combat.Spec.Shield * 0.25 || !bt.Combat.HasShieldGenerator)));
                 if (!stillOpen) u.BoardTarget = null;
             }
@@ -1350,7 +1351,7 @@ namespace SolarSystem.Core
             {
                 if (!Hostile(u, o) || o.Captured || o.Kind != UnitKind.Ship) continue;
                 if (o.Combat.Interior.Boarder != null && o.Combat.Interior.Boarder != u.Faction) continue;
-                if (!MayBoard(u, o)) continue;
+                if (!MayBoard(u, o) || (o.Surrendering && !o.SurrenderOpenToBoarding)) continue;
                 bool open = o.Combat.Disabled || o.SurrenderOpenToBoarding || o.Stunned > 10 || (breacher && (o.Combat.Shield <= o.Combat.Spec.Shield * 0.25 || !o.Combat.HasShieldGenerator));
                 if (!open) continue;
                 if (!breacher && ThreatNear(u, o.Pos, 6)) continue;
@@ -1540,7 +1541,10 @@ namespace SolarSystem.Core
             u.Target = null;
             u.BoardTarget = null;
             foreach (var o in Units)
+            {
                 if (o.Target == u) o.Target = null;
+                if (o.BoardTarget == u && !u.SurrenderOpenToBoarding) o.BoardTarget = null;
+            }
             Emit(FxKind.Hail, u.Pos, u.Pos, u.LengthKm, u.Side, u, -1);
             UnitSurrendered?.Invoke(this, u);
         }
