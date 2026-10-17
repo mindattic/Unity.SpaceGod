@@ -1167,7 +1167,11 @@ namespace SolarSystem.Core
                     ship.PhaseEndJd = Math.Max(ship.PhaseEndJd, nowJd + 0.05);
                     return;
                 }
+                // Filled: it carries on to where it was bound, from where it lay (not from the frame's centre,
+                // which is all its fixed point's body says of where it is).
                 ship.OutOfPropellant = false;
+                Resume(ship, nowJd);
+                return;
             }
             if (ship.Phase == ShipPhase.Queued && ship.Ring == null)
             {
