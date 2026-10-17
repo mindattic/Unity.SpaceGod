@@ -558,7 +558,7 @@ namespace SolarSystem.Core
                 if (!byShip.TryGetValue(u.Ship, out var o) || !o.AtLarge || o.Ship != u.Ship) continue;
                 if (u.Dead && o.Pod != null) continue;
                 if (u.Captured && Seize(b, u, o, jd)) continue;
-                End(o, u.Dead ? OutlawFate.Killed : OutlawFate.Captured, jd, Victor(b, 1 - u.Side));
+                End(o, u.Dead ? OutlawFate.Killed : OutlawFate.Captured, jd, Victor(b, 1 - u.FoughtOn));
             }
             // Captains in the brigs of ships that fought here: a breached brig lets them go.
             foreach (var o in All.ToArray())
@@ -593,7 +593,7 @@ namespace SolarSystem.Core
             if (b == null || u == null || rec == null || !rec.Wanted) return false;
             BountyHunter hunter = null;
             foreach (var o in b.Units)
-                if (o.Side == 1 - u.Side && o.Ship != null && HunterOf(o.Ship) is BountyHunter h && (hunter == null || !o.Dead)) hunter = h;
+                if (o.Side == 1 - u.FoughtOn && o.Ship != null && HunterOf(o.Ship) is BountyHunter h && (hunter == null || !o.Dead)) hunter = h;
             if (hunter == null) return false;
             double total = Pay(rec, u.Dead ? DeadShare : 1, hunter.Ship);
             var outlaw = Of(rec);
@@ -669,7 +669,7 @@ namespace SolarSystem.Core
         bool PlayerFoughtAgainst(Battle b, BattleUnit u)
         {
             foreach (var v in b.Units)
-                if (v.PlayerFlown && v.Side == 1 - u.Side && !v.Dead && !v.Captured && v.Ship != null && v.Ship == world.PilotedShip) return true;
+                if (v.PlayerFlown && v.Side == 1 - u.FoughtOn && !v.Dead && !v.Captured && v.Ship != null && v.Ship == world.PilotedShip) return true;
             return false;
         }
 
@@ -685,7 +685,7 @@ namespace SolarSystem.Core
             int bestRank = int.MaxValue;
             foreach (var v in b.Units)
             {
-                if (v.Side != 1 - u.Side || v.Ship == null || v.Dead || v.Captured || v.Ship == u.Ship || v.Ship.Destroyed) continue;
+                if (v.Side != 1 - u.FoughtOn || v.Ship == null || v.Dead || v.Captured || v.Ship == u.Ship || v.Ship.Destroyed) continue;
                 if (v.Faction == null || v.Faction.IsPirate || (captor != null && v.Faction != captor)) continue;
                 if (Outfitting.BrigRoom(v.Ship) < 1) continue;
                 int rank = v.Ship == world.PilotedShip ? 0 : IsHunter(v.Ship) ? 1 : 2;

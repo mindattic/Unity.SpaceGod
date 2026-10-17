@@ -527,7 +527,7 @@ namespace SolarSystem.Core
                 }
                 var takers = new HashSet<Faction>();
                 foreach (var o in b.Units)
-                    if (o.Side == 1 - u.Side && o.Faction != null) takers.Add(o.Faction);
+                    if (o.Side == 1 - u.FoughtOn && o.Faction != null) takers.Add(o.Faction);
                 foreach (var f in takers)
                 {
                     if (!rec.WantedBy(f)) continue;
