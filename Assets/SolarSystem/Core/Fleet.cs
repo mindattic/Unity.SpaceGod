@@ -984,7 +984,14 @@ namespace SolarSystem.Core
             else if (ship.FinalBody >= 0 && (ship.FinalBody != ship.Orbit.Body || inFlight))
             {
                 int to = ship.FinalBody;
-                if (ship.Wander) Burn(ship, jd, to, () => WanderOrbit(to, ship));
+                if (!inFlight)
+                {
+                    // Filled in port, it sets out as from any port: by the lanes (or a transfer orbit) its trip was costed for.
+                    ship.DestinationBody = to;
+                    ship.PhaseEndJd = jd;
+                    Depart(ship);
+                }
+                else if (ship.Wander) Burn(ship, jd, to, () => WanderOrbit(to, ship));
                 else Burn(ship, jd, to, () => ArrivalFor(ship, to));
             }
             else
