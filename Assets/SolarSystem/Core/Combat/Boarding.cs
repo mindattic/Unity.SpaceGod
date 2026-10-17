@@ -393,17 +393,23 @@ namespace SolarSystem.Core
             bool front = false;
             foreach (var c in Compartments)
                 if (c.Boarders > 0.01 && !c.Taken) front = true;
+            // Every party's move is worked out from where they all stood at the start of the step, then made: a party
+            // arriving in a held compartment does not move on again in the same step.
+            var moves = new List<(Compartment from, Compartment to, double marines)>();
             foreach (var c in Compartments)
             {
                 if (!c.Taken || c.Boarders <= (front ? 1 : 0.01)) continue;
                 int next = NextToward(c.Index);
                 if (next < 0) continue;
-                var n = Compartments[next];
                 // Most of the party moves on; a rear guard holds what was taken.
                 double move = c.Boarders * Math.Min(1, 0.08 * dt);
                 if (front && c.Boarders - move < 2) move = Math.Max(0, c.Boarders - 2);
-                c.Boarders -= move;
-                n.Boarders += move;
+                moves.Add((c, Compartments[next], move));
+            }
+            foreach (var (from, to, marines) in moves)
+            {
+                from.Boarders -= marines;
+                to.Boarders += marines;
             }
         }
 
