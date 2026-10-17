@@ -101,6 +101,39 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AShieldHitNamesTheGeneratorWhoseArcTookItAndACollapsedArcRaisesNoBubble()
+        {
+            // U.SPC-T40: the bubble a shield hit raises is drawn on the struck arc, in that generator's colour at
+            // its charge, so the hit has to say which generator it was; a collapsed arc lets hits through to the hull.
+            var (b, _, _) = Skirmish(3, new[] { (ShipClass.Cruiser, 0), (ShipClass.Cruiser, 1) });
+            var target = b.Units[1];
+            var bowPoint = target.PointLocal(new DVec3(0, 0, 0.5));
+            var gen = target.Combat.GeneratorFor(target.YawDegOf(bowPoint));
+            Assert.That(gen, Is.Not.Null, "the cruiser's bow arc has no generator");
+            Assert.That(gen.ShieldFraction, Is.EqualTo(1).Within(1e-9));
+
+            b.ApplyDamage(target, null, gen.MaxShield * 0.25, bowPoint);
+            var hit = b.Fx.Last(f => f.Kind == FxKind.ShieldHit);
+            Assert.That(hit.Sub, Is.EqualTo(gen.Index), "the shield hit did not name the generator covering the bow");
+            Assert.That(hit.Unit, Is.SameAs(target));
+            Assert.That(gen.ShieldFraction, Is.EqualTo(0.75).Within(1e-9), "the bubble's charge is not the arc's own");
+
+            // A hull's collision through the same arc names it too.
+            int seq = b.FxSeq;
+            b.ApplyImpact(target, bowPoint, gen.MaxShield * 0.1);
+            Assert.That(b.Fx.Where(f => f.Seq > seq && f.Kind == FxKind.ShieldHit).Select(f => f.Sub), Is.EqualTo(new[] { gen.Index }));
+
+            gen.Shield = 0;
+            Assert.That(gen.ShieldFraction, Is.EqualTo(0), "a collapsed arc still has charge to show");
+            seq = b.FxSeq;
+            double hull = target.Combat.Hull;
+            b.ApplyDamage(target, null, 50, bowPoint);
+            Assert.That(b.Fx.Any(f => f.Seq > seq && f.Kind == FxKind.ShieldHit), Is.False, "a collapsed arc raised a shield bubble");
+            Assert.That(b.Fx.Any(f => f.Seq > seq && f.Kind == FxKind.Impact), Is.True, "a hit on a collapsed arc did not go to the hull");
+            Assert.That(target.Combat.Hull, Is.LessThan(hull));
+        }
+
+        [Test]
         public void LosingTheReactorDestroysTheShipAndLosingAGeneratorDropsItsOwnShields()
         {
             var (b, _, _) = Skirmish(3, new[] { (ShipClass.Cruiser, 0), (ShipClass.Cruiser, 1) });

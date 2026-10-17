@@ -279,6 +279,14 @@ namespace SolarSystem.Views
             shieldVertexColors = cols.ToArray();
         }
 
+        /// <summary>
+        /// A shield generator's colour at <paramref name="charge"/> (0 to 1 of its cap): dim and translucent when
+        /// nearly drained, bright when full. The ring's wedge and the bubble a hit raises on that generator's arc
+        /// (<see cref="BattleFx"/>, U.SPC-T40) share it, so a bubble reads as the arc that took the hit.
+        /// </summary>
+        public static Color ShieldColor(float charge) =>
+            Color.Lerp(new Color(0.1f, 0.25f, 0.5f, 0.22f), new Color(0.4f, 0.75f, 1f, 1f), Mathf.Clamp01(charge));
+
         /// <summary>Recolours each wedge from its own generator's live charge; only shown while fighting.</summary>
         void UpdateShieldRing(bool fighting)
         {
@@ -288,10 +296,7 @@ namespace SolarSystem.Views
             for (int gi = 0; gi < shieldGenerators.Count; gi++)
             {
                 var gen = shieldGenerators[gi];
-                float frac = !gen.Destroyed && gen.MaxShield > 0 ? (float)(gen.Shield / gen.MaxShield) : 0f;
-                var c = gen.Destroyed
-                    ? Color.clear
-                    : Color.Lerp(new Color(0.1f, 0.25f, 0.5f, 0.22f), new Color(0.4f, 0.75f, 1f, 1f), frac);
+                var c = gen.Destroyed ? Color.clear : ShieldColor((float)gen.ShieldFraction);
                 int start = shieldWedgeStart[gi], count = shieldWedgeCount[gi];
                 for (int v = 0; v < count; v++) shieldVertexColors[start + v] = c;
             }

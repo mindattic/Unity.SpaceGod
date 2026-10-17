@@ -3,6 +3,8 @@ using SolarSystem.Core;
 using SolarSystem.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Math = System.Math;
+using Subsystem = SolarSystem.Core.Subsystem;
 
 namespace SolarSystem.Views
 {
@@ -25,6 +27,10 @@ namespace SolarSystem.Views
             Radial = 0,
             Beam = 1,
             Ring = 2,
+
+            /// <summary>A shield bubble segment: a hex lattice with a ripple from the impact; the flash's age rides
+            /// in the shape slot's fraction (3 + age), see the Fx shader.</summary>
+            Bubble = 3,
         }
 
         struct Effect
@@ -36,6 +42,11 @@ namespace SolarSystem.Views
             public Color Color;
             public float Born, Life;
             public BattleUnit Unit;
+
+            /// <summary>A shield hit's impact direction in the struck hull's own frame (right, up, forward), so its
+            /// bubble stays on the arc that took it as the hull turns, and the generator covering that arc.</summary>
+            public DVec3 Local;
+            public int Sub;
         }
 
         readonly SolarSystemApp app;
@@ -123,7 +134,7 @@ namespace SolarSystem.Views
         {
             var side = fx.Side >= 0 && fx.Side < 2 ? b.SideLeaders[fx.Side] : null;
             var faction = side != null ? new Color(side.Color.R, side.Color.G, side.Color.B) : Color.white;
-            var e = new Effect { Battle = b, Kind = fx.Kind, A = fx.A, B = fx.B, Size = fx.Size, Born = now, Unit = fx.Unit };
+            var e = new Effect { Battle = b, Kind = fx.Kind, A = fx.A, B = fx.B, Size = fx.Size, Born = now, Unit = fx.Unit, Sub = fx.Sub };
             switch (fx.Kind)
             {
                 case FxKind.Beam:
@@ -147,8 +158,11 @@ namespace SolarSystem.Views
                     e.Life = 0.1f;
                     break;
                 case FxKind.ShieldHit:
+                    // Coloured at draw time by the struck arc's generator (see DrawShieldHit); this is only the
+                    // fallback for a hit that names none.
                     e.Color = new Color(0.35f, 0.7f, 1f) * 0.55f;
-                    e.Life = 0.3f;
+                    e.Life = 0.55f;
+                    if (fx.Unit != null) e.Local = fx.Unit.ToLocal(fx.A);
                     break;
                 case FxKind.Impact:
                     e.Color = new Color(1f, 0.7f, 0.35f);
@@ -243,12 +257,8 @@ namespace SolarSystem.Views
                     break;
                 }
                 case FxKind.ShieldHit:
-                {
-                    var c = e.Unit != null && e.Unit.Present ? Point(e.Battle, e.Unit.Pos) : Point(e.Battle, e.B);
-                    float r = (float)(e.Size * 0.75 * app.BattleKmScale);
-                    Sprite(c, Mathf.Max(r, PixelSize(c, 10)), e.Color * fade, Shape.Ring);
+                    DrawShieldHit(e, t, fade);
                     break;
-                }
                 case FxKind.Breach:
                 {
                     // Atmosphere venting from the hole: a bright puff and a jet streaming outward.
@@ -302,6 +312,80 @@ namespace SolarSystem.Views
                     break;
                 }
             }
+        }
+
+        /// <summary>The shield shell's radius in ship lengths: between the inner and outer edge of ShipView's ring.</summary>
+        const double BubbleRadius = 0.62;
+
+        /// <summary>Half-angle of the patch of shell a hit lights, degrees.</summary>
+        const float BubbleHalfAngleDeg = 38f;
+
+        const int BubbleGrid = 7;
+
+        /// <summary>
+        /// A shield hit (U.SPC-T40): a segment of the shield bubble flashes around the hull at the impact, a hex
+        /// lattice with a ripple running out from the hit, in the colour of the generator whose arc took it at
+        /// that arc's live charge, so a hard-pressed arc flashes dim and translucent and a fresh one bright. An arc
+        /// that has collapsed (or whose generator is shot away) shows nothing: its hits go to the hull and draw as
+        /// impacts. A hull too small on screen for a patch to read gets the old ring flash, in the same colour.
+        /// </summary>
+        void DrawShieldHit(Effect e, float t, float fade)
+        {
+            var u = e.Unit;
+            Subsystem gen = null;
+            if (u != null && u.Combat != null && e.Sub >= 0 && e.Sub < u.Combat.Subsystems.Count)
+                gen = u.Combat.Subsystems[e.Sub];
+            if (gen == null || u == null || !u.Present)
+            {
+                var c0 = u != null && u.Present ? Point(e.Battle, u.Pos) : Point(e.Battle, e.B);
+                float r0 = (float)(e.Size * 0.75 * app.BattleKmScale);
+                Sprite(c0, Mathf.Max(r0, PixelSize(c0, 10)), e.Color * fade, Shape.Ring);
+                return;
+            }
+            float charge = (float)gen.ShieldFraction;
+            if (charge <= 0) return;
+            var tint = ShipView.ShieldColor(charge);
+            var color = new Color(tint.r, tint.g, tint.b, 1f) * (tint.a * fade * 1.6f);
+
+            var centre = Point(e.Battle, u.Pos);
+            float shellR = (float)(u.LengthKm * BubbleRadius * app.BattleKmScale);
+            if (shellR < PixelSize(centre, 14))
+            {
+                Sprite(centre, Mathf.Max(shellR, PixelSize(centre, 10)), color, Shape.Ring);
+                return;
+            }
+
+            var d = e.Local.LengthSquared > 1e-12 ? e.Local.Normalized : new DVec3(0, 0, 1);
+            var reference = Math.Abs(d.Y) < 0.9 ? new DVec3(0, 1, 0) : new DVec3(1, 0, 0);
+            var t1 = DVec3.Cross(reference, d).Normalized;
+            var t2 = DVec3.Cross(d, t1);
+            double k = Math.Tan(BubbleHalfAngleDeg * Mathf.Deg2Rad);
+            float z = (float)Shape.Bubble + Mathf.Min(t, 0.999f);
+            int i0 = vertices.Count;
+            for (int j = 0; j <= BubbleGrid; j++)
+            {
+                float v = (float)j / BubbleGrid;
+                for (int i = 0; i <= BubbleGrid; i++)
+                {
+                    float uu = (float)i / BubbleGrid;
+                    var dir = (d + (t1 * (uu * 2 - 1) + t2 * (v * 2 - 1)) * k).Normalized;
+                    vertices.Add(Point(e.Battle, u.PointLocal(dir * BubbleRadius)));
+                    colors.Add(color);
+                    uvs.Add(new Vector3(uu, v, z));
+                }
+            }
+            int row = BubbleGrid + 1;
+            for (int j = 0; j < BubbleGrid; j++)
+                for (int i = 0; i < BubbleGrid; i++)
+                {
+                    int a = i0 + j * row + i;
+                    indices.Add(a);
+                    indices.Add(a + 1);
+                    indices.Add(a + row + 1);
+                    indices.Add(a);
+                    indices.Add(a + row + 1);
+                    indices.Add(a + row);
+                }
         }
 
         void DrawMissiles(Battle b)

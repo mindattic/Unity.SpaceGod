@@ -272,6 +272,9 @@ namespace SolarSystem.Core
         public double Size;
         public int Side;
         public BattleUnit Unit;
+
+        /// <summary>The subsystem index concerned, or -1: the hardpoint hit or lost, or for a
+        /// <see cref="FxKind.ShieldHit"/> the shield generator whose arc took the hit.</summary>
         public int Sub;
     }
 
@@ -1147,7 +1150,8 @@ namespace SolarSystem.Core
                     double soaked = Math.Min(generator.Shield, damage);
                     generator.Shield -= soaked;
                     damage -= soaked;
-                    Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, -1);
+                    // Sub names the generator whose arc took it, so the bubble it raises is that arc's (U.SPC-T40).
+                    Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, generator.Index);
                     if (damage <= 0) return;
                 }
             }
@@ -1188,9 +1192,10 @@ namespace SolarSystem.Core
             if (!target.Present || hp <= 0) return;
             var c = target.Combat;
             double shieldBefore = c.Shield;
+            var generator = c.GeneratorFor(target.YawDegOf(at));
             var lost = new List<Subsystem>();
             double through = Collisions.ApplyDamage(c, target.ToLocal(at), hp, Seconds, lost);
-            if (c.Shield < shieldBefore) Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, -1);
+            if (c.Shield < shieldBefore) Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, generator?.Index ?? -1);
             if (through > 0) Emit(FxKind.Impact, at, at, through, target.Side, target, -1);
             foreach (var s in lost) Emit(FxKind.SubsystemDestroyed, at, at, target.LengthKm * 0.12, target.Side, target, s.Index);
             if (c.Hull <= 0)

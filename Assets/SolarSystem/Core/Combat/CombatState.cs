@@ -33,6 +33,14 @@ namespace SolarSystem.Core
         public SubsystemKind Kind => Def.Kind;
         public bool Destroyed => Hp <= 0;
         public double Health => Math.Max(0, Hp / Def.MaxHp);
+
+        /// <summary>
+        /// This generator's arc's live charge as a fraction of its cap, 0 to 1: what its shield ring wedge and the
+        /// bubble a hit raises on its arc are shown at (U.SPC-T40). Zero for a collapsed or shot-away generator,
+        /// whose arc then shows no bubble, and for anything that is not a shield generator.
+        /// </summary>
+        public double ShieldFraction => Kind == SubsystemKind.ShieldGenerator && !Destroyed && MaxShield > 0 && Shield > 0
+            ? Math.Min(1, Shield / MaxShield) : 0;
     }
 
     /// <summary>
