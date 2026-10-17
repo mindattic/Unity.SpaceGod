@@ -824,6 +824,9 @@ namespace SolarSystem
             }
             pilotFrameBody = frame;
             SeedPilot(offsetKm, velocity, facing);
+            // A tanker called for some earlier hull (one taken from the player, say) is not this one's.
+            TankerDueS = -1;
+            propellantWarning = 0;
             pilotFlightAssistOff = false;
             pilotBattleCheckTimer = 0;
             demandPrompted = false;
@@ -1208,6 +1211,8 @@ namespace SolarSystem
             pilotLockTarget = Target.None;
             SpaceCamera.PilotLockTarget = Target.None;
             nearGate = null;
+            // A tanker called in the old system does not follow the hull through the gate.
+            TankerDueS = -1;
 
             Select(Piloted);
             SpaceCamera.EnterPilotChase(Piloted, 6);
