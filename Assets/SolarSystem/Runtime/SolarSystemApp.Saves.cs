@@ -43,15 +43,15 @@ namespace SolarSystem
         {
             if (!autosaveEnabled) return;
             autosaveDueS -= dt;
-            // Between the stars there is no system to come back to: try again once the trip is over.
-            if (autosaveDueS > 0 || Travel.Active) return;
+            // Between the stars there is no system to come back to (nor, latched to a hulk, a session to keep): try again once that is over.
+            if (autosaveDueS > 0 || SaveBlocker() != null) return;
             autosaveDueS = AutosaveIntervalS;
             Autosave(false);
         }
 
         void OnApplicationQuit()
         {
-            if (autosaveEnabled && Galaxy != null && !Travel.Active) Autosave(true);
+            if (autosaveEnabled && Galaxy != null && SaveBlocker() == null) Autosave(true);
         }
 
         string pendingSave, pendingLoad;
@@ -84,7 +84,11 @@ namespace SolarSystem
         }
 
         /// <summary>Why the game cannot be saved or loaded right now, or null when it can.</summary>
-        public string SaveBlocker() => Travel.Active ? "Not between the stars: wait until the trip is over" : null;
+        public string SaveBlocker() =>
+            Travel.Active ? "Not between the stars: wait until the trip is over"
+            // What the clamps have brought out (survivors, crates, a fight aboard) is the session's until they come off.
+            : Salvage != null ? "Not while latched to a hulk: cast off first (4)"
+            : null;
 
         void Autosave(bool quiet)
         {
@@ -126,7 +130,8 @@ namespace SolarSystem
         /// <summary>Replaces the running simulation with the one saved in <paramref name="slot"/>.</summary>
         public bool LoadFrom(string slot)
         {
-            string blocked = SaveBlocker();
+            // (Loading drops whatever the session held, a hulk latched to included: only a trip between the stars stops it.)
+            string blocked = Travel.Active ? SaveBlocker() : null;
             if (blocked != null)
             {
                 ShowToast(blocked);
