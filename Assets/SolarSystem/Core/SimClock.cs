@@ -96,6 +96,18 @@ namespace SolarSystem.Core
 
         public static SimClock StartingNow() => new SimClock(Astro.JulianDate(DateTime.UtcNow));
 
+        /// <summary>
+        /// The slowest warp level that gets <paramref name="simSeconds"/> of simulated time over within
+        /// <paramref name="realSeconds"/> of real time (the fastest level if none does), never slower than
+        /// <paramref name="atLeast"/>: how a piloted hyperlane ride of hours plays out in under a minute (U.SPC-T41).
+        /// </summary>
+        public static int WarpToCover(double simSeconds, double realSeconds, int atLeast = 0)
+        {
+            int i = Math.Max(0, Math.Min(Levels.Length - 1, atLeast));
+            while (i < Levels.Length - 1 && simSeconds / Levels[i].SimSecondsPerSecond > realSeconds) i++;
+            return i;
+        }
+
         public void SetWarp(int index) => WarpIndex = Math.Max(0, Math.Min(Levels.Length - 1, index));
         public void Faster() => SetWarp(WarpIndex + 1);
         public void Slower() => SetWarp(WarpIndex - 1);

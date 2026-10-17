@@ -66,6 +66,7 @@ namespace SolarSystem.UI
 
             if (app.Travel.Active) DrawTravel();
             else DrawWorldOverlay();
+            DrawLaneEffects();
             if (!app.ShowHud)
             {
                 if (app.ShowSaves) DrawSaves();
@@ -80,6 +81,7 @@ namespace SolarSystem.UI
             DrawStatus();
             DrawSalvage();
             DrawHail();
+            DrawLaneRide();
             if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
             if (app.ShowCargo) DrawCargo();
@@ -377,6 +379,80 @@ namespace SolarSystem.UI
             var size = small.CalcSize(content);
             var p = new Vector2((Screen.width - size.x) * 0.5f, Screen.height - 66);
             DrawLabel(readout, p, assist ? Dim : RetrogradeColor, true);
+        }
+
+        // ---------------------------------------------------------------- hyperlane rides (U.SPC-T41)
+
+        static readonly Color StreakColor = new Color(0.6f, 0.88f, 1f);
+        const int StreakCount = 72;
+
+        /// <summary>
+        /// Riding a lane at the helm: streaks of light stream out past the view from the point ahead, longer
+        /// and faster with the ride's speed (fading for a moment after coming off), and a ring gate gone
+        /// through washes the screen in a flash.
+        /// </summary>
+        void DrawLaneEffects()
+        {
+            if (Event.current.type != EventType.Repaint || !app.IsPiloting || app.Travel.Active) return;
+            float strength = app.LaneStreaks;
+            if (strength > 0.01f)
+            {
+                var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+                if (app.RidingLane && DirectionToGui(app.PilotForward, out var ahead)) centre = ahead;
+                float reach = new Vector2(Screen.width, Screen.height).magnitude * 0.6f;
+                float t = Time.unscaledTime;
+                for (int i = 0; i < StreakCount; i++)
+                {
+                    // Fixed per streak: its bearing, pace and starting point (a cheap hash of its index).
+                    float h1 = Frac(Mathf.Sin(i * 12.9898f) * 43758.55f);
+                    float h2 = Frac(Mathf.Sin(i * 78.233f) * 12345.67f);
+                    float h3 = Frac(Mathf.Sin(i * 37.719f) * 24634.63f);
+                    float angle = h1 * Mathf.PI * 2f;
+                    float phase = Frac(t * (0.35f + 1.6f * strength) * (0.6f + h2) + h3);
+                    var dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                    float r = 30f + phase * phase * reach;
+                    float length = (8f + 170f * strength) * (0.3f + phase);
+                    var color = new Color(StreakColor.r, StreakColor.g, StreakColor.b, strength * phase * 0.75f);
+                    DrawLine(centre + dir * r, centre + dir * (r + length), color, 1f + 1.5f * phase);
+                }
+            }
+            if (app.GateFlash > 0.001f)
+            {
+                var old = GUI.color;
+                GUI.color = new Color(0.78f, 0.93f, 1f, app.GateFlash * app.GateFlash * 0.85f);
+                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Icons.White);
+                GUI.color = old;
+            }
+        }
+
+        static float Frac(float x) => x - Mathf.Floor(x);
+
+        /// <summary>Above the status bar while riding a lane: the lane, how far along, the speed, the time to the off-ramp and its exits.</summary>
+        void DrawLaneRide()
+        {
+            if (!app.RidingLane) return;
+            var ship = app.Piloted.Ship;
+            var hop = ship.LaneLeg;
+            double progress = Fleet.LaneProgress(ship, app.Clock.Jd);
+            string head = "HYPERLANE  ·  " + hop.Lane.Name.ToUpperInvariant() + "  ·  bound for " + app.Catalog[hop.To].Name +
+                          "  ·  " + Percent(progress) + "  ·  " + SpeedText(app.PilotSpeedKmS) +
+                          "  ·  off-ramp in " + Mathf.CeilToInt((float)app.RideSecondsLeft) + " s";
+            var exits = new List<string> { (app.RideChoice < 0 ? "> " : "") + "1 come off at " + app.Catalog[hop.To].Name };
+            for (int i = 0; i < app.RideOnward.Count && i < 8; i++)
+            {
+                var next = app.RideOnward[i];
+                exits.Add((app.RideChoice == i ? "> " : "") + (i + 2) + " on to " + app.Catalog[next.To].Name);
+            }
+            string tail = "AT THE OFF-RAMP:  " + string.Join("    ", exits) + "    (P hands the ride to the crew)";
+            var a = new GUIContent(head);
+            var b = new GUIContent(tail);
+            float w = Mathf.Max(text.CalcSize(a).x, small.CalcSize(b).x) + 28;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 128, w, 50));
+            GUI.contentColor = StreakColor;
+            GUI.Label(new Rect(r.x + 14, r.y + 5, w, 20), a, text);
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 14, r.y + 27, w, 18), b, small);
+            GUI.contentColor = Color.white;
         }
 
         /// <summary>Where a direction (ecliptic, unit) vanishes on screen, if it is in front of the camera and on screen.</summary>
@@ -2320,6 +2396,7 @@ namespace SolarSystem.UI
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
+                "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",

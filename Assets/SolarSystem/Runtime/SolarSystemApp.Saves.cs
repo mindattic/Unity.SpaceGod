@@ -205,7 +205,8 @@ namespace SolarSystem
                 pilot = session.Pilot;
                 pilotAim = session.PilotAim;
                 pilotFlightAssistOff = session.FlightAssistOff;
-                if (ship.Battle == null) PinWherePiloted(ship);
+                // A ride under way goes on from where it was (EnterPiloting has taken it up again).
+                if (ship.Battle == null && ship.Phase != ShipPhase.Lane) PinWherePiloted(ship);
             }
             else
             {
@@ -222,6 +223,9 @@ namespace SolarSystem
             pilotLockTarget = Target.None;
             pilotBoosting = false;
             pilot = default;
+            rideWarpBefore = -1;
+            RideOnward.Clear();
+            RideChoice = -1;
             SpaceCamera.PilotLockTarget = Target.None;
             Salvage = null;
             SalvageApproach = null;

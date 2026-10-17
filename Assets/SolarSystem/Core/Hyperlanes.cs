@@ -220,6 +220,44 @@ namespace SolarSystem.Core
         public DVec3 RampHelio(Lane lane, int at, double jd) => ephemeris.HelioAt(at, jd) + RampOffset(lane, at, jd);
 
         /// <summary>
+        /// Radius of the ring gate at each ramp, km (U.SPC-T41): a hull flown in through it joins the lane.
+        /// AI traffic burns to the ramp's centre; a pilot only has to thread the ring.
+        /// </summary>
+        public const double GateRadiusKm = 1500;
+
+        /// <summary>
+        /// The on-ramp whose ring gate a point (true heliocentric km) is inside, as the hop that rides
+        /// its lane away from that ramp's system, or null. The nearest gate wins where two overlap.
+        /// </summary>
+        public LaneHop? OnRampAt(DVec3 helioKm, double jd)
+        {
+            LaneHop? best = null;
+            double bestKm = GateRadiusKm;
+            foreach (var lane in Lanes)
+                for (int end = 0; end < 2; end++)
+                {
+                    int at = end == 0 ? lane.A : lane.B;
+                    double km = (helioKm - RampHelio(lane, at, jd)).Length;
+                    if (km > bestKm) continue;
+                    bestKm = km;
+                    best = new LaneHop(lane, at, lane.Other(at));
+                }
+            return best;
+        }
+
+        /// <summary>
+        /// The lanes a rider coming off at <paramref name="system"/>'s ramp could carry on along (the
+        /// off-ramp's exit choice), never straight back down <paramref name="cameIn"/>.
+        /// </summary>
+        public List<LaneHop> OnwardHops(int system, Lane cameIn)
+        {
+            var hops = new List<LaneHop>();
+            foreach (var lane in Lanes)
+                if (lane != cameIn && (lane.A == system || lane.B == system)) hops.Add(new LaneHop(lane, system, lane.Other(system)));
+            return hops;
+        }
+
+        /// <summary>
         /// A point along a lane from <paramref name="a"/> to <paramref name="b"/> (s from 0 to 1): a
         /// quadratic curve bowed outward by <paramref name="bend"/> and pushed out to stay
         /// <paramref name="keepOut"/> from the origin (the Sun). Works in true km or scene units alike.

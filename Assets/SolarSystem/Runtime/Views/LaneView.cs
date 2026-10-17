@@ -10,6 +10,8 @@ namespace SolarSystem.Views
     /// Draws the hyperlane network: each lane a glowing ribbon along its curve between its two ramps,
     /// a ring gate at each ramp, and pulses of light streaming both ways so it reads as a highway.
     /// Everything is a few pixels wide at any distance, so the network shows from across the system.
+    /// Up close each ring gate is drawn at its true size (<see cref="Hyperlanes.GateRadiusKm"/>), square
+    /// to its lane, for a pilot to fly through; it flashes as a hull goes in or comes out (U.SPC-T41).
     /// </summary>
     public sealed class LaneView
     {
@@ -23,8 +25,26 @@ namespace SolarSystem.Views
         readonly Vector3[] curve = new Vector3[Samples + 1];
 
         const int Samples = 48;
+        const int RingSegments = 40;
+        const float FlashSeconds = 0.9f;
         static readonly Color LaneColor = new Color(0.25f, 0.6f, 1f);
         static readonly Color PulseColor = new Color(0.6f, 0.9f, 1f);
+        static readonly Color GateColor = new Color(0.45f, 0.8f, 1f);
+
+        Lane flashLane;
+        int flashAt = -1;
+        float flashTime = -10f;
+
+        /// <summary>Lights up the ring gate at <paramref name="at"/>'s end of <paramref name="lane"/> for a moment.</summary>
+        public void Flash(Lane lane, int at)
+        {
+            flashLane = lane;
+            flashAt = at;
+            flashTime = Time.unscaledTime;
+        }
+
+        float FlashOf(Lane lane, int at, float now) =>
+            lane == flashLane && at == flashAt ? Mathf.Clamp01(1f - (now - flashTime) / FlashSeconds) : 0f;
 
         public LaneView(SolarSystemApp app, Transform parent)
         {
@@ -66,6 +86,8 @@ namespace SolarSystem.Views
                 }
                 Sprite(curve[0], 16, LaneColor * 0.7f, 2);
                 Sprite(curve[Samples], 16, LaneColor * 0.7f, 2);
+                Gate(lane, lane.A, aKm, curve[0], curve[1], now);
+                Gate(lane, lane.B, bKm, curve[Samples], curve[Samples - 1], now);
                 // Ambient flow: a faint pulse each way, just to read as a live highway at any zoom,
                 // even when nothing is actually riding it right now.
                 for (int k = 0; k < 2; k++)
@@ -97,6 +119,38 @@ namespace SolarSystem.Views
             mesh.SetUVs(0, uvs);
             mesh.SetIndices(indices, MeshTopology.Triangles, 0, false);
             mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1e9f);
+        }
+
+        /// <summary>
+        /// A ramp's ring gate: a hoop square to the lane, its true radius as mapped near its planet (never
+        /// under a few pixels), brightening and swelling for a moment when it flashes.
+        /// </summary>
+        void Gate(Lane lane, int at, DVec3 rampKm, Vector3 centre, Vector3 inward, float now)
+        {
+            var axis = inward - centre;
+            if (axis.sqrMagnitude < 1e-12f) return;
+            axis.Normalize();
+            var eph = app.Ephemeris;
+            var radial = app.Fleet.Lanes.RampDirection(lane, at, eph.Jd);
+            var across = DVec3.Cross(radial, DVec3.UnitZ);
+            across = across.LengthSquared > 1e-12 ? across.Normalized : DVec3.UnitX;
+            var c = app.Scale.MapNear(eph, app.BodyScenes, at, rampKm);
+            var e = app.Scale.MapNear(eph, app.BodyScenes, at, rampKm + across * Hyperlanes.GateRadiusKm);
+            float flash = FlashOf(lane, at, now);
+            float radius = Mathf.Max((float)(e - c).Length, PixelSize(centre, 9)) * (1f + 0.25f * flash);
+            var u = Vector3.Cross(axis, Mathf.Abs(Vector3.Dot(axis, Vector3.up)) > 0.98f ? Vector3.right : Vector3.up).normalized;
+            var v = Vector3.Cross(axis, u);
+            var color = GateColor * (0.75f + 2.5f * flash);
+            float width = 2.2f + 5f * flash;
+            var prev = centre + u * radius;
+            for (int k = 1; k <= RingSegments; k++)
+            {
+                float t = k * Mathf.PI * 2f / RingSegments;
+                var p = centre + (u * Mathf.Cos(t) + v * Mathf.Sin(t)) * radius;
+                Ribbon(prev, p, width, color);
+                prev = p;
+            }
+            if (flash > 0) Sprite(centre, 18 + 70 * flash, PulseColor * (2.2f * flash), 0);
         }
 
         Vector3 Along(float s)

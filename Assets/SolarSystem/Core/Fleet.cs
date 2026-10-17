@@ -781,6 +781,54 @@ namespace SolarSystem.Core
             }
         }
 
+        // ---------------------------------------------------------------- the player's own rides (U.SPC-T41)
+
+        /// <summary>
+        /// A piloted hull flown in through an on-ramp's ring gate joins the lane where it is, by the same
+        /// <see cref="StartLane"/> AI traffic rides: a one-hop journey ending at the far ramp. The hull is
+        /// held (<see cref="IsHeld"/>), so its pilot brings it off there with <see cref="RampReached"/>; let
+        /// go of mid-ride, the fleet carries it on to that system like any other ship.
+        /// </summary>
+        public void JoinLane(Ship ship, LaneHop hop, DVec3 helioKm, double jd)
+        {
+            ship.Journey = new List<LaneHop> { hop };
+            ship.JourneyIndex = 0;
+            ship.FinalBody = hop.To;
+            ship.DestinationBody = hop.To;
+            ship.Wander = false;
+            ship.Ring = null;
+            ship.HoldPoint = null;
+            ship.LurkLane = null;
+            ship.StrandedInFlight = false;
+            ship.Orbit = FixedPoint(hop.From, helioKm - ephemeris.HelioAt(hop.From, jd));
+            StartLane(ship, jd);
+        }
+
+        /// <summary>Whether a ride has reached the far ramp (a held rider waits there for its pilot's call).</summary>
+        public static bool RideOver(Ship ship, double jd) => ship.Phase == ShipPhase.Lane && jd >= ship.PhaseEndJd;
+
+        /// <summary>
+        /// A piloted ride has reached its far ramp: carry on along <paramref name="next"/> (one of
+        /// <see cref="Hyperlanes.OnwardHops"/>) from right where the hull is, or, with none, come off and be
+        /// pinned there under the pilot's hand, facing <paramref name="facing"/>.
+        /// </summary>
+        public void RampReached(Ship ship, LaneHop? next, DVec3 facing, double jd)
+        {
+            var hop = ship.LaneLeg;
+            if (next is LaneHop onward && onward.From == hop.To)
+            {
+                ship.Orbit = FixedPoint(hop.To, ship.LaneToOffset);
+                // A fresh list: a journey may be a planner's cached route, never to be added to.
+                ship.Journey = new List<LaneHop> { onward };
+                ship.JourneyIndex = 0;
+                ship.FinalBody = onward.To;
+                ship.DestinationBody = onward.To;
+                StartLane(ship, jd);
+                return;
+            }
+            PinAt(ship, hop.To, ship.LaneToOffset, facing, jd);
+        }
+
         /// <summary>
         /// Changes course mid-flight: from wherever the ship is now, still moving as it is, a new
         /// flip-and-burn to <paramref name="to"/>. For a burn between worlds (not a hyperlane ride).

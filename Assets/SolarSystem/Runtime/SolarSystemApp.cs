@@ -804,6 +804,14 @@ namespace SolarSystem
             var (frame, offsetKm) = CurrentFrame(ship, Clock.Jd);
             var facing = Fleet.StateOf(ship, Clock.Jd).Facing;
             var velocity = DVec3.Zero;
+            // Riding a lane through to its far ramp: the ride goes on, now at the helm (U.SPC-T41). One
+            // that means to stop part-way (a raider's lurk) is taken where it is, as any other flight.
+            bool riding = !ship.IsEscort && ship.Battle == null && ship.Phase == ShipPhase.Lane && ship.LaneEndProgress >= 1;
+            if (riding)
+            {
+                frame = ship.LaneLeg.From;
+                offsetKm = Fleet.StateOf(ship, Clock.Jd).HelioKm - Ephemeris.Helio(frame);
+            }
             if (ship.IsEscort) ship.Leader = null;
             else World.War.HandOverCommand(ship);
             if (ship.Battle != null)
@@ -834,12 +842,20 @@ namespace SolarSystem
             havenPrompted = null;
             // Out of a battle, the hull is the pilot's from here: no longer landed, descending or in formation.
             // In one, the battle owns its pose, but an escort cut loose still needs an orbit of its own.
-            if (ship.Battle == null || ship.Orbit == null) PinWherePiloted(ship);
+            rideWarpBefore = -1;
+            insideRampGate = true;
+            if (!riding && (ship.Battle == null || ship.Orbit == null)) PinWherePiloted(ship);
 
             Select(t);
             SpaceCamera.EnterPilotChase(t, 6);
             Clock.SetWarp(0);
             ShowToast("Piloting " + ship.Name + ", " + Clock.Warp.Label + "  (P to release, . to speed up, Left-click to fire, T to lock a target, Z/X to roll, F flight assist, hold J to cruise)");
+            if (riding)
+            {
+                BeginRide(ship, false);
+                ShowToast("Riding the " + ship.LaneLeg.Lane.Name + " lane at the helm of " + ship.Name + ", bound for " + Catalog[ship.LaneLeg.To].Name +
+                          "  (number keys pick the off-ramp's exit, P to release)");
+            }
         }
 
         /// <summary>
@@ -915,6 +931,7 @@ namespace SolarSystem
             // Where it was taken: the captor's schedule (or the drifting hulk) picks up from here. If the
             // capture ended the fight in the same tick, the war has already planned the prize's next trip from
             // its old spot: plan it again from here, or the pin would hold it until that trip's departure time.
+            EndRide();
             PinWherePiloted(ship);
             if (ship.Battle == null && !ship.Destroyed && !ship.Derelict && !ship.IsEscort) Fleet.ScheduleNext(ship, Clock.Jd);
             Piloted = Target.None;
@@ -939,7 +956,10 @@ namespace SolarSystem
             pilotBoosting = false;
             pilotCruise = default;
             SpaceCamera.PilotLockTarget = Target.None;
-            if (ship != null && !ship.Destroyed)
+            bool rode = ship != null && !ship.Destroyed && ship.Battle == null && ship.Phase == ShipPhase.Lane;
+            EndRide();
+            // Mid-ride the crew rides it on: the fleet brings it off at the far ramp and on into that system.
+            if (ship != null && !ship.Destroyed && !rode)
             {
                 if (ship.Battle != null)
                 {
@@ -1031,6 +1051,11 @@ namespace SolarSystem
                 ExitPiloting();
                 return;
             }
+            if (ship.Phase == ShipPhase.Lane)
+            {
+                UpdateLaneRide(ship);
+                return;
+            }
 
             // Free look: the stick swings about the hull's own roof (yaw) and starboard (pitch) axes,
             // so there's no gimbal clamp and "mouse right" stays screen-right however the hull has
@@ -1105,6 +1130,7 @@ namespace SolarSystem
             // Contracts worked at the helm: crates handed over, passengers put ashore, patrols flown, bodies surveyed (U.SPC-T101).
             World.Contracts?.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, Clock.Jd);
             UpdateGateActivation(ship);
+            UpdateLaneEntry(ship);
         }
 
         /// <summary>Thrust, km/s^2, above which the piloted ship's drive shows as a burn on others' scanners (about 0.01 g).</summary>
@@ -1659,6 +1685,22 @@ namespace SolarSystem
                     if (ship.IsEscort != (pass == 1)) continue;
                     shipLength[i] = Scale.ShipLength(ship.LengthKm);
 
+                    if (ship == World.PilotedShip && ship.Phase == ShipPhase.Lane)
+                    {
+                        // Riding a lane at the helm: drawn on the lane as every rider is, nose along it.
+                        var ride = Fleet.StateOf(ship, jd);
+                        shipScene[i] = Scale.LaneScene(Ephemeris, bodyScene, Fleet.Lanes, ship, ride.Progress, out var along)
+                            + SideScene(Fleet.LanePoint(ship, jd, ride.Progress), ship.LaneHoldSide) * Fleet.LaneRejoin(ship, jd);
+                        var af = new Vector3((float)along.X, (float)along.Y, (float)along.Z);
+                        var roof = pilot.Up.SwapYZ;
+                        var ru = new Vector3((float)roof.X, (float)roof.Y, (float)roof.Z);
+                        if (af.sqrMagnitude < 1e-12f) af = Vector3.forward;
+                        if (ru.sqrMagnitude < 1e-12f || Mathf.Abs(Vector3.Dot(af.normalized, ru.normalized)) > 0.98f) ru = Mathf.Abs(Vector3.Dot(af.normalized, Vector3.up)) > 0.98f ? Vector3.right : Vector3.up;
+                        shipRotation[i] = Quaternion.LookRotation(af, ru);
+                        shipRotationInitialised[i] = true;
+                        shipStates[i] = ride;
+                        continue;
+                    }
                     if (ship == World.PilotedShip)
                     {
                         shipScene[i] = bodyScene[pilotFrameBody] + Scale.LocalOffset(Catalog[pilotFrameBody], pilotOffsetKm);
@@ -1872,9 +1914,14 @@ namespace SolarSystem
             UnityCamera.farClipPlane = 5e8f;
             UnityCamera.transform.SetPositionAndRotation(Vector3.zero, SpaceCamera.Rotation);
 
-            float targetFov = IsPiloting && pilotCruise.Active ? CruiseFov : IsPiloting && pilotBoosting ? BoostFov : BaseFov;
+            float targetFov = RidingLane ? BaseFov + (LaneFov - BaseFov) * LaneRideSpeed
+                : IsPiloting && pilotCruise.Active ? CruiseFov : IsPiloting && pilotBoosting ? BoostFov : BaseFov;
             cameraFov = Mathf.Lerp(cameraFov, targetFov, 1f - Mathf.Exp(-dt * FovResponseHz));
-            UnityCamera.fieldOfView = cameraFov;
+            // A ring gate kicks the view wide for a moment and flashes as the hull goes through (U.SPC-T41).
+            fovKick *= Mathf.Exp(-dt * 3.5f);
+            GateFlash = Mathf.Max(0, GateFlash - dt / GateFlashS);
+            LaneExitFade = Mathf.Max(0, LaneExitFade - dt / LaneExitFadeS);
+            UnityCamera.fieldOfView = Mathf.Min(150f, cameraFov + fovKick);
         }
 
         public Vector3 Relative(DVec3 scene)
