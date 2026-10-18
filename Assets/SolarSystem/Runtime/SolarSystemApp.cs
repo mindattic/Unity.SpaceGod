@@ -298,6 +298,7 @@ namespace SolarSystem
         {
             Application.targetFrameRate = 144;
             QualitySettings.vSyncCount = 1;
+            AutoReorient = PlayerPrefs.GetInt(AutoReorientPref, 1) == 1;
 
             Clock = SimClock.StartingNow();
             Scale = new ScaleModel { Blend = 1 };
@@ -395,7 +396,7 @@ namespace SolarSystem
             UpdateRadii();
             UpdateShips(0);
             Structures.Layout();
-            // A new system starts level with the ecliptic again (R levels to its own plane).
+            // A new system starts level with the ecliptic again (auto-reorient then swings to its own plane).
             SpaceCamera.SetUpFrame(Quaternion.identity);
             SpaceCamera.SetPose(SpaceCamera.ScenePosition, SpaceCamera.Rotation);
         }
@@ -522,7 +523,11 @@ namespace SolarSystem
             DropLostTargets();
             BattleTime();
             if (Travel.Active) Travel.Update(dt);
-            else SpaceCamera.Update(dt, Input);
+            else
+            {
+                KeepReoriented();
+                SpaceCamera.Update(dt, Input);
+            }
             UpdateClipPlanes(dt);
             UpdateViews(dt);
             UpdateHover();
@@ -649,7 +654,7 @@ namespace SolarSystem
             if (i.ToggleNews && !IsPiloting) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
-            if (i.LevelView) LevelView();
+            if (i.ToggleReorient) ToggleAutoReorient();
             if (i.ToggleSatellites)
             {
                 ShowSatellites = !ShowSatellites;
@@ -1611,27 +1616,77 @@ namespace SolarSystem
         }
 
         /// <summary>
-        /// The plane a system is laid out in, as its north-side normal (Unity axes): the ecliptic for
-        /// a single star, the orbit of the first star round the barycentre for a binary (Alpha
-        /// Centauri's A-B plane, steeply tilted to the ecliptic).
+        /// The plane the active system is laid out in, as its north-side normal (Unity axes): the ecliptic in Sol, the
+        /// orbit of the first star round the barycentre for a binary (Alpha Centauri's A-B plane, steeply tilted to the
+        /// ecliptic), and for any other star the plane its own planets sweep, weighted by their masses.
         /// </summary>
-        public Vector3 SystemPlaneNormal()
+        public Vector3 SystemPlaneNormal() => PlaneNormal(ActiveSystem);
+
+        /// <summary>The plane <paramref name="system"/> is laid out in (see <see cref="SystemPlaneNormal"/>), active or not.</summary>
+        public static Vector3 PlaneNormal(StarSystem system)
         {
-            if (Catalog.Root.IsStar || Catalog.Count < 2) return Vector3.up;
-            var n = DVec3.Cross(Ephemeris.Relative(1), Ephemeris.RelativeVelocityKmS(1)).Normalized.SwapYZ;
-            return n.LengthSquared > 0 ? new Vector3((float)n.X, (float)n.Y, (float)n.Z) : Vector3.up;
+            var catalog = system.Catalog;
+            var eph = system.Ephemeris;
+            if (catalog.Root.Name == "Sun" || catalog.Count < 2) return Vector3.up;
+            DVec3 n;
+            if (!catalog.Root.IsStar) n = DVec3.Cross(eph.Relative(1), eph.RelativeVelocityKmS(1));
+            else
+            {
+                n = DVec3.Zero;
+                for (int i = 0; i < catalog.Count; i++)
+                    if (catalog[i].ParentIndex == catalog.Root.Index)
+                        n += DVec3.Cross(eph.Relative(i), eph.RelativeVelocityKmS(i)) * Math.Max(catalog[i].Gm, 1e-9);
+            }
+            if (!(n.LengthSquared > 0)) return Vector3.up;
+            n = n.Normalized.SwapYZ;
+            return new Vector3((float)n.X, (float)n.Y, (float)n.Z);
         }
 
-        public string SystemPlaneName => Catalog.Root.IsStar ? "the ecliptic" : "the A–B orbital plane";
+        /// <summary>
+        /// How far out <paramref name="system"/>'s Oort cloud reaches, light-years: the Sun's about 100,000 AU, other
+        /// systems' scaled by the cube root of their stars' mass, as a star's gravitational reach is.
+        /// </summary>
+        public static double OortCloudLy(StarSystem system)
+        {
+            double gm = 0;
+            foreach (var b in system.Catalog.Bodies)
+                if (b.IsStar) gm += b.Gm;
+            double mass = gm > 0 ? gm / Core.StarSystemBuilder.SunGm : 1;
+            return SunOortCloudAu * Math.Pow(mass, 1.0 / 3.0) / AuPerLy;
+        }
+
+        const double SunOortCloudAu = 100000, AuPerLy = 63241.077;
+
+        public string SystemPlaneName =>
+            IsSol ? "the ecliptic" : !Catalog.Root.IsStar ? "the A–B orbital plane" : Catalog.Root.Name + "'s planetary plane";
+
+        /// <summary>Whether the view keeps the active system's plane level by itself (R or the on-screen toggle; remembered between sessions).</summary>
+        public bool AutoReorient { get; private set; }
+
+        const string AutoReorientPref = "AutoReorient";
+
+        public void ToggleAutoReorient()
+        {
+            AutoReorient = !AutoReorient;
+            PlayerPrefs.SetInt(AutoReorientPref, AutoReorient ? 1 : 0);
+            ShowToast(AutoReorient ? "AUTO-REORIENT ON: keeping " + SystemPlaneName + " level" : "AUTO-REORIENT OFF: the view stays as you leave it");
+        }
 
         /// <summary>Swings the view smoothly round until the system's plane is level.</summary>
-        public void LevelView()
+        public void Reorient()
         {
             // The chase camera follows the hull the mouse is flying: there is no view of its own to level,
             // and the levelling ease would compound on the chase's own easing every frame.
             if (Travel.Active || IsPiloting) return;
             SpaceCamera.Level(SystemPlaneNormal());
-            ShowToast("LEVEL: " + SystemPlaneName.ToUpperInvariant() + " is now horizontal");
+        }
+
+        /// <summary>With auto-reorient on, swings the view level again whenever the system's plane is not (a new system, the helm let go).</summary>
+        void KeepReoriented()
+        {
+            if (!AutoReorient || IsPiloting || SpaceCamera.Levelling) return;
+            var normal = SystemPlaneNormal();
+            if (Vector3.Angle(SpaceCamera.UpFrame * Vector3.up, normal) > 0.5f) SpaceCamera.Level(normal);
         }
 
         /// <summary>Space: the whole simulation (every system) eases to a stop, or back up to speed.</summary>

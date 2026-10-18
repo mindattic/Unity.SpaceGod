@@ -185,7 +185,7 @@ namespace SolarSystem
             yield return Wait(2.2f);
             yield return stop("31-alpha-centauri");
             // The A-B orbit is tilted 70-odd degrees to the ecliptic: level the view to it.
-            app.LevelView();
+            app.Reorient();
             yield return Wait(2.2f);
             yield return stop("31b-alpha-centauri-levelled");
 

@@ -87,11 +87,28 @@ namespace SolarSystem.Cameras
             leaveTo = Math.Max(leaveFrom * 25, app.Scale.LocalDistance(app.Catalog.Root, LeaveSpanKm(From)));
             startRotation = app.SpaceCamera.Rotation;
             destinationBuilt = false;
+            // The view keeps the plane it left until it passes into the destination's Oort cloud, then (with
+            // auto-reorient on) swings to the destination's own plane before arriving.
+            fromUp = app.SpaceCamera.UpFrame * Vector3.up;
+            toUp = app.AutoReorient ? SolarSystemApp.PlaneNormal(To) : Vector3.up;
+            oortLy = SolarSystemApp.OortCloudLy(To);
             Banner = To.Name.ToUpperInvariant() + "   ·   " + Galaxy.DistanceLy(From, To).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " LIGHT-YEARS";
         }
 
         /// <summary>Whether the destination's views are already built (hidden, part way across).</summary>
         bool destinationBuilt;
+
+        /// <summary>Up for the view: the plane left behind, the destination's plane, and the destination's Oort cloud radius (ly).</summary>
+        Vector3 fromUp = Vector3.up, toUp = Vector3.up;
+        double oortLy;
+
+        /// <summary>0 outside the destination's Oort cloud, easing to 1 by the end of the crossing.</summary>
+        float ReorientShare()
+        {
+            double dist = (To.PositionLy - CameraLy).Length;
+            double span = Math.Max(oortLy - StandOffLy, 1e-6);
+            return Smoother(Mathf.Clamp01((float)((oortLy - dist) / span)));
+        }
 
         /// <summary>How far out the camera pulls before the system is a point: past its farthest member.</summary>
         static double LeaveSpanKm(StarSystem s) =>
@@ -126,7 +143,7 @@ namespace SolarSystem.Cameras
             var root = app.BodyScene(0);
             var dir = leaveStart / leaveFrom;
             double d = Math.Exp(Math.Log(leaveFrom) + (Math.Log(leaveTo) - Math.Log(leaveFrom)) * e);
-            var look = Quaternion.LookRotation(ToVector(-dir), Vector3.up);
+            var look = Quaternion.LookRotation(ToVector(-dir), fromUp);
             app.SpaceCamera.SetPose(root + dir * d, Quaternion.Slerp(startRotation, look, Smoother(Mathf.Min(1, t * 1.6f))));
             if (t < 1) return;
 
@@ -151,9 +168,10 @@ namespace SolarSystem.Cameras
             // Turn toward the destination first, then glide: rotation leads, position follows.
             float turn = Smoother(Mathf.Clamp01(t / 0.4f));
             float glide = Smoother(Mathf.Clamp01((t - 0.18f) / 0.82f));
-            var lookAtDest = Quaternion.LookRotation(ToVector(travel.SwapYZ), Vector3.up);
-            var rotation = Quaternion.Slerp(crossStartRotation, lookAtDest, turn);
             CameraLy = DVec3.Lerp(crossStart, crossEnd, glide);
+            var up = Vector3.Slerp(fromUp, toUp, ReorientShare());
+            var lookAtDest = Quaternion.LookRotation(ToVector(travel.SwapYZ), up);
+            var rotation = Quaternion.Slerp(crossStartRotation, lookAtDest, turn);
             app.SpaceCamera.SetRotation(rotation);
             app.Interstellar.Update(CameraLy, rotation, 1f);
             // Half way across, while nothing of either system is on screen, the destination is built (hidden), so
@@ -169,6 +187,9 @@ namespace SolarSystem.Cameras
             // Arrive: the destination takes over, the camera so far out along the line of travel that the whole system
             // is one point where its star was, and it opens out from there as the camera falls in.
             if (!destinationBuilt) app.Activate(To);
+            // The view arrives level with the destination's plane (or the ecliptic with auto-reorient off).
+            var frame = Quaternion.FromToRotation(Vector3.up, toUp);
+            app.SpaceCamera.SetUpFrame(frame);
             Views.BodyView.CoronaPresence = ArrivalCorona;
             app.Interstellar.Visible = false;
             app.SetSystemVisible(true);
@@ -176,13 +197,15 @@ namespace SolarSystem.Cameras
             arriveTo = app.OverviewDistance();
             double span = app.Scale.LocalDistance(app.Catalog.Root, LeaveSpanKm(To));
             arriveFrom = Math.Min(Math.Max(Math.Max(arriveTo * 30, span), span * app.PixelsPerUnitAtUnitDistance() / PointPixels), MaxArriveDistance);
-            // End where the overview focus will put us, so handing over is seamless.
-            var flat = new Vector3((float)arriveDirection.X, 0, (float)arriveDirection.Z);
+            // End where the overview focus will put us, so handing over is seamless: the same elevation, measured
+            // from the destination's plane.
+            var local = Quaternion.Inverse(frame) * ToVector(arriveDirection);
+            var flat = new Vector3(local.x, 0, local.z);
             if (flat.sqrMagnitude < 1e-6f) flat = Vector3.back;
             flat.Normalize();
             float el = SolarSystemApp.OverviewPitch * Mathf.Deg2Rad;
-            var endDir = new Vector3(flat.x * Mathf.Cos(el), Mathf.Sin(el), flat.z * Mathf.Cos(el));
-            arriveEndRotation = Quaternion.LookRotation(-endDir, Vector3.up);
+            var endDir = frame * new Vector3(flat.x * Mathf.Cos(el), Mathf.Sin(el), flat.z * Mathf.Cos(el));
+            arriveEndRotation = Quaternion.LookRotation(-endDir, toUp);
             arriveEndDirection = new DVec3(endDir.x, endDir.y, endDir.z);
             crossStartRotation = rotation;
             Stage = Leg.Arrive;
@@ -208,7 +231,7 @@ namespace SolarSystem.Cameras
             var root = app.BodyScene(0);
             var dir = Slerp(arriveDirection, arriveEndDirection, e);
             double d = Math.Exp(Math.Log(arriveFrom) + (Math.Log(arriveTo) - Math.Log(arriveFrom)) * e);
-            var look = Quaternion.LookRotation(ToVector(-dir), Vector3.up);
+            var look = Quaternion.LookRotation(ToVector(-dir), toUp);
             app.SpaceCamera.SetPose(root + dir * d, Quaternion.Slerp(crossStartRotation, look, Smoother(Mathf.Min(1, t * 2f))));
             if (t < 1) return;
             Active = false;

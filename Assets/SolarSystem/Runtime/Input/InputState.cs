@@ -76,7 +76,7 @@ namespace SolarSystem.Input
         public bool WatchBattle;
         public bool ToggleLanes;
         public bool ToggleSatellites;
-        public bool LevelView;
+        public bool ToggleReorient;
         public bool CycleShips;
         public bool CycleBackward;
         public bool Home;
@@ -190,7 +190,7 @@ namespace SolarSystem.Input
             WatchBattle = kb.bKey.wasPressedThisFrame;
             ToggleLanes = kb.nKey.wasPressedThisFrame;
             ToggleSatellites = kb.kKey.wasPressedThisFrame;
-            LevelView = kb.rKey.wasPressedThisFrame;
+            ToggleReorient = kb.rKey.wasPressedThisFrame;
             CycleShips = kb.tabKey.wasPressedThisFrame;
             CycleBackward = CycleShips && Boost;
             Home = kb.homeKey.wasPressedThisFrame || kb.backspaceKey.wasPressedThisFrame;
@@ -217,7 +217,7 @@ namespace SolarSystem.Input
             Boost = Slow = Fire = Cruise = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = LevelView = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
             QuickSave = QuickLoad = ToggleSaves = false;
             NumberKey = -1;
         }

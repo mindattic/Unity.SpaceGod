@@ -2408,10 +2408,11 @@ namespace SolarSystem.UI
                 if (GUI.Button(new Rect(call.x + 4, call.y + 4, call.width - 8, 22), label, app.TankerDueS >= 0 ? buttonActive : button)) app.CallTanker();
             }
 
-            // Level the view to the system's plane (a smooth swing, not a snap).
-            var level = Panel(new Rect(r.xMax + 8, r.y, 120, 30));
-            if (GUI.Button(new Rect(level.x + 4, level.y + 4, level.width - 8, 22), cam.Levelling ? "LEVELLING…" : "LEVEL  [R]", cam.Levelling ? buttonActive : button))
-                app.LevelView();
+            // Auto-reorient: keep the active system's own plane level (a smooth swing, not a snap).
+            var level = Panel(new Rect(r.xMax + 8, r.y, 200, 30));
+            string reorient = cam.Levelling ? "REORIENTING…" : app.AutoReorient ? "AUTO-REORIENT  ON  [R]" : "AUTO-REORIENT  OFF  [R]";
+            if (GUI.Button(new Rect(level.x + 4, level.y + 4, level.width - 8, 22), reorient, app.AutoReorient ? buttonActive : button))
+                app.ToggleAutoReorient();
         }
 
         /// <summary>The helm's sensor readout: running silent or not, the ship's own signature (lit up by a burn or a
@@ -2532,7 +2533,7 @@ namespace SolarSystem.UI
                 "F   focus selection     Esc   leave focus / deselect     Home   system view",
                 "G  or  `   toggle GAMEPLAY / REALISTIC scale",
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
-                "K   satellites    R   level the view to the system plane",
+                "K   satellites    R   auto-reorient on/off (keep this system's plane level)",
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
