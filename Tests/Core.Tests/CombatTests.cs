@@ -218,14 +218,19 @@ namespace SolarSystem.Core.Tests
             eph.Update(StartJd);
             var w = World.CreateDefault(eph, StartJd);
             int maxWrecks = 0;
-            double lastJd = StartJd;
-            for (double jd = StartJd; jd <= StartJd + 200; jd += 0.25)
+            double lastJd = StartJd, firstWreckJd = double.NaN;
+            // Most fights end in surrender or flight, so the first hull to die in one can take most of a year: run until
+            // one has, then on past that wreck's lifetime.
+            for (double jd = StartJd; jd <= StartJd + 400; jd += 0.25)
             {
                 eph.Update(jd);
                 w.Update(jd);
                 maxWrecks = Math.Max(maxWrecks, w.War.Wrecks.Items.Count);
+                if (double.IsNaN(firstWreckJd) && w.War.Wrecks.Items.Count > 0) firstWreckJd = w.War.Wrecks.Items[0].CreatedJd;
                 lastJd = jd;
+                if (jd > firstWreckJd + w.War.Wrecks.DefaultLifetimeDays + 1) break;
             }
+            Assert.That(w.War.Wrecks.Items.Any(x => x.CreatedJd == firstWreckJd), Is.False, "the first wreck should have been cleared away once its lifetime ran out");
 
             Assert.That(w.Fleet.Ships.Count(s => s.Destroyed) > 0, Is.True, "nobody ever died, so this proves nothing");
             Assert.That(maxWrecks > 0, Is.True, "a ship died but no wreck was ever left behind");

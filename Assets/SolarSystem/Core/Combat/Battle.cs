@@ -1213,7 +1213,9 @@ namespace SolarSystem.Core
             {
                 if (m.Gone) continue;
                 m.Life -= dt;
-                if (m.Life <= 0 || m.Target == null || !m.Target.Present || m.Target.Side == m.Side)
+                // A hull that has struck its colours is no longer shot at, nor boarded until its terms open it.
+                bool spared = m.Target != null && m.Target.Surrendering && !(m.Kind == MissileKind.Pod && m.Target.SurrenderOpenToBoarding);
+                if (m.Life <= 0 || m.Target == null || !m.Target.Present || m.Target.Side == m.Side || spared)
                 {
                     m.Gone = true;
                     Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.05, m.Side, null, -1);
