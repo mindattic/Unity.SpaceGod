@@ -1037,6 +1037,8 @@ namespace SolarSystem
                 pilotCruise = default;
                 nearGate = null;
                 World.Sensors?.UpdatePilot(null, default, false, Clock.Jd);
+                // A patrol's hail ends with the helm, so it is not answered later by whatever hull is flown next.
+                World.Law?.UpdatePilot(null, 0, default, default, Clock.Jd);
                 return;
             }
             var ship = Piloted.Ship;
@@ -1242,6 +1244,9 @@ namespace SolarSystem
             SalvageApproach = null;
 
             World.PilotedShip = null;
+            // The system left behind no longer sees the pilot, nor holds a patrol's hail on it.
+            World.Sensors?.UpdatePilot(null, default, false, Clock.Jd);
+            World.Law?.UpdatePilot(null, 0, default, default, Clock.Jd);
             Activate(destination);
             Piloted = Target.OfShip(arrived);
             World.PilotedShip = arrived;
