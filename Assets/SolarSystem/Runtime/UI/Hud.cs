@@ -202,17 +202,16 @@ namespace SolarSystem.UI
                 }
             }
             if (string.IsNullOrEmpty(travel.Banner)) return;
+            // One quiet caption for the whole trip, over the view itself: no panel or progress bar to read as a loading screen.
             var content = new GUIContent(travel.Banner);
-            float w = Mathf.Max(toast.CalcSize(content).x + 60, 420);
-            var r = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.18f, w, 52);
-            GUI.Box(r, GUIContent.none, panel);
-            GUI.Label(new Rect(r.x + 30, r.y + 8, w - 60, 22), content, toast);
-            var bar = new Rect(r.x + 30, r.y + 36, w - 60, 4);
-            GUI.DrawTexture(bar, buttonTexture);
-            var old = GUI.color;
-            GUI.color = Accent;
-            GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * travel.Overall, bar.height), Icons.White);
-            GUI.color = old;
+            var size = toast.CalcSize(content);
+            // Below the clock and news feed at the top of the screen.
+            var r = new Rect((Screen.width - size.x) * 0.5f, Mathf.Max(Screen.height * 0.26f, 170f), size.x, size.y);
+            var old = GUI.contentColor;
+            GUI.contentColor = new Color(0, 0, 0, 0.7f);
+            GUI.Label(new Rect(r.x + 1, r.y + 1, r.width, r.height), content, toast);
+            GUI.contentColor = old;
+            GUI.Label(r, content, toast);
         }
 
         void DrawWorldOverlay()

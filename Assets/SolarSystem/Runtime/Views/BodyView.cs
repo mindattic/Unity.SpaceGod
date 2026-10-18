@@ -17,6 +17,10 @@ namespace SolarSystem.Views
         readonly Transform glow;
         readonly Material glowMaterial;
 
+        /// <summary>Scales how large a star's corona is kept on screen from afar (1 normally): arriving from between the
+        /// stars it starts no bigger than the star point it takes over from and grows to full as the camera falls in.</summary>
+        public static float CoronaPresence = 1f;
+
         /// <summary>A free-flying station: drawn as a model with the ship shader, not a sphere.</summary>
         readonly bool station;
 
@@ -193,7 +197,7 @@ namespace SolarSystem.Views
                 // Corona: at least ~4% of the view so the Sun reads as a star from anywhere in the system;
                 // dimmer stars (K and M dwarfs) a little less.
                 float presence = Mathf.Clamp(Mathf.Pow((float)Body.LuminositySolar, 0.12f), 0.45f, 1.1f);
-                float size = Mathf.Max(radius * 7f, distance * 0.07f * presence) * (1 + flare * 0.8f);
+                float size = Mathf.Max(radius * 7f, distance * 0.07f * presence * CoronaPresence) * (1 + flare * 0.8f);
                 var toCamera = distance > 0 ? -relative / distance : -cameraForward;
                 glow.localPosition = relative + toCamera * Mathf.Min(radius * 1.05f, distance * 0.5f);
                 glow.localRotation = Quaternion.LookRotation(-toCamera, Vector3.up);

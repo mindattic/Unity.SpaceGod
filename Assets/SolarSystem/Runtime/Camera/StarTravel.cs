@@ -54,7 +54,7 @@ namespace SolarSystem.Cameras
         /// <summary>The way the crossing heads, ecliptic: from the star left toward the one bound for.</summary>
         public DVec3 Heading => Active ? (To.PositionLy - From.PositionLy).Normalized : DVec3.Zero;
 
-        const float LeaveSeconds = 2.2f, CrossSeconds = 3.8f, ArriveSeconds = 2.6f;
+        const float LeaveSeconds = 2.2f, CrossSeconds = 3.8f, ArriveSeconds = 3.4f;
 
         /// <summary>The crossing starts and ends this far from each star (light-years).</summary>
         const double StandOffLy = 0.22;
@@ -86,8 +86,12 @@ namespace SolarSystem.Cameras
             leaveFrom = leaveStart.Length;
             leaveTo = Math.Max(leaveFrom * 25, app.Scale.LocalDistance(app.Catalog.Root, LeaveSpanKm(From)));
             startRotation = app.SpaceCamera.Rotation;
-            Banner = "LEAVING " + From.Name.ToUpperInvariant();
+            destinationBuilt = false;
+            Banner = To.Name.ToUpperInvariant() + "   ·   " + Galaxy.DistanceLy(From, To).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " LIGHT-YEARS";
         }
+
+        /// <summary>Whether the destination's views are already built (hidden, part way across).</summary>
+        bool destinationBuilt;
 
         /// <summary>How far out the camera pulls before the system is a point: past its farthest member.</summary>
         static double LeaveSpanKm(StarSystem s) =>
@@ -98,6 +102,7 @@ namespace SolarSystem.Cameras
         {
             if (!Active) return;
             if (app.ActiveSystem != To) app.Activate(To);
+            Views.BodyView.CoronaPresence = 1f;
             Active = false;
             app.Interstellar.Visible = false;
             app.FocusSystemOverview();
@@ -137,7 +142,6 @@ namespace SolarSystem.Cameras
             app.SetSystemVisible(false);
             Stage = Leg.Cross;
             t = 0;
-            Banner = Galaxy.DistanceLy(From, To).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " LIGHT-YEARS TO " + To.Name.ToUpperInvariant();
         }
 
         void UpdateCross(float dt)
@@ -152,15 +156,26 @@ namespace SolarSystem.Cameras
             CameraLy = DVec3.Lerp(crossStart, crossEnd, glide);
             app.SpaceCamera.SetRotation(rotation);
             app.Interstellar.Update(CameraLy, rotation, 1f);
+            // Half way across, while nothing of either system is on screen, the destination is built (hidden), so
+            // nothing has to be made at the moment it comes into view.
+            if (!destinationBuilt && t >= 0.5f)
+            {
+                app.Activate(To);
+                app.SetSystemVisible(false);
+                destinationBuilt = true;
+            }
             if (t < 1) return;
 
-            // Arrive: the destination takes over, the camera far out along the line of travel.
-            app.Activate(To);
+            // Arrive: the destination takes over, the camera so far out along the line of travel that the whole system
+            // is one point where its star was, and it opens out from there as the camera falls in.
+            if (!destinationBuilt) app.Activate(To);
+            Views.BodyView.CoronaPresence = ArrivalCorona;
             app.Interstellar.Visible = false;
             app.SetSystemVisible(true);
             arriveDirection = -travel.SwapYZ;
             arriveTo = app.OverviewDistance();
-            arriveFrom = Math.Max(arriveTo * 30, app.Scale.LocalDistance(app.Catalog.Root, LeaveSpanKm(To)));
+            double span = app.Scale.LocalDistance(app.Catalog.Root, LeaveSpanKm(To));
+            arriveFrom = Math.Min(Math.Max(Math.Max(arriveTo * 30, span), span * app.PixelsPerUnitAtUnitDistance() / PointPixels), MaxArriveDistance);
             // End where the overview focus will put us, so handing over is seamless.
             var flat = new Vector3((float)arriveDirection.X, 0, (float)arriveDirection.Z);
             if (flat.sqrMagnitude < 1e-6f) flat = Vector3.back;
@@ -172,8 +187,16 @@ namespace SolarSystem.Cameras
             crossStartRotation = rotation;
             Stage = Leg.Arrive;
             t = 0;
-            Banner = "ARRIVING AT " + To.Name.ToUpperInvariant();
         }
+
+        /// <summary>How wide, in pixels, the whole destination system is when it first takes over from its star.</summary>
+        const double PointPixels = 6;
+
+        /// <summary>The destination star's corona on taking over, as a share of its usual size: about the star point's.</summary>
+        const float ArrivalCorona = 0.25f;
+
+        /// <summary>Kept well inside the camera's far plane (5e8 scene units).</summary>
+        const double MaxArriveDistance = 2e8;
 
         DVec3 arriveEndDirection;
 
@@ -181,6 +204,7 @@ namespace SolarSystem.Cameras
         {
             t = Mathf.Min(1, t + dt / ArriveSeconds);
             float e = Smoother(t);
+            Views.BodyView.CoronaPresence = Mathf.Lerp(ArrivalCorona, 1f, e);
             var root = app.BodyScene(0);
             var dir = Slerp(arriveDirection, arriveEndDirection, e);
             double d = Math.Exp(Math.Log(arriveFrom) + (Math.Log(arriveTo) - Math.Log(arriveFrom)) * e);
