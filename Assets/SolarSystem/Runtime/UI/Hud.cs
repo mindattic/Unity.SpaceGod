@@ -54,6 +54,38 @@ namespace SolarSystem.UI
         /// <summary>The piloted ship's own sensor picture, or null when only watching (then everything is shown).</summary>
         ContactBook Picture => app.IsPiloting && app.Piloted.Ship != null ? app.World.Sensors?.Player : null;
 
+        /// <summary>Where each contact was last drawn while the scanners held it, so a lost one stays marked there.</summary>
+        readonly Dictionary<Ship, DVec3> lastSeenScene = new Dictionary<Ship, DVec3>();
+        Fleet lastSeenFleet;
+
+        static readonly Color LostEnemy = new Color(1f, 0.35f, 0.3f, 0.8f);
+        static readonly Color LostAlly = new Color(0.35f, 0.65f, 1f, 0.8f);
+        static readonly Color LostNeutral = new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, 0.7f);
+
+        /// <summary>A lost contact's question mark: red if hostile to the hull flown, blue if of its own flag, grey if
+        /// neutral -- or if the scanners never made out whose it was.</summary>
+        Color LostColor(Contact contact)
+        {
+            var me = app.Piloted.Ship?.Faction;
+            var them = contact.Ship?.Faction;
+            if (contact.Level != ContactLevel.Identified || me == null || them == null) return LostNeutral;
+            if (them == me) return LostAlly;
+            return app.World.Diplomacy.Hostile(me, them) ? LostEnemy : LostNeutral;
+        }
+
+        /// <summary>Where a ship is drawn: where it is, unless it is a contact the scanners have lost -- then where they last
+        /// had it (false if they never had it here).</summary>
+        bool ContactScene(Ship ship, Contact contact, out DVec3 scene)
+        {
+            if (contact == null || !contact.Cold)
+            {
+                scene = app.ShipScene(ship);
+                if (contact != null) lastSeenScene[ship] = scene;
+                return true;
+            }
+            return lastSeenScene.TryGetValue(ship, out scene);
+        }
+
         public Hud(SolarSystemApp app) => this.app = app;
 
         public void Draw()
@@ -219,14 +251,25 @@ namespace SolarSystem.UI
             // At the helm the player sees only what the ship's own scanners hold (U.SPC-T66): an unknown blip, a hull
             // class, or -- identified -- whose it is; a track gone cold is drawn faded where it was last seen.
             var picture = Picture;
+            if (picture == null || app.Fleet != lastSeenFleet)
+            {
+                lastSeenScene.Clear();
+                lastSeenFleet = app.Fleet;
+            }
             for (int i = 0; i < ships.Count; i++)
             {
                 var ship = ships[i];
                 if (ship.Destroyed || ship.Controller.Phase == ShipPhase.Landed) continue;
                 var contact = picture != null && ship != app.Piloted.Ship ? picture.Of(ship) : null;
                 if (picture != null && ship != app.Piloted.Ship && contact == null) continue;
-                var scene = app.ShipScene(ship);
+                if (!ContactScene(ship, contact, out var scene)) continue;
                 if (!app.ToGui(scene, out var p, out var depth)) continue;
+                if (contact != null && contact.Cold)
+                {
+                    // Lost: only a question mark where the scanners last had it, never where it really is now.
+                    DrawIcon(Icons.Lost, p, 14, LostColor(contact));
+                    continue;
+                }
                 float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
                 if (px >= 5) continue;
                 if (app.Occluded(scene)) continue;
@@ -237,7 +280,7 @@ namespace SolarSystem.UI
                     DrawIcon(Icons.ForShip(ship.Spec.Class), p, Icons.PixelSize(ship.Spec.Class), new Color(c.R, c.G, c.B, 0.95f));
                     continue;
                 }
-                float alpha = contact.Cold ? 0.4f : 0.95f;
+                const float alpha = 0.95f;
                 if (contact.Level == ContactLevel.Blip) DrawIcon(Icons.Blip, p, 12, new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, alpha));
                 else
                 {
@@ -267,7 +310,7 @@ namespace SolarSystem.UI
                             named = app.ShipDisplayLength(ship) / d * ppu > 12;
                     }
                     if (!named) continue;
-                    if (!app.ToGui(app.ShipScene(ship), out var p, out var depth) || app.Occluded(app.ShipScene(ship))) continue;
+                    if (!ContactScene(ship, contact, out var at) || !app.ToGui(at, out var p, out var depth) || app.Occluded(at)) continue;
                     float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
                     var c = ship.Faction.Color;
                     if (contact == null)
@@ -536,6 +579,8 @@ namespace SolarSystem.UI
         {
             if (t.IsNone) return;
             var scene = app.TargetScene(t);
+            // A lost contact is bracketed on its question mark, where the scanners last had it.
+            if (t.IsShip && Picture?.Of(t.Ship) is Contact lost && lost.Cold && !lastSeenScene.TryGetValue(t.Ship, out scene)) return;
             double radius = app.TargetRadius(t);
             bool onScreen = app.ToGui(scene, out var p, out var depth) &&
                             p.x >= 0 && p.x <= Screen.width && p.y >= 0 && p.y <= Screen.height;

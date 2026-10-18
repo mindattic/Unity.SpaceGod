@@ -12,7 +12,7 @@ namespace SolarSystem.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde, blip;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde, blip, lost;
 
         public static Texture2D White => white ??= Solid();
 
@@ -33,6 +33,21 @@ namespace SolarSystem.UI
             float cross = Mathf.Min(Box(p, new Vector2(0.05f, 0.3f)), Box(p, new Vector2(0.3f, 0.05f)));
             float corners = Mathf.Max(Outline(Box(p, new Vector2(0.62f, 0.62f)), 0.1f), -Mathf.Min(Box(p, new Vector2(0.3f, 0.8f)), Box(p, new Vector2(0.8f, 0.3f))));
             return Mathf.Min(cross, corners);
+        });
+
+        /// <summary>A contact the scanners have lost, marked where it was last seen: a question mark.</summary>
+        public static Texture2D Lost => lost ??= Draw(p =>
+        {
+            const float r = 0.3f, t = 0.15f;
+            var c = new Vector2(0, 0.3f);
+            var q = p - c;
+            // The hook: the circle round c, open in its lower-left quarter, ending left and at the bottom.
+            float hook = q.x < 0 && q.y < 0
+                ? Mathf.Min((q - new Vector2(-r, 0)).magnitude, (q - new Vector2(0, -r)).magnitude) - t * 0.5f
+                : Ring(q, r, t);
+            float stem = Box(p - new Vector2(0, -0.13f), new Vector2(t * 0.5f, 0.13f));
+            float point = (p - new Vector2(0, -0.58f)).magnitude - 0.11f;
+            return Mathf.Min(Mathf.Min(hook, stem), point);
         });
 
         static float Ticks(Vector2 p) => Mathf.Min(Box(p - new Vector2(0, 0.72f), new Vector2(0.05f, 0.2f)),
