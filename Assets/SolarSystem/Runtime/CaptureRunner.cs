@@ -40,6 +40,8 @@ namespace SolarSystem
             if (!done)
             {
                 StopCoroutine(tour);
+                // A stop cut off mid-way never lets go of the camera itself (a dogfight's chase lock on a hull nobody flies).
+                if (!app.IsPiloting) app.SpaceCamera.ExitFocus();
                 Debug.LogWarning("[SolarSystem] The galaxy was rebuilt mid-tour; the tour stops here.");
             }
 
