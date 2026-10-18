@@ -647,6 +647,9 @@ namespace SolarSystem.Core
             ship.DerelictBy = raiders;
             ship.Cargo = "Derelict: boarded, stripped and abandoned";
             Fleet.PinAt(ship, b.Body, b.Anchor + u.Pos, u.Forward, jd);
+            // A hull lost to its owners like any other.
+            losses.TryGetValue(ship.Faction, out int lost);
+            losses[ship.Faction] = lost + 1;
             double aboard = ship.Combat != null ? ship.Combat.Interior.Crew + ship.Combat.Interior.Marines : 0;
             SalvageSession.Strand(ship, raiders, good, leftTonnes, jd);
             // Those who did not hide aboard are put off in the pods, to be hauled in for ransom or found by someone kinder.
