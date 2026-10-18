@@ -775,7 +775,7 @@ namespace SolarSystem.Core
             {
                 if (!Idle(world, ship) || ship.Role != ShipRole.Courier || ship.HasCargo) continue;
                 var route = Network.Route(from, to, ship.Faction, jd);
-                if (route == null || route.Count == 0) return;
+                if (route == null || route.Count == 0) continue;
                 SetOut(from, to, ship, VoyagePurpose.Courier, route, jd);
                 ship.Cargo = "Interstellar mail and data cores for " + to.Name;
                 world.Log(jd, $"{ship.Name} takes the mail for {to.Name} by the {route[0].Name}", WorldEventKind.Info, PortOf(ship));
@@ -818,7 +818,7 @@ namespace SolarSystem.Core
             {
                 if (!Idle(world, ship) || ship.Role != ShipRole.Free || ship.Spec.Class != ShipClass.Courier) continue;
                 var route = Network.Route(from, to, ship.Faction, jd);
-                if (route == null || route.Count == 0) return;
+                if (route == null || route.Count == 0) continue;
                 SetOut(from, to, ship, VoyagePurpose.Survey, route, jd);
                 ship.Cargo = "Survey instruments, bound for " + to.Name;
                 world.Log(jd, $"{ship.Name} sets out to survey {to.Name}, {route.Count} gate{(route.Count == 1 ? "" : "s")} out", WorldEventKind.Info, PortOf(ship));
