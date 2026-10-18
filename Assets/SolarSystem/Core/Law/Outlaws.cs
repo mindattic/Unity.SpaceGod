@@ -391,7 +391,8 @@ namespace SolarSystem.Core
                 // Seen by what the hull itself gives off (a raider lying dark is hard to make out), not a battle's glare.
                 string witness = world.Sensors != null ? Law.FindWitness(pos, jd, null, world.Sensors.SignatureOf(o.Ship, jd)) : Law.FindWitness(pos, jd);
                 if (witness == null) continue;
-                Sight(o.Record, Locate(o.Ship), jd, witness);
+                // A flagship merged into another band goes where that band's leader goes.
+                Sight(o.Record, Locate(o.Ship.Controller), jd, witness);
             }
             var p = Law.Player;
             if (p.Wanted && world.PilotedShip != null && pilotBody >= 0 && !double.IsNaN(pilotJd) && jd - pilotJd < 1)
