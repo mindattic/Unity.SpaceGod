@@ -1017,6 +1017,10 @@ namespace SolarSystem.Core
             return byShip.TryGetValue(target, out var o) && o.Aboard && o.Ship == target && o.Record.Wanted;
         }
 
+        /// <summary>The record of the outlaw whose own flagship <paramref name="ship"/> is, even when it now sails in another's group.</summary>
+        public LawRecord RecordCommanding(Ship ship) =>
+            ship != null && byShip.TryGetValue(ship, out var o) && o.Ship == ship ? o.Record : null;
+
         // ---------------------------------------------------------------- feared names
 
         void Fear(double jd)

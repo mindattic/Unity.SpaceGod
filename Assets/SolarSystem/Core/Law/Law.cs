@@ -511,8 +511,8 @@ namespace SolarSystem.Core
             {
                 if (u.Kind != UnitKind.Ship || u.Ship == null || !(u.Dead || u.Captured)) continue;
                 bool player = u.PlayerFlown;
-                if (!player && u.Ship.IsEscort) continue;
-                var rec = player ? Player : FindRecord(u.Ship);
+                // An escort answers only for a wanted captain of its own aboard (a band merged into another group).
+                var rec = player ? Player : u.Ship.IsEscort ? world?.Outlaws?.RecordCommanding(u.Ship) : FindRecord(u.Ship);
                 if (rec == null || !rec.Wanted) continue;
                 // Alive or dead (see Outlaws.ClaimInBattle): a captain taken goes in a brig to be handed over for the
                 // full price, one who got away in the pods is still wanted, and a kill pays hunters (or, on a scanned
