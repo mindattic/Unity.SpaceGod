@@ -1173,6 +1173,11 @@ namespace SolarSystem.Core
                             lootTonnes += ship.CargoTonnes * 0.6;
                             lootValue += ship.CargoTonnes * 0.6 * GoodInfo.Of(ship.CargoGood).BasePrice;
                             DeliverLoot(ship.CargoGood, ship.CargoTonnes * 0.6);
+                            // What they hauled off is no longer in the wreck to salvage.
+                            if (Wrecks.Of(ship) is Wreck wreck)
+                                for (int i = 0; i < wreck.Salvage.Count; i++)
+                                    if (wreck.Salvage[i].Good == ship.CargoGood)
+                                        wreck.Salvage[i] = new SalvageStack(ship.CargoGood, wreck.Salvage[i].Tonnes * 0.4);
                         }
                         ship.HasCargo = false;
                     }
