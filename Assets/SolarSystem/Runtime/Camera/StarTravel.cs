@@ -35,6 +35,25 @@ namespace SolarSystem.Cameras
         /// <summary>0..1 through the whole trip.</summary>
         public float Overall => Active ? Mathf.Clamp01(((int)Stage + t) / 3f) : 0;
 
+        /// <summary>How hard the view is going to warp, 0..1: building as the system falls away, swelling with the glide
+        /// across, dying away on arrival. Drives the warp lines and stellar dust.</summary>
+        public float Warp
+        {
+            get
+            {
+                if (!Active) return 0;
+                switch (Stage)
+                {
+                    case Leg.Leave: return 0.6f * Smoother(Mathf.Clamp01((t - 0.55f) / 0.45f));
+                    case Leg.Cross: return 0.6f + 0.4f * Mathf.Sin(Mathf.PI * Mathf.Clamp01((t - 0.18f) / 0.82f));
+                    default: return 0.6f * (1 - Smoother(Mathf.Clamp01(t / 0.5f)));
+                }
+            }
+        }
+
+        /// <summary>The way the crossing heads, ecliptic: from the star left toward the one bound for.</summary>
+        public DVec3 Heading => Active ? (To.PositionLy - From.PositionLy).Normalized : DVec3.Zero;
+
         const float LeaveSeconds = 2.2f, CrossSeconds = 3.8f, ArriveSeconds = 2.6f;
 
         /// <summary>The crossing starts and ends this far from each star (light-years).</summary>

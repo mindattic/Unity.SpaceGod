@@ -186,6 +186,7 @@ namespace SolarSystem.UI
         void DrawTravel()
         {
             var travel = app.Travel;
+            if (Event.current.type == EventType.Repaint) DrawWarp();
             if (Event.current.type == EventType.Repaint && app.Interstellar.Visible && app.ShowLabels)
             {
                 foreach (var s in app.Interstellar.Stars)
@@ -443,22 +444,7 @@ namespace SolarSystem.UI
             {
                 var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
                 if (app.RidingLane && DirectionToGui(app.PilotForward, out var ahead)) centre = ahead;
-                float reach = new Vector2(Screen.width, Screen.height).magnitude * 0.6f;
-                float t = Time.unscaledTime;
-                for (int i = 0; i < StreakCount; i++)
-                {
-                    // Fixed per streak: its bearing, pace and starting point (a cheap hash of its index).
-                    float h1 = Frac(Mathf.Sin(i * 12.9898f) * 43758.55f);
-                    float h2 = Frac(Mathf.Sin(i * 78.233f) * 12345.67f);
-                    float h3 = Frac(Mathf.Sin(i * 37.719f) * 24634.63f);
-                    float angle = h1 * Mathf.PI * 2f;
-                    float phase = Frac(t * (0.35f + 1.6f * strength) * (0.6f + h2) + h3);
-                    var dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                    float r = 30f + phase * phase * reach;
-                    float length = (8f + 170f * strength) * (0.3f + phase);
-                    var color = new Color(StreakColor.r, StreakColor.g, StreakColor.b, strength * phase * 0.75f);
-                    DrawLine(centre + dir * r, centre + dir * (r + length), color, 1f + 1.5f * phase);
-                }
+                DrawStreaks(centre, strength, StreakCount, StreakColor, 0, 170f);
             }
             if (app.GateFlash > 0.001f)
             {
@@ -470,6 +456,73 @@ namespace SolarSystem.UI
         }
 
         static float Frac(float x) => x - Mathf.Floor(x);
+
+        /// <summary>Streaks of light streaming out from <paramref name="centre"/>, longer and faster with
+        /// <paramref name="strength"/>; <paramref name="seed"/> gives a set its own pattern.</summary>
+        void DrawStreaks(Vector2 centre, float strength, int count, Color tint, int seed, float maxLength)
+        {
+            float reach = new Vector2(Screen.width, Screen.height).magnitude * 0.6f;
+            float t = Time.unscaledTime;
+            for (int i = 0; i < count; i++)
+            {
+                // Fixed per streak: its bearing, pace and starting point (a cheap hash of its index).
+                int k = i + seed;
+                float h1 = Frac(Mathf.Sin(k * 12.9898f) * 43758.55f);
+                float h2 = Frac(Mathf.Sin(k * 78.233f) * 12345.67f);
+                float h3 = Frac(Mathf.Sin(k * 37.719f) * 24634.63f);
+                float angle = h1 * Mathf.PI * 2f;
+                float phase = Frac(t * (0.35f + 1.6f * strength) * (0.6f + h2) + h3);
+                var dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                float r = 30f + phase * phase * reach;
+                float length = (8f + maxLength * strength) * (0.3f + phase);
+                var color = new Color(tint.r, tint.g, tint.b, strength * phase * 0.75f);
+                DrawLine(centre + dir * r, centre + dir * (r + length), color, 1f + 1.5f * phase);
+            }
+        }
+
+        // ---------------------------------------------------------------- between the stars
+
+        static readonly Color WarpColor = new Color(0.82f, 0.9f, 1f);
+        static readonly Color DustColor = new Color(0.88f, 0.84f, 0.78f);
+        const int WarpLineCount = 110, DustCount = 240;
+        Vector2 warpCentre;
+
+        /// <summary>
+        /// Travelling between stars: warp lines stream out from the star ahead, long and fast at the height of the
+        /// crossing, and stellar dust drifts past, slow near the centre and quickening toward the edges of the view.
+        /// </summary>
+        void DrawWarp()
+        {
+            var travel = app.Travel;
+            float warp = travel.Warp;
+            var screenCentre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            if (warp < 0.01f) { warpCentre = screenCentre; return; }
+            // The lines pour from the star ahead once the view has turned to it, gliding there rather than jumping.
+            var target = travel.Stage == StarTravel.Leg.Cross && DirectionToGui(travel.Heading, out var ahead) ? ahead : screenCentre;
+            warpCentre = Vector2.Lerp(warpCentre, target, 1f - Mathf.Exp(-5f * Time.unscaledDeltaTime));
+            var centre = warpCentre;
+
+            float reach = new Vector2(Screen.width, Screen.height).magnitude * 0.7f;
+            float t = Time.unscaledTime;
+            var old = GUI.color;
+            for (int i = 0; i < DustCount; i++)
+            {
+                int k = i + 1000;
+                float h1 = Frac(Mathf.Sin(k * 12.9898f) * 43758.55f);
+                float h2 = Frac(Mathf.Sin(k * 78.233f) * 12345.67f);
+                float h3 = Frac(Mathf.Sin(k * 37.719f) * 24634.63f);
+                float angle = h1 * Mathf.PI * 2f;
+                float phase = Frac(t * (0.06f + 0.45f * warp) * (0.5f + h2) + h3);
+                // Cubed, so a mote creeps out of the distance and rushes past at the edge, as if coming nearer.
+                float r = 6f + phase * phase * phase * reach;
+                float size = 1f + 2.2f * phase;
+                GUI.color = new Color(DustColor.r, DustColor.g, DustColor.b, Mathf.Clamp01(warp * 1.6f) * Mathf.Min(1f, phase * 4f) * (0.2f + 0.45f * h3));
+                var p = centre + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * r;
+                GUI.DrawTexture(new Rect(p.x - size * 0.5f, p.y - size * 0.5f, size, size), Icons.White);
+            }
+            GUI.color = old;
+            DrawStreaks(centre, warp, WarpLineCount, WarpColor, 500, 320f);
+        }
 
         /// <summary>Above the status bar while riding a lane: the lane, how far along, the speed, the time to the off-ramp and its exits.</summary>
         void DrawLaneRide()
