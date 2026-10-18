@@ -651,7 +651,7 @@ namespace SolarSystem.Core
             losses.TryGetValue(ship.Faction, out int lost);
             losses[ship.Faction] = lost + 1;
             double aboard = ship.Combat != null ? ship.Combat.Interior.Crew + ship.Combat.Interior.Marines : 0;
-            SalvageSession.Strand(ship, raiders, good, leftTonnes, jd);
+            SalvageSession.Strand(ship, raiders, good, leftTonnes, jd, aboard);
             // Those who did not hide aboard are put off in the pods, to be hauled in for ransom or found by someone kinder.
             double hid = ship.Combat?.Interior.Survivors ?? 0;
             if (aboard - hid >= 0.5)

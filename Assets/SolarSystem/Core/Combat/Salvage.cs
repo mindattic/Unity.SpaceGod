@@ -99,7 +99,7 @@ namespace SolarSystem.Core
         /// the ship's own stores, and -- by a roll fixed per hull -- crew who hid and survived, raiders still
         /// aboard finishing the job, both or neither.
         /// </summary>
-        public static void Strand(Ship ship, Faction raiders, Good good, double leftTonnes, double jd)
+        public static void Strand(Ship ship, Faction raiders, Good good, double leftTonnes, double jd, double aboard = double.PositiveInfinity)
         {
             ship.Salvage.Clear();
             if (leftTonnes > 0) ship.Salvage.Add(new SalvageStack(good, leftTonnes));
@@ -115,6 +115,8 @@ namespace SolarSystem.Core
             var rng = new Random(unchecked(ship.Id * 7919 + (int)Math.Floor(jd * 24)));
             double survivors = 0, lurkers = 0;
             if (rng.NextDouble() < 0.35) survivors = Math.Max(1, Math.Round(ship.Combat.Spec.Crew * (0.05 + 0.15 * rng.NextDouble())));
+            // Only those still aboard can hide there.
+            survivors = Math.Min(survivors, Math.Floor(aboard));
             if (rng.NextDouble() < 0.3) lurkers = 2 + rng.Next(7);
             ship.Combat.Interior.Abandon(survivors, lurkers, raiders?.MarineQuality ?? 1);
         }
