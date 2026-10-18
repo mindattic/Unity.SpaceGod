@@ -225,6 +225,8 @@ Unity.exe -batchmode -quit -projectPath . -executeMethod SolarSystem.EditorTools
 powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 ```
 
+`deploy.bat` at the repo root runs the same script and also refreshes a **Unity Solar System** shortcut on the Desktop that starts the published copy. In Claude Code, `/deploy` starts `deploy.bat` in its own window and `/run` starts the published game. A prompt hook (`.claude/hooks/instant-commands.ps1`) handles both before any model turn, so the orchestrator's pace holds never apply to them.
+
 `tools\launch.bat` (or `tools\launch.ps1`) always redeploys first, then offers Normal Play, Demo + Capture (`-demo -capture video screen 5`) or Quit.
 
 ## Command line

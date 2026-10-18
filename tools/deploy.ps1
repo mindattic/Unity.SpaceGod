@@ -98,6 +98,18 @@ if (-not (Test-Path $exe)) {
     exit 1
 }
 
+# ── Desktop shortcut ─────────────────────────────────────────────────────────
+# Points at the published copy, so double-clicking it (or /run) always plays the last deploy.
+# GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
+$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity Solar System.lnk'
+$link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+$link.TargetPath       = $exe
+$link.WorkingDirectory = $out
+$link.IconLocation     = "$exe,0"
+$link.Description      = 'Unity Solar System (deployed copy in C:\Apps)'
+$link.Save()
+Write-Host "    Shortcut -> $shortcut" -ForegroundColor Gray
+
 # ── Summary ────────────────────────────────────────────────────────────────
 Write-Host ''
 Write-Host '  Published successfully.' -ForegroundColor Green
