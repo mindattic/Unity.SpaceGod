@@ -1037,11 +1037,34 @@ namespace SolarSystem.Core
         {
             if (!Burns(ship) || ship.LegPropellant <= 0) return;
             double end = ship.StrandJd < ship.PhaseEndJd ? ship.StrandJd : ship.PhaseEndJd;
-            double span = end - ship.PhaseStartJd;
-            if (span > 0) ship.Propellant += ship.LegPropellant * Math.Max(0, Math.Min(1, (end - jd) / span));
+            var conic = ship.Conic;
+            if (conic != null && conic.DeltaVKmS > 0)
+            {
+                // A transfer orbit burns at each end and coasts between, so what is unflown is the delta-v not yet burned.
+                double paid = ConicDeltaVSpent(ship, conic, end);
+                if (paid > 0) ship.Propellant += ship.LegPropellant * Math.Max(0, Math.Min(1, (paid - ConicDeltaVSpent(ship, conic, jd)) / paid));
+            }
+            else
+            {
+                double span = end - ship.PhaseStartJd;
+                if (span > 0) ship.Propellant += ship.LegPropellant * Math.Max(0, Math.Min(1, (end - jd) / span));
+            }
             ship.LegPropellant = 0;
             ship.StrandJd = double.NaN;
         }
+
+        /// <summary>Delta-v a ship on <paramref name="conic"/> has burned by <paramref name="jd"/>: the departure burn, the
+        /// handoff trims spread over the coast, then the capture burn, km/s.</summary>
+        static double ConicDeltaVSpent(Ship ship, ConicTransfer conic, double jd)
+        {
+            double depEnd = ship.PhaseStartJd + conic.DepartureBurnDays, capStart = ship.PhaseEndJd - conic.ArrivalBurnDays;
+            return conic.DepartureBurnKmS * Share(jd, ship.PhaseStartJd, depEnd)
+                 + conic.CorrectionBurnKmS * Share(jd, depEnd, capStart)
+                 + conic.ArrivalBurnKmS * Share(jd, capStart, ship.PhaseEndJd);
+        }
+
+        static double Share(double t, double from, double to) =>
+            to <= from ? (t >= to ? 1 : 0) : Math.Max(0, Math.Min(1, (t - from) / (to - from)));
 
         /// <summary>
         /// The tanks have run dry part way through a transit: the ship drifts dead where the drive cut out,
