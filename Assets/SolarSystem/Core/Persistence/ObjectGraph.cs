@@ -18,7 +18,7 @@ namespace SolarSystem.Core
     /// for each of its hundred-odd classes, and keeps a save complete as they grow.
     ///
     /// The format is self-describing: each type's fields are listed by name, so a save still reads after
-    /// a field is added (it keeps its default) or removed (its value is skipped). It is not a long-term
+    /// a field is removed (its value is skipped); one made before a field was added is refused. It is not a long-term
     /// archive format: compiler-generated closures are named per build, so a save made by one build may
     /// not read in another whose lambdas moved.
     ///
@@ -915,8 +915,16 @@ namespace SolarSystem.Core
                     {
                         string key = r.ReadString();
                         m.FieldTypes[f] = types[r.ReadInt32()];
-                        if (current.TryGetValue(key, out var fi)) m.Fields[f] = fi;
+                        if (current.TryGetValue(key, out var fi))
+                        {
+                            m.Fields[f] = fi;
+                            current.Remove(key);
+                        }
                     }
+                    // Objects are made without running their constructors, so a field the save lacks would load as
+                    // null (not its initialiser) and break later: a save from before it was added is refused instead.
+                    if (current.Count > 0)
+                        throw new InvalidDataException("The save is from an older build: " + m.Type.FullName + " has fields it lacks (" + string.Join(", ", current.Keys) + ")");
                 }
             }
 
