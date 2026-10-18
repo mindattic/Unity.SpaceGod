@@ -1143,7 +1143,8 @@ namespace SolarSystem
             World.Outlaws.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
             // Contracts worked at the helm: crates handed over, passengers put ashore, patrols flown, bodies surveyed (U.SPC-T101).
             World.Contracts?.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, Clock.Jd);
-            UpdateGateActivation(ship);
+            // Through a gate, the hull flown on is another one, in another system: nothing more for this one this frame.
+            if (UpdateGateActivation(ship)) return;
             UpdateLaneEntry(ship);
             UpdateLaneRejoin(ship);
             ShowWarNotices();
@@ -1225,21 +1226,21 @@ namespace SolarSystem
         /// activation key and re-seeds the pilot session onto the arriving hull in its new system,
         /// exactly as <see cref="TogglePiloting"/> seeds one at the start.
         /// </summary>
-        void UpdateGateActivation(Ship ship)
+        bool UpdateGateActivation(Ship ship)
         {
-            if (ActiveSystem.Gates.Count == 0 || ship.Battle != null) { nearGate = null; return; }
+            if (ActiveSystem.Gates.Count == 0 || ship.Battle != null) { nearGate = null; return false; }
             var shipHelioKm = Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
             var wasNear = nearGate;
             var gate = nearGate = ActiveSystem.GateInRange(shipHelioKm);
             if (gate != null && gate != wasNear)
                 ShowToast("In range of " + gate.Name.ToUpperInvariant() + " to " + gate.Destination.Name.ToUpperInvariant() +
                           (gate.Admits(ship.Faction, Clock.Jd) && gate.Partner.Admits(ship.Faction, Clock.Jd) ? " (Y to activate)" : " (shut: under blockade)"));
-            if (gate == null || !Input.ActivateGate) return;
+            if (gate == null || !Input.ActivateGate) return false;
             // A blockaded gate (or one whose far end is) will not open for the pilot either.
-            if (!gate.Link.Open(ActiveSystem, ship.Faction, Clock.Jd)) { ShowToast(gate.Name.ToUpperInvariant() + " is shut to " + ship.Faction.Name); return; }
+            if (!gate.Link.Open(ActiveSystem, ship.Faction, Clock.Jd)) { ShowToast(gate.Name.ToUpperInvariant() + " is shut to " + ship.Faction.Name); return false; }
 
             var destination = gate.Destination;
-            if (!GateTransit.TryPerform(gate, shipHelioKm, ship, Fleet, Clock.Jd, out var arrived)) return;
+            if (!GateTransit.TryPerform(gate, shipHelioKm, ship, Fleet, Clock.Jd, out var arrived)) return false;
             EndSalvage(null);
             SalvageApproach = null;
 
@@ -1256,12 +1257,15 @@ namespace SolarSystem
             pilotLockTarget = Target.None;
             SpaceCamera.PilotLockTarget = Target.None;
             nearGate = null;
+            // Arriving beside an on-ramp is not flying in through it.
+            insideRampGate = true;
             // A tanker called in the old system does not follow the hull through the gate.
             TankerDueS = -1;
 
             Select(Piloted);
             SpaceCamera.EnterPilotChase(Piloted, 6);
             ShowToast("Jumped to " + destination.Name.ToUpperInvariant() + " through the gate");
+            return true;
         }
 
         /// <summary>Starts (or joins) a fight the instant piloting brings the ship within range of a
