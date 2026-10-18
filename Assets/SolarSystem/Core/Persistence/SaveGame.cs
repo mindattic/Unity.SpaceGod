@@ -208,7 +208,8 @@ namespace SolarSystem.Core
                     return h;
                 }
             }
-            catch (Exception e) when (e is IOException || e is InvalidDataException || e is UnauthorizedAccessException)
+            // A corrupt header can also fail as a bad string length (FormatException) or out-of-range timestamp (ArgumentException).
+            catch (Exception e) when (e is IOException || e is InvalidDataException || e is UnauthorizedAccessException || e is FormatException || e is ArgumentException)
             {
                 return null;
             }
