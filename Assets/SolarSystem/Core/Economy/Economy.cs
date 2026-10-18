@@ -413,7 +413,8 @@ namespace SolarSystem.Core
             };
         }
 
-        public bool CanTrade(Ship ship, Settlement s) => Diplomacy.CanDockAt(ship.Faction, s) && (DockAllowed == null || DockAllowed(ship, s));
+        // A fallen haven makes and trades nothing until it is rebuilt.
+        public bool CanTrade(Ship ship, Settlement s) => !s.Fallen && Diplomacy.CanDockAt(ship.Faction, s) && (DockAllowed == null || DockAllowed(ship, s));
 
         /// <summary>Whether the law bars <paramref name="ship"/> from a port its faction could otherwise use (see <see cref="Law.CanDock"/>).</summary>
         public bool LawRefuses(Ship ship, Settlement s) => DockAllowed != null && Diplomacy.CanDockAt(ship.Faction, s) && !DockAllowed(ship, s);
