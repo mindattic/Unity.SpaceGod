@@ -1321,7 +1321,8 @@ namespace SolarSystem.Core
                 return;
             }
             heir.Leader = null;
-            heir.Role = ShipRole.Patrol;
+            // A merchant's hired wing (U.SPC-T275) has no patrol route to take over: it goes its own way.
+            heir.Role = dead.Route != null && dead.Route.Length > 0 ? ShipRole.Patrol : ShipRole.Free;
             heir.Route = dead.Route;
             heir.RouteIndex = dead.RouteIndex;
             heir.Phase = dead.Phase;

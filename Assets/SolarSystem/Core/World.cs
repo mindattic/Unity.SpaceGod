@@ -74,6 +74,9 @@ namespace SolarSystem.Core
         /// bounties posted from what the system needs, and who has taken them (see <see cref="Core.Contracts"/>).</summary>
         public Contracts Contracts { get; private set; }
 
+        /// <summary>The merchant fleet's fighter escorts (U.SPC-T275).</summary>
+        public MerchantEscorts Escorts { get; private set; }
+
         /// <summary>The player's own fleet and property: owned ships under hired captains' standing orders, warehouses,
         /// station shares and mining claims, and the house account their earnings go to (see <see cref="Core.Holdings"/>).</summary>
         public Holdings Holdings { get; private set; }
@@ -138,6 +141,7 @@ namespace SolarSystem.Core
             Law.Update(jd);
             Outlaws.Update(jd);
             Contracts.Update(jd);
+            Escorts?.Update(jd);
             Holdings.Update(jd);
             if (jd >= nextRecountJd)
             {
@@ -343,6 +347,7 @@ namespace SolarSystem.Core
             war.Crews.Resolved += Outlaws.OnPodResolved;
             // The boards post from the markets, migration, the war's danger and the law's books (U.SPC-T101).
             Contracts = new Contracts(this, seed + 17);
+            Escorts = new MerchantEscorts(this, seed + 19);
             war.BattleEnded += Contracts.OnBattleEnded;
             Holdings = new Holdings(this, seed + 19);
             economy.DockAllowed = Law.AllowsDocking;
