@@ -243,6 +243,29 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void TheFreeTradersPayTheYardThatFitsOutANewHunter()
+        {
+            var w = CreateWorld();
+            int mars = Body(w, "Mars");
+            var o = Raider(w, mars);
+            w.Law.Commit(o.Record, CrimeKind.Piracy, w.Sol, w.Belt, mars, StartJd, "Ares Prime", "Battle of Mars");
+            w.Independents.Treasury = 5e9;
+            var yard = Port(w, "Earth Orbital");
+            double cost = Economy.HullPrice(ShipClass.Cruiser) + Economy.HullPrice(ShipClass.Destroyer);
+            int hunters = w.Outlaws.Hunters.Count;
+            for (int day = 1; day <= 2000 && w.Outlaws.Hunters.Count == hunters; day++)
+            {
+                double guild = w.Independents.Treasury, owner = yard.Owner.Treasury;
+                w.Outlaws.Update(StartJd + day);
+                if (w.Outlaws.Hunters.Count == hunters) continue;
+                Assert.That(w.Events.Any(e => e.Text.StartsWith(yard.Name + " fits out the bounty hunter")), Is.True);
+                Assert.That(guild - w.Independents.Treasury, Is.EqualTo(cost).Within(1));
+                Assert.That(yard.Owner.Treasury - owner, Is.EqualTo(cost).Within(1), "the hull price goes to the yard, not to nobody");
+            }
+            Assert.That(w.Outlaws.Hunters.Count, Is.GreaterThan(hunters), "a hunter was commissioned");
+        }
+
+        [Test]
         public void AHunterLeavesAFearedBandItCannotMatchAlone()
         {
             var w = CreateWorld();

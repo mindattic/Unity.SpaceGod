@@ -1135,7 +1135,9 @@ namespace SolarSystem.Core
                 if (yard == null || st.Population > yard.Population) yard = st;
             }
             if (yard == null) return;
+            // Bought from the yard like any other hull: its owner is paid for them.
             Guild.Treasury -= cost;
+            if (yard.Owner != Guild) yard.Owner.Treasury += cost;
             var hunter = Commission(yard, jd);
             world.Log(jd, $"{yard.Name} fits out the bounty hunter {hunter.Name} for the {Guild.Name}: there is money on the boards", WorldEventKind.Launch, yard.Body);
         }
