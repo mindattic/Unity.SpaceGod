@@ -30,6 +30,9 @@ namespace SolarSystem.Core
         double nextJd;
         int named;
 
+        /// <summary>Every fighter taken on here and not yet paid off (U.SPC-T288).</summary>
+        readonly HashSet<Ship> hired = new HashSet<Ship>();
+
         public MerchantEscorts(World world, int seed)
         {
             this.world = world;
@@ -66,12 +69,14 @@ namespace SolarSystem.Core
 
         public static double HireFee(ShipClass c) => c == ShipClass.Breacher ? HeavyHireFee : LightHireFee;
 
-        /// <summary>Takes wings on for the freighters in port that want them and pays every escort its wage.</summary>
+        /// <summary>Takes wings on for the freighters in port that want them, pays every escort its wage, and pays off
+        /// the wings that have outlived their merchants.</summary>
         public void Update(double jd)
         {
             if (jd < nextJd) return;
             double days = nextJd > 0 ? jd - nextJd + CheckDays : CheckDays;
             nextJd = jd + CheckDays;
+            PayOffOrphans();
 
             var wings = new Dictionary<Ship, int>();
             int total = 0;
@@ -122,8 +127,34 @@ namespace SolarSystem.Core
                     world.Fleet.AddEscort(leader, e, Fleet.SlotFor(have++));
                     Pay(leader, HireFee(c));
                     world.NotifyAdded(e);
+                    hired.Add(e);
                 }
             }
+        }
+
+        /// <summary>
+        /// A hired fighter whose merchant is gone (lost, scrapped, or the wing handed on to its strongest) has nobody to
+        /// guard and nobody paying it: at its next port, out of any fight, it is paid off and leaves the fleet (no wreck),
+        /// and so does the rest of its wing still flying with it (U.SPC-T288). Until then it flies on as it was.
+        /// </summary>
+        void PayOffOrphans()
+        {
+            var gone = new List<Ship>();
+            foreach (var s in hired)
+            {
+                if (s.Destroyed) { gone.Add(s); continue; }
+                var lead = s.Leader;
+                bool guarding = lead != null && !lead.Destroyed && world.IsTrader(lead);
+                // Still with a merchant, or following the one of its wing that is (the wing flies on as a group).
+                if (guarding || (lead != null && hired.Contains(lead) && !lead.Destroyed && lead.Leader != null && world.IsTrader(lead.Leader))) continue;
+                var head = lead != null && hired.Contains(lead) ? lead : s;
+                if (head.Phase != ShipPhase.Parked || head.Battle != null || s.Battle != null || head == world.PilotedShip || s == world.PilotedShip) continue;
+                gone.Add(s);
+                s.Destroyed = true;
+                s.GateDeparted = true;
+                s.Leader = null;
+            }
+            foreach (var s in gone) hired.Remove(s);
         }
 
         /// <summary>A merchant that takes escorts on: a lawful freighter or miner in port, not the player's (neither the

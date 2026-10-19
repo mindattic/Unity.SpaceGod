@@ -90,5 +90,34 @@ namespace SolarSystem.Core.Tests
             w.Escorts.Update(StartJd + 1);
             Assert.That(w.Fleet.Ships.Any(s => s.Leader == hauler), Is.False, "a freighter whose owners are broke took on a wing");
         }
-    }
+    
+        [Test]
+        public void AWingThatHasOutlivedItsMerchantIsPaidOffAtItsNextPortAndDrawsNoMoreWages()
+        {
+            var (w, hauler) = RichHauler(1e9);
+            w.Escorts.Update(StartJd + 1);
+            var wing = w.Fleet.Ships.Where(s => s.Leader == hauler && !s.Destroyed).ToList();
+            Assert.That(wing.Count, Is.GreaterThanOrEqualTo(2));
+
+            // The merchant is lost: its wing goes on under its strongest, as any group's does (U.SPC-T285).
+            hauler.Destroyed = true;
+            w.War.HandOverCommand(hauler);
+            foreach (var s in wing) s.Phase = ShipPhase.Parked;
+            w.Escorts.Update(StartJd + 2);
+            Assert.That(wing.All(s => s.Destroyed && s.GateDeparted), Is.True, "a wing with no merchant to guard was not paid off in port");
+
+            double treasury = hauler.Faction.Treasury;
+            w.Escorts.Update(StartJd + 3);
+            Assert.That(hauler.Faction.Treasury, Is.EqualTo(treasury), "a paid-off wing still drew wages");
+        }
+
+        [Test]
+        public void AWingStillWithItsMerchantIsNotPaidOff()
+        {
+            var (w, hauler) = RichHauler(1e9);
+            w.Escorts.Update(StartJd + 1);
+            w.Escorts.Update(StartJd + 2);
+            Assert.That(w.Fleet.Ships.Count(s => s.Leader == hauler && !s.Destroyed), Is.GreaterThanOrEqualTo(2));
+        }
+}
 }
