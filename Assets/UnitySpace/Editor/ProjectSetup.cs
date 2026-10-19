@@ -18,7 +18,7 @@ namespace UnitySpace.EditorTools
     /// The scene is committed and is only written when it is missing (U.SPC-T262): Unity gives every
     /// object a fresh random file ID, so regenerating it on each build left a no-op diff in git after
     /// every deploy. A change to <see cref="CreateScene"/> therefore reaches the player only once the
-    /// scene is rebuilt (Solar System > Rebuild Main Scene, or -executeMethod ...ProjectSetup.CreateScene)
+    /// scene is rebuilt (UnitySpace > Rebuild Main Scene, or -executeMethod ...ProjectSetup.CreateScene)
     /// and committed together with the code change.
     /// </summary>
     [InitializeOnLoad]
@@ -39,7 +39,7 @@ namespace UnitySpace.EditorTools
             };
         }
 
-        [MenuItem("Solar System/Rebuild Main Scene")]
+        [MenuItem("UnitySpace/Rebuild Main Scene")]
         public static void CreateScene()
         {
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
@@ -53,7 +53,7 @@ namespace UnitySpace.EditorTools
             camera.farClipPlane = 5e8f;
             cameraGo.AddComponent<AudioListener>();
 
-            new GameObject("Solar System").AddComponent<UnitySpaceApp>();
+            new GameObject("UnitySpace").AddComponent<UnitySpaceApp>();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -61,7 +61,7 @@ namespace UnitySpace.EditorTools
             Debug.Log("[UnitySpace] Scene written to " + ScenePath);
         }
 
-        [MenuItem("Solar System/Build Windows Player")]
+        [MenuItem("UnitySpace/Build Windows Player")]
         public static void BuildWindows()
         {
             if (!File.Exists(ScenePath)) CreateScene();

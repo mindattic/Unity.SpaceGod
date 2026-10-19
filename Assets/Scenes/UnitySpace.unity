@@ -130,7 +130,7 @@ GameObject:
   - component: {fileID: 587283090}
   - component: {fileID: 587283089}
   m_Layer: 0
-  m_Name: Solar System
+  m_Name: UnitySpace
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

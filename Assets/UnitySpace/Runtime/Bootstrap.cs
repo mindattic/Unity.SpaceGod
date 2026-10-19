@@ -16,7 +16,7 @@ namespace UnitySpace
         static void EnsureApp()
         {
             var app = UnityEngine.Object.FindAnyObjectByType<UnitySpaceApp>();
-            if (app == null) app = new GameObject("Solar System").AddComponent<UnitySpaceApp>();
+            if (app == null) app = new GameObject("UnitySpace").AddComponent<UnitySpaceApp>();
 
             if (HasCommandLineFlag("-demo") && app.GetComponent<CaptureRunner>() == null)
             {
