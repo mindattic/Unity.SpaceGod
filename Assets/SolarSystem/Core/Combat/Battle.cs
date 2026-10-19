@@ -69,6 +69,12 @@ namespace SolarSystem.Core
         /// <summary>The missile lock on <see cref="PlayerLockTarget"/>, 0-1: made at 1 (see <see cref="Gunnery.LockSeconds"/>).</summary>
         public double LockProgress;
 
+        /// <summary>A dogfighting small craft's manoeuvre (see <see cref="Battle.Dogfight"/>, U.SPC-T274), the seconds
+        /// it holds it for, and the way it breaks.</summary>
+        public DogfightManeuver Maneuver;
+        public double ManeuverLeft;
+        public int BreakSide = 1;
+
         /// <summary>The velocity gunners read this hull as having: its real one, eased in over
         /// <see cref="Gunnery.TrackingLagS"/>, so a steady course is tracked and a sudden jink is not (U.SPC-T270).</summary>
         public DVec3 SeenVel;
@@ -193,6 +199,19 @@ namespace SolarSystem.Core
             var local = ToLocal(point);
             return Astro.WrapDegrees360(Math.Atan2(local.X, local.Z) * Astro.Rad2Deg);
         }
+    }
+
+    /// <summary>What a dogfighting small craft is doing (U.SPC-T274).</summary>
+    public enum DogfightManeuver
+    {
+        /// <summary>Nose on the lead point, guns working, jinking on the way in.</summary>
+        Attack,
+
+        /// <summary>Through the merge and out the other side under boost, to come round for another pass.</summary>
+        Extend,
+
+        /// <summary>A hard turn away from a hostile on its tail.</summary>
+        Break,
     }
 
     public enum MissileKind
@@ -793,6 +812,11 @@ namespace SolarSystem.Core
                 Approach(u, dt);
                 return;
             }
+            if (!u.Fleeing && Dogfights(u))
+            {
+                Dogfight(u, dt);
+                return;
+            }
             double maxSpeed = c.Spec.MaxSpeed * (0.25 + 0.75 * c.EngineFactor);
             if (maxSpeed <= 0)
             {
@@ -840,6 +864,140 @@ namespace SolarSystem.Core
 
             var face = u.Fleeing || u.Target == null ? u.Vel : BroadsideFacing(u, (u.Target.Pos - u.Pos).Normalized);
             TurnToward(u, face, c.Spec.TurnRateDegS, dt);
+        }
+
+        // ---------------------------------------------------------------- dogfighting (U.SPC-T274)
+
+        /// <summary>The share of a hull's own turn rate at the helm (<see cref="PilotTuning.TurnRateDegS"/>) its crew
+        /// flies it at in a dogfight: a human's hands are quicker than a crew's reactions.</summary>
+        public const double DogfightTurnShare = 0.6;
+
+        /// <summary>How close the merge is, km (inside it the attacker extends), how far it extends before coming
+        /// round, and how near a hostile behind must be to count as on its tail.</summary>
+        public const double MergeKm = 0.3, ExtendKm = 1.6, TailKm = 2.5;
+
+        /// <summary>How far off a dogfighter goes for the player in preference to whatever else it was after, km.</summary>
+        public const double HuntPlayerKm = 8;
+
+        /// <summary>The small craft that dogfight: the light fighters. A heavy fighter (the Breacher) closes to board.</summary>
+        static bool Dogfights(BattleUnit u) =>
+            u.Kind == UnitKind.Ship && u.Ship != null && (u.Ship.Spec.Class == ShipClass.Fighter || u.Ship.Spec.Class == ShipClass.Courier);
+
+        /// <summary>
+        /// A light fighter flown by its crew in a dogfight: on the same airframe the player flies (its helm turn rate,
+        /// cut to <see cref="DogfightTurnShare"/>, and its own thrust), going where its nose points. It lays its nose on
+        /// the lead point for its guns and jinks on the way in; through the merge it extends under boost and comes round
+        /// again; with a hostile on its tail and pointed at it, it breaks hard to one side. It goes for the player first.
+        /// </summary>
+        void Dogfight(BattleUnit u, double dt)
+        {
+            var c = u.Combat;
+            var cls = u.Ship.Spec.Class;
+            var tune = PilotTuning.Of(cls);
+            var hull = HullDynamics.Of(c.Spec);
+            double engines = 0.4 + 0.6 * c.EngineFactor;
+            double speed = tune.MaxSpeed * engines;
+            double turn = tune.TurnRateDegS * DogfightTurnShare * engines;
+            double accel = Math.Max(hull.MainAccel, 1e-3) * engines;
+
+            // The player first, if near enough to be worth the chase.
+            foreach (var o in Units)
+                if (o.PlayerControlled && Hostile(u, o) && (o.Pos - u.Pos).Length < HuntPlayerKm)
+                {
+                    u.Target = o;
+                    break;
+                }
+            var t = u.Target != null && u.Target.Present && Hostile(u, u.Target) ? u.Target : null;
+
+            var threat = OnItsTail(u);
+            u.ManeuverLeft -= dt;
+            if (threat != null && u.Maneuver != DogfightManeuver.Break)
+            {
+                u.Maneuver = DogfightManeuver.Break;
+                u.ManeuverLeft = 1.6 + rng.NextDouble();
+                u.BreakSide = rng.Next(2) == 0 ? -1 : 1;
+            }
+            else if (u.ManeuverLeft <= 0 && u.Maneuver != DogfightManeuver.Attack)
+                u.Maneuver = DogfightManeuver.Attack;
+
+            u.Basis(out var right, out var up);
+            DVec3 goal;
+            switch (u.Maneuver)
+            {
+                case DogfightManeuver.Break:
+                    // Hard over to one side and a little up, under boost.
+                    goal = right * u.BreakSide + up * 0.35 + u.Forward * 0.2;
+                    speed *= tune.BoostSpeedMultiplier;
+                    break;
+                case DogfightManeuver.Extend:
+                    goal = u.Forward + (t != null ? (u.Pos - t.Pos).Normalized * 0.4 : DVec3.Zero);
+                    speed *= tune.BoostSpeedMultiplier;
+                    if (t != null && (t.Pos - u.Pos).Length > ExtendKm) u.ManeuverLeft = 0;
+                    break;
+                default:
+                    if (t == null)
+                    {
+                        goal = -u.Pos;
+                        speed *= 0.5;
+                        break;
+                    }
+                    var rel = t.Pos - u.Pos;
+                    double d = rel.Length;
+                    double rounds = RoundSpeedOf(c);
+                    var aimAt = rounds > 0 ? Gunnery.LeadPoint(u.Pos, u.Vel, t.Pos, t.Vel, rounds) : t.Pos;
+                    goal = aimAt - u.Pos;
+                    // A weave on the way in, so the target's gunners have a hard time of it too.
+                    if (d > 0.8)
+                    {
+                        double w = Math.Sin(Seconds * 2.3 + u.Wander) * 0.12;
+                        goal = goal.Normalized + (right * w + up * w * 0.5);
+                    }
+                    // On its tail, hold station rather than overrun it.
+                    if (d < 1.2) speed = Math.Max(speed * 0.6, Math.Min(speed, t.Vel.Length + 0.05));
+                    if (d < MergeKm)
+                    {
+                        u.Maneuver = DogfightManeuver.Extend;
+                        u.ManeuverLeft = 2 + rng.NextDouble();
+                    }
+                    break;
+            }
+            // Never out of the fight altogether: past most of the escape radius, it turns back in.
+            if (u.Pos.Length > EscapeKm * 0.8) goal = goal.Normalized + (-u.Pos).Normalized * 1.5;
+            TurnToward(u, goal, turn, dt);
+
+            var want = u.Forward * speed;
+            var dv = want - u.Vel;
+            double step = accel * dt;
+            u.Vel += dv.Length > step ? dv.Normalized * step : dv;
+            u.Pos += u.Vel * dt;
+        }
+
+        /// <summary>A hostile close behind <paramref name="u"/> with its nose on it, or null.</summary>
+        BattleUnit OnItsTail(BattleUnit u)
+        {
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || o.Combat.Disabled || o.Stunned > 0 || !o.Combat.Armed) continue;
+                var to = o.Pos - u.Pos;
+                double d = to.Length;
+                if (d < 1e-6 || d > TailKm) continue;
+                var dir = to / d;
+                if (DVec3.Dot(u.Forward, dir) < -0.3 && DVec3.Dot(o.Forward, -dir) > 0.94) return o;
+            }
+            return null;
+        }
+
+        /// <summary>The fastest round a hull's forward guns fire, km/s; 0 if they are beams.</summary>
+        static double RoundSpeedOf(ShipCombat c)
+        {
+            double speed = 0;
+            foreach (var s in c.Subsystems)
+            {
+                var w = s.Def.Weapon;
+                if (s.Destroyed || w == null || w.Missile || w.AntiSmall || w.Supporting) continue;
+                speed = Math.Max(speed, w.MuzzleSpeedKmS);
+            }
+            return speed;
         }
 
         /// <summary>
