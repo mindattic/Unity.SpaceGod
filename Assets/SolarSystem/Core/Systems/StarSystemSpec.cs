@@ -174,6 +174,12 @@ namespace SolarSystem.Core
         public double AAu;
         public double MeanAnomalyDeg;
         public string Summary;
+
+        /// <summary>
+        /// Not a station yet but the orbit marked out for one (U.SPC-T293): a frontier star's habitat site, where the
+        /// first colony ship through its gate builds its settlers' home (see <see cref="ColonySite.Survey"/>).
+        /// </summary>
+        public bool HabitatSite;
     }
 
     /// <summary>

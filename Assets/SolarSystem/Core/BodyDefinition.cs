@@ -137,6 +137,12 @@ namespace SolarSystem.Core
         public double LaplacePoleRaDeg = double.NaN;
         public double LaplacePoleDecDeg = double.NaN;
 
+        /// <summary>
+        /// Game layer: an empty orbit marked out for settlers to build a habitat in (a frontier star's, see
+        /// <see cref="StationSpec.HabitatSite"/>), surveyed as a colony site though nothing stands there yet.
+        /// </summary>
+        public bool HabitatSite;
+
         public string Summary;
 
         /// <summary>

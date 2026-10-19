@@ -232,13 +232,16 @@ namespace SolarSystem.Core
         /// <summary>The gates being surveyed, built and rebuilt (U.SPC-T97): how the network grows outward and heals after a war.</summary>
         public GateConstruction Construction { get; private set; }
 
+        /// <summary>Colony ships through the gates to the systems the new gates open (U.SPC-T293).</summary>
+        public InterstellarColonisation Colonisation { get; private set; }
+
         /// <summary>Raised when a system joins the simulation (a frontier star reached by its first gate): (the system, when).</summary>
         public event Action<StarSystem, double> SystemAdded;
 
         /// <summary>
         /// Raised when the first gate into an empty system is finished and it is open to settlement (see
         /// <see cref="StarSystem.OpenToSettlement"/>): (the system, the faction that built the gate, when). Colonisation
-        /// takes it from there.
+        /// takes it from there: crowded factions anywhere the gates reach send colony ships to it (<see cref="InterstellarColonisation"/>).
         /// </summary>
         public event Action<StarSystem, Faction, double> SystemOpened;
 
@@ -382,6 +385,7 @@ namespace SolarSystem.Core
             Polities.InTransit = Traffic.InTransit;
             Construction = new GateConstruction(this, jd);
             Wars = new InterstellarWars(this, jd);
+            Colonisation = new InterstellarColonisation(this);
         }
 
         /// <summary>

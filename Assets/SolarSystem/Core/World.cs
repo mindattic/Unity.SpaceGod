@@ -561,11 +561,19 @@ namespace SolarSystem.Core
                 Contracts.TravelDays(from.Body == body ? 0 : (Ephemeris.HelioAt(from.Body, when) - Ephemeris.HelioAt(body, when)).Length);
             c.Launched = v => Log(v.DepartJd, v.Reinforcing != null
                 ? $"The colony ship {v.Name} sails from {v.From.Name} with {v.Colonists:N0} settlers for {v.Reinforcing.Name}"
-                : $"The colony ship {v.Name} sails from {v.From.Name} with {v.Colonists:N0} colonists to settle {v.Site.Name}", WorldEventKind.Launch, v.From.Body);
+                : $"The colony ship {v.Name} sails from {v.From.Name} with {v.Colonists:N0} colonists to settle {v.Site.Name}" +
+                  (v.Abroad ? $" in {v.Where}, through the gates" : ""), WorldEventKind.Launch, v.From.Body);
             c.Landed = (v, s) => Log(Economy.Jd, s != null
                 ? $"The colony ship {v.Name} lands {v.Colonists:N0} settlers at {s.Name}"
-                : $"The colony ship {v.Name} finds {v.Site.Name} taken and carries its colonists home", WorldEventKind.Info, v.Body);
-            c.Founded = s => Log(Economy.Jd, $"{s.Owner.Name} colonists found {s.Name}, an outpost of {s.Population:N0} on {Catalog[s.Body].Name}", WorldEventKind.Economy, s.Body);
+                : $"The colony ship {v.Name} finds {v.Site.Name}{(v.Abroad ? " in " + v.Where : "")} taken and carries its colonists home",
+                WorldEventKind.Info, v.Abroad ? v.From.Body : v.Body);
+            c.Founded = s =>
+            {
+                // Settlers from another system bring their polity here with them (U.SPC-T293).
+                Fleet.AddFaction(s.Owner);
+                Log(Economy.Jd, $"{s.Owner.Name} colonists found {s.Name}, an outpost of {s.Population:N0} " +
+                                (Catalog[s.Body].HabitatSite ? "in a new habitat" : "on " + Catalog[s.Body].Name), WorldEventKind.Economy, s.Body);
+            };
             c.Expanded = s => Log(Economy.Jd, $"{s.Name} builds out its habitat for {s.InitialPopulation * People.MaxGrowth:N0} people", WorldEventKind.Economy, s.Body);
             c.Promoted = s => Log(Economy.Jd, $"{s.Name} has grown from an outpost into a colony of {s.Population:N0}", WorldEventKind.Economy, s.Body);
             c.Ruined = s => Log(Economy.Jd, $"{s.Name} has failed: its last settlers leave and it stands empty, a ruin", WorldEventKind.Loss, s.Body);

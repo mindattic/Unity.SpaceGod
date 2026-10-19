@@ -39,13 +39,38 @@ namespace SolarSystem.Core
         public static double LuminosityOf(double radiusSolar, double teffK) => radiusSolar * radiusSolar * Math.Pow(teffK / 5772.0, 4);
 
         static SystemSpec System(string name, double rh, double rm, double rs, double dd, double dm, double ds, bool south, double ly,
-            StarSpec star, string summary) =>
-            new SystemSpec
+            StarSpec star, string summary)
+        {
+            var s = new SystemSpec
             {
                 Name = name, NeighbourName = name,
                 RaDeg = Astro.Hms(rh, rm, rs), DecDeg = Astro.Dms(dd, dm, ds, south), DistanceLy = ly,
                 Primary = StellarNode.Single(star), Summary = summary,
             };
+            s.Stations.Add(Habitat(name, star));
+            return s;
+        }
+
+        /// <summary>Stellar radii a habitat site keeps clear of its star, at the least.</summary>
+        public const double HabitatMinRadii = 5;
+
+        /// <summary>
+        /// The orbit marked out for the first settlers' habitat (U.SPC-T293), as the settled frontier's hubs stand
+        /// (<see cref="NearbySocieties"/>): the middle of the star's conservative habitable zone, or, round a star too
+        /// cold to have one clear of its surface (a brown dwarf), <see cref="HabitatMinRadii"/> stellar radii out. Its
+        /// water and air are assumed to come from captured comets, as at the frontier's ice stations. Fiction.
+        /// </summary>
+        public static StationSpec Habitat(string system, StarSpec star)
+        {
+            HabitableZones.ConservativeEdgesAu(star.LuminositySolar, star.TeffK, out double inner, out double outer);
+            double aAu = Math.Max(Math.Sqrt(inner * outer), HabitatMinRadii * star.RadiusSolar * StarSystemBuilder.SunRadiusKm / Astro.AuKm);
+            return new StationSpec
+            {
+                Name = system + " Habitat", Host = star.Name, AAu = aAu, MeanAnomalyDeg = 0, HabitatSite = true,
+                Summary = "An orbit marked out for a settlers' habitat, in the habitable zone where the star has one clear of it; " +
+                          "empty until a colony ship comes through the gate. Fiction.",
+            };
+        }
 
         static StarSpec Star(string name, string spectral, double mass, double radius, double luminosity, double teff, double rotationDays, string summary) =>
             new StarSpec

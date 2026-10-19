@@ -284,6 +284,7 @@ namespace SolarSystem.Core
                 PoleRaDeg = ra, PoleDecDeg = dec, RotationHours = 2,
                 Color = new Rgb(0.75f, 0.76f, 0.8f),
                 Status = BodyStatus.Fictional,
+                HabitatSite = s.HabitatSite,
                 Summary = s.Summary,
             };
         }

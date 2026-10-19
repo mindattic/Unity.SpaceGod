@@ -37,6 +37,9 @@ namespace SolarSystem.Core
         /// <summary>Starlight at the site, Earth = 1.</summary>
         public double Flux;
 
+        /// <summary>An empty orbit marked out for a habitat (<see cref="BodyDefinition.HabitatSite"/>) rather than a world to land on.</summary>
+        public bool Habitat;
+
         public bool Has(Good g) => Array.IndexOf(Resources, g) >= 0;
 
         /// <summary>
@@ -73,7 +76,8 @@ namespace SolarSystem.Core
         public static ColonySite Survey(BodyCatalog catalog, int index)
         {
             var b = catalog[index];
-            if (b.Kind == BodyKind.Star || b.Kind == BodyKind.Barycentre || b.Kind == BodyKind.Station || b.GasGiant) return null;
+            if (b.Kind == BodyKind.Star || b.Kind == BodyKind.Barycentre || b.GasGiant) return null;
+            if (b.Kind == BodyKind.Station && !b.HabitatSite) return null;
             // Climb to the body whose parent is a star: its orbit sets the sunlight.
             var orbiter = b;
             BodyDefinition star = null;
@@ -97,6 +101,15 @@ namespace SolarSystem.Core
                 Zone = HabitableZones.Classify(star.LuminositySolar, star.TeffK, aAu, e),
                 Flux = HabitableZones.MeanFlux(star.LuminositySolar, aAu, e),
             };
+            if (b.HabitatSite)
+            {
+                // An orbit marked out for a habitat (U.SPC-T293): nothing to dig, but water and nitrogen from captured comets,
+                // as the frontier's ice stations have them (assumed); room for more people the more sunlight there is to farm by.
+                site.Habitat = true;
+                site.Resources = new[] { Good.Water, Good.Nitrogen };
+                site.Capacity = site.Zone == HabitableZone.Conservative ? 3e5 : site.Zone == HabitableZone.Optimistic ? 2e5 : 1e5;
+                return site;
+            }
             bool small = b.Kind == BodyKind.Asteroid || b.RadiusKm < 200;
             double inner = HabitableZones.RunawayFlux(star.TeffK), outer = HabitableZones.MaxGreenhouseFlux(star.TeffK);
             var list = new List<Good>();
@@ -167,9 +180,33 @@ namespace SolarSystem.Core
 
         public double DepartJd, ArriveJd;
 
+        /// <summary>
+        /// For a voyage through the gates to another system (U.SPC-T293): that system's colonisation and markets, and
+        /// its name; null for a voyage within the system it sailed from.
+        /// </summary>
+        public Colonisation Into;
+        public Economy IntoEconomy;
+        public string Where;
+
+        public bool Abroad => Into != null;
+
         public int Body => Reinforcing?.Body ?? Site.Body;
 
         public override string ToString() => Name;
+    }
+
+    /// <summary>A free site in another system that a colony ship could reach through the gates, and how long it would take (U.SPC-T293).</summary>
+    public sealed class ForeignSite
+    {
+        public ColonySite Site;
+
+        /// <summary>The system's colonisation and markets, and its name.</summary>
+        public Colonisation Into;
+        public Economy Economy;
+        public string Where;
+
+        /// <summary>Days from the port to the site: out to the gate, through the gates, and in to the site.</summary>
+        public double Days;
     }
 
     /// <summary>
@@ -181,7 +218,8 @@ namespace SolarSystem.Core
     /// of its cap, counts a rising share of its growth the same way). Once a faction has a ship's worth of them
     /// (<see cref="PartySize"/>) and can pay for the voyage, it sends a colony ship from its most crowded port
     /// with those colonists and starter goods: to a young settlement of its own that has room, or else to
-    /// the best free site in reach (the habitable zone first, then what there is to dig). On landing the
+    /// the best free site in reach (the habitable zone first, then what there is to dig), which may be in another
+    /// system newly opened to settlement, through the gates (<see cref="Abroad"/>, U.SPC-T293). On landing the
     /// colonists found an <see cref="ColonyStage.Outpost"/> with farms and ice mines to feed itself and a
     /// mine on the site's best ore.
     ///
@@ -197,8 +235,23 @@ namespace SolarSystem.Core
         /// <summary>Every site in the system, occupied or not (whether one is free is checked when it is wanted).</summary>
         public readonly List<ColonySite> Sites = new List<ColonySite>();
 
-        /// <summary>Colony ships under way.</summary>
+        /// <summary>Colony ships under way that sailed from here (to this system or, through the gates, another).</summary>
         public readonly List<ColonyShip> Voyages = new List<ColonyShip>();
+
+        /// <summary>Colony ships under way from other systems to a site here (U.SPC-T293); they land through their own system's review.</summary>
+        public readonly List<ColonyShip> Incoming = new List<ColonyShip>();
+
+        /// <summary>
+        /// The free sites in other systems open to settlement that a faction's colonists at a port could reach through
+        /// the gates (U.SPC-T293); null for a system on its own.
+        /// </summary>
+        public Func<Faction, Settlement, double, IEnumerable<ForeignSite>> Abroad;
+
+        /// <summary>
+        /// What a site in a system nobody has settled yet is worth against one at home: a whole system to hold, its gate
+        /// and its markets the founder's (assumed).
+        /// </summary>
+        public const double NewSystemWorth = 2;
 
         /// <summary>Days a colony ship takes from a port to a body at a date; null for <see cref="DefaultTravelDays"/>.</summary>
         public Func<Settlement, int, double, double> TravelDays;
@@ -310,12 +363,18 @@ namespace SolarSystem.Core
             return false;
         }
 
-        bool Bound(int body)
+        /// <summary>A colony ship is on its way to <paramref name="body"/> here (one bound for another system does not count).</summary>
+        public bool Bound(int body)
         {
             foreach (var v in Voyages)
+                if (!v.Abroad && v.Body == body) return true;
+            foreach (var v in Incoming)
                 if (v.Body == body) return true;
             return false;
         }
+
+        /// <summary>Whether any colony ship from another system is on its way here.</summary>
+        public bool Awaited => Incoming.Count > 0;
 
         bool Sailing(Faction f)
         {
@@ -374,11 +433,12 @@ namespace SolarSystem.Core
             }
 
             ColonySite site = null;
+            ForeignSite abroad = null;
             double cost;
             if (reinforce != null) cost = ReinforceCost;
             else
             {
-                // ... or else the best free site in reach.
+                // ... or else the best free site in reach: in this system, or through the gates in one newly opened to settlement.
                 double best = 0;
                 foreach (var c in Sites)
                 {
@@ -393,6 +453,20 @@ namespace SolarSystem.Core
                         bestDays = d;
                     }
                 }
+                if (Abroad != null)
+                    foreach (var x in Abroad(f, from, jd))
+                    {
+                        double score = x.Site.Score;
+                        if (score <= 0 || double.IsNaN(x.Days) || x.Days < 0) continue;
+                        double value = score * NewSystemWorth / (1 + x.Days / 200);
+                        if (value > best)
+                        {
+                            best = value;
+                            site = x.Site;
+                            abroad = x;
+                            bestDays = x.Days;
+                        }
+                    }
                 if (site == null) return null;
                 cost = FoundingCost;
             }
@@ -407,6 +481,9 @@ namespace SolarSystem.Core
                 Reinforcing = reinforce,
                 DepartJd = jd,
                 ArriveJd = jd + bestDays,
+                Into = abroad?.Into,
+                IntoEconomy = abroad?.Economy,
+                Where = abroad?.Where,
             };
 
             // The colonists come from every crowded place in turn, most crowded first, none below its floor.
@@ -445,6 +522,7 @@ namespace SolarSystem.Core
             }
             f.Treasury -= spent;
             Voyages.Add(ship);
+            ship.Into?.Incoming.Add(ship);
             Launched?.Invoke(ship);
             return ship;
         }
@@ -487,13 +565,20 @@ namespace SolarSystem.Core
                     return target;
                 }
             }
-            else if (!Occupied(economy, v.Site.Body, jd))
+            else
             {
-                var s = Found(economy, v.Owner, v.Site, v.Colonists, jd);
-                Unload(v, s);
-                economy.Open(s);
-                Founded?.Invoke(s);
-                return s;
+                // A ship from another system founds in that system's markets, and its news is that system's.
+                var there = v.IntoEconomy ?? economy;
+                var into = v.Into ?? this;
+                v.Into?.Incoming.Remove(v);
+                if (!Occupied(there, v.Site.Body, jd))
+                {
+                    var s = Found(there, v.Owner, v.Site, v.Colonists, jd);
+                    Unload(v, s);
+                    there.Open(s);
+                    into.Founded?.Invoke(s);
+                    return s;
+                }
             }
             // The site was taken or the settlement lost while they were on their way: they go home.
             if (v.From != null && Lives(v.From))
@@ -521,7 +606,8 @@ namespace SolarSystem.Core
             int ruins = 0;
             foreach (var x in economy.Settlements)
                 if (x.Body == site.Body) ruins++;
-            string name = ruins == 0 ? site.Name + " Landing" : "New " + site.Name + (ruins > 1 ? " " + (ruins + 1) : "");
+            // A habitat is called after its site ("Ross 154 Habitat"); a world's first settlement is its landing.
+            string name = ruins == 0 ? (site.Habitat ? site.Name : site.Name + " Landing") : "New " + site.Name + (ruins > 1 ? " " + (ruins + 1) : "");
             var s = economy.Add(name, site.Body, SettlementKind.MiningOutpost, owner, people);
             s.Stage = ColonyStage.Outpost;
             s.FoundedJd = jd;
