@@ -347,6 +347,32 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AHullSentToTheBreakersHandsItsEscortsOn()
+        {
+            var w = CreateWorld();
+            var c = Named(w, "Kraken Hydrocarbon Company");
+            double jd = StartJd + 1;
+            BreakTheRivals(w, c, jd);
+            ParkFleet(w, c, "Titan", jd);
+            // Every hull flies with a hired fighter wing (U.SPC-T275).
+            var wings = c.Ships.ToDictionary(s => s, s =>
+            {
+                var e = w.Fleet.AddShip(s.Name + " wing", ShipClass.Fighter, s.Faction, ShipRole.Escort);
+                w.Fleet.AddEscort(s, e, Fleet.SlotFor(0));
+                return e;
+            });
+            c.Cash = -400e6;
+            w.Companies.Review(jd);
+            var gone = wings.Keys.First(s => s.Scrapped);
+            var escort = wings[gone];
+            Assert.That(escort.Destroyed, Is.False);
+            Assert.That(escort.Leader, Is.Not.SameAs(gone), "no longer flying beside a hull gone to the breakers");
+            Assert.That(escort.Controller.Orbit, Is.Not.Null, "it carries on from where the hull lay");
+            // Nothing flies (or draws wages, or counts against the fleet's escorts) beside a hull that is gone.
+            Assert.That(w.Fleet.Ships.Any(s => !s.Destroyed && s.Leader != null && s.Leader.Destroyed), Is.False);
+        }
+
+        [Test]
         public void ACompanyThatStaysInDebtTooLongIsWoundUpEvenWithHullsLeft()
         {
             var w = CreateWorld();

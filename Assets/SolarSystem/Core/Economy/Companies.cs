@@ -722,6 +722,8 @@ namespace SolarSystem.Core
             c.HullsScrapped++;
             world.Economy.Release(ship);
             ship.Company = null;
+            // Its escorts (a hired fighter wing, U.SPC-T275) do not follow it to the breakers: they carry on under the strongest.
+            world.War?.HandOverCommand(ship);
             ship.Scrapped = true;
             // Gone from the fleet without a wreck: the hull goes to the breakers' yard.
             ship.Destroyed = true;
