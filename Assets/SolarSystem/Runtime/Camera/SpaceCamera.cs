@@ -76,6 +76,18 @@ namespace SolarSystem.Cameras
         /// <see cref="UpdateFocus"/>). <see cref="Target.None"/> when nothing is locked.</summary>
         public Target PilotLockTarget { get; set; } = Target.None;
 
+        /// <summary>While piloting: where the view looks when it is not simply the hull's own facing (U.SPC-T269)
+        /// -- along a light fighter's crosshair, or swung about a capital ship by the mouse. Null follows the hull.</summary>
+        public Quaternion? PilotView { get; set; }
+
+        /// <summary>How fast the view catches up to <see cref="PilotView"/>: quick, since in free aim the
+        /// crosshair is the middle of the screen and must stay under the mouse.</summary>
+        const float PilotViewResponseHz = 30f;
+
+        /// <summary>How far above the line of sight a free-aim chase sits, in chase distances, so the
+        /// hull flies below the crosshair instead of covering it.</summary>
+        const double PilotViewLift = 0.22;
+
         const float TravelSeconds = 1.6f;
         const float LevelSeconds = 1.4f;
         const float LookSensitivity = 0.12f;
@@ -252,6 +264,7 @@ namespace SolarSystem.Cameras
             Mode = CameraMode.Free;
             FocusTarget = Target.None;
             PilotLocked = false;
+            PilotView = null;
             SetRotation(rotation);
             velocity = Vector3.zero;
             SetScenePosition(ScenePosition);
@@ -338,8 +351,8 @@ namespace SolarSystem.Cameras
             if (PilotLocked)
             {
                 var shipRotation = world.TargetRotation(FocusTarget);
-                var wantRotation = shipRotation;
-                if (!PilotLockTarget.IsNone)
+                var wantRotation = PilotView ?? shipRotation;
+                if (PilotView == null && !PilotLockTarget.IsNone)
                 {
                     var toTarget = world.TargetScene(PilotLockTarget) - world.TargetScene(FocusTarget);
                     if (toTarget.LengthSquared > 1e-12)
@@ -350,13 +363,18 @@ namespace SolarSystem.Cameras
                 }
                 // Eases toward the hull's facing (and any lock-on blend) rather than welding to it
                 // instantly, so sharp turns read as a chase rather than a rigid 1:1 attachment.
-                Rotation = Quaternion.Slerp(Rotation, wantRotation, 1f - Mathf.Exp(-dt * PilotCamResponseHz));
+                Rotation = Quaternion.Slerp(Rotation, wantRotation, 1f - Mathf.Exp(-dt * (PilotView != null ? PilotViewResponseHz : PilotCamResponseHz)));
                 if (Math.Abs(input.Scroll) > 0)
                     zoomTarget = Math.Max(MinZoom(FocusTarget), Math.Min(20, zoomTarget * Math.Pow(0.82, input.Scroll)));
                 zoom = Math.Exp(Math.Log(zoom) + (Math.Log(zoomTarget) - Math.Log(zoom)) * (1 - Math.Exp(-dt * 10)));
                 var chaseBack = Rotation * Vector3.back;
                 double chaseR = world.TargetRadius(FocusTarget);
                 ScenePosition = world.TargetScene(FocusTarget) + new DVec3(chaseBack.x, chaseBack.y, chaseBack.z) * (zoom * chaseR);
+                if (PilotView != null)
+                {
+                    var lift = Rotation * Vector3.up;
+                    ScenePosition += new DVec3(lift.x, lift.y, lift.z) * (zoom * chaseR * PilotViewLift);
+                }
                 CurrentSpeed = 0;
                 return;
             }

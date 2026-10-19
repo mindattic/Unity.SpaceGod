@@ -401,6 +401,10 @@ namespace SolarSystem.UI
             double speed = vel.Length;
             bool noseOn = DirectionToGui(app.PilotForward, out var nose);
             if (noseOn) DrawBoresight(nose, new Color(1, 1, 1, 0.8f));
+            // Where the stick points the hull (U.SPC-T269): far ahead of the nose in free aim, a little ahead
+            // of it on a hull steered by the nose; a capital ship's helm is its heading, the nose itself.
+            if (app.PilotControlMode != PilotControl.Helm && DirectionToGui(app.PilotAimDirection, out var aim) && (!noseOn || (aim - nose).sqrMagnitude > 4))
+                DrawCrosshair(aim, CrosshairColor);
 
             double driftDeg = 0;
             if (speed > 1e-6)
@@ -599,6 +603,27 @@ namespace SolarSystem.UI
             var d = direction.SwapYZ;
             if (!app.RelativeToGui(new Vector3((float)d.X, (float)d.Y, (float)d.Z) * 1e6f, out p)) return false;
             return p.x >= 0 && p.y >= 0 && p.x <= Screen.width && p.y <= Screen.height;
+        }
+
+        /// <summary>The flight keys for the way the flown hull is steered (U.SPC-T269).</summary>
+        static string ControlHint(PilotControl control) =>
+            control == PilotControl.FreeAim ? "WASD throttle/strafe, mouse aims, the hull turns after it"
+            : control == PilotControl.Helm ? "W/S throttle, A/D Q/E turn the hull, mouse looks around"
+            : "WASD throttle/strafe, mouse steers the nose";
+
+        static readonly Color CrosshairColor = new Color(0.55f, 0.95f, 1f, 0.9f);
+
+        /// <summary>The crosshair: four ticks about an open centre, so the target under it stays visible.</summary>
+        void DrawCrosshair(Vector2 p, Color color)
+        {
+            var old = GUI.color;
+            GUI.color = color;
+            var w = Icons.White;
+            GUI.DrawTexture(new Rect(p.x - 16, p.y - 1, 9, 2), w);
+            GUI.DrawTexture(new Rect(p.x + 7, p.y - 1, 9, 2), w);
+            GUI.DrawTexture(new Rect(p.x - 1, p.y - 16, 2, 9), w);
+            GUI.DrawTexture(new Rect(p.x - 1, p.y + 7, 2, 9), w);
+            GUI.color = old;
         }
 
         void DrawBoresight(Vector2 p, Color color)
@@ -2380,7 +2405,7 @@ namespace SolarSystem.UI
                     s = "PILOTING  ·  " + TargetName(cam.FocusTarget) + (app.Piloted.Ship != null ? "  ·  PROPELLANT " + (app.Piloted.Ship.Propellant <= 1e-6 ? "DRY" : Percent(app.Piloted.Ship.PropellantFraction)) : "") +
                         (app.World.Law != null && app.World.Law.Player.Wanted ? "  ·  WANTED " + Credits(app.World.Law.Player.TotalBounty) : "") +
                         SensorText() +
-                        "   (WASD throttle/strafe, mouse to steer, Z/X roll, F flight assist, Shift boost, F3 silent running, P to release)";
+                        "   (" + ControlHint(app.PilotControlMode) + ", Z/X roll, F flight assist, Shift boost, F3 silent running, P to release)";
                     break;
                 case SpaceCamera.CameraMode.Focus:
                     s = "FOCUS  ·  " + TargetName(cam.FocusTarget) + "   (WASD to swim free, wheel to zoom, right-drag to orbit)";
@@ -2537,6 +2562,7 @@ namespace SolarSystem.UI
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
+                "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",

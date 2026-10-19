@@ -410,6 +410,36 @@ namespace SolarSystem.Core
             s.Up = up.LengthSquared > 1e-18 ? up.Normalized : PilotState.LevelUp(s.Forward);
         }
 
+        /// <summary>The least the stick's aim may lead the nose, deg: room for fine aim even on a hull that
+        /// stops its swing almost at once.</summary>
+        public const double MinAimLeadDeg = 4;
+
+        /// <summary>
+        /// How far the stick's aim may run ahead of the nose, radians: as far as the hull needs to brake
+        /// its swing from full turn rate (ω²/2α), and no further. That much lets the nose reach its full
+        /// rate while the mouse keeps moving; any more and the hull goes on turning after the hand has
+        /// stopped, chasing an aim point the player cannot see.
+        /// </summary>
+        public static double AimLeadRad(in HullDynamics hull, in PilotTuning tuning)
+        {
+            double rate = tuning.TurnRateDegS * Astro.Deg2Rad;
+            double brake = hull.PitchYawAngularAccel > 0 ? rate * rate / (2 * hull.PitchYawAngularAccel) : 0;
+            return Math.Min(Math.PI, Math.Max(MinAimLeadDeg * Astro.Deg2Rad, brake));
+        }
+
+        /// <summary>Pulls <paramref name="aim"/> back to within <paramref name="maxLeadRad"/> of
+        /// <paramref name="forward"/> (both unit), along the great circle between them.</summary>
+        public static DVec3 ClampAim(DVec3 aim, DVec3 forward, double maxLeadRad)
+        {
+            var axis = DVec3.Cross(forward, aim);
+            double sin = axis.Length, cos = DVec3.Dot(forward, aim);
+            double angle = Math.Atan2(sin, cos);
+            if (angle <= maxLeadRad) return aim;
+            // Dead astern: any axis across the nose will do.
+            if (sin < 1e-9) axis = PilotState.LevelUp(forward);
+            return RotateAbout(forward, axis.Normalized, maxLeadRad).Normalized;
+        }
+
         /// <summary>Rodrigues' rotation of <paramref name="v"/> by <paramref name="angle"/> radians about unit axis <paramref name="k"/>.</summary>
         public static DVec3 RotateAbout(DVec3 v, DVec3 k, double angle)
         {

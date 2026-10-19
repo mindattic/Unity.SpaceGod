@@ -78,5 +78,45 @@ namespace SolarSystem.Core
 
         public static PilotTuning Of(ShipClass c) =>
             ByClass.TryGetValue(c, out var t) ? t : new PilotTuning(0.1, 20, 1.3, 20, 6, 3.0);
+
+        /// <summary>How a hull of class <paramref name="c"/> is flown at the helm (U.SPC-T269).</summary>
+        public static PilotControl ControlOf(ShipClass c)
+        {
+            switch (c)
+            {
+                case ShipClass.Fighter:
+                case ShipClass.Courier:
+                    return PilotControl.FreeAim;
+                case ShipClass.Breacher:
+                    return PilotControl.DirectNose;
+                case ShipClass.Freighter:
+                case ShipClass.Miner:
+                    return PilotControl.Hauler;
+                default:
+                    return PilotControl.Helm;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The way a hull is flown at the helm, one per kind of craft (U.SPC-T269): see <see cref="PilotAim"/>.
+    /// </summary>
+    public enum PilotControl
+    {
+        /// <summary>Light fighters, Star Conflict style: the mouse swings the camera and crosshair freely
+        /// and the hull turns after them at its own rate.</summary>
+        FreeAim,
+
+        /// <summary>Heavy fighters, Everspace 2 style: the mouse turns the hull itself and the nose is the
+        /// crosshair; the aim never leads it by more than the hull can brake its swing in.</summary>
+        DirectNose,
+
+        /// <summary>Freighters and miners: flown like <see cref="DirectNose"/>, with the hull's weight and
+        /// a slow mouse making it a heavy, deliberate thing to manoeuvre.</summary>
+        Hauler,
+
+        /// <summary>Capital ships, naval style: the keys turn the hull, the mouse looks around it freely,
+        /// and the turrets fight on their own.</summary>
+        Helm,
     }
 }

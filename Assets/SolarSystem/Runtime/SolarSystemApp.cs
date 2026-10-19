@@ -94,6 +94,32 @@ namespace SolarSystem
         DVec3 pilotAim = DVec3.UnitX;
         const float PilotLookSensitivity = 0.12f;
 
+        /// <summary>A freighter's stick is slower: it is a heavy thing to point (U.SPC-T269).</summary>
+        const float HaulerLookFactor = 0.6f;
+
+        /// <summary>The free-aim view's roof (see <see cref="PilotAim.Look"/>): it turns with the crosshair and
+        /// follows the hull's roll, so the mouse stays screen-relative.</summary>
+        DVec3 pilotViewUp;
+
+        /// <summary>At a capital ship's helm the mouse looks around the hull rather than steering it: how far
+        /// the view is swung from dead astern, degrees.</summary>
+        float helmLookYaw, helmLookPitch;
+
+        /// <summary>How the flown hull is steered (see <see cref="PilotControl"/>).</summary>
+        public PilotControl PilotControlMode { get; private set; }
+
+        /// <summary>Where the stick points the hull (ecliptic, unit): the crosshair in free aim.</summary>
+        public DVec3 PilotAimDirection => pilotAim;
+
+        /// <summary>The stick straight ahead again, and the view behind the hull: on taking the helm and
+        /// whenever the hull is put on a new heading by something other than the stick.</summary>
+        void ResetPilotAim()
+        {
+            pilotAim = pilot.Forward;
+            pilotViewUp = pilot.Up;
+            helmLookYaw = helmLookPitch = 0;
+        }
+
         /// <summary>What the pilot camera leans toward tracking, independent of the ship's own facing.</summary>
         Target pilotLockTarget = Target.None;
 
@@ -927,7 +953,7 @@ namespace SolarSystem
             var upReference = new DVec3(upUnity.x, upUnity.y, upUnity.z).SwapYZ;
             var level = upReference - pilot.Forward * DVec3.Dot(upReference, pilot.Forward);
             if (level.LengthSquared > 1e-6) pilot.Up = level.Normalized;
-            pilotAim = pilot.Forward;
+            ResetPilotAim();
         }
 
         /// <summary>The piloted ship was taken from the player (boarded and captured): the session ends with
@@ -1039,6 +1065,8 @@ namespace SolarSystem
         /// position every frame piloting is active, before <see cref="UpdateShips"/> reads it.</summary>
         void UpdatePiloting(float dt)
         {
+            // Set again below once the hull has flown this frame; a lane ride or a lost helm leaves the chase on the hull.
+            SpaceCamera.PilotView = null;
             if (!IsPiloting)
             {
                 pilotBoosting = false;
@@ -1070,14 +1098,32 @@ namespace SolarSystem
                 return;
             }
 
-            // Free look: the stick swings about the hull's own roof (yaw) and starboard (pitch) axes,
-            // so there's no gimbal clamp and "mouse right" stays screen-right however the hull has
-            // rolled -- the nose can be pointed anywhere, including straight up/down or looping past behind.
+            // The stick, one way per kind of hull (U.SPC-T269): a light fighter's mouse swings the view and the
+            // hull turns after it, a heavy fighter's or freighter's turns the hull itself, and a capital ship
+            // is turned on the keys while the mouse looks around it.
+            var tuning = PilotTuning.Of(ship.Spec.Class);
+            var hull = HullDynamics.Of(ship.Combat.Spec);
+            var control = PilotControlMode = PilotTuning.ControlOf(ship.Spec.Class);
+            double leadRad = PilotFlight.AimLeadRad(hull, tuning);
             var look = ClickPanelOpen ? Vector2.zero : Input.MouseDelta;
-            if (look.sqrMagnitude > 0)
+            double lookRight = look.x * PilotLookSensitivity * Mathf.Deg2Rad, lookUp = look.y * PilotLookSensitivity * Mathf.Deg2Rad;
+            double strafeRight = Input.Move.x, strafeUp = Input.Move.y;
+            switch (control)
             {
-                pilotAim = PilotFlight.RotateAbout(pilotAim, pilot.Up, -look.x * PilotLookSensitivity * Mathf.Deg2Rad);
-                pilotAim = PilotFlight.RotateAbout(pilotAim, pilot.Right, look.y * PilotLookSensitivity * Mathf.Deg2Rad).Normalized;
+                case PilotControl.FreeAim:
+                    PilotAim.Look(ref pilotAim, ref pilotViewUp, lookRight, lookUp, pilot.Forward, pilot.Up, dt);
+                    break;
+                case PilotControl.Helm:
+                    // A/D and Q/E (C/]) are the helm's yaw and pitch: a capital ship turns rather than strafes.
+                    helmLookYaw = Mathf.Repeat(helmLookYaw + look.x * PilotLookSensitivity + 180f, 360f) - 180f;
+                    helmLookPitch = Mathf.Clamp(helmLookPitch - look.y * PilotLookSensitivity, -80f, 80f);
+                    pilotAim = PilotAim.Helm(pilot.Forward, pilot.Up, strafeRight, strafeUp, leadRad);
+                    strafeRight = strafeUp = 0;
+                    break;
+                default:
+                    float factor = control == PilotControl.Hauler ? HaulerLookFactor : 1f;
+                    pilotAim = PilotAim.Nose(pilotAim, pilot.Forward, pilot.Up, lookRight * factor, lookUp * factor, leadRad);
+                    break;
             }
             var desiredForward = pilotAim;
 
@@ -1099,13 +1145,12 @@ namespace SolarSystem
             if (!pilotLockTarget.IsNone && (!pilotLockTarget.IsShip || pilotLockTarget.Ship.Destroyed)) pilotLockTarget = Target.None;
             SpaceCamera.PilotLockTarget = pilotLockTarget;
 
-            var tuning = PilotTuning.Of(ship.Spec.Class);
             var input = new PilotInput
             {
                 DesiredForward = desiredForward,
                 Throttle = Mathf.Clamp(Input.Move.z, -1f, 1f),
-                StrafeRight = Mathf.Clamp(Input.Move.x, -1f, 1f),
-                StrafeUp = Mathf.Clamp(Input.Move.y, -1f, 1f),
+                StrafeRight = Math.Max(-1, Math.Min(1, strafeRight)),
+                StrafeUp = Math.Max(-1, Math.Min(1, strafeUp)),
                 Roll = Mathf.Clamp(Input.Roll, -1f, 1f),
                 Boost = Input.Boost,
                 Cruise = Input.Cruise,
@@ -1127,7 +1172,8 @@ namespace SolarSystem
             var gravity = PilotGravity();
             var posBefore = pilot.Pos;
             var velBefore = pilot.Vel;
-            PilotFlight.Step(ref pilot, ship.Combat, HullDynamics.Of(ship.Combat.Spec), tuning, input, gravity, dt);
+            PilotFlight.Step(ref pilot, ship.Combat, hull, tuning, input, gravity, dt);
+            SpaceCamera.PilotView = PilotViewRotation(control);
             // The drive runs on the ship's own tanks: every change of velocity its thrusters make (not gravity's
             // pull, which is free) is paid for in reaction mass by the rocket equation, and a dry hull only coasts.
             var pos = pilot.Pos;
@@ -1156,6 +1202,30 @@ namespace SolarSystem
             UpdateLaneEntry(ship);
             UpdateLaneRejoin(ship);
             ShowWarNotices();
+        }
+
+        /// <summary>Where the chase camera looks, for the hulls whose view is not simply the hull's own facing:
+        /// along the crosshair in free aim, and swung about the hull by the mouse at a capital ship's helm.</summary>
+        Quaternion? PilotViewRotation(PilotControl control)
+        {
+            switch (control)
+            {
+                case PilotControl.FreeAim: return ToRotation(pilotAim, pilotViewUp);
+                case PilotControl.Helm: return ToRotation(pilot.Forward, pilot.Up) * Quaternion.Euler(helmLookPitch, helmLookYaw, 0);
+                default: return null;
+            }
+        }
+
+        /// <summary>A Unity rotation facing <paramref name="forward"/> with its roof on <paramref name="up"/> (ecliptic axes).</summary>
+        static Quaternion ToRotation(DVec3 forward, DVec3 up)
+        {
+            var f = forward.SwapYZ;
+            var u = up.SwapYZ;
+            var fv = new Vector3((float)f.X, (float)f.Y, (float)f.Z);
+            var uv = new Vector3((float)u.X, (float)u.Y, (float)u.Z);
+            if (fv.sqrMagnitude < 1e-12f) fv = Vector3.forward;
+            if (uv.sqrMagnitude < 1e-12f || Mathf.Abs(Vector3.Dot(fv.normalized, uv.normalized)) > 0.98f) uv = Mathf.Abs(fv.normalized.y) > 0.98f ? Vector3.right : Vector3.up;
+            return Quaternion.LookRotation(fv, uv);
         }
 
         /// <summary>Thrust, km/s^2, above which the piloted ship's drive shows as a burn on others' scanners (about 0.01 g).</summary>
@@ -1907,7 +1977,10 @@ namespace SolarSystem
                         shipScene[i] = BattleScene(battle, u.Pos);
                         var f = u.Forward.SwapYZ;
                         var fv = new Vector3((float)f.X, (float)f.Y, (float)f.Z);
-                        if (fv.sqrMagnitude > 1e-12f) shipRotation[i] = Quaternion.LookRotation(fv, Mathf.Abs(fv.normalized.y) > 0.98f ? Vector3.right : Vector3.up);
+                        // The flown hull keeps the roll its pilot gave it (set with its pose in UpdateShips); the
+                        // battle's units have no roll of their own.
+                        if (ship == World.PilotedShip) shipRotation[i] = ToRotation(pilotForward, pilot.Up);
+                        else if (fv.sqrMagnitude > 1e-12f) shipRotation[i] = Quaternion.LookRotation(fv, Mathf.Abs(fv.normalized.y) > 0.98f ? Vector3.right : Vector3.up);
                         lastBattleScene[i] = shipScene[i];
                     }
                 }

@@ -144,7 +144,7 @@ namespace SolarSystem
             pilot = PilotState.At(ship.Orbit.OffsetAt(jd), facing * tuning.MaxSpeed, facing);
             var level = up - facing * DVec3.Dot(up, facing);
             if (level.LengthSquared > 1e-9) pilot.Up = level.Normalized;
-            pilotAim = pilot.Forward;
+            ResetPilotAim();
             insideRampGate = false;
             laneRejoinable = true;
             LaneExitFade = 1;
@@ -290,7 +290,7 @@ namespace SolarSystem
             var level = pilot.Up - st.Facing * DVec3.Dot(pilot.Up, st.Facing);
             pilot.Up = level.LengthSquared > 1e-9 ? level.Normalized : PilotState.LevelUp(st.Facing);
             pilot.AngularVelocity = DVec3.Zero;
-            pilotAim = pilot.Forward;
+            ResetPilotAim();
             double span = Math.Max(ship.PhaseEndJd - ship.PhaseStartJd, 1e-9);
             double u = Math.Max(0, Math.Min(1, (jd - ship.PhaseStartJd) / span));
             LaneRideSpeed = (float)((1 - Math.Cos(Astro.TwoPi * u)) * 0.5);
@@ -321,7 +321,7 @@ namespace SolarSystem
             pilot = PilotState.At(ship.Orbit.OffsetAt(jd), facing * tuning.MaxSpeed, facing);
             var level = up - facing * DVec3.Dot(up, facing);
             if (level.LengthSquared > 1e-9) pilot.Up = level.Normalized;
-            pilotAim = pilot.Forward;
+            ResetPilotAim();
             insideRampGate = true;
             LaneExitFade = 1;
             ShowToast("Off the " + hop.Lane.Name + " lane at " + Catalog[hop.To].Name);

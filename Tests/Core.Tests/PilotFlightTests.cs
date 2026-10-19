@@ -385,6 +385,56 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void TheAimIsPulledBackToWithinItsLeadOfTheNose()
+        {
+            var lead = 10 * Astro.Deg2Rad;
+            var near = PilotFlight.RotateAbout(DVec3.UnitX, DVec3.UnitZ, 5 * Astro.Deg2Rad);
+            Assert.That(PilotFlight.ClampAim(near, DVec3.UnitX, lead).Equals(near), Is.True, "an aim inside the lead was moved");
+
+            var far = PilotFlight.ClampAim(DVec3.UnitY, DVec3.UnitX, lead);
+            Assert.That(AngleDeg(far, DVec3.UnitX), Is.EqualTo(10).Within(1e-9));
+            Assert.That(far.Y > 0 && Math.Abs(far.Z) < 1e-12, Is.True, "clamped off the great circle toward the aim");
+
+            var astern = PilotFlight.ClampAim(-DVec3.UnitX, DVec3.UnitX, lead);
+            Assert.That(AngleDeg(astern, DVec3.UnitX), Is.EqualTo(10).Within(1e-9));
+        }
+
+        [Test]
+        public void EveryHullsAimLeadsFarEnoughToReachItsFullTurnRate()
+        {
+            foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
+            {
+                var hull = Hull(c);
+                if (hull.PitchYawAngularAccel <= 0) continue;
+                var tuning = PilotTuning.Of(c);
+                double rate = tuning.TurnRateDegS * Astro.Deg2Rad;
+                double lead = PilotFlight.AimLeadRad(hull, tuning);
+                Assert.That(Math.Sqrt(2 * hull.PitchYawAngularAccel * lead), Is.GreaterThanOrEqualTo(rate * (1 - 1e-9)), c + ": the lead caps the turn below the hull's rate");
+                Assert.That(lead, Is.GreaterThanOrEqualTo(PilotFlight.MinAimLeadDeg * Astro.Deg2Rad));
+            }
+        }
+
+        [Test]
+        public void LettingGoOfTheStickAfterAFlickStopsTheNoseWithinItsBrakingAngle()
+        {
+            foreach (var c in new[] { ShipClass.Fighter, ShipClass.Freighter, ShipClass.Cruiser, ShipClass.Battleship })
+            {
+                var rig = new Rig(c);
+                double lead = PilotFlight.AimLeadRad(rig.Hull, rig.Tuning);
+                const double dt = 1 / 60.0;
+                // The stick flung half way round, then left alone: the aim is held to its lead each frame, as the helm does.
+                var aim = PilotFlight.ClampAim(-DVec3.UnitY, rig.S.Forward, lead);
+                rig.Fly(new PilotInput { DesiredForward = aim }, dt);
+                var stoppedAt = aim;
+                for (int i = 0; i < 60 * 120; i++)
+                    rig.Fly(new PilotInput { DesiredForward = aim }, dt);
+
+                Assert.That(AngleDeg(rig.S.Forward, stoppedAt), Is.LessThan(1e-6), c + ": the nose did not settle on the clamped aim");
+                Assert.That(AngleDeg(rig.S.Forward, DVec3.UnitX), Is.LessThanOrEqualTo(lead * Astro.Rad2Deg + 1e-6), c + ": the nose swung on past where the aim was let go");
+            }
+        }
+
+        [Test]
         public void StrafeMovesSidewaysWithoutRequiringAnyTurn()
         {
             var rig = new Rig(ShipClass.Cruiser);
