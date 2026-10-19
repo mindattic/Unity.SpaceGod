@@ -212,6 +212,7 @@ namespace SolarSystem.Core.Tests
             var sol = g.Find("Sol System");
             var ac = g.Find("Alpha Centauri");
             g.Focus = sol;
+            var people = g.Systems.Skip(2).SelectMany(s => s.World.Economy.Settlements).ToDictionary(s => s, s => s.Population);
             int coarseBattles = 0;
             ac.World.War.BattleStarted += _ => coarseBattles++;
 
@@ -238,6 +239,9 @@ namespace SolarSystem.Core.Tests
             // A fight in a system nobody is watching is seen through within a coarse step or two of its four-hour limit.
             foreach (var b in ac.World.War.Battles)
                 Assert.That(end - b.StartJd, Is.LessThan(1), b.Name + " dragging on at coarse detail");
+            // The frontier societies (U.SPC-T90) lived through it alongside everyone else's traffic: nobody starved out.
+            foreach (var (s, p) in people)
+                if (s.Kind != SettlementKind.Haven) Assert.That(s.Population, Is.GreaterThan(p * 0.8), s.Name);
             Assert.That(Math.Min(cpu, watch.Elapsed.TotalSeconds), Is.LessThan(BudgetSeconds));
         }
 

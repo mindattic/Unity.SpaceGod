@@ -106,6 +106,19 @@ namespace SolarSystem.Core
         public static StarSystem CreateAlphaCentauri(double jd) => Create(AlphaCentauri.Spec(), jd, World.CreateAlphaCentauri);
 
         /// <summary>
+        /// A nearby system with the society planned for it (<see cref="NearbySocieties"/>, U.SPC-T90): its stations
+        /// added to the catalogue entry, its settlements, lanes and traffic built by <see cref="World.CreateSettled"/>.
+        /// A system with no society planned is left unsettled.
+        /// </summary>
+        public static StarSystem CreateSettled(SystemSpec spec, double jd)
+        {
+            var society = NearbySocieties.For(spec);
+            if (society == null) return Create(spec, jd);
+            society.AddStations(spec);
+            return Create(spec, jd, (eph, at, seed) => World.CreateSettled(eph, at, seed, society));
+        }
+
+        /// <summary>
         /// Builds a system from its catalogue entry. <paramref name="world"/> makes its game layer
         /// (settlements, fleets); left out, the system is unsettled (see <see cref="World.CreateUnsettled"/>).
         /// </summary>
@@ -261,8 +274,8 @@ namespace SolarSystem.Core
         public static double DistanceLy(StarSystem from, StarSystem to) => (to.PositionLy - from.PositionLy).Length;
 
         /// <summary>
-        /// Sol, Alpha Centauri (both settled), and the nearest real systems beyond
-        /// (<see cref="NearbySystems"/>), each visitable but unsettled, all joined by the jump-gate
+        /// Sol, Alpha Centauri, and the nearest real systems beyond (<see cref="NearbySystems"/>), each
+        /// settled more thinly the farther out it is (<see cref="NearbySocieties"/>), all joined by the jump-gate
         /// lattice (<see cref="GateNetwork"/>) that the interstellar traffic flies; the rest of the
         /// nearest stars are shown, not simulated.
         /// </summary>
@@ -273,7 +286,7 @@ namespace SolarSystem.Core
             var alphaCentauri = StarSystem.CreateAlphaCentauri(jd);
             g.Systems.Add(sol);
             g.Systems.Add(alphaCentauri);
-            foreach (var spec in NearbySystems.All()) g.Systems.Add(StarSystem.Create(spec, jd));
+            foreach (var spec in NearbySystems.All()) g.Systems.Add(StarSystem.CreateSettled(spec, jd));
             var simulated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var s in g.Systems)
                 if (s.Spec?.NeighbourName != null) simulated.Add(s.Spec.NeighbourName);

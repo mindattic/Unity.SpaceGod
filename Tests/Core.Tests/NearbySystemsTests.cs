@@ -280,12 +280,12 @@ namespace SolarSystem.Core.Tests
             Assert.That(g.NearbyStars.Select(n => n.Name), Does.Contain("Procyon"));
             Assert.That(g.NearbyStars.Count + 10, Is.EqualTo(Galaxy.Neighbours().Count()));
 
-            // Every system is on the gate lattice; the new systems start with no settlements or ships.
+            // Every system is on the gate lattice, and settled (U.SPC-T90: see NearbySocietiesTests).
             Assert.That(g.Systems.Where(s => s.Gates.Count == 0).Select(s => s.Name), Is.Empty);
             foreach (var s in g.Systems.Skip(2))
             {
-                Assert.That(s.World.Economy.Settlements, Is.Empty, s.Name);
-                Assert.That(s.World.Fleet.Ships, Is.Empty, s.Name);
+                Assert.That(s.Settled, Is.True, s.Name);
+                Assert.That(s.World.Fleet.Ships, Is.Not.Empty, s.Name);
                 Assert.That(s.OverviewSpanKm, Is.GreaterThan(0), s.Name);
             }
         }

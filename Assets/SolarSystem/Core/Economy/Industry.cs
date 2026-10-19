@@ -119,8 +119,8 @@ namespace SolarSystem.Core
         /// <summary>Workers it needs at its current level.</summary>
         public double Workers => Recipe.WorkersPerLevel * Level;
 
-        /// <summary>Farms and water extraction: kept running through a capture, and crewed first.</summary>
-        public bool LifeSupport => Recipe.Kind == IndustryKind.Farm || (Recipe.Kind == IndustryKind.Mine && Recipe.Outputs[0].good == Good.Water);
+        /// <summary>Farms, and water and nitrogen (air) extraction: kept running through a capture, and crewed first.</summary>
+        public bool LifeSupport => Recipe.Kind == IndustryKind.Farm || (Recipe.Kind == IndustryKind.Mine && (Recipe.Outputs[0].good == Good.Water || Recipe.Outputs[0].good == Good.Nitrogen));
 
         public Facility(Recipe recipe, double level)
         {

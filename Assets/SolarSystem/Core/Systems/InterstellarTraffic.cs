@@ -147,6 +147,12 @@ namespace SolarSystem.Core
         /// <summary>The most freighters out on one system's runs to another at once.</summary>
         public const int MaxTradersPerRoute = 4;
 
+        /// <summary>
+        /// The most of a system's own freighters that may be out on interstellar runs at once, as a share of them: the
+        /// rest stay to carry its own trade, so a thin frontier system (U.SPC-T90) is not emptied by a dozen routes.
+        /// </summary>
+        public const double MaxAbroadShare = 0.25;
+
         /// <summary>What a mail run pays a courier a light-year, credits (the receiving system's government pays).</summary>
         public const double MailFeePerLy = 60000;
 
@@ -574,6 +580,13 @@ namespace SolarSystem.Core
                 if (s.Settled) settled.Add(s);
 
             foreach (var s in galaxy.Systems) SendHomeWhenDone(s, jd);
+            // Every voyage under way, gathered once: the dispatchers below count them for each of many routes.
+            outCache = new List<Voyage>();
+            foreach (var p in inGates)
+                if (p.Leader.Voyage != null) outCache.Add(p.Leader.Voyage);
+            foreach (var s in galaxy.Systems)
+                foreach (var ship in s.World.Fleet.Ships)
+                    if (!ship.Destroyed && ship.Voyage != null) outCache.Add(ship.Voyage);
             foreach (var from in settled)
                 foreach (var to in settled)
                 {
@@ -591,6 +604,7 @@ namespace SolarSystem.Core
                 var (from, to, quarry, asked) = expeditionsWanted[i];
                 if (DispatchExpedition(from, to, quarry, jd) || jd - asked > 20) expeditionsWanted.RemoveAt(i);
             }
+            outCache = null;
         }
 
         /// <summary>A ship that can be sent: its own master (not an escort, not the player's), idle in port, not fighting.</summary>
@@ -605,11 +619,20 @@ namespace SolarSystem.Core
         /// <summary>The body a ship in port is at (its ring's world when landed).</summary>
         static int PortOf(Ship s) => s.Phase == ShipPhase.Landed && s.Ring != null ? s.Ring.Body : s.Orbit.Body;
 
+        /// <summary>The voyages under way, while <see cref="Daily"/> sends ships out (null otherwise).</summary>
+        List<Voyage> outCache;
+
         /// <summary>How many of <paramref name="home"/>'s ships with <paramref name="purpose"/> are out (on the way, abroad or coming back).</summary>
         int Out(StarSystem home, VoyagePurpose purpose, StarSystem bound = null)
         {
             int n = 0;
             bool Counts(Voyage v) => v != null && v.Home == home && v.Purpose == purpose && (bound == null || v.Destination == bound || (v.Homeward && v.Route.Count > 0 && v.Route[0].Home == bound) || v.Destination == bound);
+            if (outCache != null)
+            {
+                foreach (var v in outCache)
+                    if (Counts(v)) n++;
+                return n;
+            }
             foreach (var p in inGates)
                 if (Counts(p.Leader.Voyage)) n++;
             foreach (var s in galaxy.Systems)
@@ -640,6 +663,7 @@ namespace SolarSystem.Core
                 HomeRole = ship.Role, HomeRoute = ship.Route, HomePorts = ship.Ports,
             };
             ship.Voyage = v;
+            outCache?.Add(v);
             ship.GateKm = route[0].PositionKm;
             from.World.Fleet.ScheduleNext(ship, jd);
             return v;
@@ -649,6 +673,7 @@ namespace SolarSystem.Core
         void DispatchTrade(StarSystem from, StarSystem to, double jd)
         {
             if (Out(from, VoyagePurpose.Trade, to) >= MaxTradersPerRoute) return;
+            if (Out(from, VoyagePurpose.Trade) >= Math.Max(1, (int)(Freighters(from) * MaxAbroadShare))) return;
             // Traders here know the far markets only by the last news from them (U.SPC-T100): none, no run.
             var news = News.Known(from, to);
             if (news == null) return;
@@ -764,6 +789,15 @@ namespace SolarSystem.Core
             // In from the far gate: to a typical port, about as far out as the one it left.
             double inbound = Burn(Math.Max(from.Ephemeris.Helio(port).Length * 0.5, 0.05 * Astro.AuKm));
             return outbound + GateNetwork.RouteDays(route) + inbound + 1;
+        }
+
+        /// <summary>A system's own working freighters, at home or away.</summary>
+        int Freighters(StarSystem home)
+        {
+            int n = 0;
+            foreach (var s in home.World.Fleet.Ships)
+                if (!s.Destroyed && !s.IsEscort && s.Role == ShipRole.Trader && s.Spec.Class == ShipClass.Freighter && s.Voyage == null) n++;
+            return n + Out(home, VoyagePurpose.Trade);
         }
 
         /// <summary>A courier with the mail, every so often, when none is out on the run.</summary>

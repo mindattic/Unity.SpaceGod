@@ -15,8 +15,8 @@ namespace SolarSystem.Core
     ///  - candidates the archive does not list (or lists from one unconfirmed detection) come from
     ///    their discovery papers and are flagged <see cref="BodyStatus.Candidate"/>;
     ///  - binary orbits and debris discs: the orbit and disc papers named beside them.
-    /// Orbital planes and phases nobody has measured are assumed and say so. None of these systems
-    /// has any settlement yet: whatever the game puts there later is fiction.
+    /// Orbital planes and phases nobody has measured are assumed and say so. The societies settled on
+    /// them (<see cref="NearbySocieties"/>) are fiction, kept apart from these entries.
     /// </summary>
     public static class NearbySystems
     {

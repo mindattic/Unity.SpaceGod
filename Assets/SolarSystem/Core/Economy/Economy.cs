@@ -63,6 +63,12 @@ namespace SolarSystem.Core
         /// <summary>Port tax on every sale and purchase, paid to the port's owner.</summary>
         public const double PortTax = 0.04;
 
+        /// <summary>
+        /// The smallest load worth booking, tonnes, for a market that wants less than a usual load (an outpost's
+        /// medicine, a fab's platinum); bigger markets are sent at least 2% of the hold, up to 20 t.
+        /// </summary>
+        public const double MinLoadTonnes = 2;
+
         public const double TickDays = 0.25;
 
         /// <summary>Ships' propellant purchases count toward a market's demand averaged over about this many days.</summary>
@@ -633,14 +639,16 @@ namespace SolarSystem.Core
                 if (!Carries(cls, good)) continue;
                 double available = from.Available(good);
                 double minimum = Math.Min(capacity * 0.02, 20);
-                if (available < minimum) continue;
+                if (available < Math.Min(minimum, MinLoadTonnes)) continue;
                 foreach (var to in Settlements)
                 {
                     if (to.Body == fromBody || !CanTrade(ship, to)) continue;
                     double factor = RouteFactorOf(ship, from, to);
                     if (factor <= 0) continue;
                     double tonnes = Math.Min(Math.Min(capacity, available), to.Absorb(good));
-                    if (tonnes < minimum) continue;
+                    // A small market's whole want of a good can be less than a usual load: it takes what it wants
+                    // (down to MinLoadTonnes), if a run that small pays.
+                    if (tonnes < Math.Min(minimum, Math.Max(MinLoadTonnes, to.Target(good) * 0.5))) continue;
                     var run = PriceRun(ship, fromBody, to.Body, jd, tonnes, tanks, fuelPrice);
                     if (!run.Reachable) continue;
                     double cost = from.PurchaseCost(good, tonnes);

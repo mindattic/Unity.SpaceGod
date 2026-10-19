@@ -9,7 +9,7 @@ namespace SolarSystem.Core
     /// factions and their economy are the game layer, placed on worlds that plausibly hold what they
     /// produce (ice moons sell water, Titan hydrocarbons, Io copper and zinc from its sulphide flows).
     /// </summary>
-    public sealed class World
+    public sealed partial class World
     {
         public Ephemeris Ephemeris { get; }
         public BodyCatalog Catalog => Ephemeris.Catalog;

@@ -16,7 +16,7 @@ Every system outside Sol is a catalogue entry (`SystemSpec`, in `AlphaCentauri.c
   - Optimistic zone: recent-Venus and early-Mars fluxes. These are approximated by scaling the conservative edges by their solar ratios (1.7763/1.0385 and 0.3207/0.3507).
   - The flux is averaged over the orbit: L / (a²√(1−e²)). A companion star's light is ignored.
 - **Distances** are 1000 / parallax (mas) parsecs, times 3.26156 ly/pc.
-- **The game layer:** Sol and Alpha Centauri keep their settlements, fleets and jump gates. The other systems are visitable (Navigator, STAR SYSTEMS) but unsettled: no settlements, lanes or ships. Their two placeholder factions, "Survey Service" and "Unknown", are fiction, and so will be anything settled there later.
+- **The game layer:** Sol and Alpha Centauri keep their settlements, fleets and jump gates. The twelve systems beyond are settled too (U.SPC-T90, `NearbySocieties.cs`), more thinly the farther out they are; see "The nearby societies" below. Every faction, settlement, station and ship there is fiction; the catalogue values above are untouched by it.
 
 ## Alpha Centauri A and B
 
@@ -339,3 +339,10 @@ Three real Trojans: Hektor and Eurybates in the Greek camp at Jupiter's L4, Patr
   - every orbital yard, factory and habitat;
   - in Sol, the Black Banner and its havens: Blackwater on Deimos, the hidden belt bases and Menoetius Hold above.
 - The ore mined at Toliman Forge is fiction: no asteroid belt is known around B.
+
+## The nearby societies (U.SPC-T90)
+
+- **All fiction**, placed by `NearbySocieties.cs` on the real bodies of the twelve catalogue systems: every faction, settlement, population, mine, factory, yard, lane and ship name. The physical values of the stars and planets stay those sourced above; a society only adds invented stations (each summary begins "Fiction.") on circular orbits of its own choosing.
+- **Where things go:** colonies only on habitable-zone worlds (Ross 128 b, GJ 1061 d, Luyten b, Teegarden's Star b); metal mines on the hot rocky worlds (Barnard e and c, Lalande 21185 b, Tau Ceti h, GJ 1061 b and c, Luyten c, Teegarden's Star c); skimmer aerostats on the giants and mini-Neptunes, candidates included (Wolf 359 b, Lalande 21185 c, Epsilon Eridani b, Epsilon Indi Ab, Luyten d); ice and rock stations in the known belts and discs (Epsilon Eridani's inner and outer belts, Tau Ceti's disc). Where no world will do, the hub is a station in the habitable zone, and ore or ice comes from a captured swarm of rock or comets that no survey has found (Barnard's Star, Luhman 16, Wolf 359, Sirius, Ross 128, Epsilon Indi): said so in each station's summary. Sirius's stations keep to orbits well inside the ~8 AU periastron of B (its habitable zone, past 5 AU, is not stable); Luhman 16's skim the brown dwarfs' iron and silicate cloud decks and their water, methane and ammonia.
+- **How big:** each settlement's people are scaled by (4.344 ly / distance)², Alpha Centauri's distance over the system's, squared, so Barnard's Star is about half as built up as Centauri and the 12 ly frontier about an eighth. The fleet (freighters, ore haulers, couriers, a navy patrol, free ships) follows from the people. Raiders hold a haven only in the two systems big enough to keep a navy that can hold them off (Barnard's Star and Epsilon Eridani).
+- **Sized to work:** every settlement grows most of its own food, water and air; the mines and factories are then sized so the system makes 15% more of every good than it uses, a facility whose consumables come from elsewhere counted at the 55% it runs on without them.
