@@ -360,17 +360,20 @@ namespace SolarSystem
             InitSaves();
         }
 
-        /// <summary>Battle toasts from whichever system is being watched.</summary>
+        /// <summary>Battle toasts from whichever system is being watched, in every system there is and any a new gate opens (U.SPC-T97).</summary>
         void SubscribeWorlds()
         {
-            foreach (var system in Galaxy.Systems)
+            foreach (var system in Galaxy.Systems) SubscribeWorld(system);
+            Galaxy.SystemAdded += (s, jd) => SubscribeWorld(s);
+            Galaxy.SystemOpened += (s, by, jd) => ShowToast(s.Name.ToUpperInvariant() + " IS OPEN: " + by.Name + " has finished the first gate in");
+        }
+
+        void SubscribeWorld(StarSystem s)
+        {
+            s.World.War.BattleStarted += b =>
             {
-                var s = system;
-                s.World.War.BattleStarted += b =>
-                {
-                    if (s == ActiveSystem) ShowToast(b.Name.ToUpperInvariant() + " has begun");
-                };
-            }
+                if (s == ActiveSystem) ShowToast(b.Name.ToUpperInvariant() + " has begun");
+            };
         }
 
         /// <summary>

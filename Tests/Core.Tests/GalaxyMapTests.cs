@@ -190,6 +190,42 @@ namespace SolarSystem.Core.Tests
             Assert.That(GalaxyMap.Build(g, sol, heard).Of(ac).Pirates, Is.EqualTo(PirateActivity.High));
         }
 
+        /// <summary>U.SPC-T97: the map is fed the gates really being built, and a ring wrecked far off shows down once word of it arrives.</summary>
+        [Test]
+        public void TheGatesTheBuildersAreWorkingOnShowAndAWreckedRingIsDownOnceHeardOf()
+        {
+            var (g, sol, ac) = Create();
+            var wolf = g.Find("Wolf 359");
+            Assume.That(g.Network.Between(sol, wolf), Is.Null);
+            var p = g.Construction.Start(sol.World.Sol, sol, wolf, null, StartJd);
+            // Surveying: nothing to draw yet.
+            Assert.That(g.Construction.Works(), Is.Empty);
+            p.SurveyDays = 0;
+            g.Construction.Step(p, StartJd + 1, 1);
+            for (int d = 2; d <= 101; d++) g.Construction.Step(p, StartJd + d, 1);
+            var works = g.Construction.Works();
+            Assert.That(works.Count, Is.EqualTo(1));
+            var map = GalaxyMap.Build(g, sol, StartJd + 101, works);
+            var building = map.Between(sol, wolf);
+            Assert.That(building.UnderConstruction, Is.True);
+            Assert.That(building.Builder, Is.SameAs(sol.World.Sol));
+            Assert.That(building.Progress, Is.EqualTo(p.Progress).Within(1e-12));
+            Assert.That(building.Progress, Is.GreaterThan(0));
+
+            // Centauri's end of the Sol pair wrecked: down in Centauri at once, in Sol only once the news comes round.
+            var link = g.Network.Between(sol, ac);
+            double jd = StartJd + 0.5;
+            g.Construction.Damage(link.GateIn(ac), 1, jd, "test");
+            bool DownAtAc(GalaxyMapModel m) => link.A == ac ? m.Between(sol, ac).DownAtA : m.Between(sol, ac).DownAtB;
+            Assert.That(DownAtAc(GalaxyMap.Build(g, ac, jd)), Is.True);
+            Assert.That(GalaxyMap.Build(g, ac, jd).Between(sol, ac).Shut, Is.True, "a ring out of action is shut to everyone");
+            Assert.That(DownAtAc(GalaxyMap.Build(g, sol, jd)), Is.False, "word has not reached Sol");
+            double heard = Relay(g, ac, sol, jd);
+            var after = GalaxyMap.Build(g, sol, heard).Between(sol, ac);
+            Assert.That(after.Down, Is.True, "the news has come round by the other gates");
+            Assert.That(after.Shut, Is.True);
+        }
+
         [Test]
         public void AGateBeingBuiltShowsOnceEitherEndIsKnown()
         {

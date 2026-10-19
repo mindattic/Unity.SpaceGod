@@ -135,13 +135,17 @@ namespace SolarSystem.Views
             }
             var pair = new Vector3[2];
             var net = galaxy.Network.Links;
+            // A strip for each link finished since (U.SPC-T97).
+            while (links.Count < net.Count) links.Add(new LineStrip(net[links.Count].ToString(), Root.transform));
             for (int i = 0; i < net.Count && i < links.Count; i++)
             {
                 var l = net[i];
                 bool shut = l.AtA.Blockaded(jd) || l.AtB.Blockaded(jd);
                 pair[0] = At(l.A.PositionLy);
                 pair[1] = At(l.B.PositionLy);
-                var c = shut ? new Color(1f, 0.35f, 0.3f, 0.55f * fade) : new Color(0.45f, 0.85f, 1f, 0.4f * fade);
+                // Grey and faint while a ring is out of action, red under blockade, pale blue when open.
+                var c = !l.Working ? new Color(0.5f, 0.5f, 0.5f, 0.25f * fade)
+                    : shut ? new Color(1f, 0.35f, 0.3f, 0.55f * fade) : new Color(0.45f, 0.85f, 1f, 0.4f * fade);
                 links[i].SetPoints(pair, 2, c, 1f, 1f);
                 links[i].SetTint(Color.white);
                 links[i].Root.transform.localPosition = Vector3.zero;

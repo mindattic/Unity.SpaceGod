@@ -100,8 +100,13 @@ namespace SolarSystem.Core
         /// <summary>The traffic as a share of the busiest link's on the map (0..1).</summary>
         public double Flow;
 
-        /// <summary>Each end shut (under blockade), as last heard of that end.</summary>
+        /// <summary>Each end shut (under blockade, or its ring out of action), as last heard of that end.</summary>
         public bool ShutAtA, ShutAtB;
+
+        /// <summary>Each end's ring damaged out of action in a war (U.SPC-T97), as last heard of that end: shut to everyone until rebuilt.</summary>
+        public bool DownAtA, DownAtB;
+
+        public bool Down => DownAtA || DownAtB;
 
         public bool Shut => ShutAtA || ShutAtB;
 
@@ -286,12 +291,12 @@ namespace SolarSystem.Core
             if (a != null && a.Known)
             {
                 asOf = Math.Max(asOf, a.Report.AsOfJd);
-                Gate(a.Report, link.AtA, model.Jd, out l.ShutAtA, out l.OwnerA);
+                Gate(a.Report, link.AtA, model.Jd, out l.ShutAtA, out l.DownAtA, out l.OwnerA);
             }
             if (b != null && b.Known)
             {
                 asOf = Math.Max(asOf, b.Report.AsOfJd);
-                Gate(b.Report, link.AtB, model.Jd, out l.ShutAtB, out l.OwnerB);
+                Gate(b.Report, link.AtB, model.Jd, out l.ShutAtB, out l.DownAtB, out l.OwnerB);
             }
             if (double.IsNegativeInfinity(asOf)) return l;
             l.KnownAsOfJd = asOf;
@@ -324,14 +329,15 @@ namespace SolarSystem.Core
             return l;
         }
 
-        static void Gate(SystemReport r, JumpGate gate, double jd, out bool shut, out Faction owner)
+        static void Gate(SystemReport r, JumpGate gate, double jd, out bool shut, out bool down, out Faction owner)
         {
-            shut = false;
+            shut = down = false;
             owner = null;
             foreach (var g in r.Gates)
                 if (g.Gate == gate)
                 {
-                    shut = g.Shut(jd);
+                    down = g.Down;
+                    shut = g.Shut(jd) || down;
                     owner = g.Owner;
                     return;
                 }

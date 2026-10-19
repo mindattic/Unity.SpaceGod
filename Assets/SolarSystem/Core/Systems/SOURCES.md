@@ -241,6 +241,27 @@ Every system outside Sol is a catalogue entry (`SystemSpec`, in `AlphaCentauri.c
 
 - **Assumed:** plane.
 
+## The frontier stars (U.SPC-T97)
+
+The stars of the interstellar view that nobody simulates until a faction builds the first gate to one (`FrontierSystems.cs`, see `GateConstruction`). Each is its primary star only (a companion is named in its summary but not simulated), with only the best-established planets. Positions are the interstellar view's (Wikipedia "List of nearest stars": RECONS and Gaia DR3). Star values are from each star's Wikipedia entry and the papers it cites; where marked *derived* the luminosity is worked out from the radius and temperature (L = R²(T/5772 K)⁴), and a rotation marked *assumed* has not been measured.
+
+| Star | Type | Mass (M☉) | Radius (R☉) | Luminosity (L☉) | Teff (K) | Rotation (d) | Not simulated |
+|---|---|---|---|---|---|---|---|
+| WISE 0855−0714 | Y4 | ≈0.0048 (5 MJ; 3–10 MJ) | 0.10 | derived | 285 | 0.4 *assumed* | |
+| Gliese 65 A (BL Ceti) | M5.5Ve | 0.1225 (Kervella et al. 2016) | 0.165 | derived | 2670 | 0.243 | UV Ceti (B) |
+| Ross 154 | M3.5Ve | 0.177 | 0.240 | 0.0038 | 3248 | 2.85 | |
+| Ross 248 | M5.5Ve | 0.136 | 0.160 | 0.0018 | 2799 | 4.2 | |
+| Gliese 887 | M0.5V | 0.489 (Jeffers et al. 2020) | 0.471 | 0.0368 | 3688 | 200 | |
+| 61 Cygni A | K5.0V | 0.70 | 0.665 | 0.153 | 4526 | 35.4 | 61 Cygni B |
+| Procyon A | F5IV–V | 1.478 | 2.048 | 6.93 | 6530 | 23 | Procyon B |
+| Struve 2398 A | M3.0V | 0.334 | 0.351 | derived | 3400 | 40 *assumed* | Struve 2398 B |
+| Groombridge 34 A | M1.5V | 0.38 | 0.38 | derived | 3700 | 44 | Groombridge 34 B |
+| DX Cancri | M6.5Ve | 0.087 | 0.11 | derived | 2700 | 1.4 *assumed* | |
+
+- **Planets:** Gliese 887 b (9.262 d, 0.068 AU, e 0.09, 4.2 M⊕ min) and c (21.789 d, 0.120 AU, e 0.22, 7.6 M⊕ min), Jeffers et al. 2020 (Science 368, 1477); Groombridge 34 Ab (11.4433 d, 0.0717 AU, e 0.09, 3.03 M⊕ min), Howard et al. 2014 and Pinamonti et al. 2018. Radii from the Chen & Kipping 2017 relation; planes and phases assumed.
+- **Left out:** EZ Aquarii, a close triple whose masses are not pinned down well enough, stays a plain star.
+- **The gates themselves** are fiction: what one costs (tonnes of Alloys, Electronics and Machinery, scaling with its reach), how long it takes to build (two years and a fifth of a year per light-year, after a survey of 60 days and 15 per light-year), the farthest one reaches (8 ly) and how war damages them are game rules, in `GateConstruction.cs`.
+
 ## Real spacecraft (Sol)
 
 Orbits are circular, at the published altitude and inclination. Where each craft sits along its orbit is **illustrative**: there are no live orbital elements.

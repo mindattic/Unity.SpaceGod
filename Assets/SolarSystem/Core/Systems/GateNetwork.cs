@@ -29,11 +29,14 @@ namespace SolarSystem.Core
         /// <summary>This link's gate in <paramref name="s"/>, or null if it does not touch it.</summary>
         public JumpGate GateIn(StarSystem s) => s == A ? AtA : s == B ? AtB : null;
 
-        /// <summary>Open for <paramref name="faction"/> leaving <paramref name="from"/>: both ends let it through.</summary>
+        /// <summary>Both rings whole enough to hold a crossing open (see <see cref="JumpGate.Working"/>).</summary>
+        public bool Working => AtA.Working && AtB.Working;
+
+        /// <summary>Open for <paramref name="faction"/> leaving <paramref name="from"/>: both rings working, and both ends let it through.</summary>
         public bool Open(StarSystem from, Faction faction, double jd)
         {
             var near = GateIn(from);
-            return near != null && near.Admits(faction, jd) && near.Partner.Admits(faction, jd);
+            return near != null && Working && near.Admits(faction, jd) && near.Partner.Admits(faction, jd);
         }
 
         public override string ToString() => AtA.Name + " / " + AtB.Name;
@@ -167,7 +170,8 @@ namespace SolarSystem.Core
         /// (Dijkstra on crossing time, plus <see cref="CrossingDays"/> for each system passed through),
         /// as the gates to take in order, each in the system the ship is in when it takes it. Gates
         /// that will not open for <paramref name="traveller"/> at <paramref name="jd"/> are left out
-        /// (null traveller: any gate). Empty for the same system; null when there is no way through.
+        /// (null traveller: any gate still working), and a link with a ring out of action (see
+        /// <see cref="GateLink.Working"/>) for everyone. Empty for the same system; null when there is no way through.
         /// </summary>
         public List<JumpGate> Route(StarSystem from, StarSystem to, Faction traveller = null, double jd = double.NegativeInfinity)
         {
@@ -192,7 +196,7 @@ namespace SolarSystem.Core
                 foreach (var l in LinksOf(here))
                 {
                     var next = l.Other(here);
-                    if (done.Contains(next)) continue;
+                    if (done.Contains(next) || !l.Working) continue;
                     if (traveller != null && !l.Open(here, traveller, jd)) continue;
                     double days = hereDays + l.TransitDays + (here == from ? 0 : CrossingDays);
                     if (!best.TryGetValue(next, out double known) || days < known)

@@ -42,15 +42,16 @@ namespace SolarSystem.Core
         /// <summary>
         /// The gate to leave <paramref name="from"/> by on the way to <paramref name="to"/> (the one straight there,
         /// else the first on the quickest route over the network, open or not: the view is no ship and nobody's
-        /// blockade stops it) and the one in <paramref name="to"/> to come out of (the far end of the last gate on
-        /// that route). False, with both null, when <paramref name="from"/> has no gates or there is no way through.
+        /// blockade stops it, though a ring out of action does) and the one in <paramref name="to"/> to come out of (the far
+        /// end of the last gate on that route). False, with both null, when <paramref name="from"/> has no gates or there is
+        /// no way through.
         /// </summary>
         public static bool TryChoose(GateNetwork network, StarSystem from, StarSystem to, out JumpGate departure, out JumpGate arrival)
         {
             departure = arrival = null;
             if (from == null || to == null || from == to || from.Gates.Count == 0) return false;
             var direct = from.GateTo(to);
-            if (direct != null && direct.Partner != null)
+            if (direct != null && direct.Partner != null && direct.Link.Working)
             {
                 departure = direct;
                 arrival = direct.Partner;

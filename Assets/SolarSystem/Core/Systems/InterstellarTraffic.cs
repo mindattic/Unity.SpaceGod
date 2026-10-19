@@ -216,12 +216,14 @@ namespace SolarSystem.Core
             rng = new Random(seed);
             nextDailyJd = jd + 0.5;
             News = new Newswire(galaxy, jd);
-            foreach (var system in galaxy.Systems)
-            {
-                var s = system;
-                s.World.ReachedGate += (ship, when) => OnReachedGate(s, ship, when);
-                s.World.VoyageOrders = (ship, here, when) => Orders(s, ship, here, when);
-            }
+            foreach (var system in galaxy.Systems) Register(system);
+        }
+
+        /// <summary>Takes <paramref name="s"/>'s gate traffic on: ships there reaching a gate, and the orders of those abroad (a system opened by a new gate, U.SPC-T97, as well as the first ones).</summary>
+        internal void Register(StarSystem s)
+        {
+            s.World.ReachedGate += (ship, when) => OnReachedGate(s, ship, when);
+            s.World.VoyageOrders = (ship, here, when) => Orders(s, ship, here, when);
         }
 
         GateNetwork Network => galaxy.Network;

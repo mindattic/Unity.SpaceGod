@@ -17,6 +17,7 @@ namespace SolarSystem.Views
     public sealed class GateView
     {
         readonly SolarSystemApp app;
+        readonly Transform parent;
         readonly List<(JumpGate gate, GameObject root, MeshRenderer renderer)> views = new List<(JumpGate, GameObject, MeshRenderer)>();
         readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
         static readonly int EngineGlowId = Shader.PropertyToID("_EngineGlow");
@@ -30,12 +31,22 @@ namespace SolarSystem.Views
         static readonly Color IdleColor = new Color(0.6f, 0.45f, 1f);
         static readonly Color ReadyColor = new Color(0.55f, 1f, 0.6f);
         static readonly Color ShutColor = new Color(1f, 0.3f, 0.25f);
+        static readonly Color DownColor = new Color(0.35f, 0.32f, 0.3f);
 
         public GateView(SolarSystemApp app, Transform parent)
         {
             this.app = app;
-            foreach (var gate in app.ActiveSystem.Gates)
+            this.parent = parent;
+            AddNew();
+        }
+
+        /// <summary>A view for every gate of the active system not yet drawn: those it started with, and any finished since (U.SPC-T97).</summary>
+        void AddNew()
+        {
+            var gates = app.ActiveSystem.Gates;
+            for (int i = views.Count; i < gates.Count; i++)
             {
+                var gate = gates[i];
                 var root = new GameObject(gate.Name);
                 root.transform.SetParent(parent, false);
                 root.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetDockingRing(null);
@@ -48,6 +59,7 @@ namespace SolarSystem.Views
 
         public void Update(bool visible, JumpGate readyToActivate)
         {
+            if (views.Count < app.ActiveSystem.Gates.Count) AddNew();
             double jd = app.Clock.Jd;
             foreach (var (gate, root, renderer) in views)
             {
@@ -68,8 +80,10 @@ namespace SolarSystem.Views
 
                 bool ready = gate == readyToActivate;
                 bool shut = gate.Blockaded(jd) || (gate.Partner != null && gate.Partner.Blockaded(jd));
-                var color = ready ? ReadyColor : shut ? ShutColor : IdleColor;
-                block.SetFloat(EngineGlowId, ready ? 3f : 1.3f + 0.5f * Mathf.Sin(Time.unscaledTime * 2f));
+                // A ring out of action (wrecked in a war, or its far end) is dark until it is rebuilt.
+                bool down = gate.Link == null || !gate.Link.Working;
+                var color = ready ? ReadyColor : down ? DownColor : shut ? ShutColor : IdleColor;
+                block.SetFloat(EngineGlowId, ready ? 3f : down ? 0.2f : 1.3f + 0.5f * Mathf.Sin(Time.unscaledTime * 2f));
                 block.SetColor(EngineColorId, color);
                 block.SetColor(ColorId, Color.white);
                 block.SetFloat(HighlightId, 0f);

@@ -64,11 +64,35 @@ namespace SolarSystem.Core
             PositionKm = positionKm;
         }
 
+        /// <summary>
+        /// How whole the ring is, 0..1 (U.SPC-T97): 1 as built, worn down by sabotage and fighting in a war
+        /// (see <see cref="Damage"/>), 0 a wreck. Below <see cref="OperationalIntegrity"/> it will not hold a
+        /// crossing open, and nobody can go through either way until it is rebuilt (see <see cref="GateConstruction"/>).
+        /// </summary>
+        public double Integrity = 1;
+
+        /// <summary>The least of <see cref="Integrity"/> a ring still works at: damaged, but holding.</summary>
+        public const double OperationalIntegrity = 0.5;
+
+        /// <summary>Whole enough to hold a crossing open (see <see cref="Integrity"/>).</summary>
+        public bool Working => Integrity >= OperationalIntegrity;
+
+        /// <summary>Wrecked outright: nothing left of the ring but its frame.</summary>
+        public bool Wrecked => Integrity <= 0;
+
+        /// <summary>Knocks <paramref name="amount"/> (0..1) off the ring's <see cref="Integrity"/>; true if that put it out of action.</summary>
+        public bool Damage(double amount)
+        {
+            bool was = Working;
+            Integrity = Math.Max(0, Integrity - Math.Max(0, amount));
+            return was && !Working;
+        }
+
         public bool InRange(DVec3 shipHelioKm) => (shipHelioKm - PositionKm).Length <= ActivationRangeKm;
 
         /// <summary>Whether a ship at <paramref name="shipHelioKm"/> (relative to this gate's own
-        /// system root) can activate this gate right now: paired, and close enough.</summary>
-        public bool CanActivate(DVec3 shipHelioKm) => Partner != null && InRange(shipHelioKm);
+        /// system root) can activate this gate right now: paired, both rings working, and close enough.</summary>
+        public bool CanActivate(DVec3 shipHelioKm) => Partner != null && Working && Partner.Working && InRange(shipHelioKm);
 
         public bool Blockaded(double jd) => jd < BlockadeUntilJd;
 

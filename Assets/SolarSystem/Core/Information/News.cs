@@ -124,7 +124,7 @@ namespace SolarSystem.Core
         {
             var world = s.World;
             r.Holder = world.Holder;
-            foreach (var g in s.Gates) r.Gates.Add(new GateState { Gate = g, Owner = g.Owner, BlockadeUntilJd = g.BlockadeUntilJd });
+            foreach (var g in s.Gates) r.Gates.Add(new GateState { Gate = g, Owner = g.Owner, BlockadeUntilJd = g.BlockadeUntilJd, Damage = 1 - g.Integrity });
             foreach (var st in world.Economy.Settlements)
             {
                 if (st.Kind == SettlementKind.Haven)
@@ -161,6 +161,12 @@ namespace SolarSystem.Core
 
         /// <summary>Shut at <paramref name="jd"/>, as far as the report knew (a blockade lasts until its date unless lifted).</summary>
         public bool Shut(double jd) => jd < BlockadeUntilJd;
+
+        /// <summary>How much of the ring had been knocked out of it (U.SPC-T97): 0 whole, 1 a wreck (see <see cref="JumpGate.Integrity"/>).</summary>
+        public double Damage;
+
+        /// <summary>The ring was out of action: too damaged to hold a crossing open until it is rebuilt.</summary>
+        public bool Down => 1 - Damage < JumpGate.OperationalIntegrity;
     }
 
     /// <summary>A port a report saw under a declared blockade or a siege (U.SPC-T103).</summary>

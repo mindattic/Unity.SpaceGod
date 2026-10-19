@@ -1137,14 +1137,32 @@ namespace SolarSystem.UI
                 foreach (var gate in system.Gates)
                 {
                     bool shut = gate.Blockaded(jd) || gate.Partner.Blockaded(jd);
+                    bool down = !gate.Link.Working;
                     string line = "   " + gate.Name + "  " + gate.Link.Ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly, " +
-                                  (gate.Link.TransitDays * 24).ToString("0", CultureInfo.InvariantCulture) + " h" + (shut ? "   SHUT" : "");
+                                  (gate.Link.TransitDays * 24).ToString("0", CultureInfo.InvariantCulture) + " h" + (down ? "   DOWN" : shut ? "   SHUT" : "") +
+                                  (gate.Integrity < 1 ? "  " + (gate.Integrity * 100).ToString("0", CultureInfo.InvariantCulture) + "% whole" : "");
                     var old = GUI.contentColor;
-                    GUI.contentColor = shut ? new Color(1f, 0.5f, 0.42f) : new Color(0.7f, 0.82f, 0.95f);
+                    GUI.contentColor = down || shut ? new Color(1f, 0.5f, 0.42f) : new Color(0.7f, 0.82f, 0.95f);
                     GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), line, small);
                     GUI.contentColor = old;
                     sy += 15;
                 }
+                // Gates being surveyed, built or rebuilt here (U.SPC-T97), and how far along.
+                if (app.Galaxy.Construction != null)
+                    foreach (var p in app.Galaxy.Construction.Active)
+                    {
+                        if (p.From != system) continue;
+                        string what = p.Work == GateJob.Repair ? "rebuilding the " + p.Gate.Name
+                            : p.Stage == GateStage.Survey ? "surveying for a gate to " + p.TargetName
+                            : "building a gate to " + p.TargetName;
+                        string line = "   " + p.Builder.Name + " " + what +
+                                      (p.Stage == GateStage.Building ? "  " + (p.Progress * 100).ToString("0", CultureInfo.InvariantCulture) + "%" : "");
+                        var old = GUI.contentColor;
+                        GUI.contentColor = new Color(0.85f, 0.8f, 0.55f);
+                        GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), line, small);
+                        GUI.contentColor = old;
+                        sy += 15;
+                    }
             }
             int crossing = app.Galaxy.Traffic.InGates.Count;
             if (crossing > 0)

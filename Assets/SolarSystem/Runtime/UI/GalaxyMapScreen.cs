@@ -75,7 +75,7 @@ namespace SolarSystem.UI
             double jd = app.Clock.Jd;
             if (model == null || builtFor != app.ActiveSystem || Time.unscaledTime - builtAt > 0.25f)
             {
-                model = GalaxyMap.Build(app.Galaxy, app.ActiveSystem, jd);
+                model = GalaxyMap.Build(app.Galaxy, app.ActiveSystem, jd, app.Galaxy.Construction?.Works());
                 builtAt = Time.unscaledTime;
                 builtFor = app.ActiveSystem;
             }

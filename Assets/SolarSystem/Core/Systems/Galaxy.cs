@@ -51,6 +51,25 @@ namespace SolarSystem.Core
             return best;
         }
 
+        /// <summary>
+        /// Nobody has settled it yet, but a working gate leads in (U.SPC-T97): the first gate into an empty system opens it
+        /// to settlement, and stays its way in while it holds (see <see cref="GateConstruction"/>).
+        /// </summary>
+        public bool OpenToSettlement
+        {
+            get
+            {
+                if (Settled) return false;
+                foreach (var g in gates)
+                    if (g.Link != null && g.Link.Working) return true;
+                return false;
+            }
+        }
+
+        /// <summary>When its first gate was finished and it was opened to settlement (see <see cref="OpenToSettlement"/>); NaN for one
+        /// that was on the network from the start, or is not yet.</summary>
+        public double OpenedJd = double.NaN;
+
         /// <summary>Has settlements to trade with (Sol, Alpha Centauri), rather than only stars and worlds.</summary>
         public bool Settled
         {
@@ -205,6 +224,19 @@ namespace SolarSystem.Core
         /// <summary>The ships crossing between systems and the voyages that send them (see <see cref="InterstellarTraffic"/>).</summary>
         public InterstellarTraffic Traffic { get; private set; }
 
+        /// <summary>The gates being surveyed, built and rebuilt (U.SPC-T97): how the network grows outward and heals after a war.</summary>
+        public GateConstruction Construction { get; private set; }
+
+        /// <summary>Raised when a system joins the simulation (a frontier star reached by its first gate): (the system, when).</summary>
+        public event Action<StarSystem, double> SystemAdded;
+
+        /// <summary>
+        /// Raised when the first gate into an empty system is finished and it is open to settlement (see
+        /// <see cref="StarSystem.OpenToSettlement"/>): (the system, the faction that built the gate, when). Colonisation
+        /// takes it from there.
+        /// </summary>
+        public event Action<StarSystem, Faction, double> SystemOpened;
+
         /// <summary>
         /// The interstellar polities (U.SPC-T91): every system's factions, one object each however many systems they
         /// hold, with one diplomacy table between them all.
@@ -249,7 +281,26 @@ namespace SolarSystem.Core
                 }
             }
             Traffic?.Update(jd);
+            Construction?.Update(jd);
         }
+
+        /// <summary>
+        /// Brings <paramref name="system"/> into the simulation from <paramref name="jd"/> (a frontier star reached by its
+        /// first gate, U.SPC-T97): it runs with the rest from now on (at coarse detail unless it is the focus), its gate
+        /// traffic is taken on, and the plain star it was shown as among the <see cref="NearbyStars"/> gives way to it.
+        /// </summary>
+        public void AddSystem(StarSystem system, double jd)
+        {
+            if (system == null || Systems.Contains(system)) return;
+            Systems.Add(system);
+            string shown = system.Spec?.NeighbourName ?? system.Name;
+            NearbyStars.RemoveAll(n => string.Equals(n.Name, shown, StringComparison.OrdinalIgnoreCase));
+            system.World.Coarse = !AtFullDetail(system);
+            Traffic?.Register(system);
+            SystemAdded?.Invoke(system, jd);
+        }
+
+        internal void RaiseOpened(StarSystem system, Faction by, double jd) => SystemOpened?.Invoke(system, by, jd);
 
         /// <summary>
         /// Makes <paramref name="system"/> the <see cref="Focus"/> now (the player has arrived there): it is brought
@@ -288,7 +339,8 @@ namespace SolarSystem.Core
         /// Sol, Alpha Centauri, and the nearest real systems beyond (<see cref="NearbySystems"/>), each
         /// settled more thinly the farther out it is (<see cref="NearbySocieties"/>), all joined by the jump-gate
         /// lattice (<see cref="GateNetwork"/>) that the interstellar traffic flies; the rest of the
-        /// nearest stars are shown, not simulated.
+        /// nearest stars are shown, not simulated, until a faction's gate reaches one (<see cref="GateConstruction"/>,
+        /// <see cref="FrontierSystems"/>).
         /// </summary>
         public static Galaxy CreateDefault(double jd)
         {
@@ -307,6 +359,7 @@ namespace SolarSystem.Core
             g.Network = GateNetwork.Build(g.Systems);
             g.Traffic = new InterstellarTraffic(g, jd);
             g.Polities.InTransit = g.Traffic.InTransit;
+            g.Construction = new GateConstruction(g, jd);
             return g;
         }
 
