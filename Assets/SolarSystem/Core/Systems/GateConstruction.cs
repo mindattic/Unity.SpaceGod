@@ -287,8 +287,11 @@ namespace SolarSystem.Core
             if (bill > 0) have = Math.Min(have, Math.Max(0, p.Builder.Treasury) / bill);
             if (have <= 0) return;
             for (int i = 0; i < Materials.Length; i++) Buy(p, i, want[i] * have);
+            double before = p.WorkDone;
             p.WorkDone = Math.Min(p.WorkDays, p.WorkDone + rate * have);
-            if (p.Work == GateJob.Repair) p.Gate.Integrity = Math.Max(p.Gate.Integrity, p.FromIntegrity + (1 - p.FromIntegrity) * p.Progress);
+            // The day's work mends its share of the damage it was sized for, on top of whatever is left of the ring: damage done
+            // to it meanwhile stands (U.SPC-T299).
+            if (p.Work == GateJob.Repair) p.Gate.Integrity = Math.Min(1, p.Gate.Integrity + (1 - p.FromIntegrity) * (p.WorkDone - before) / p.WorkDays);
             if (p.WorkDone >= p.WorkDays - 1e-9) Complete(p, jd);
         }
 
@@ -398,7 +401,9 @@ namespace SolarSystem.Core
             }
             if (p.Work == GateJob.Repair)
             {
-                p.Gate.Integrity = 1;
+                // Whole, unless it was damaged again while the work went on: that is left for the next repair (U.SPC-T299).
+                p.Gate.Integrity = Math.Min(1, p.Gate.Integrity + (1 - p.FromIntegrity) * Math.Max(0, 1 - p.Progress) + 1e-9);
+                if (p.Gate.Integrity > 1 - 1e-6) p.Gate.Integrity = 1;
                 // The ring is rebuilt with its forts (U.SPC-T294), not left open to the next war fleet.
                 GateNetwork.Fortify(p.Gate);
                 Repaired++;

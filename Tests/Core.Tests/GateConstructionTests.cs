@@ -240,6 +240,39 @@ namespace SolarSystem.Core.Tests
                         if (a != b) Assert.That((a.PositionKm - b.PositionKm).Length, Is.GreaterThan(JumpGate.ActivationRangeKm * 2), s.Name);
         }
 
+        /// <summary>
+        /// U.SPC-T299: damage done to a ring while it is being rebuilt stands: the next day's work adds to what is left of it,
+        /// rather than putting it back to where the work had got to, and the finished repair leaves the new damage to mend.
+        /// </summary>
+        [Test]
+        public void DamageDoneToAGateUnderRepairIsNotUndoneByTheNextDaysWork()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var ac = g.Find("Alpha Centauri");
+            var gate = sol.GateTo(ac);
+            g.Construction.Damage(gate, 0.6, StartJd);
+            double jd = StartJd;
+            while (gate.Integrity < 0.7 && jd < StartJd + 5 * Year)
+            {
+                jd += 1;
+                g.Construction.Update(jd);
+            }
+            var repair = g.Construction.RepairOf(gate);
+            Assert.That(repair, Is.Not.Null);
+            g.Construction.Damage(gate, 0.3, jd, "saboteurs");
+            double damaged = gate.Integrity;
+            jd += 1;
+            g.Construction.Update(jd);
+            Assert.That(gate.Integrity, Is.LessThan(damaged + 0.05), "a day's work undid the sabotage");
+            while (repair.Active && jd < StartJd + 5 * Year)
+            {
+                jd += 1;
+                g.Construction.Update(jd);
+            }
+            Assert.That(gate.Integrity, Is.LessThan(1), "the finished repair mended damage it was never sized for");
+        }
+
         [Test]
         public void AWreckedGateShutsItsLinkUntilItsOwnerRebuildsIt()
         {
