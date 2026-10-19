@@ -129,8 +129,9 @@ namespace SolarSystem.Core.Tests
             Assert.That(acA.World.Jd, Is.EqualTo(arrive), "promoted to the moment, not left at its last mark");
             Assert.That(acA.Ephemeris.Jd, Is.EqualTo(arrive));
             // Nothing it was doing is cut short: every ship's schedule runs on from the moment, and every fight
-            // still under way is the same fight.
-            foreach (var s in acA.World.Fleet.Ships.Where(s => !s.Destroyed && !s.IsEscort))
+            // still under way is the same fight. A ship the schedule is holding (a derelict hulk, one in a fight)
+            // has no schedule running to be overdue.
+            foreach (var s in acA.World.Fleet.Ships.Where(s => !s.Destroyed && !s.IsEscort && !acA.World.Fleet.IsHeld(s)))
                 Assert.That(Math.Min(s.PhaseEndJd, double.IsNaN(s.StrandJd) ? double.MaxValue : s.StrandJd), Is.GreaterThanOrEqualTo(arrive - 1e-9), s.Name + " overdue");
             foreach (var battle in battlesBefore)
                 if (!battle.Over) Assert.That(acA.World.War.Battles, Does.Contain(battle), battle.Name);
