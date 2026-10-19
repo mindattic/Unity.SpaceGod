@@ -494,7 +494,7 @@ namespace SolarSystem.Core
                     foreach (var v in victims)
                         if (!v.Dead && !v.Captured)
                         {
-                            witness = v.Ship != null ? "the " + v.Ship.Name : v.Platform != null ? v.Platform.Name : null;
+                            witness = v.Ship != null ? "the " + v.Ship.Name : v.Platform != null ? v.Platform.Name : v.Fort != null ? v.Fort.Name : null;
                             if (witness != null) break;
                         }
                     witness ??= FindWitness(where, jd, s => inBattle.Contains(s));

@@ -21,6 +21,9 @@ namespace SolarSystem.Core
 
         /// <summary>A navy group sent after raiders to the system they came from.</summary>
         Expedition,
+
+        /// <summary>A war fleet on campaign against another power's systems (U.SPC-T92, see <see cref="InterstellarWars"/>).</summary>
+        Campaign,
     }
 
     /// <summary>
@@ -60,6 +63,12 @@ namespace SolarSystem.Core
 
         /// <summary>An expedition's quarry: the raiders it was sent after.</summary>
         public Faction Quarry;
+
+        /// <summary>A war fleet's campaign (U.SPC-T92), or null.</summary>
+        public Campaign Campaign;
+
+        /// <summary>The enemy gate a war fleet holds beside, having come out of it, until it has taken it (U.SPC-T92); null when none.</summary>
+        public JumpGate HoldGate;
 
         /// <summary>Light-years along the outbound route (what tolls and fees scale with).</summary>
         public double Ly;
@@ -290,9 +299,27 @@ namespace SolarSystem.Core
             }
             var gate = v.NextGate;
             bool here = gate != null && gate.Home == system && gate.InRange(ship.Orbit.OffsetAt(when));
+            bool campaign = v.Purpose == VoyagePurpose.Campaign && v.Campaign != null;
+            if (campaign && gate != null && gate.Home == system && here)
+            {
+                // A war fleet at an enemy's gate takes it before it goes through (U.SPC-T92): it holds here while the
+                // campaign fights its forts and holds the gate (see InterstellarWars), however long that takes.
+                if (galaxy.Wars != null && galaxy.Wars.MustTake(gate, v))
+                {
+                    if (double.IsNaN(v.WaitingSinceJd)) v.WaitingSinceJd = now;
+                    return;
+                }
+                // The far end held against it is forced: it goes through, to fight there.
+                if (GateNetwork.Passable(gate, ship.Faction, when))
+                {
+                    atGates.RemoveAll(e => e.ship == ship);
+                    Enter(system, ship, gate, when);
+                    return;
+                }
+            }
             if (gate == null || gate.Home != system || !gate.Link.Open(system, ship.Faction, when) || !here)
             {
-                var route = Network.Route(system, v.Destination, ship.Faction, now);
+                var route = Network.Route(system, v.Destination, ship.Faction, now, campaign);
                 if (route != null && route.Count > 0 && route[0] != gate)
                 {
                     // Round by another gate.
@@ -427,7 +454,11 @@ namespace SolarSystem.Core
                 fleet.Receive(s);
             }
 
-            if (v.NextGate != null)
+            if (v.Purpose == VoyagePurpose.Campaign && galaxy.Wars != null && galaxy.Wars.OnEmerged(system, leader, p.To, jd))
+            {
+                // A war fleet come out beside an enemy's gate holds there to take it first (U.SPC-T92).
+            }
+            else if (v.NextGate != null)
             {
                 // Passing through: across to the next gate.
                 leader.GateKm = v.NextGate.PositionKm;
@@ -457,6 +488,7 @@ namespace SolarSystem.Core
         {
             VoyagePurpose.Raid => "a raid beyond the gates",
             VoyagePurpose.Expedition => "an expedition beyond the gates",
+            VoyagePurpose.Campaign => "a campaign beyond the gates",
             VoyagePurpose.Survey => "a survey beyond the gates",
             VoyagePurpose.Courier => "a mail run beyond the gates",
             _ => "a run beyond the gates",
@@ -506,9 +538,15 @@ namespace SolarSystem.Core
                     ship.Ports = null;
                     v.StayUntilJd = jd + 20 + rng.NextDouble() * 10;
                     break;
+                case VoyagePurpose.Campaign:
+                    // Here until the campaign is won, lost or called off (see InterstellarWars), not for a set stay.
+                    ship.Route = null;
+                    ship.Ports = null;
+                    v.StayUntilJd = double.PositiveInfinity;
+                    break;
             }
             ship.Role = v.Purpose == VoyagePurpose.Survey ? ShipRole.Free : v.HomeRole;
-            if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition)
+            if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign)
                 ship.Ports ??= world.FreeShipPorts();
             world.Log(jd, $"{ship.Name} of {ship.Faction.Name} comes through the {cameIn.Partner.Name} from {v.Home.Name}", WorldEventKind.Info, system.Catalog.Root.Index);
             world.Fleet.ScheduleNext(ship, jd);
@@ -582,7 +620,9 @@ namespace SolarSystem.Core
         int Orders(StarSystem system, Ship ship, int here, double jd)
         {
             var v = ship.Voyage;
-            if (v == null || ship.GateKm != null || system == v.Home) return -1;
+            if (v == null || ship.GateKm != null) return -1;
+            if (v.Purpose == VoyagePurpose.Campaign) return galaxy.Wars?.Orders(system, ship, here, jd) ?? -1;
+            if (system == v.Home) return -1;
             var economy = system.World.Economy;
             var war = system.World.War;
             if (v.Purpose == VoyagePurpose.Raid)
@@ -705,6 +745,74 @@ namespace SolarSystem.Core
             var route = Network.Route(from, to, ship.Faction, jd);
             if (route == null || route.Count == 0) return null;
             return SetOut(from, to, ship, purpose, route, jd);
+        }
+
+        /// <summary>
+        /// Sends a war fleet (<paramref name="ship"/>, a flagship idle in <paramref name="from"/>) on <paramref name="campaign"/>
+        /// to <paramref name="to"/> (U.SPC-T92), by the quickest way it can fight through: gates held by the enemy count,
+        /// to be forced. Null if there is no way at all or the ship is not free to go.
+        /// </summary>
+        public Voyage SendCampaign(Ship ship, StarSystem from, StarSystem to, Campaign campaign, double jd)
+        {
+            if (from == to || !Idle(from.World, ship)) return null;
+            var route = Network.Route(from, to, ship.Faction, jd, force: true);
+            if (route == null || route.Count == 0) return null;
+            var v = SetOut(from, to, ship, VoyagePurpose.Campaign, route, jd);
+            v.Campaign = campaign;
+            v.StayUntilJd = double.PositiveInfinity;
+            return v;
+        }
+
+        /// <summary>
+        /// Points a war fleet on campaign (<paramref name="ship"/>, its flagship in <paramref name="system"/>) at another
+        /// system (U.SPC-T92): on to its next goal, or (<paramref name="to"/> its home) back where it set out from, the way it
+        /// can fight through. At home already, it takes up its old duties at once. False if there is no way (it stays).
+        /// </summary>
+        public bool Redirect(StarSystem system, Ship ship, StarSystem to, double jd)
+        {
+            var v = ship.Voyage;
+            if (v == null) return false;
+            List<JumpGate> route = null;
+            if (system != to)
+            {
+                route = Network.Route(system, to, ship.Faction, jd, force: true);
+                if (route == null) return false;
+            }
+            atGates.RemoveAll(e => e.ship == ship);
+            v.AtGate = false;
+            v.HoldGate = null;
+            v.WaitingSinceJd = double.NaN;
+            if (system == to && to == v.Home)
+            {
+                Home(system, ship, jd);
+                return true;
+            }
+            v.Destination = to;
+            v.Route = route ?? new List<JumpGate>();
+            v.Leg = 0;
+            ship.GateKm = v.Route.Count > 0 ? v.Route[0].PositionKm : (DVec3?)null;
+            if (ship.Battle == null) system.World.Fleet.ScheduleNext(ship, jd);
+            return true;
+        }
+
+        /// <summary>
+        /// A war fleet holding beside a gate it has taken goes on (U.SPC-T92): to its next gate, or, at the end of its way, to
+        /// its work in this system.
+        /// </summary>
+        public void Release(StarSystem system, Ship ship, double jd)
+        {
+            var v = ship.Voyage;
+            if (v == null) return;
+            var held = v.HoldGate;
+            v.HoldGate = null;
+            ship.GateKm = v.NextGate?.PositionKm;
+            if (ship.GateKm == null && system == v.Destination && held != null && ship.Battle == null)
+            {
+                // The way's end: it has arrived, as a fleet that met no gate in its way would have.
+                Arrive(system, ship, held, jd);
+                return;
+            }
+            if (ship.Battle == null) system.World.Fleet.ScheduleNext(ship, jd);
         }
 
         /// <summary>Starts <paramref name="ship"/> on a voyage from <paramref name="from"/> to <paramref name="to"/> by <paramref name="route"/>.</summary>
@@ -946,6 +1054,8 @@ namespace SolarSystem.Core
                     CancelVoyage(system, ship, jd, ship.Faction == v.Faction);
                     continue;
                 }
+                // A war fleet comes home when its campaign says so (see InterstellarWars).
+                if (v.Purpose == VoyagePurpose.Campaign) continue;
                 bool hurt = (ship.Spec.IsMilitary || ship.Faction.IsPirate) && ship.Combat.Damage > 0.45;
                 if (jd < v.StayUntilJd && !hurt) continue;
                 if (ship.Battle != null || (ship.Phase != ShipPhase.Parked && ship.Phase != ShipPhase.Landed)) continue;

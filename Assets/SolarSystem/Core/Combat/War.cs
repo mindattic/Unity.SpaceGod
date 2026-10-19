@@ -510,7 +510,7 @@ namespace SolarSystem.Core
             var ship = u.Ship;
             if (ship == null || ship.Destroyed)
             {
-                if (u.Kind == UnitKind.Platform) u.Platform.Platforms.Remove(u.Combat);
+                if (u.Kind == UnitKind.Platform) StrikeOff(u);
                 return;
             }
             // Captors with a brig lock up some of its people first, for bounty or ransom in port (U.SPC-T65).
@@ -1070,6 +1070,73 @@ namespace SolarSystem.Core
             return b;
         }
 
+        /// <summary>A defence platform or gate fort lost (or taken) is struck off its settlement's or gate's list.</summary>
+        static void StrikeOff(BattleUnit u)
+        {
+            u.Platform?.Platforms.Remove(u.Combat);
+            u.Fort?.Forts.Remove(u.Combat);
+        }
+
+        /// <summary>How near a gate (km) a ship holding beside it counts as at it, for a gate battle (U.SPC-T92).</summary>
+        public const double GateReachKm = 2000;
+
+        readonly Dictionary<JumpGate, int> gateBattles = new Dictionary<JumpGate, int>();
+
+        /// <summary>
+        /// A gate battle (U.SPC-T92): <paramref name="attacker"/>'s war fleet, holding beside <paramref name="gate"/> (an end
+        /// of it in this system), engages the gate's forts and whatever enemy warships hold there with them. Fought where the
+        /// gate stands, off the system's root, like any other battle. Null if there is nothing there to fight, the fleet is
+        /// in no shape to start it, or a fight is already on at the root.
+        /// </summary>
+        public Battle StartGateBattle(JumpGate gate, Faction attacker, double jd)
+        {
+            int root = Catalog.Root.Index;
+            if (gate == null || gate.Home?.World != world || BattleAt(root) != null) return null;
+            var present = new List<Ship>();
+            foreach (var s in PresentGroups(root))
+            {
+                var o = s.Controller.Orbit;
+                if (o != null && (o.OffsetAt(jd) - gate.PositionKm).Length <= GateReachKm) present.Add(s);
+            }
+            var hostile = new HashSet<Faction>();
+            if (gate.Forts.Count > 0 && Diplomacy.Hostile(attacker, gate.Owner)) hostile.Add(gate.Owner);
+            bool armed = false;
+            foreach (var s in present)
+            {
+                bool military = (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Combat.Armed;
+                if (s.Faction == attacker && military && Willing(s.Controller, jd)) armed = true;
+                else if (military && !s.Faction.IsPirate && Diplomacy.Hostile(attacker, s.Faction)) hostile.Add(s.Faction);
+            }
+            if (!armed || hostile.Count == 0) return null;
+
+            gateBattles.TryGetValue(gate, out int n);
+            gateBattles[gate] = n + 1;
+            string name = (n == 0 ? "" : Ordinal(n + 1) + " ") + "Battle of the " + gate.Name;
+            var b = new Battle(nextBattleId++, root, name, gate.PositionKm, jd, rng.Next());
+            Hook(b);
+            var approach = DVec3.Cross(gate.PositionKm.Normalized, DVec3.UnitZ);
+            b.ApproachAxis = approach.LengthSquared > 1e-6 ? approach.Normalized : DVec3.UnitX;
+            b.AggressorSide = 0;
+            foreach (var s in present)
+            {
+                if (s.Faction.IsPirate) continue;
+                int side = SideFor(s.Faction, attacker, hostile);
+                if (side >= 0) Join(b, s, side, false);
+            }
+            if (hostile.Contains(gate.Owner))
+                for (int i = 0; i < gate.Forts.Count; i++)
+                {
+                    double a = Astro.TwoPi * i / Math.Max(1, gate.Forts.Count);
+                    var pos = Spot(b, 1) * 0.4 + new DVec3(Math.Cos(a), Math.Sin(a), 0.1) * 6;
+                    b.AddFort(gate, gate.Forts[i], 1, pos);
+                }
+            Battles.Add(b);
+            world.Log(jd, $"{b.Name}: {Describe(b, 0)} storm the gate against {Describe(b, 1)}", WorldEventKind.Battle, root);
+            BumpDanger(root, 1.5);
+            BattleStarted?.Invoke(b);
+            return b;
+        }
+
         /// <summary>Fit to pick a fight: not withdrawing and not badly hurt.</summary>
         bool Willing(Ship leader, double jd) =>
             !Withdrawing(leader, jd) && leader.Combat.Damage < 0.45 && leader.Combat.Armed;
@@ -1236,7 +1303,7 @@ namespace SolarSystem.Core
                 if (u.Side < 0 || u.Side > 1) continue;
                 if (u.Dead && u.Kind != UnitKind.Fighter) lost[u.Side]++;
                 if (u.Fled) fled[u.Side]++;
-                if (u.Kind == UnitKind.Platform && u.Dead) u.Platform.Platforms.Remove(u.Combat);
+                if (u.Kind == UnitKind.Platform && u.Dead) StrikeOff(u);
                 // Boarders still fighting aboard anything that wasn't taken (a platform too) are gone with the battle.
                 if (!u.Captured && !left.Contains(u)) u.Combat.Interior.BoardersGone();
                 if (u.Ship == null || left.Contains(u)) continue;
@@ -1857,6 +1924,18 @@ namespace SolarSystem.Core
             return false;
         }
 
+        /// <summary>Warships of a navy at war with <paramref name="f"/> (not raiders) parked at <paramref name="body"/>.</summary>
+        bool EnemyNavyAt(int body, Faction f)
+        {
+            foreach (var s in Fleet.Ships)
+            {
+                if (s.Destroyed || s.IsEscort || !s.Spec.IsMilitary || s.Faction.IsPirate || !Diplomacy.Hostile(f, s.Faction)) continue;
+                var c = s.Controller;
+                if (c.Phase == ShipPhase.Parked && c.Orbit != null && c.Orbit.Body == body) return true;
+            }
+            return false;
+        }
+
         bool PiratesAt(int body)
         {
             foreach (var s in Fleet.Ships)
@@ -2249,6 +2328,8 @@ namespace SolarSystem.Core
                 if (st.Fallen) continue;
                 // Not mid-fight: a daily refit would refill shields and ammunition (and end a boarding) in battle.
                 if (BattleAt(st.Body) != null) continue;
+                // Nor with an enemy navy holding the space overhead (U.SPC-T92): nothing goes up past its guns.
+                if (EnemyNavyAt(st.Body, st.Owner)) continue;
                 foreach (var p in st.Platforms)
                     if (p.Damage > 0) { p.Repair(0.05); p.FreeResupply(); }
                 if (st.Platforms.Count >= st.MaxPlatforms) continue;

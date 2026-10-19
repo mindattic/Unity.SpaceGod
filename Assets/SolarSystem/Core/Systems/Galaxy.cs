@@ -237,6 +237,9 @@ namespace SolarSystem.Core
         /// </summary>
         public event Action<StarSystem, Faction, double> SystemOpened;
 
+        /// <summary>The wars between the systems' powers: their goals, campaigns, occupations and treaties (U.SPC-T92, see <see cref="InterstellarWars"/>).</summary>
+        public InterstellarWars Wars { get; private set; }
+
         /// <summary>
         /// The interstellar polities (U.SPC-T91): every system's factions, one object each however many systems they
         /// hold, with one diplomacy table between them all.
@@ -282,6 +285,7 @@ namespace SolarSystem.Core
             }
             Traffic?.Update(jd);
             Construction?.Update(jd);
+            Wars?.Update(jd);
         }
 
         /// <summary>
@@ -356,11 +360,23 @@ namespace SolarSystem.Core
                 if (s.Spec?.NeighbourName != null) simulated.Add(s.Spec.NeighbourName);
             foreach (var n in Neighbours())
                 if (!simulated.Contains(n.Name)) g.NearbyStars.Add(n);
-            g.Network = GateNetwork.Build(g.Systems);
-            g.Traffic = new InterstellarTraffic(g, jd);
-            g.Polities.InTransit = g.Traffic.InTransit;
-            g.Construction = new GateConstruction(g, jd);
+            g.Connect(jd);
             return g;
+        }
+
+        /// <summary>
+        /// Joins <see cref="Systems"/> (built into this galaxy's <see cref="Polities"/>) by the jump gates: the lattice
+        /// <see cref="GateNetwork.Build"/> makes, or <paramref name="network"/> if given (a test's own map); arms the gates
+        /// its states hold (<see cref="GateNetwork.Fortify"/>); and starts the traffic, the gate building and the wars between them.
+        /// </summary>
+        public void Connect(double jd, GateNetwork network = null)
+        {
+            Network = network ?? GateNetwork.Build(Systems);
+            Network.Fortify();
+            Traffic = new InterstellarTraffic(this, jd);
+            Polities.InTransit = Traffic.InTransit;
+            Construction = new GateConstruction(this, jd);
+            Wars = new InterstellarWars(this, jd);
         }
 
         /// <summary>

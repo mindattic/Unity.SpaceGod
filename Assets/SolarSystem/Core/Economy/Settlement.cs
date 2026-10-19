@@ -61,6 +61,21 @@ namespace SolarSystem.Core
         /// <summary>Days since the owner last changed; production is disrupted for a while after a capture.</summary>
         public double DaysSinceCapture = 9999;
 
+        /// <summary>
+        /// Troops holding it for its owner (U.SPC-T92): its own militia, or the marines who took it. NaN until a war first
+        /// asks, when it is mustered at <see cref="InterstellarWars.GarrisonPerPerson"/> of the people. An invader's
+        /// landed marines must beat it down before the place changes hands.
+        /// </summary>
+        public double Garrison = double.NaN;
+
+        /// <summary>How restive its people are under their owner, 0 (content) to 1 (in open revolt): an occupation sets it
+        /// high, a garrison wears it down, and it idles part of the industry while it lasts (U.SPC-T92).</summary>
+        public double Unrest;
+
+        /// <summary>The power it was taken from in a war still being fought, or null: a peace treaty either cedes it to the
+        /// occupier or gives it back, and its people may rise to let the old owner back in (U.SPC-T92).</summary>
+        public Faction OccupiedFrom;
+
         public double TradeVolumeCredits;
 
         /// <summary>Share of industry working (a strike idles all but life support); 1 normally. See <see cref="MarketShocks"/>.</summary>

@@ -39,6 +39,16 @@ namespace SolarSystem.Core
             return near != null && Working && near.Admits(faction, jd) && near.Partner.Admits(faction, jd);
         }
 
+        /// <summary>
+        /// Open for <paramref name="faction"/>'s war fleet leaving <paramref name="from"/> (U.SPC-T92): each end either lets
+        /// it through or is held by a power it is at war with, and so may be forced (see <see cref="JumpGate.HostileTo"/>).
+        /// </summary>
+        public bool Forcible(StarSystem from, Faction faction, double jd)
+        {
+            var near = GateIn(from);
+            return near != null && Working && GateNetwork.Passable(near, faction, jd);
+        }
+
         public override string ToString() => AtA.Name + " / " + AtB.Name;
     }
 
@@ -61,6 +71,13 @@ namespace SolarSystem.Core
 
         /// <summary>How many nearest neighbours each system is linked to.</summary>
         public const int Neighbours = 2;
+
+        /// <summary>Forts a state with a navy keeps at each gate it holds (U.SPC-T92).</summary>
+        public const int GateForts = 2;
+
+        /// <summary>What a route planner reckons a gate held against it costs to force (days), so a war fleet goes round by a
+        /// friendly or neutral way where there is one (U.SPC-T92).</summary>
+        public const double ForcingDays = 6;
 
         /// <summary>A crossing: six hours to spin the gate up and line up, plus two hours a light-year.</summary>
         public static double TransitDays(double ly) => 0.25 + ly / 12.0;
@@ -151,6 +168,27 @@ namespace SolarSystem.Core
             }
         }
 
+        /// <summary>
+        /// Arms the gates (U.SPC-T92): each one a state with a navy holds gets <see cref="GateForts"/> forts, which a war
+        /// fleet must fight to force it; a survey service's gates in empty systems stand unguarded.
+        /// </summary>
+        public void Fortify()
+        {
+            foreach (var l in links)
+                foreach (var g in new[] { l.AtA, l.AtB })
+                {
+                    g.MaxForts = g.Owner != null && g.Owner.IsMilitary && g.Owner.Kind == PolityKind.State ? GateForts : 0;
+                    while (g.Forts.Count < g.MaxForts) g.Forts.Add(new ShipCombat(CombatSpec.Platform));
+                }
+        }
+
+        /// <summary>
+        /// Whether a war fleet of <paramref name="faction"/> can take <paramref name="near"/> to its partner (U.SPC-T92): both
+        /// ends let it through, or are held by an enemy it may force.
+        /// </summary>
+        public static bool Passable(JumpGate near, Faction faction, double jd) =>
+            near?.Partner != null && (near.Admits(faction, jd) || near.HostileTo(faction)) && (near.Partner.Admits(faction, jd) || near.Partner.HostileTo(faction));
+
         public IEnumerable<GateLink> LinksOf(StarSystem s)
         {
             foreach (var l in links)
@@ -172,8 +210,10 @@ namespace SolarSystem.Core
         /// that will not open for <paramref name="traveller"/> at <paramref name="jd"/> are left out
         /// (null traveller: any gate still working), and a link with a ring out of action (see
         /// <see cref="GateLink.Working"/>) for everyone. Empty for the same system; null when there is no way through.
+        /// <paramref name="force"/> plans a war fleet's way (U.SPC-T92): a gate held by an enemy counts too, at
+        /// <see cref="ForcingDays"/> more, as one it can fight its way through.
         /// </summary>
-        public List<JumpGate> Route(StarSystem from, StarSystem to, Faction traveller = null, double jd = double.NegativeInfinity)
+        public List<JumpGate> Route(StarSystem from, StarSystem to, Faction traveller = null, double jd = double.NegativeInfinity, bool force = false)
         {
             if (from == null || to == null) return null;
             if (from == to) return new List<JumpGate>();
@@ -197,8 +237,13 @@ namespace SolarSystem.Core
                 {
                     var next = l.Other(here);
                     if (done.Contains(next) || !l.Working) continue;
-                    if (traveller != null && !l.Open(here, traveller, jd)) continue;
-                    double days = hereDays + l.TransitDays + (here == from ? 0 : CrossingDays);
+                    double forcing = 0;
+                    if (traveller != null && !l.Open(here, traveller, jd))
+                    {
+                        if (!force || !l.Forcible(here, traveller, jd)) continue;
+                        forcing = ForcingDays;
+                    }
+                    double days = hereDays + l.TransitDays + (here == from ? 0 : CrossingDays) + forcing;
                     if (!best.TryGetValue(next, out double known) || days < known)
                     {
                         best[next] = days;

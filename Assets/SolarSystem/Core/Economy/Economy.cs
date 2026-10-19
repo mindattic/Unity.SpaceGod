@@ -209,6 +209,8 @@ namespace SolarSystem.Core
         {
             // A recently captured settlement is in disarray: output recovers over 60 days.
             double disruption = Math.Min(1, 0.25 + s.DaysSinceCapture / 60);
+            // ... and restive under an occupier: unrest idles up to half of it (U.SPC-T92).
+            disruption *= 1 - 0.5 * Math.Max(0, Math.Min(1, s.Unrest));
             double wages = 0;
             foreach (var f in s.Facilities)
             {

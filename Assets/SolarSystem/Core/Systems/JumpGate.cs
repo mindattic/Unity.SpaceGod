@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SolarSystem.Core
 {
@@ -39,11 +40,30 @@ namespace SolarSystem.Core
         public StarSystem Destination => Partner?.Home;
 
         /// <summary>The faction that holds this end: its system's leading power (see
-        /// <see cref="GateNetwork.AssignOwners"/>), or null for nobody.</summary>
+        /// <see cref="GateNetwork.AssignOwners"/>), or null for nobody; a war fleet that takes it, or a treaty that
+        /// cedes its system, hands it to another (U.SPC-T92).</summary>
         public Faction Owner { get; internal set; }
 
         /// <summary>Closed to everyone but its owner until this date (a blockade); see <see cref="Admits"/>.</summary>
         public double BlockadeUntilJd = double.NegativeInfinity;
+
+        /// <summary>
+        /// The forts guarding this end (U.SPC-T92): defence platforms its owner keeps at the gate, which a war fleet forcing
+        /// it fights in a gate battle (see <see cref="War.StartGateBattle"/>) before it can take the gate. Destroyed ones
+        /// are struck off; the owner rebuilds them in peace (see <see cref="InterstellarWars"/>).
+        /// </summary>
+        public readonly List<ShipCombat> Forts = new List<ShipCombat>();
+
+        /// <summary>How many forts the owner keeps here when it can (0: an unguarded gate).</summary>
+        public int MaxForts;
+
+        /// <summary>
+        /// Whether <paramref name="faction"/> is at war with this end's owner (U.SPC-T92): the gate will not open for it, but
+        /// a war fleet may force it, fighting its forts and taking it (see <see cref="InterstellarWars"/>). A gate shut by a
+        /// blockade against a power at peace is shut, not forcible.
+        /// </summary>
+        public bool HostileTo(Faction faction) =>
+            Owner != null && faction != null && faction != Owner && !faction.IsPirate && Home?.World.Diplomacy.Get(Owner, faction) == Relation.War;
 
         /// <summary>How far out a gate sits from its system's root: above the surface of a star (inside
         /// the Sun would be nowhere a ship can fly), from the point itself for a barycentre; see

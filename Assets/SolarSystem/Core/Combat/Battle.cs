@@ -19,6 +19,9 @@ namespace SolarSystem.Core
         public Faction Faction;
         public Ship Ship;
         public Settlement Platform;
+
+        /// <summary>The gate a fort unit guards (U.SPC-T92); its <see cref="Kind"/> is <see cref="UnitKind.Platform"/>, with no settlement.</summary>
+        public JumpGate Fort;
         public ShipCombat Combat;
         public double LengthKm;
 
@@ -147,7 +150,7 @@ namespace SolarSystem.Core
 
         public bool Present => !Dead && !Fled && !Docked;
         public double Radius => LengthKm * 0.5;
-        public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : "Fighter";
+        public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : Fort != null ? Fort.Name + " fort" : "Fighter";
 
         /// <summary>While <see cref="PlayerControlled"/>: the EMP trigger held, and a mine asked for this frame (the
         /// battle clears it once it has tried, U.SPC-T271).</summary>
@@ -493,6 +496,14 @@ namespace SolarSystem.Core
         {
             var u = NewUnit(UnitKind.Platform, side, s.Owner, platform, CombatSpec.PlatformLengthKm, pos, DVec3.UnitX);
             u.Platform = s;
+            return u;
+        }
+
+        /// <summary>A gate fort joins the fight for its gate's owner (U.SPC-T92).</summary>
+        public BattleUnit AddFort(JumpGate gate, ShipCombat fort, int side, DVec3 pos)
+        {
+            var u = NewUnit(UnitKind.Platform, side, gate.Owner, fort, CombatSpec.PlatformLengthKm, pos, DVec3.UnitX);
+            u.Fort = gate;
             return u;
         }
 
