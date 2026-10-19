@@ -262,7 +262,7 @@ Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`; each tour screensho
 | Swim speed (free) or zoom (focus) | Mouse wheel |
 | Select | Left click (double-click to focus) |
 | Focus on selection / re-frame | F |
-| Leave focus, then deselect | Esc |
+| Back out one step: close the open panels, leave focus, deselect; then the pause menu (Resume, Settings > Display, Quit) | Esc |
 | Whole-system view | Home or Backspace |
 | Toggle gameplay / realistic scale | G or Backquote |
 | Planets: 0 Sun, 1 Mercury to 9 Pluto (in Alpha Centauri: A, B, Proxima, its planets, the stations) | Number keys (press twice to focus) |
@@ -282,12 +282,14 @@ Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`; each tour screensho
 | Model viewer | F9 |
 | Quicksave / quickload | F5 / F8 |
 | Save and load slots | F6 |
+| Display: resolution, windowed / borderless windowed / exclusive fullscreen, VSync (nothing changes until Apply; Keep within 10 seconds or it reverts; kept settings are used at startup) | Esc, Settings, Display |
 
 While piloting:
 
 | Action | Input |
 | --- | --- |
 | Steer | Mouse |
+| Pause menu (P, not Esc, hands the ship back) | Esc |
 | Throttle / strafe / rise and sink | W S / A D / E Q |
 | Roll | Z X |
 | Flight assist on / off | F |

@@ -45,8 +45,8 @@ namespace SolarSystem.UI
         int outfitSlot = -1;
         Vector2 outfitScroll;
 
-        static readonly Color Accent = new Color(0.45f, 0.85f, 1f);
-        static readonly Color Dim = new Color(0.62f, 0.7f, 0.78f);
+        internal static readonly Color Accent = new Color(0.45f, 0.85f, 1f);
+        internal static readonly Color Dim = new Color(0.62f, 0.7f, 0.78f);
 
         /// <summary>An unidentified contact: no faction colour until the scanners know whose it is.</summary>
         static readonly Color ContactGrey = new Color(0.78f, 0.8f, 0.82f);
@@ -2555,7 +2555,8 @@ namespace SolarSystem.UI
                 "W A S D   swim          Q / E  or  C / ]   down / up          Space   pause (eases to a stop and back)",
                 "Shift   boost           Ctrl   fine             Wheel   swim speed / zoom",
                 "Right-drag   look / orbit                Left-click   select    (double: focus)",
-                "F   focus selection     Esc   leave focus / deselect     Home   system view",
+                "F   focus selection     Esc   close panels / leave focus / deselect, then the pause menu     Home   system view",
+                "Esc   pause menu (straight away at the helm): Resume, Settings > Display (resolution, window mode, VSync), Quit",
                 "G  or  `   toggle GAMEPLAY / REALISTIC scale",
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
                 "K   satellites    R   auto-reorient on/off (keep this system's plane level)",
@@ -2692,7 +2693,7 @@ namespace SolarSystem.UI
             toast = new GUIStyle { fontSize = 14, fontStyle = FontStyle.Bold, normal = { textColor = Accent } };
         }
 
-        static Texture2D Solid(Color fill, Color edge)
+        internal static Texture2D Solid(Color fill, Color edge)
         {
             const int n = 8;
             var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave, filterMode = FilterMode.Point };

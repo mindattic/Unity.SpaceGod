@@ -312,6 +312,9 @@ namespace SolarSystem
         Transform worldRoot;
         Transform systemRoot;
         Hud hud;
+
+        /// <summary>Esc's pause menu (Resume, Settings > Display, Quit): while it is open the frame stops after input.</summary>
+        readonly PauseMenu pauseMenu = new PauseMenu();
         double scaleFrom = 1;
         float scaleT = 1f;
         const float ScaleSeconds = 2.4f;
@@ -323,7 +326,7 @@ namespace SolarSystem
         void Awake()
         {
             Application.targetFrameRate = 144;
-            QualitySettings.vSyncCount = 1;
+            DisplayOptions.ApplySaved(); // the resolution, window mode and VSync last kept (VSync on until then)
             AutoReorient = PlayerPrefs.GetInt(AutoReorientPref, 1) == 1;
 
             Clock = SimClock.StartingNow();
@@ -533,7 +536,19 @@ namespace SolarSystem
             float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
             bool overUi = IsPointerOverUi();
             Input.Poll(overUi, ModelViewer.CapturesInput);
+            // The pause menu has the frame: nothing else moves, and the stick and trigger do nothing, until it closes.
+            if (pauseMenu.IsOpen)
+            {
+                pauseMenu.Update(Input.Escape, Time.unscaledDeltaTime);
+                FreeCursorForMenu();
+                return;
+            }
             HandleCommands();
+            if (pauseMenu.IsOpen)
+            {
+                FreeCursorForMenu();
+                return;
+            }
 
             Clock.Advance(dt);
             Galaxy.Update(Clock.Jd);
@@ -566,6 +581,13 @@ namespace SolarSystem
             bool lockCursor = (Input.LookHeld || (IsPiloting && !ClickPanelOpen)) && !ModelViewer.CapturesInput;
             Cursor.lockState = lockCursor ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !lockCursor;
+        }
+
+        /// <summary>The pause menu is clicked through, whether or not the helm had the cursor locked.</summary>
+        static void FreeCursorForMenu()
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         /// <summary>A ship destroyed while selected or followed: let go of it.</summary>
@@ -635,7 +657,12 @@ namespace SolarSystem
             // The model viewer has the screen: the game's HUD would paint over the model and its buttons
             // (travel, Now, Focus...) would still act on the hidden game.
             if (ModelViewer.CapturesInput) return;
+            // Under the pause menu the HUD is shown but cannot be clicked.
+            bool menu = pauseMenu.IsOpen;
+            if (menu) GUI.enabled = false;
             hud.Draw();
+            GUI.enabled = true;
+            if (menu) pauseMenu.Draw();
         }
 
         bool IsPointerOverUi()
@@ -698,15 +725,34 @@ namespace SolarSystem
             }
             if (i.Home && !IsPiloting) FocusSystemOverview();
             if (i.Focus && !IsPiloting) FocusSelected();
-            if (i.Escape)
-            {
-                if (IsPiloting) ExitPiloting();
-                else if (SpaceCamera.Mode != SpaceCamera.CameraMode.Free) SpaceCamera.ExitFocus();
-                else Select(Target.None);
-            }
+            if (i.Escape) BackOut();
             if (i.CycleShips && !IsPiloting) CycleShips(i.CycleBackward ? -1 : 1);
             if (i.NumberKey >= 0 && !IsPiloting) NumberHotkey(i.NumberKey);
             if (i.Pilot) TogglePiloting();
+        }
+
+        /// <summary>
+        /// Esc (U.SPC-T276): closes the panels being clicked through, else leaves the camera's focus, else clears
+        /// the selection, and with nothing left to back out of opens the pause menu. At the helm it goes from the
+        /// panels straight to the menu: P, not Esc, hands the ship back. See <see cref="EscapeKey"/>.
+        /// </summary>
+        void BackOut()
+        {
+            switch (EscapeKey.Route(ClickPanelOpen, IsPiloting, SpaceCamera.Mode != SpaceCamera.CameraMode.Free, !Selected.IsNone))
+            {
+                case EscapeAction.ClosePanels:
+                    ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = false;
+                    break;
+                case EscapeAction.LeaveFocus:
+                    SpaceCamera.ExitFocus();
+                    break;
+                case EscapeAction.Deselect:
+                    Select(Target.None);
+                    break;
+                default:
+                    pauseMenu.Open();
+                    break;
+            }
         }
 
         static readonly string[] SolNumberBodies = { "Sun", "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto" };
