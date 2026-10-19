@@ -1,0 +1,308 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Ultimate Spaceships Creator Evaluation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column for a decision brief; a facts strip, a two-column pros/cons, a class-fit table, then the work as a real ordered sequence. */
+:root {
+  --bg: #f2f4f7;
+  --panel: #ffffff;
+  --fg: #17202b;
+  --muted: #586474;
+  --line: #d8dee6;
+  --accent: #2a64a8;
+  --good: #2b7a4b;
+  --bad: #b03a35;
+  --warn: #9a5d00;
+  --good-bg: #e6f3eb;
+  --bad-bg: #f8e7e6;
+  --warn-bg: #f7eedc;
+  --font-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --panel: #161d27; --fg: #e3e9f0; --muted: #98a5b5; --line: #2a3442;
+    --accent: #7fb2ec; --good: #6cc792; --bad: #ee8a84; --warn: #e4b062;
+    --good-bg: #16291f; --bad-bg: #2e1a1a; --warn-bg: #2c2414; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --panel: #161d27; --fg: #e3e9f0; --muted: #98a5b5; --line: #2a3442;
+  --accent: #7fb2ec; --good: #6cc792; --bad: #ee8a84; --warn: #e4b062;
+  --good-bg: #16291f; --bad-bg: #2e1a1a; --warn-bg: #2c2414; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 15.5px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 880px; margin: 0 auto; padding-block: 40px 64px; display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: 0.01em; }
+h1 { font-size: clamp(1.75rem, 4.5vw, 2.4rem); line-height: 1.15; }
+h2 { font-size: 1.35rem; line-height: 1.25; }
+h3 { font-size: 1.02rem; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code { font-family: var(--font-mono); font-size: 0.88em; }
+.eyebrow { font: 500 0.75rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+section { display: grid; gap: 16px; }
+header { display: grid; gap: 14px; }
+.lede { color: var(--muted); font-size: 1.05rem; }
+
+.verdict { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 6px; padding: 18px 20px; display: grid; gap: 8px; }
+.verdict strong { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.fact { background: var(--panel); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.fact b { font: 500 1.25rem/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+.fact span { font-size: 0.82rem; color: var(--muted); }
+
+.split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.col { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.col h3 { display: flex; align-items: center; gap: 8px; }
+.tag { font: 500 0.7rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 7px; border-radius: 3px; }
+.tag.good { color: var(--good); background: var(--good-bg); }
+.tag.bad { color: var(--bad); background: var(--bad-bg); }
+.tag.warn { color: var(--warn); background: var(--warn-bg); }
+ul.points { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+ul.points li { padding-left: 16px; position: relative; }
+ul.points li::before { content: ""; position: absolute; left: 0; top: 0.68em; width: 6px; height: 6px; border-radius: 1px; }
+.pros li::before { background: var(--good); }
+.cons li::before { background: var(--bad); }
+
+.blocker { background: var(--bad-bg); border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; display: grid; gap: 10px; }
+.blocker h3 { color: var(--bad); }
+.options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.option { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 12px 14px; display: grid; gap: 4px; align-content: start; font-size: 0.92rem; min-width: 0; }
+.option b { font-family: var(--font-display); font-weight: 600; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 0.92rem; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 0.72rem/1.2 var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td.cls { font-family: var(--font-mono); font-weight: 500; white-space: nowrap; }
+.chip { display: inline-block; font: 500 0.7rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 6px; border-radius: 3px; white-space: nowrap; }
+.chip.good { color: var(--good); background: var(--good-bg); }
+.chip.warn { color: var(--warn); background: var(--warn-bg); }
+.chip.bad { color: var(--bad); background: var(--bad-bg); }
+
+ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 12px; }
+ol.steps li { counter-increment: step; display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+ol.steps li::before { content: counter(step, decimal-leading-zero); font: 500 0.95rem/1.5 var(--font-mono); color: var(--accent); }
+ol.steps li div { display: grid; gap: 4px; min-width: 0; }
+ol.steps li p { color: var(--muted); font-size: 0.93rem; }
+
+.unknowns { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.note { color: var(--muted); font-size: 0.85rem; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sources { font-size: 0.85rem; color: var(--muted); display: grid; gap: 6px; }
+.sources ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+
+@media (max-width: 720px) {
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .split, .options { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">Asset evaluation · UnitySolarSystem</span>
+    <h1>Ultimate Spaceships Creator</h1>
+    <p class="lede">A modular sci-fi ship pack by Ebal Studios on the Unity Asset Store. This page sets out what it is, how it fits the game's ship pipeline, and what adopting it would take.</p>
+    <div class="verdict">
+      <strong>Promising, but not a drop-in.</strong>
+      <p>It could replace most of the game's procedural and Kenney hulls with one consistent art set, and its colour masks suit faction livery. Two things come first: the repository is public, so the licence decides how the pack can live in the project, and the hand-painted style should be judged against the game's realistic direction in a scratch project before any money or integration work goes in. Of the other packs compared below, MSGDI's capital ships fit the realism direction better, and a ported hull generator is the free option that keeps the repo public.</p>
+    </div>
+  </header>
+
+  <section aria-labelledby="facts">
+    <h2 id="facts">What the pack is</h2>
+    <div class="facts">
+      <div class="fact"><b>600</b><span>example ships, each as a joined mesh and as a modular prefab</span></div>
+      <div class="fact"><b>219</b><span>unique modules across 18 design sets</span></div>
+      <div class="fact"><b>4K</b><span>hand-painted albedo, metallic, normal and emission maps</span></div>
+      <div class="fact"><b>10</b><span>colour variations per ship, through a colour-mask shader</span></div>
+      <div class="fact"><b>$125</b><span>single-entity licence, standard Asset Store EULA</span></div>
+      <div class="fact"><b>462.1 MB</b><span>download size</span></div>
+      <div class="fact"><b>URP</b><span>Built-in, URP and HDRP supported; the game runs URP 17.4</span></div>
+      <div class="fact"><b>v7.1</b><span>released 15 Oct 2026; still maintained</span></div>
+    </div>
+    <p>Files are FBX meshes, prefabs (Examples, Modular Examples, Modules), Shader Graph "Colorize" materials and PNG textures. Ships are assembled by hand in the Editor. There are no LODs, and the docs describe no runtime builder.</p>
+  </section>
+
+  <section aria-labelledby="procon">
+    <h2 id="procon">Pros and cons</h2>
+    <div class="split">
+      <div class="col">
+        <h3><span class="tag good">For</span> What it gives the game</h3>
+        <ul class="points pros">
+          <li><b>Breadth.</b> 600 hulls in 18 styles, capital ships among them, enough to give every faction and class a distinct look.</li>
+          <li><b>Faction colours come almost free.</b> The Colorize shader recolours from masks over one texture set. That maps directly onto the per-faction livery <code>ShipModels.MaterialsFor</code> applies today.</li>
+          <li><b>Warships can still break in two.</b> Modular examples are separate module prefabs, so a hull can be combined into a stern half and a bow half, as wrecks need.</li>
+          <li><b>One art style.</b> Today the game mixes Kenney low-poly craft with procedural warships. One pack would make the fleet look like it belongs together.</li>
+          <li><b>URP-ready and maintained.</b> It supports the game's render pipeline, and the latest update is from this month.</li>
+          <li><b>Cheap to draw.</b> The author reports Colorize costs about the same as a standard material, and a shared texture set per style keeps memory down.</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3><span class="tag bad">Against</span> What it costs</h3>
+        <ul class="points cons">
+          <li><b>Licence versus a public repo.</b> The EULA allows the assets inside a built game but not redistribution of the source files. They can't be committed to the public GitHub repo.</li>
+          <li><b>Style may not fit.</b> It is hand-painted and tagged "lowpoly". The game is heading toward realism. Screenshots alone won't settle this.</li>
+          <li><b>Lighting and shader mismatch.</b> Ships are lit by the game's own Sun-lit <code>Ship.shader</code>. The pack's Shader Graph materials expect URP's normal lights, so one side has to be adapted.</li>
+          <li><b>No class metadata.</b> Nothing marks an example as a freighter, miner or carrier. Each one has to be picked by eye and mapped to a <code>ShipClass</code>.</li>
+          <li><b>No hardpoint data.</b> Turrets and damage scars are placed from each class's combat layout, so they won't line up with a new hull until offsets are set per model.</li>
+          <li><b>Heavy.</b> 462 MB of 4K textures for ships that usually draw as icons a few pixels across. Most of it would be trimmed or downscaled.</li>
+          <li><b>Built for Unity 2022.3.</b> The listing's original version is 2022.3; the game is on Unity 6 (6000.4). Recent docs reference Unity 6.3 features, so it is probably fine, but this is unconfirmed.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="licence">
+    <div class="blocker">
+      <h3 id="licence">Decide first: where the pack lives</h3>
+      <p>The repository <code>mindattic/UnitySolarSystem</code> is public. The Kenney craft in <code>Resources/Ships</code> are CC0, which is why that was never an issue. This pack needs one of these:</p>
+      <div class="options">
+        <div class="option"><b>Make the repo private</b><span>Simplest. Everything stays in git and fresh clones build as they do today.</span></div>
+        <div class="option"><b>Keep the pack out of git</b><span>Gitignore it and import it locally. The repo stays public, but a fresh clone needs the pack before it shows those ships, so the procedural and Kenney fallbacks must stay.</span></div>
+        <div class="option"><b>Private asset repo</b><span>Put the curated, processed ships in a private repo or submodule. Public code, private art. More moving parts.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="fit">
+    <h2 id="fit">How it maps onto the game's ship classes</h2>
+    <p>Today's sources come from <code>ShipModels.Build</code>. The pack column is what the docs confirm; anything marked "check" needs a look in the catalogue scenes.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ShipClass</th><th>Drawn today</th><th>Pack candidate</th><th>Confidence</th></tr></thead>
+        <tbody>
+          <tr><td class="cls">Carrier</td><td>Procedural, stern + bow</td><td>Void Whale: "reminiscent of carrier ships", 30 examples, 26 modules</td><td><span class="chip good">Confirmed</span></td></tr>
+          <tr><td class="cls">Battleship</td><td>Procedural, stern + bow</td><td>Capital sets in the "Capital Spaceships" catalogue scene</td><td><span class="chip warn">Check</span></td></tr>
+          <tr><td class="cls">Cruiser</td><td>Procedural, stern + bow</td><td>Capital sets, smaller examples</td><td><span class="chip warn">Check</span></td></tr>
+          <tr><td class="cls">Destroyer</td><td>Procedural, stern + bow</td><td>Capital sets, smallest examples; needs a spinal railgun look</td><td><span class="chip warn">Check</span></td></tr>
+          <tr><td class="cls">Freighter</td><td>Kenney craft_cargoA / B</td><td>No freighter set named in the docs</td><td><span class="chip bad">Unknown</span></td></tr>
+          <tr><td class="cls">Miner</td><td>Kenney craft_miner</td><td>No mining set named; could be kitbashed from modules</td><td><span class="chip bad">Unknown</span></td></tr>
+          <tr><td class="cls">Courier</td><td>Kenney speederA / racer</td><td>Small sets such as Strider Ox ("a wingless small spaceship")</td><td><span class="chip good">Likely</span></td></tr>
+          <tr><td class="cls">Breacher</td><td>Procedural, drill prow</td><td>Nothing with a drill prow; keep procedural or kitbash</td><td><span class="chip bad">Unknown</span></td></tr>
+          <tr><td class="cls">Fighter</td><td>Procedural</td><td>Small winged sets (Star Sparrow and others)</td><td><span class="chip good">Likely</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="work">
+    <h2 id="work">What would have to be done</h2>
+    <ol class="steps">
+      <li><div><h3>Settle the licence question</h3><p>Pick one of the three options above before anything from the pack touches the repository.</p></div></li>
+      <li><div><h3>Evaluate in a scratch project</h3><p>Import into an empty Unity 6 URP project, not this one, so 462 MB never lands in the main repo. Light a few hulls the way the game does (one sun, dark space) and judge the style against the game's realism direction.</p></div></li>
+      <li><div><h3>Curate two or three hulls per class</h3><p>About 20 to 30 ships. Fill the gaps (freighter, miner, breacher) by kitbashing modules or by keeping today's models for those classes.</p></div></li>
+      <li><div><h3>Prepare the meshes</h3><p>Use the joined "Examples" for one-piece ships. For warships, combine the modular example's modules into a stern half and a bow half with the pack's Mesh Combiner, so <code>ShipModels.Build</code> can keep returning two sections and wrecks still break in two.</p></div></li>
+      <li><div><h3>Normalise like the Kenney craft</h3><p>Run each hull through AssetForge's mesh pipeline: one unit long on Z, centred, nose on +Z. Output goes to <code>Resources/Ships</code>, and <code>KenneyModelFor</code> becomes a per-class model table.</p></div></li>
+      <li><div><h3>Make materials and livery work</h3><p>Either teach <code>Ship.shader</code> to sample the pack's albedo, normal and colour-mask textures and keep the game's Sun lighting, or adapt the Colorize Shader Graph to that lighting. Either way, the faction colour drives the mask colour.</p></div></li>
+      <li><div><h3>Seat the hardpoints</h3><p>Turrets, launchers and damage scars are placed from each class's combat layout. Check they sit on the new hull surfaces and add per-model offsets where they float or sink.</p></div></li>
+      <li><div><h3>Trim the weight</h3><p>Copy over only the curated hulls and their texture sets, leave out the Legacy folder, and downscale the 4K maps. Ships under 5 px already draw as icons, so 1K is likely enough.</p></div></li>
+      <li><div><h3>Verify in the game</h3><p>Model viewer (F9), the ship gallery capture, a warship wreck breaking in two, faction colours on every class, and frame time with full system traffic.</p></div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="alts">
+    <h2 id="alts">Other packs compared</h2>
+    <p>The best alternatives found, in two groups: paid packs under the standard Asset Store EULA, which carry the same licence problem as this one, and open sources that can be committed to the public repo as they are. Asset Store pages load their contents with scripts, so ship counts marked "unverified" come from publishers' own pages or third-party listings.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pack</th><th>Licence</th><th>Price</th><th>What it covers</th><th>Fit for this game</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><a href="https://assetstore.unity.com/packages/3d/vehicles/space/spaceship-capital-ship-collection-i-78939">MSGDI Capital Ship Collection I</a><br><span class="note">plus <a href="https://assetstore.unity.com/packages/3d/vehicles/space/scifi-mining-ships-86066">Mining Ships</a> and <a href="https://assetstore.unity.com/packages/3d/vehicles/space/spaceship-mule-freighter-120454">Mule Freighter</a></span></td>
+            <td><span class="chip warn">EULA</span></td>
+            <td class="num">$75 + $20 + $15</td>
+            <td>Battleships, carriers and other capital hulls; a mining ship with harvester; a freighter. URP and HDRP on Unity 6000.3. v1.2, May 2026. Ship count unverified.</td>
+            <td><b>Closest to the realism direction.</b> Near-future hard-surface style. Weapons are separate meshes, so they can sit on the game's own hardpoints, and swappable bridge and engine modules give a natural stern/bow cut. It also fills the freighter and miner gaps this pack leaves, from the same publisher. Large files (3.0 GB, 4K hull textures).</td>
+          </tr>
+          <tr>
+            <td><a href="https://assetstore.unity.com/packages/3d/vehicles/space/battleships-2-261241">FORGE3D Battleships 2</a></td>
+            <td><span class="chip warn">EULA</span></td>
+            <td class="num">$73</td>
+            <td>Battleships, carriers, cruisers, frigates, freighters and stations (store tags). About 25 ships, 27 turrets and 13 structures, unverified. URP supported. v1.1, Nov 2024.</td>
+            <td><b>Most complete warship and station set.</b> Separate turrets and team-colour materials suit faction livery. Its Amplify shaders would clash with <code>Ship.shader</code>, and one Unity 6 user reported needing an extra shader package.</td>
+          </tr>
+          <tr>
+            <td><a href="https://syntystore.com/products/polygon-sci-fi-space-pack">Synty POLYGON Sci-Fi Space</a></td>
+            <td><span class="chip warn">EULA</span></td>
+            <td class="num">$149.99</td>
+            <td>660 assets: fighters, bombers, cruisers, carriers, transports, drones, escape pods, warp gates, a station and a modular ship kit. 24 colour variants.</td>
+            <td><b>Widest class coverage, wrong style.</b> Flat-shaded and strongly stylised, the opposite of where the game is heading.</td>
+          </tr>
+          <tr>
+            <td><a href="https://science.nasa.gov/3d-resources/">NASA 3D Resources</a></td>
+            <td><span class="chip good">Public repo OK</span></td>
+            <td class="num">Free</td>
+            <td>Real spacecraft: the Gateway lunar station, Hubble, Cassini, Dawn, the Apollo Lunar Module and many satellites. GLB, Blender and other formats.</td>
+            <td><b>Best for stations and orbital infrastructure</b>, such as relays and depots at Lagrange points. Free and without copyright, but NASA logos and insignia are not public domain and must be removed from textures, and nothing may imply NASA's endorsement. No warships or freighters.</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/a1studmuffin/SpaceshipGenerator">SpaceshipGenerator</a> (Blender add-on)</td>
+            <td><span class="chip good">MIT</span></td>
+            <td class="num">Free</td>
+            <td>Grows a hull from a seeded box by extruding faces, then places engines, turrets, antennas and lights. The same seed always gives the same ship.</td>
+            <td><b>A different route: varied hulls without a pack.</b> The algorithm is simple enough to port into <code>ShipMeshFactory</code>, giving every ship its own procedural hull with the stern/bow split built in. Its default look is greebled fighter rather than hard sci-fi, so it would need tuning.</td>
+          </tr>
+          <tr>
+            <td><a href="https://kenney-assets.itch.io/space-station-kit">Kenney Space Station Kit</a> and <a href="https://opengameart.org/content/shipyard-v04-customizable-spaceships">Shipyard v0.4</a></td>
+            <td><span class="chip good">CC0</span></td>
+            <td class="num">Free</td>
+            <td>Kenney: over 80 modular parts "to create space stations and ships". Shipyard: one Blender file of hull sections, components and surface detail.</td>
+            <td><b>Kitbash kits for capital hulls.</b> Kenney's kit matches the craft already in the game. Either kit can be assembled into separate stern and bow halves. Both need hand building and an AssetForge pass.</td>
+          </tr>
+          <tr>
+            <td><a href="https://quaternius.com/packs/ultimatespaceships.html">Quaternius Ultimate Spaceships</a></td>
+            <td><span class="chip good">CC0</span></td>
+            <td class="num">Free</td>
+            <td>10 ships, 5 colour variants each. FBX, OBJ, glTF and Blend.</td>
+            <td><b>Small and arcade-styled.</b> Could add fighter and courier variety in the current low-poly look. No capital ships.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col">
+      <h3><span class="tag warn">Pick</span> Two realistic routes</h3>
+      <ul class="points pros">
+        <li><b>Keep the repo public:</b> port SpaceshipGenerator's approach into <code>ShipMeshFactory</code> so every warship and freighter gets its own hull, use NASA models (logos removed) for stations, and keep Kenney craft for small civilians. This costs nothing, and nothing has to be moved out of the repo.</li>
+        <li><b>Buy art, repo private or pack kept out of git:</b> MSGDI's capital collection plus its freighter and miner fits the realism direction better than Ultimate Spaceships Creator and covers the classes this pack lacks, for $110 in total. Ultimate Spaceships Creator remains the choice if a hand-painted style is acceptable.</li>
+      </ul>
+    </div>
+    <p class="note">Ruled out: Jackson's Modular Space Ships (no licence stated, built for Unreal), BuzPin Low-Poly Spaceships (CC BY-ND forbids modified versions), ESA imagery (non-commercial only), and a "16 URP prefabs" pack whose listing says it was made with AI. No free hard-sci-fi capital-ship set turned up.</p>
+  </section>
+
+  <section aria-labelledby="unknowns">
+    <h2 id="unknowns">Still unconfirmed</h2>
+    <ul class="unknowns">
+      <li>Poly counts: the pack doesn't publish them.</li>
+      <li>What the 77 reviews say: the review text couldn't be read from the store page.</li>
+      <li>Whether any examples read as freighters or miners, the two civilian classes the game shows most.</li>
+      <li>How the hand-painted look holds up under the game's single hard sun light.</li>
+    </ul>
+  </section>
+
+  <footer class="sources">
+    <span class="eyebrow">Sources</span>
+    <ul>
+      <li><a href="https://assetstore.unity.com/packages/3d/vehicles/space/ultimate-spaceships-creator-196802">Unity Asset Store listing</a>: price, size, version, pipelines, licence</li>
+      <li><a href="https://ebal-studios.gitbook.io/usc">Ebal Studios documentation</a>: introduction, folder structure, examples vs modular examples, mesh combining, LODs, Colorize shader, Void Whale and Strider Ox sets</li>
+      <li>Compared packs: the store, publisher and GitHub pages linked in the table above, and <a href="https://www.nasa.gov/nasa-brand-center/images-and-media/">NASA's media usage guidelines</a></li>
+      <li>This repository: <code>Runtime/Rendering/ShipModels.cs</code>, <code>Core/Ships.cs</code>, <code>ProjectSettings/ProjectVersion.txt</code>, <code>Packages/manifest.json</code></li>
+    </ul>
+  </footer>
+</main>
+
+</body></html>
