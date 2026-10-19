@@ -35,6 +35,9 @@ namespace SolarSystem.Core
         /// <summary>Called when a yard has banked enough to lay down a hull. Return the class to build, or null to wait.</summary>
         public Func<Settlement, ShipClass?> ChooseBuild;
 
+        /// <summary>Factions founding new settlements as their people run out of room (U.SPC-T98), run at each review; null for none.</summary>
+        public Colonisation Colonisation;
+
         /// <summary>Raised when a yard completes a hull; the world puts it into service.</summary>
         public Action<Settlement, ShipClass, double> ShipBuilt;
 
@@ -111,6 +114,18 @@ namespace SolarSystem.Core
                 People.AssignLabour(s);
             }
             People.Migrate(Settlements, Diplomacy, 0);
+        }
+
+        /// <summary>
+        /// Opens a settlement added in play (a colony founded, U.SPC-T98) for business: its flows, prices and crews
+        /// as <see cref="Initialise"/> sets them, but with only the stock it was given.
+        /// </summary>
+        public void Open(Settlement s)
+        {
+            RecomputeFlows(s);
+            for (int i = 0; i < GoodInfo.Count; i++) s.Satisfaction[i] = 1;
+            s.RefreshPrices();
+            People.AssignLabour(s);
         }
 
         public IEnumerable<Settlement> At(int body)
@@ -255,7 +270,12 @@ namespace SolarSystem.Core
             double sustenance = Math.Min(s.Satisfaction[(int)Good.Food], s.Satisfaction[(int)Good.Water]);
             double health = s.Satisfaction[(int)Good.MedicalSupplies];
             double rate = People.GrowthRate(sustenance, health);
-            s.Population = Math.Max(s.InitialPopulation * People.MinShare, Math.Min(s.InitialPopulation * People.MaxGrowth, s.Population * (1 + rate * dt)));
+            double grown = s.Population * (1 + rate * dt), cap = s.InitialPopulation * People.MaxGrowth;
+            // Growth with no room to grow into is people with nowhere to go: the pressure that founds colonies (U.SPC-T98).
+            if (grown > cap) People.AddOverflow(s, grown - Math.Max(s.Population, cap));
+            // ... and in a crowded place, a share of those born would rather go than squeeze in.
+            else if (grown > s.Population) People.AddOverflow(s, (grown - s.Population) * People.Crowding(s));
+            s.Population = Math.Max(s.InitialPopulation * People.MinShare, Math.Min(cap, grown));
 
             // How people have been living, remembered for about a month: what draws or drives migrants.
             double k = 1 - Math.Exp(-dt / People.WellbeingDays);
@@ -314,6 +334,7 @@ namespace SolarSystem.Core
                 if (!prepaid) s.Owner.Treasury -= price;
                 ShipBuilt?.Invoke(s, cls.Value, Jd);
             }
+            Colonisation?.Review(this, Jd);
         }
 
         /// <summary>Value of a recipe's outputs over its inputs at local prices (mines count only their running costs).</summary>

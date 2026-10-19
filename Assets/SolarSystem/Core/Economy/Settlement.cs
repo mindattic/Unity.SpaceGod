@@ -187,6 +187,22 @@ namespace SolarSystem.Core
         /// <summary>Net people a day arriving (positive) or leaving (negative) by migration, over the last review.</summary>
         public double NetMigration;
 
+        /// <summary>
+        /// People here with no room (U.SPC-T98): the growth a settlement at its population cap could not take,
+        /// and migrants who would have left for a place that was full. What a faction founds colonies with
+        /// (<see cref="Colonisation"/>); held to <see cref="People.OverflowShare"/> of the population (the rest give up).
+        /// </summary>
+        public double Overflow;
+
+        /// <summary>Founded in play (an outpost, a colony, a ruin) or one of the system's own (U.SPC-T98).</summary>
+        public ColonyStage Stage;
+
+        /// <summary>For a founded settlement: when it was founded, and when it was abandoned (NaN if it never was).</summary>
+        public double FoundedJd = double.NaN, RuinedJd = double.NaN;
+
+        /// <summary>For a founded settlement: the site it stands on (what it can dig, how far it can grow).</summary>
+        public ColonySite Site;
+
         public double Flow(Good g) => Math.Max(Demand[(int)g], Supply[(int)g]);
 
         /// <summary>The stock a market wants on hand: <see cref="CoverDays"/> of its larger flow.</summary>

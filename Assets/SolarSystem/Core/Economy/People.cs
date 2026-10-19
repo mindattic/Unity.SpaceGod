@@ -195,6 +195,30 @@ namespace SolarSystem.Core
         /// <summary>Migration rate: the share of a population a day that moves for a full unit gap in attraction, before weighting by destination size.</summary>
         public const double MigrationPerDay = 0.002;
 
+        /// <summary>The most people a settlement holds as <see cref="Settlement.Overflow"/>, as a share of its population: past it, those waiting give up.</summary>
+        public const double OverflowShare = 0.05;
+
+        /// <summary>A settlement past this share of its cap is crowded (see <see cref="Crowding"/>).</summary>
+        public const double CrowdedShare = 0.6;
+
+        /// <summary>
+        /// How crowded <paramref name="s"/> is, 0..1: 0 up to <see cref="CrowdedShare"/> of its cap, rising to 1 at the
+        /// cap. That share of its growth would rather leave than squeeze in, and is counted as <see cref="Settlement.Overflow"/>.
+        /// </summary>
+        public static double Crowding(Settlement s)
+        {
+            double cap = s.InitialPopulation * MaxGrowth;
+            if (cap <= 0) return 0;
+            return Math.Max(0, Math.Min(1, (s.Population / cap - CrowdedShare) / (1 - CrowdedShare)));
+        }
+
+        /// <summary>Counts <paramref name="people"/> more at <paramref name="s"/> with no room (U.SPC-T98), up to <see cref="OverflowShare"/> of its people.</summary>
+        public static void AddOverflow(Settlement s, double people)
+        {
+            if (people <= 0 || s.Kind == SettlementKind.Haven) return;
+            s.Overflow = Math.Min(s.Overflow + people, s.Population * OverflowShare);
+        }
+
         /// <summary>Gaps in attraction smaller than this move nobody: the cost and bother of moving.</summary>
         public const double MigrationThreshold = 0.05;
 
@@ -305,7 +329,12 @@ namespace SolarSystem.Core
                 if (arriving > room)
                 {
                     double k = room / arriving;
-                    for (int i = 0; i < n; i++) moves[i, j] *= k;
+                    for (int i = 0; i < n; i++)
+                    {
+                        // Those turned away still want to leave: people with nowhere to go (U.SPC-T98).
+                        AddOverflow(settlements[i], moves[i, j] * (1 - k));
+                        moves[i, j] *= k;
+                    }
                 }
             }
             for (int i = 0; i < n; i++)

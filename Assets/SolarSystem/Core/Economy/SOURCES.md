@@ -85,3 +85,21 @@ People move toward food, water and work, following Harris and Todaro, *Migration
   - **Assumed**.
 - Nobody crosses a war front, pirates move only among their own havens, and nobody leaves a place below its floor or arrives at one at its cap.
 - Moving is instant for now. Passenger and colonist transport is a later ticket (U.SPC-T101).
+
+## Colonisation
+
+Factions found new settlements as their people run out of room (U.SPC-T98). Nothing runs on a timer: the pressure comes from the population and migration model above.
+
+- **People with no room.** A settlement at its cap (four times its founding people) can neither grow nor take in migrants. The growth it cannot take, and the migrants turned away from a full place, count as its *overflow*: people with nowhere to go. A place filling up feels it before then: past 60% of its cap, a rising share of its growth (all of it at the cap) would rather leave than squeeze in, and counts too. **Assumed**. A settlement holds at most 5% of its people as overflow; past that, those waiting give up. **Assumed**.
+- **A colony ship** sails once a faction has 5,000 such people (a party the size of a small town) and nothing else under way. **Assumed**. The colonists come from the most crowded places first, none below its floor.
+- **Where it goes.** A young settlement of the faction's own with room for half a party and doing well (wellbeing 0.85 or better) takes them first. Otherwise they go to the best free site in reach: the score falls by half for every 200 days of travel. **Assumed**.
+- **What a site is worth.** Its place against the star's habitable zone (Kopparapu et al. 2013, as in the star systems) counts most: 3 for the conservative zone, 2 for the optimistic, 1 outside it. Then come what can be dug there and how far its habitat can grow. A site outside the zone with no ice to melt is never settled. What a body holds is a game-layer judgement from its sunlight and size:
+  - worlds in the zone have water, and nitrogen and titanium if they are big enough to hold an atmosphere;
+  - hot worlds have bare metal;
+  - small warm bodies of the inner belt have metal and the precious ones;
+  - cold bodies have ice: water, and nitrogen and hydrocarbons on the bigger ones.
+  - A site's capacity is 2 million people in the conservative zone and 1 million in the optimistic. Outside the zone it is 400,000 on a world 1,000 km or more across, 150,000 on one over 200 km, and 50,000 below that. **Assumed**.
+- **Costs.** A founding voyage costs 150 million credits (the charter and a prefabricated habitat). A voyage with more settlers for a young settlement costs 40 million. Starter goods are bought at the port's prices: 180 days of food, water and air, and a year of medicine and the habitat's spares. **Assumed**.
+- **An outpost.** On landing, the colonists build farms for all of their food and ice mines for their water and air, where the site has the ice. They also open a mine on the site's most valuable ore, employing a quarter of their industrial hands. As their numbers grow, the farms and ice mines grow with them. A site with water but no nitrogen depends on nitrogen shipped in.
+- **Growth.** An outpost at three quarters of its cap and living well (wellbeing 0.9) is built out by half again. Its owner pays 4,000 credits a head of new base population. Its works grow in step, and a mine opens on the next ore the site has. Building out stops at the site's capacity. An outpost with 25,000 people and 1,000 facility jobs is a colony. **Assumed**.
+- **Failure.** A founded settlement that hunger or sickness has worn down to its floor (a quarter of its base population), and that is living badly (wellbeing under 0.8), is abandoned. Its last people go to the owner's biggest settlement, and the place is left a ruin with no people, market or work. After five years its site may be settled again. **Assumed**.

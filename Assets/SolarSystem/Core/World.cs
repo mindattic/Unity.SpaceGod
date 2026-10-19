@@ -85,6 +85,9 @@ namespace SolarSystem.Core
         /// station shares and mining claims, and the house account their earnings go to (see <see cref="Core.Holdings"/>).</summary>
         public Holdings Holdings { get; private set; }
 
+        /// <summary>Factions founding new settlements as their people run out of room (U.SPC-T98).</summary>
+        public Colonisation Colonisation { get; private set; }
+
         /// <summary>The most bounty hunter groups the free traders keep in service.</summary>
         public int HunterCap = 3;
 
@@ -395,6 +398,7 @@ namespace SolarSystem.Core
             economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
             Infrastructure.AddSettlementStructures(economy, seed + 3);
+            WireColonisation();
             // Merchants and couriers go down to the surface through the rings; warships and pirates hold orbit.
             fleet.Lands = IsTrader;
 
@@ -496,6 +500,30 @@ namespace SolarSystem.Core
                 if (next < 0 && !ship.HasCargo) ship.Cargo = "Empty, looking for work";
                 return next;
             };
+        }
+
+        /// <summary>
+        /// Colonisation (U.SPC-T98): every world of the system surveyed as a site, colony ships timed by the
+        /// distance at the date they sail (a freighter's flip-and-burn, as the contract boards reckon it), and
+        /// the news of each voyage, founding, build-out, promotion and failure in the log.
+        /// </summary>
+        void WireColonisation()
+        {
+            var c = Colonisation = new Colonisation();
+            c.SurveyAll(Catalog);
+            c.TravelDays = (from, body, when) =>
+                Contracts.TravelDays(from.Body == body ? 0 : (Ephemeris.HelioAt(from.Body, when) - Ephemeris.HelioAt(body, when)).Length);
+            c.Launched = v => Log(v.DepartJd, v.Reinforcing != null
+                ? $"The colony ship {v.Name} sails from {v.From.Name} with {v.Colonists:N0} settlers for {v.Reinforcing.Name}"
+                : $"The colony ship {v.Name} sails from {v.From.Name} with {v.Colonists:N0} colonists to settle {v.Site.Name}", WorldEventKind.Launch, v.From.Body);
+            c.Landed = (v, s) => Log(Economy.Jd, s != null
+                ? $"The colony ship {v.Name} lands {v.Colonists:N0} settlers at {s.Name}"
+                : $"The colony ship {v.Name} finds {v.Site.Name} taken and carries its colonists home", WorldEventKind.Info, v.Body);
+            c.Founded = s => Log(Economy.Jd, $"{s.Owner.Name} colonists found {s.Name}, an outpost of {s.Population:N0} on {Catalog[s.Body].Name}", WorldEventKind.Economy, s.Body);
+            c.Expanded = s => Log(Economy.Jd, $"{s.Name} builds out its habitat for {s.InitialPopulation * People.MaxGrowth:N0} people", WorldEventKind.Economy, s.Body);
+            c.Promoted = s => Log(Economy.Jd, $"{s.Name} has grown from an outpost into a colony of {s.Population:N0}", WorldEventKind.Economy, s.Body);
+            c.Ruined = s => Log(Economy.Jd, $"{s.Name} has failed: its last settlers leave and it stands empty, a ruin", WorldEventKind.Loss, s.Body);
+            Economy.Colonisation = c;
         }
 
         // ---------------------------------------------------------------- Alpha Centauri
