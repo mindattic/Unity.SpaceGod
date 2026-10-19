@@ -169,7 +169,7 @@ namespace SolarSystem
 
         // ---------------------------------------------------------------- Alpha Centauri
 
-        /// <summary>Out to Alpha Centauri through the interstellar view, round its stars, worlds and gates, and home.</summary>
+        /// <summary>Out to Alpha Centauri through the Centauri Gate, round its stars, worlds and gates, and home.</summary>
         static IEnumerator CentauriTour(SolarSystemApp app, Func<string, IEnumerator> stop)
         {
             var sol = app.ActiveSystem;
@@ -179,7 +179,8 @@ namespace SolarSystem
             app.Clock.SetWarp(SimClock.DefaultWarpIndex);
             app.TravelTo(ac);
             while (app.Travel.Active && app.Travel.Stage != Cameras.StarTravel.Leg.Cross) yield return null;
-            yield return Wait(1.9f);
+            // Through the gate the crossing is a short spell inside it.
+            yield return Wait(app.Travel.ThroughGate ? 0.8f : 1.9f);
             yield return stop("30-between-the-stars");
             while (app.Travel.Active) yield return null;
             yield return Wait(2.2f);

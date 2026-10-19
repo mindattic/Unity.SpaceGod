@@ -2194,7 +2194,8 @@ namespace SolarSystem
 
         void UpdateClipPlanes(float dt)
         {
-            double nearest = NearestSurface(SpaceCamera.ScenePosition);
+            // Going through a gate, the ring passes close by, nearer than anything else.
+            double nearest = Math.Min(NearestSurface(SpaceCamera.ScenePosition), Travel.GateClearance);
             UnityCamera.nearClipPlane = (float)Math.Max(1e-6, Math.Min(nearest * 0.25, 20.0));
             UnityCamera.farClipPlane = 5e8f;
             UnityCamera.transform.SetPositionAndRotation(Vector3.zero, SpaceCamera.Rotation);
@@ -2206,7 +2207,7 @@ namespace SolarSystem
             fovKick *= Mathf.Exp(-dt * 3.5f);
             GateFlash = Mathf.Max(0, GateFlash - dt / GateFlashS);
             LaneExitFade = Mathf.Max(0, LaneExitFade - dt / LaneExitFadeS);
-            UnityCamera.fieldOfView = Mathf.Min(150f, cameraFov + fovKick);
+            UnityCamera.fieldOfView = Mathf.Min(150f, cameraFov + fovKick + Travel.FovKick);
         }
 
         public Vector3 Relative(DVec3 scene)

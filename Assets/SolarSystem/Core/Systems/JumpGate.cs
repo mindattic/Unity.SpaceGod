@@ -7,8 +7,8 @@ namespace SolarSystem.Core
     /// system (see <see cref="GateNetwork"/>): a ship that flies to one and activates it emerges at the
     /// other. AI traffic takes <see cref="GateNetwork.TransitDays"/> to cross (see
     /// <see cref="InterstellarTraffic"/>); a piloted ship crosses at once (see <see cref="GateTransit"/>),
-    /// since piloting runs the clock at real time. The menu-driven STAR SYSTEMS jump is the camera's own
-    /// way across and is untouched.
+    /// since piloting runs the clock at real time. The menu-driven STAR SYSTEMS jump takes the camera
+    /// through the gates too, on its own (see <see cref="GateJump"/>), without moving any ship.
     ///
     /// Placed at <see cref="RadiusKm"/> from the system's own root rather than anywhere near the real
     /// scale of a light-year crossing: a piloted hull's top speed (<see cref="PilotTuning"/>, even

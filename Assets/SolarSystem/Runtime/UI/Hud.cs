@@ -188,7 +188,12 @@ namespace SolarSystem.UI
         void DrawTravel()
         {
             var travel = app.Travel;
-            if (Event.current.type == EventType.Repaint) DrawWarp();
+            if (Event.current.type == EventType.Repaint)
+            {
+                DrawGateLight(travel.GateGlow, GateGlowColor, 0.3f);
+                DrawWarp();
+                DrawGateLight(travel.GateFlash * travel.GateFlash, GateFlashColor, 0.9f);
+            }
             if (Event.current.type == EventType.Repaint && app.Interstellar.Visible && app.ShowLabels)
             {
                 foreach (var s in app.Interstellar.Stars)
@@ -629,6 +634,20 @@ namespace SolarSystem.UI
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Icons.White);
                 GUI.color = old;
             }
+        }
+
+        static readonly Color GateGlowColor = new Color(0.4f, 0.28f, 0.85f);
+        static readonly Color GateFlashColor = new Color(0.78f, 0.93f, 1f);
+
+        /// <summary>Going through a jump gate between the stars: the screen tinted the gate's violet inside it, or washed
+        /// in a flash at each ring (<paramref name="amount"/> 0..1, up to <paramref name="opacity"/>).</summary>
+        static void DrawGateLight(float amount, Color color, float opacity)
+        {
+            if (amount < 0.001f) return;
+            var old = GUI.color;
+            GUI.color = new Color(color.r, color.g, color.b, amount * opacity);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Icons.White);
+            GUI.color = old;
         }
 
         static float Frac(float x) => x - Mathf.Floor(x);
