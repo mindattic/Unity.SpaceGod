@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace UnitySpace
 {
@@ -14,6 +15,26 @@ namespace UnitySpace
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void EnsureApp()
+        {
+            // The main menu is a scene of its own, and the app is not made in it: the menu loads the game scene
+            // when the player starts. A run for the tour, a capture or -continue goes straight there.
+            if (UnityEngine.Object.FindAnyObjectByType<UI.MainMenu>() != null)
+            {
+                if (!GameLaunch.SkipsMenu) return;
+                SceneManager.sceneLoaded += AfterSkippingMenu;
+                SceneManager.LoadScene(GameLaunch.GameScene);
+                return;
+            }
+            Equip();
+        }
+
+        static void AfterSkippingMenu(Scene scene, LoadSceneMode mode)
+        {
+            SceneManager.sceneLoaded -= AfterSkippingMenu;
+            Equip();
+        }
+
+        static void Equip()
         {
             var app = UnityEngine.Object.FindAnyObjectByType<UnitySpaceApp>();
             if (app == null) app = new GameObject("UnitySpace").AddComponent<UnitySpaceApp>();

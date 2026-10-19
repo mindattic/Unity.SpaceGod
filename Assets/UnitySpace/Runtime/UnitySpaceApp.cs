@@ -330,7 +330,9 @@ namespace UnitySpace
         {
             Application.targetFrameRate = 144;
             DisplayOptions.ApplySaved(); // the resolution, window mode and VSync last kept (VSync on until then)
-            AutoReorient = PlayerPrefs.GetInt(AutoReorientPref, 1) == 1;
+            AutoReorient = ActiveProfile.Current.Flag(AutoReorientSetting, true);
+            pauseMenu.ShowSaves = () => ShowSaves = true;
+            pauseMenu.ToMainMenu = () => pendingMainMenu = true;
 
             Clock = SimClock.StartingNow();
             Scale = new ScaleModel { Blend = 1 };
@@ -1955,12 +1957,13 @@ namespace UnitySpace
         /// <summary>Whether the view keeps the active system's plane level by itself (R or the on-screen toggle; remembered between sessions).</summary>
         public bool AutoReorient { get; private set; }
 
-        const string AutoReorientPref = "AutoReorient";
+        const string AutoReorientSetting = "auto-reorient";
 
         public void ToggleAutoReorient()
         {
             AutoReorient = !AutoReorient;
-            PlayerPrefs.SetInt(AutoReorientPref, AutoReorient ? 1 : 0);
+            try { ActiveProfile.Current.SetFlag(AutoReorientSetting, AutoReorient); }
+            catch (Exception e) { Debug.LogError("[UnitySpace] Saving the auto-reorient setting failed: " + e); }
             ShowToast(AutoReorient ? "AUTO-REORIENT ON: keeping " + SystemPlaneName + " level" : "AUTO-REORIENT OFF: the view stays as you leave it");
         }
 

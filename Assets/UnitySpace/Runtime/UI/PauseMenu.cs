@@ -6,11 +6,12 @@ namespace UnitySpace.UI
 {
     /// <summary>
     /// The pause menu (U.SPC-T276), opened by Esc once there is nothing left for it to back out of (or at the
-    /// helm): Resume, Settings and Quit. Settings holds the Display page, where the resolution, the window mode
+    /// helm): Resume, Save / Load, Settings, Main Menu and Quit. Settings holds the Display page, where the resolution, the window mode
     /// and VSync are picked; nothing changes until Apply, and what Apply puts on the screen is taken back after
     /// ten real seconds unless the player keeps it. While the menu is open the whole simulation stands still
     /// (the app skips its frame), the cursor is free and the piloted hull takes no stick or trigger. Esc goes
-    /// back one page, and on the first page resumes.
+    /// back one page, and on the first page resumes. The main menu opens the same Settings on their own
+    /// (<see cref="OpenSettings"/>).
     /// </summary>
     public sealed class PauseMenu
     {
@@ -44,16 +45,34 @@ namespace UnitySpace.UI
 
         public bool IsOpen { get; private set; }
 
+        /// <summary>Opened on Settings by itself (from the main menu): backing out of Settings closes it.</summary>
+        bool settingsOnly;
+
+        /// <summary>Save / Load: the game's saves panel (the menu closes first).</summary>
+        public System.Action ShowSaves;
+
+        /// <summary>Main Menu: leaves the game for the main menu scene.</summary>
+        public System.Action ToMainMenu;
+
         /// <summary>Opens on the first page and stops scaled time (particles, anything on <see cref="Time.deltaTime"/>);
         /// the simulation itself stands still because the app skips its frame while the menu is open.</summary>
         public void Open()
         {
             if (IsOpen) return;
             IsOpen = true;
+            settingsOnly = false;
             page = Page.Main;
             notice = null;
             timeScaleBefore = Time.timeScale;
             Time.timeScale = 0;
+        }
+
+        /// <summary>Opens straight on Settings, for a screen of its own (the main menu): Back from there closes it.</summary>
+        public void OpenSettings()
+        {
+            Open();
+            settingsOnly = true;
+            page = Page.Settings;
         }
 
         /// <summary>Closes the menu and lets time run as it was. New display settings not yet kept are taken back.</summary>
@@ -88,7 +107,8 @@ namespace UnitySpace.UI
                     page = Page.Settings;
                     break;
                 case Page.Settings:
-                    page = Page.Main;
+                    if (settingsOnly) Close();
+                    else page = Page.Main;
                     break;
                 default:
                     Close();
@@ -180,15 +200,25 @@ namespace UnitySpace.UI
 
         void DrawMain()
         {
-            const float w = 320, h = 214;
+            const float w = 320, h = 302;
             var r = Centred(w, h);
             GUI.Box(r, GUIContent.none, panel);
             GUI.Label(new Rect(r.x + 20, r.y + 14, w - 40, 22), "PAUSED", title);
             GUI.Label(new Rect(r.x + 20, r.y + 38, w - 40, 18), "Every system stands still  ·  Esc to resume", small);
             float y = r.y + 70;
             if (GUI.Button(new Rect(r.x + 20, y, w - 40, 34), "Resume", button)) Close();
-            if (GUI.Button(new Rect(r.x + 20, y + 44, w - 40, 34), "Settings", button)) page = Page.Settings;
-            if (GUI.Button(new Rect(r.x + 20, y + 88, w - 40, 34), "Quit", button))
+            if (GUI.Button(new Rect(r.x + 20, y + 44, w - 40, 34), "Save / Load", button))
+            {
+                Close();
+                ShowSaves?.Invoke();
+            }
+            if (GUI.Button(new Rect(r.x + 20, y + 88, w - 40, 34), "Settings", button)) page = Page.Settings;
+            if (GUI.Button(new Rect(r.x + 20, y + 132, w - 40, 34), "Main Menu", button))
+            {
+                Close();
+                ToMainMenu?.Invoke();
+            }
+            if (GUI.Button(new Rect(r.x + 20, y + 176, w - 40, 34), "Quit", button))
             {
                 Time.timeScale = timeScaleBefore;
                 Quit();
@@ -204,7 +234,7 @@ namespace UnitySpace.UI
             GUI.Label(new Rect(r.x + 20, r.y + 38, w - 40, 18), "Esc to go back", small);
             float y = r.y + 70;
             if (GUI.Button(new Rect(r.x + 20, y, w - 40, 34), "Display", button)) OpenDisplay();
-            if (GUI.Button(new Rect(r.x + 20, y + 44, w - 40, 34), "Back", button)) page = Page.Main;
+            if (GUI.Button(new Rect(r.x + 20, y + 44, w - 40, 34), "Back", button)) Back();
         }
 
         void DrawDisplay()

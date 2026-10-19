@@ -148,28 +148,36 @@ namespace UnitySpace.UI
 
         // ---------------------------------------------------------------- save and load (U.SPC-T67)
 
+        string[] saveNames;
         SaveHeader[] saveHeaders;
         float savesReadAt = -10f;
+        Vector2 savesScroll;
+
+        /// <summary>The save the player has asked to delete, waiting for the second click that confirms it.</summary>
+        string deleteArmed;
 
         /// <summary>
-        /// The save slots (F6): the quicksave, three slots to save into and the rotating autosaves, each with
-        /// where and when it was saved, who was flying and their purse. Save and Load act at the next frame.
+        /// The saves (F6, or Save / Load in the pause menu), of the profile in use: New Save makes another of the
+        /// player's own, and each row shows where and when it was saved, who was flying and their purse, with
+        /// Save to overwrite it (the quicksave and the player's saves), Load, and Delete (asked twice). Save and
+        /// Load act at the next frame.
         /// </summary>
         void DrawSaves()
         {
             var slots = app.Saves;
             if (slots == null) return;
-            var names = new System.Collections.Generic.List<string>(SaveSlots.AllSlots());
-            if (saveHeaders == null || saveHeaders.Length != names.Count || Time.unscaledTime - savesReadAt > 1f)
+            if (saveNames == null || Time.unscaledTime - savesReadAt > 1f)
             {
-                saveHeaders = new SaveHeader[names.Count];
-                for (int i = 0; i < names.Count; i++) saveHeaders[i] = slots.Header(names[i]);
+                saveNames = new System.Collections.Generic.List<string>(slots.AllSlots()).ToArray();
+                saveHeaders = new SaveHeader[saveNames.Length];
+                for (int i = 0; i < saveNames.Length; i++) saveHeaders[i] = slots.Header(saveNames[i]);
                 savesReadAt = Time.unscaledTime;
             }
-            const float w = 720, rowH = 24;
-            float h = 82 + names.Count * rowH;
-            var r = Panel(new Rect((Screen.width - w) * 0.5f, 170, w, h));
-            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 60, 22), "SAVE & LOAD", title);
+            const float w = 760, rowH = 24;
+            float listH = Mathf.Min(saveNames.Length, 14) * rowH;
+            float h = 116 + listH;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, Mathf.Min(170, Screen.height - h - 20), w, h));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 60, 22), "SAVE & LOAD  ·  " + ActiveProfile.Current.Name.ToUpperInvariant(), title);
             if (GUI.Button(new Rect(r.xMax - 34, r.y + 6, 24, 22), "X", button)) app.ShowSaves = false;
             var old = GUI.contentColor;
             GUI.contentColor = Dim;
@@ -177,26 +185,56 @@ namespace UnitySpace.UI
             GUI.Label(new Rect(r.x + 12, r.y + 30, w - 24, 18), blocked ??
                 "F5 quicksave   F8 quickload   F6 close   ·   autosaves every " + (UnitySpaceApp.AutosaveIntervalS / 60f).ToString("0", CultureInfo.InvariantCulture) + " minutes and on quit", small);
             GUI.contentColor = old;
-            for (int i = 0; i < names.Count; i++)
+
+            bool enabled = GUI.enabled;
+            GUI.enabled = enabled && blocked == null;
+            string next = slots.NewManual();
+            if (GUI.Button(new Rect(r.x + 8, r.y + 54, 160, 26), "New Save", buttonActive))
             {
-                string slot = names[i];
+                app.RequestSave(next, UnitySpaceApp.SlotName(next));
+                savesReadAt = -10f;
+                deleteArmed = null;
+            }
+            GUI.enabled = enabled;
+
+            var view = new Rect(r.x + 8, r.y + 88, w - 16, listH + 4);
+            var content = new Rect(0, 0, view.width - (saveNames.Length > 14 ? 18 : 0), saveNames.Length * rowH);
+            savesScroll = GUI.BeginScrollView(view, savesScroll, content);
+            for (int i = 0; i < saveNames.Length; i++)
+            {
+                string slot = saveNames[i];
                 var hdr = saveHeaders[i];
-                var row0 = new Rect(r.x + 8, r.y + 54 + i * rowH, w - 16, rowH - 2);
+                var row0 = new Rect(0, i * rowH, content.width, rowH - 2);
                 GUI.Box(row0, GUIContent.none, row);
-                GUI.Label(new Rect(row0.x + 6, row0.y + 2, 100, 18), UnitySpaceApp.SlotName(slot), text);
+                GUI.Label(new Rect(row0.x + 6, row0.y + 2, 150, 18), UnitySpaceApp.SaveTitle(slot, hdr), text);
                 GUI.contentColor = hdr == null ? Dim : Color.white;
                 string line = hdr == null ? "empty" : UnitySpaceApp.DescribeSave(hdr) + "   ·   saved " + hdr.SavedUtc.ToLocalTime().ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
-                GUI.Label(new Rect(row0.x + 108, row0.y + 3, w - 290, 18), line, small);
+                GUI.Label(new Rect(row0.x + 160, row0.y + 3, row0.width - 400, 18), line, small);
                 GUI.contentColor = old;
-                bool autosave = slot.StartsWith("autosave-", StringComparison.Ordinal);
-                if (!autosave && blocked == null && GUI.Button(new Rect(row0.xMax - 150, row0.y + 1, 70, 20), "Save", button))
+                if (blocked != null) continue;
+                if (!SaveSlots.IsAutosave(slot) && GUI.Button(new Rect(row0.xMax - 228, row0.y + 1, 70, 20), "Save", button))
                 {
-                    app.RequestSave(slot);
+                    app.RequestSave(slot, hdr?.Label);
                     savesReadAt = -10f;
+                    deleteArmed = null;
                 }
-                if (hdr != null && blocked == null && GUI.Button(new Rect(row0.xMax - 74, row0.y + 1, 70, 20), "Load", button))
+                if (hdr != null && GUI.Button(new Rect(row0.xMax - 152, row0.y + 1, 70, 20), "Load", button))
+                {
                     app.RequestLoad(slot);
+                    deleteArmed = null;
+                }
+                if (hdr != null && GUI.Button(new Rect(row0.xMax - 76, row0.y + 1, 72, 20), deleteArmed == slot ? "Sure?" : "Delete", deleteArmed == slot ? buttonActive : button))
+                {
+                    if (deleteArmed == slot)
+                    {
+                        slots.Delete(slot);
+                        deleteArmed = null;
+                        savesReadAt = -10f;
+                    }
+                    else deleteArmed = slot;
+                }
             }
+            GUI.EndScrollView();
         }
 
         // ---------------------------------------------------------------- world overlay
@@ -2874,7 +2912,7 @@ namespace UnitySpace.UI
                 "Shift   boost           Ctrl   fine             Wheel   swim speed / zoom",
                 "Right-drag   look / orbit                Left-click   select    (double: focus)",
                 "F   focus selection     Esc   close panels / leave focus / deselect, then the pause menu     Home   system view",
-                "Esc   pause menu (straight away at the helm): Resume, Settings > Display (resolution, window mode, VSync), Quit",
+                "Esc   pause menu (straight away at the helm): Resume, Save / Load, Settings > Display (resolution, window mode, VSync), Main Menu, Quit",
                 "G  or  `   toggle GAMEPLAY / REALISTIC scale",
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
                 "K   satellites    R   auto-reorient on/off (keep this system's plane level)",

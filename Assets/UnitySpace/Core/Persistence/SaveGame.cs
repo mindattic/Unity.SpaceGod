@@ -165,28 +165,54 @@ namespace UnitySpace.Core
     }
 
     /// <summary>
-    /// The save slots in one folder: a quicksave, a few numbered slots, and autosaves that take turns
-    /// (the oldest of them is overwritten), each a <c>.sav</c> file named after its slot.
+    /// The save slots in one folder: a quicksave, as many numbered saves as the player makes, and autosaves
+    /// that take turns (the oldest of them is overwritten), each a <c>.sav</c> file named after its slot.
     /// </summary>
     public sealed class SaveSlots
     {
         public const string Quick = "quicksave";
-        public const int ManualCount = 3;
         public const int AutosaveCount = 3;
+
+        const string ManualPrefix = "slot-";
 
         public readonly string Directory;
 
         public SaveSlots(string directory) => Directory = directory;
 
-        public static string Manual(int n) => "slot-" + n;
+        public static string Manual(int n) => ManualPrefix + n;
         public static string Autosave(int n) => "autosave-" + n;
 
-        /// <summary>Every slot a player can pick, in the order a list shows them.</summary>
-        public static IEnumerable<string> AllSlots()
+        public static bool IsManual(string slot) => ManualNumber(slot) > 0;
+
+        public static bool IsAutosave(string slot) => slot.StartsWith("autosave-", StringComparison.Ordinal);
+
+        static int ManualNumber(string slot) =>
+            slot != null && slot.StartsWith(ManualPrefix, StringComparison.Ordinal)
+            && int.TryParse(slot.Substring(ManualPrefix.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n)
+            && n > 0 ? n : 0;
+
+        /// <summary>The numbered saves on disk, in the order they were first made.</summary>
+        public List<string> ManualSlots() =>
+            !System.IO.Directory.Exists(Directory)
+                ? new List<string>()
+                : System.IO.Directory.GetFiles(Directory, ManualPrefix + "*.sav")
+                    .Select(Path.GetFileNameWithoutExtension).Where(IsManual).OrderBy(ManualNumber).ToList();
+
+        /// <summary>The slot a new save goes to: the number after the highest there is.</summary>
+        public string NewManual() => Manual(ManualSlots().Select(ManualNumber).DefaultIfEmpty(0).Max() + 1);
+
+        /// <summary>Every slot there is or could be loaded from, in the order a list shows them: the quicksave, the player's saves, the autosaves.</summary>
+        public IEnumerable<string> AllSlots()
         {
             yield return Quick;
-            for (int i = 1; i <= ManualCount; i++) yield return Manual(i);
+            foreach (var slot in ManualSlots()) yield return slot;
             for (int i = 1; i <= AutosaveCount; i++) yield return Autosave(i);
+        }
+
+        /// <summary>Removes the save in <paramref name="slot"/>, if there is one.</summary>
+        public void Delete(string slot)
+        {
+            if (Exists(slot)) File.Delete(PathOf(slot));
         }
 
         public string PathOf(string slot) => Path.Combine(Directory, slot + ".sav");

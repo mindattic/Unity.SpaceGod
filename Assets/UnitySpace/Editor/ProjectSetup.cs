@@ -5,6 +5,7 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnitySpace.UI;
 
 namespace UnitySpace.EditorTools
 {
@@ -25,6 +26,7 @@ namespace UnitySpace.EditorTools
     public static class ProjectSetup
     {
         public const string ScenePath = "Assets/Scenes/UnitySpace.unity";
+        public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string PlayerPath = "Builds/Windows/UnitySpace.exe";
 
         static ProjectSetup()
@@ -33,6 +35,7 @@ namespace UnitySpace.EditorTools
             EditorApplication.delayCall += () =>
             {
                 if (!File.Exists(ScenePath)) CreateScene();
+                if (!File.Exists(MenuScenePath)) CreateMainMenuScene();
                 var active = SceneManager.GetActiveScene();
                 if (string.IsNullOrEmpty(active.path) && !active.isDirty && !EditorApplication.isPlayingOrWillChangePlaymode)
                     EditorSceneManager.OpenScene(ScenePath);
@@ -56,18 +59,47 @@ namespace UnitySpace.EditorTools
             new GameObject("UnitySpace").AddComponent<UnitySpaceApp>();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
-            AssetDatabase.SaveAssets();
+            SetBuildScenes();
             Debug.Log("[UnitySpace] Scene written to " + ScenePath);
+        }
+
+        /// <summary>The main menu scene the player opens on: a camera on the sky and the <see cref="MainMenu"/>.</summary>
+        [MenuItem("UnitySpace/Rebuild Main Menu Scene")]
+        public static void CreateMainMenuScene()
+        {
+            if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            Directory.CreateDirectory(Path.GetDirectoryName(MenuScenePath));
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            var cameraGo = new GameObject("Main Camera") { tag = "MainCamera" };
+            var camera = cameraGo.AddComponent<Camera>();
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = Color.black;
+            camera.farClipPlane = 5e8f;
+            cameraGo.AddComponent<AudioListener>();
+
+            new GameObject("Main Menu").AddComponent<MainMenu>();
+
+            EditorSceneManager.SaveScene(scene, MenuScenePath);
+            SetBuildScenes();
+            Debug.Log("[UnitySpace] Scene written to " + MenuScenePath);
+        }
+
+        /// <summary>The main menu first (the player opens on it), then the game.</summary>
+        static void SetBuildScenes()
+        {
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MenuScenePath, true), new EditorBuildSettingsScene(ScenePath, true) };
+            AssetDatabase.SaveAssets();
         }
 
         [MenuItem("UnitySpace/Build Windows Player")]
         public static void BuildWindows()
         {
             if (!File.Exists(ScenePath)) CreateScene();
+            if (!File.Exists(MenuScenePath)) CreateMainMenuScene();
             var options = new BuildPlayerOptions
             {
-                scenes = new[] { ScenePath },
+                scenes = new[] { MenuScenePath, ScenePath },
                 locationPathName = PlayerPath,
                 target = BuildTarget.StandaloneWindows64,
                 options = BuildOptions.None,

@@ -217,6 +217,20 @@ namespace UnitySpace.Core.Tests
                 Assert.Throws<InvalidDataException>(() => slots.Load(SaveSlots.Manual(3)));
                 Assert.That(slots.List().Count, Is.EqualTo(5));
                 Assert.That(Directory.GetFiles(dir, "*.tmp"), Is.Empty, "a finished save leaves no temporary file");
+
+                // The player makes as many saves as they like: a new one takes the number after the highest.
+                Assert.That(slots.ManualSlots(), Is.EqualTo(new[] { SaveSlots.Manual(2), SaveSlots.Manual(3) }));
+                Assert.That(slots.NewManual(), Is.EqualTo(SaveSlots.Manual(4)));
+                for (int i = 0; i < 4; i++) slots.Save(slots.NewManual(), Small(StartJd + 20 + i, 1), "Mine " + i, t0.AddMinutes(30 + i));
+                Assert.That(slots.ManualSlots().Last(), Is.EqualTo(SaveSlots.Manual(7)));
+                Assert.That(slots.AllSlots().First(), Is.EqualTo(SaveSlots.Quick));
+                Assert.That(slots.AllSlots().Last(), Is.EqualTo(SaveSlots.Autosave(SaveSlots.AutosaveCount)));
+                Assert.That(slots.Latest().Label, Is.EqualTo("Mine 3"));
+                slots.Delete(SaveSlots.Manual(7));
+                Assert.That(slots.Exists(SaveSlots.Manual(7)), Is.False);
+                Assert.That(slots.NewManual(), Is.EqualTo(SaveSlots.Manual(7)));
+                Assert.That(SaveSlots.IsManual("slot-x"), Is.False);
+                Assert.That(SaveSlots.IsManual(SaveSlots.Quick), Is.False);
             }
             finally
             {

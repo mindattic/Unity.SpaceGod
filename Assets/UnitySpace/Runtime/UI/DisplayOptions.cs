@@ -11,7 +11,7 @@ namespace UnitySpace.UI
     /// </summary>
     public static class DisplayOptions
     {
-        const string Pref = "DisplaySettings";
+        const string Setting = "display";
 
         /// <summary>What is on the screen now, as last applied: <see cref="Screen.width"/> and the mode only catch up
         /// with <see cref="Screen.SetResolution(int, int, FullScreenMode)"/> at the end of the frame.</summary>
@@ -25,7 +25,7 @@ namespace UnitySpace.UI
         public static void ApplySaved()
         {
             Current = FromScreen().WithVSync(true);
-            if (DisplaySettings.TryParse(PlayerPrefs.GetString(Pref, ""), out var saved))
+            if (DisplaySettings.TryParse(ActiveProfile.Current.Setting(Setting) ?? "", out var saved))
             {
                 if (ScreenFixedByCommandLine()) Current = Current.WithVSync(saved.VSync);
                 else
@@ -49,11 +49,11 @@ namespace UnitySpace.UI
             Current = settings;
         }
 
-        /// <summary>Remembers <see cref="Current"/> for the next run (the player kept it).</summary>
+        /// <summary>Remembers <see cref="Current"/> in the player's profile for the next run (the player kept it).</summary>
         public static void Save()
         {
-            PlayerPrefs.SetString(Pref, Current.Format());
-            PlayerPrefs.Save();
+            try { ActiveProfile.Current.SetSetting(Setting, Current.Format()); }
+            catch (System.Exception e) { Debug.LogError("[UnitySpace] Saving the display settings failed: " + e); }
         }
 
         /// <summary>The sizes the screen offers, once each at its best refresh rate, and the usual widescreen and ultrawide

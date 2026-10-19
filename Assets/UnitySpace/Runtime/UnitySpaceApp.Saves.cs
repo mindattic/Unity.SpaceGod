@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using UnitySpace.Core;
 using UnitySpace.Rendering;
 using UnitySpace.Views;
@@ -31,8 +30,16 @@ namespace UnitySpace
 
         void InitSaves()
         {
-            Saves = new SaveSlots(Path.Combine(Application.persistentDataPath, "Saves"));
+            Saves = new SaveSlots(ActiveProfile.Current.SavesFolder);
             autosaveEnabled = !Bootstrap.HasCommandLineFlag("-demo") && !Bootstrap.HasCommandLineFlag("-capture");
+            // Started from the main menu: the save it picked (or, for a new game, none).
+            string picked = GameLaunch.TakeLoadSlot();
+            if (picked != null)
+            {
+                LoadFrom(picked);
+                return;
+            }
+            if (GameLaunch.FromMenu) return;
             var latest = Saves.Latest();
             if (latest == null) return;
             if (Bootstrap.HasCommandLineFlag("-continue")) LoadFrom(latest.Slot);
@@ -54,20 +61,40 @@ namespace UnitySpace
             if (autosaveEnabled && Galaxy != null && SaveBlocker() == null) Autosave(true);
         }
 
-        string pendingSave, pendingLoad;
+        /// <summary>Back to the main menu, taking an autosave on the way as quitting does.</summary>
+        public void ReturnToMainMenu()
+        {
+            if (autosaveEnabled && Galaxy != null && SaveBlocker() == null) Autosave(true);
+            GameLaunch.ToMainMenu();
+        }
+
+        string pendingSave, pendingSaveLabel, pendingLoad;
+
+        /// <summary>Main Menu was picked in the pause menu: the app leaves at the start of the next frame, not from inside its draw.</summary>
+        bool pendingMainMenu;
 
         /// <summary>Saves to <paramref name="slot"/> at the start of the next frame (the HUD asks from inside its draw, where views must not be rebuilt).</summary>
-        public void RequestSave(string slot) => pendingSave = slot;
+        public void RequestSave(string slot, string label = null)
+        {
+            pendingSave = slot;
+            pendingSaveLabel = label;
+        }
 
         /// <summary>Loads <paramref name="slot"/> at the start of the next frame.</summary>
         public void RequestLoad(string slot) => pendingLoad = slot;
 
         void HandleSaveCommands()
         {
+            if (pendingMainMenu)
+            {
+                pendingMainMenu = false;
+                ReturnToMainMenu();
+                return;
+            }
             if (pendingSave != null)
             {
-                SaveTo(pendingSave);
-                pendingSave = null;
+                SaveTo(pendingSave, pendingSaveLabel);
+                pendingSave = pendingSaveLabel = null;
             }
             if (pendingLoad != null)
             {
@@ -247,10 +274,14 @@ namespace UnitySpace
         public static string SlotName(string slot)
         {
             if (slot == SaveSlots.Quick) return "Quicksave";
-            if (slot.StartsWith("slot-", StringComparison.Ordinal)) return "Slot " + slot.Substring(5);
+            if (SaveSlots.IsManual(slot)) return "Save " + slot.Substring(5);
             if (slot.StartsWith("autosave-", StringComparison.Ordinal)) return "Autosave " + slot.Substring(9);
             return slot;
         }
+
+        /// <summary>What a list calls the save in <paramref name="slot"/>: the name the player's own save was given, else the slot's.</summary>
+        public static string SaveTitle(string slot, SaveHeader h) =>
+            SaveSlots.IsManual(slot) && !string.IsNullOrEmpty(h?.Label) ? h.Label : SlotName(slot);
 
         /// <summary>One line for a save: where and when in the simulation, who was flying and their purse.</summary>
         public static string DescribeSave(SaveHeader h)
