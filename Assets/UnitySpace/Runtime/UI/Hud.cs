@@ -1167,10 +1167,12 @@ namespace UnitySpace.UI
                 // How many gates away it is, by the quickest open way (a gate network, not all-pairs).
                 var route = here ? null : network.Route(app.ActiveSystem, system, null, jd);
                 string hops = route == null ? "" : "  " + route.Count + (route.Count == 1 ? " gate" : " gates");
-                string label = system.Name + (here ? "   ◉ here" : going ? "   travelling…" : "   " + Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly" + hops + NewsAge(system, jd) + "  ›");
+                string details = here ? "◉ here" : going ? "travelling…" : Galaxy.DistanceLy(app.ActiveSystem, system).ToString("0.00", CultureInfo.InvariantCulture) + " ly" + hops + NewsAge(system, jd) + "  ›";
                 // Rows tighten as the list of systems grows, so the body tree below keeps its room.
                 float rowHeight = app.Galaxy.Systems.Count > 4 ? 18 : 22;
-                if (GUI.Button(new Rect(r.x + 10, sy, w - 20, rowHeight), label, here ? buttonActive : button) && !here) app.TravelTo(system);
+                var systemRow = new Rect(r.x + 10, sy, w - 20, rowHeight);
+                if (GUI.Button(systemRow, GUIContent.none, here ? buttonActive : button) && !here) app.TravelTo(system);
+                NameAndDetails(systemRow, system.Name, details, here ? buttonActive : button);
                 sy += rowHeight + (app.Galaxy.Systems.Count > 4 ? 2 : 3);
                 if (!here) continue;
                 // Who holds it (U.SPC-T91): the polity owning its biggest settlement, which may hold other systems too.
@@ -1179,7 +1181,7 @@ namespace UnitySpace.UI
                 {
                     var old = GUI.contentColor;
                     GUI.contentColor = new Color(holder.Color.R, holder.Color.G, holder.Color.B);
-                    GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), "   Held by " + holder.Name, small);
+                    NameAndDetails(new Rect(r.x + 12, sy, w - 24, 15), "   Held by", holder.Name, small);
                     GUI.contentColor = old;
                     sy += 15;
                 }
@@ -1188,12 +1190,12 @@ namespace UnitySpace.UI
                 {
                     bool shut = gate.Blockaded(jd) || gate.Partner.Blockaded(jd);
                     bool down = !gate.Link.Working;
-                    string line = "   " + gate.Name + "  " + gate.Link.Ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly, " +
+                    string line = gate.Link.Ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly, " +
                                   (gate.Link.TransitDays * 24).ToString("0", CultureInfo.InvariantCulture) + " h" + (down ? "   DOWN" : shut ? "   SHUT" : "") +
                                   (gate.Integrity < 1 ? "  " + (gate.Integrity * 100).ToString("0", CultureInfo.InvariantCulture) + "% whole" : "");
                     var old = GUI.contentColor;
                     GUI.contentColor = down || shut ? new Color(1f, 0.5f, 0.42f) : new Color(0.7f, 0.82f, 0.95f);
-                    GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), line, small);
+                    NameAndDetails(new Rect(r.x + 12, sy, w - 24, 15), "   " + gate.Name, line, small);
                     GUI.contentColor = old;
                     sy += 15;
                 }
@@ -1205,11 +1207,11 @@ namespace UnitySpace.UI
                         string what = p.Work == GateJob.Repair ? "rebuilding the " + p.Gate.Name
                             : p.Stage == GateStage.Survey ? "surveying for a gate to " + p.TargetName
                             : "building a gate to " + p.TargetName;
-                        string line = "   " + p.Builder.Name + " " + what +
+                        string line = what +
                                       (p.Stage == GateStage.Building ? "  " + (p.Progress * 100).ToString("0", CultureInfo.InvariantCulture) + "%" : "");
                         var old = GUI.contentColor;
                         GUI.contentColor = new Color(0.85f, 0.8f, 0.55f);
-                        GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), line, small);
+                        NameAndDetails(new Rect(r.x + 12, sy, w - 24, 15), "   " + p.Builder.Name, line, small);
                         GUI.contentColor = old;
                         sy += 15;
                     }
@@ -1217,50 +1219,52 @@ namespace UnitySpace.UI
             int crossing = app.Galaxy.Traffic.InGates.Count;
             if (crossing > 0)
             {
-                GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), "   " + crossing + (crossing == 1 ? " ship" : " ships") + " in the gates", small);
+                NameAndDetails(new Rect(r.x + 12, sy, w - 24, 15), "   " + crossing + (crossing == 1 ? " ship" : " ships"), "in the gates", small);
                 sy += 15;
             }
             float treeTop = sy + 4 - r.y;
 
             var catalog = app.Catalog;
-            var rows = new List<(string text, Target target, int indent, Color color)>();
+            var rows = new List<(string name, string details, Target target, int indent, Color color)>();
             var war = app.World.War;
             if (war.Battles.Count > 0)
             {
-                rows.Add(("BATTLES", Target.None, 0, new Color(1f, 0.5f, 0.4f)));
+                rows.Add(("BATTLES", "", Target.None, 0, new Color(1f, 0.5f, 0.4f)));
                 foreach (var b in war.Battles)
                 {
                     var flag = Flagship(b);
-                    rows.Add((b.Name + "  " + BattleScore(b), flag != null ? Target.OfShip(flag) : Target.OfBody(b.Body), 1, new Color(1f, 0.72f, 0.6f)));
+                    rows.Add((b.Name, BattleScore(b), flag != null ? Target.OfShip(flag) : Target.OfBody(b.Body), 1, new Color(1f, 0.72f, 0.6f)));
                 }
-                rows.Add(("", Target.None, 0, Color.clear));
+                rows.Add(("", "", Target.None, 0, Color.clear));
             }
             AddBody(rows, 0, 0);
             foreach (var faction in app.Fleet.Factions)
             {
-                rows.Add(("", Target.None, 0, Color.clear));
+                rows.Add(("", "", Target.None, 0, Color.clear));
                 var fc = new Color(faction.Color.R, faction.Color.G, faction.Color.B);
-                rows.Add((faction.Name.ToUpperInvariant() + "   " + Credits(faction.Treasury), Target.None, 0, fc));
-                rows.Add((PolityText(faction), Target.None, 1, Color.Lerp(fc, Color.gray, 0.35f)));
+                rows.Add((faction.Name.ToUpperInvariant(), Credits(faction.Treasury), Target.None, 0, fc));
+                string polity = PolityText(faction);
+                int cut = polity.IndexOf(",  ", StringComparison.Ordinal);
+                rows.Add((cut < 0 ? polity : polity.Substring(0, cut), cut < 0 ? "" : polity.Substring(cut + 3), Target.None, 1, Color.Lerp(fc, Color.gray, 0.35f)));
                 foreach (var ship in app.Fleet.Ships)
                 {
                     if (ship.Faction != faction || ship.IsEscort || ship.Destroyed) continue;
-                    rows.Add((ship.Name + "  " + ShortStatus(ship), Target.OfShip(ship), 1, fc));
+                    rows.Add((ship.Name, ShortStatus(ship), Target.OfShip(ship), 1, fc));
                     foreach (var escort in app.Fleet.Ships)
-                        if (escort.Leader == ship && !escort.Destroyed) rows.Add((escort.Name + "  · " + escort.Spec.DisplayName, Target.OfShip(escort), 2, Color.Lerp(fc, Color.gray, 0.35f)));
+                        if (escort.Leader == ship && !escort.Destroyed) rows.Add((escort.Name, "· " + escort.Spec.DisplayName, Target.OfShip(escort), 2, Color.Lerp(fc, Color.gray, 0.35f)));
                 }
             }
             // The trading companies that own the merchant fleet, in their liveries.
             var companies = app.World.Companies;
             if (companies != null && companies.Enabled)
             {
-                rows.Add(("", Target.None, 0, Color.clear));
-                rows.Add(("TRADING COMPANIES", Target.None, 0, new Color(0.9f, 0.86f, 0.7f)));
+                rows.Add(("", "", Target.None, 0, Color.clear));
+                rows.Add(("TRADING COMPANIES", "", Target.None, 0, new Color(0.9f, 0.86f, 0.7f)));
                 foreach (var co in companies.All)
                 {
                     var lc = new Color(co.Livery.R, co.Livery.G, co.Livery.B);
                     if (!co.Trading) lc = Color.Lerp(lc, Color.gray, 0.6f);
-                    rows.Add((CompanyText(co), Target.None, 1, lc));
+                    rows.Add((co.Name, CompanyText(co).Substring(co.Name.Length).TrimStart(), Target.None, 1, lc));
                 }
             }
             // The player's own fleet: its house flag is no faction of the system's, but its ships are no visitors.
@@ -1272,12 +1276,12 @@ namespace UnitySpace.UI
                     if (ship.IsEscort || ship.Destroyed || ship.Faction != house) continue;
                     if (!houseHeader)
                     {
-                        rows.Add(("", Target.None, 0, Color.clear));
-                        rows.Add(("YOUR FLEET", Target.None, 0, new Color(0.85f, 0.95f, 0.7f)));
+                        rows.Add(("", "", Target.None, 0, Color.clear));
+                        rows.Add(("YOUR FLEET", "", Target.None, 0, new Color(0.85f, 0.95f, 0.7f)));
                         houseHeader = true;
                     }
                     var hc = new Color(house.Color.R, house.Color.G, house.Color.B);
-                    rows.Add((ship.Name + "  " + ShortStatus(ship), Target.OfShip(ship), 1, hc));
+                    rows.Add((ship.Name, ShortStatus(ship), Target.OfShip(ship), 1, hc));
                 }
             // Ships from other systems, come through the gates (their factions belong to their own worlds).
             bool visitorsHeader = false;
@@ -1288,37 +1292,37 @@ namespace UnitySpace.UI
                 if (ship.IsEscort || ship.Destroyed || local.Contains(ship.Faction)) continue;
                 if (!visitorsHeader)
                 {
-                    rows.Add(("", Target.None, 0, Color.clear));
-                    rows.Add(("FROM BEYOND THE GATES", Target.None, 0, new Color(0.7f, 0.82f, 0.95f)));
+                    rows.Add(("", "", Target.None, 0, Color.clear));
+                    rows.Add(("FROM BEYOND THE GATES", "", Target.None, 0, new Color(0.7f, 0.82f, 0.95f)));
                     visitorsHeader = true;
                 }
                 var fc = new Color(ship.Faction.Color.R, ship.Faction.Color.G, ship.Faction.Color.B);
-                string from = ship.Voyage != null ? "  · " + ship.Voyage.Home.Name : "";
-                rows.Add((ship.Name + from + "  " + ShortStatus(ship), Target.OfShip(ship), 1, fc));
+                string from = ship.Voyage != null ? "· " + ship.Voyage.Home.Name + "  " : "";
+                rows.Add((ship.Name, from + ShortStatus(ship), Target.OfShip(ship), 1, fc));
             }
 
             // Docking rings and what is in orbit, after the bodies.
             var infra = app.World.Infrastructure;
             if (infra != null && infra.Rings.Count > 0)
             {
-                rows.Add(("", Target.None, 0, Color.clear));
-                rows.Add(("DOCKING RINGS", Target.None, 0, new Color(0.6f, 0.9f, 1f)));
+                rows.Add(("", "", Target.None, 0, Color.clear));
+                rows.Add(("DOCKING RINGS", "", Target.None, 0, new Color(0.6f, 0.9f, 1f)));
                 foreach (var ring in infra.Rings)
                 {
                     int queued = 0;
                     foreach (var s in app.Fleet.Ships)
                         if (!s.Destroyed && s.Phase == ShipPhase.Queued && s.Ring == ring) queued++;
-                    rows.Add((ring.Name + "  · " + catalog[ring.Body].Name + (queued > 0 ? "  · " + queued + " queued" : ""), Target.OfRing(ring), 1, new Color(0.6f, 0.9f, 1f)));
+                    rows.Add((ring.Name, "· " + catalog[ring.Body].Name + (queued > 0 ? "  · " + queued + " queued" : ""), Target.OfRing(ring), 1, new Color(0.6f, 0.9f, 1f)));
                 }
             }
             if (infra != null && infra.Structures.Count > 0)
             {
-                rows.Add(("", Target.None, 0, Color.clear));
-                rows.Add(("IN ORBIT", Target.None, 0, new Color(0.85f, 0.88f, 0.92f)));
+                rows.Add(("", "", Target.None, 0, Color.clear));
+                rows.Add(("IN ORBIT", "", Target.None, 0, new Color(0.85f, 0.88f, 0.92f)));
                 foreach (var s in infra.Structures)
                 {
                     var c = s.Owner != null ? new Color(s.Owner.Color.R, s.Owner.Color.G, s.Owner.Color.B) : new Color(0.85f, 0.88f, 0.92f);
-                    rows.Add((s.Name + "  · " + catalog[s.Body].Name, Target.OfStructure(s), 1, c));
+                    rows.Add((s.Name, "· " + catalog[s.Body].Name, Target.OfStructure(s), 1, c));
                 }
             }
 
@@ -1328,21 +1332,22 @@ namespace UnitySpace.UI
             navigatorScroll = GUI.BeginScrollView(view, navigatorScroll, content);
             for (int i = 0; i < rows.Count; i++)
             {
-                var (s, target, indent, color) = rows[i];
+                var (s, details, target, indent, color) = rows[i];
                 var rr = new Rect(0, i * rowH, content.width, rowH);
                 if (target.IsNone)
                 {
                     if (s.Length == 0) continue;
                     var oldC = GUI.contentColor;
                     GUI.contentColor = color;
-                    GUI.Label(new Rect(rr.x + 6, rr.y + 2, rr.width, rr.height), s, small);
+                    NameAndDetails(new Rect(rr.x + 6, rr.y + 2, rr.width - 6, rr.height - 2), s, details, small);
                     GUI.contentColor = oldC;
                     continue;
                 }
                 bool selected = app.Selected == target;
                 var old = GUI.contentColor;
                 GUI.contentColor = selected ? Color.white : color;
-                if (GUI.Button(new Rect(rr.x + 4 + indent * 14, rr.y, rr.width - indent * 14 - 4, rr.height), s, selected ? rowSelected : row))
+                var rowRect = new Rect(rr.x + 4 + indent * 14, rr.y, rr.width - indent * 14 - 4, rr.height);
+                if (GUI.Button(rowRect, GUIContent.none, selected ? rowSelected : row))
                 {
                     bool doubleClick = lastRowTarget == target && Time.unscaledTime - lastRowClick < 0.4f;
                     app.Select(target);
@@ -1350,23 +1355,81 @@ namespace UnitySpace.UI
                     lastRowClick = Time.unscaledTime;
                     lastRowTarget = target;
                 }
+                NameAndDetails(rowRect, s, details, selected ? rowSelected : row);
                 GUI.contentColor = old;
             }
             GUI.EndScrollView();
         }
 
-        void AddBody(List<(string, Target, int, Color)> rows, int index, int indent)
+        readonly Dictionary<GUIStyle, GUIStyle> textOnly = new Dictionary<GUIStyle, GUIStyle>();
+
+        /// <summary><paramref name="style"/>'s text alone, left-aligned and unclipped, to draw over a row it has already drawn.</summary>
+        GUIStyle TextOnly(GUIStyle style)
+        {
+            if (textOnly.TryGetValue(style, out var t)) return t;
+            var colour = style.normal.textColor;
+            t = new GUIStyle(style)
+            {
+                normal = { background = null, textColor = colour },
+                hover = { background = null, textColor = colour },
+                active = { background = null, textColor = colour },
+                focused = { background = null, textColor = colour },
+                padding = new RectOffset(0, 0, style.padding.top, style.padding.bottom),
+                margin = new RectOffset(),
+                wordWrap = false,
+                clipping = TextClipping.Overflow,
+                alignment = style.alignment == TextAnchor.MiddleCenter || style.alignment == TextAnchor.MiddleRight ? TextAnchor.MiddleLeft
+                    : style.alignment == TextAnchor.UpperCenter || style.alignment == TextAnchor.UpperRight ? TextAnchor.UpperLeft
+                    : style.alignment,
+            };
+            textOnly[style] = t;
+            return t;
+        }
+
+        const float MarqueeSpeed = 30, MarqueeHold = 1.5f, MarqueeGap = 40;
+
+        /// <summary>
+        /// One navigator line: <paramref name="name"/> stays put at the left, and <paramref name="details"/> (how far,
+        /// how many gates, how old the news, what a ship is doing...) follow it; when they do not fit in what is left
+        /// of the line they scroll past to the right of the name as a marquee, holding still at the start of each pass.
+        /// </summary>
+        void NameAndDetails(Rect r, string name, string details, GUIStyle style)
+        {
+            var t = TextOnly(style);
+            float left = r.x + style.padding.left, right = r.xMax - Mathf.Max(style.padding.right, 2);
+            float nameW = Mathf.Min(t.CalcSize(new GUIContent(name)).x, right - left);
+            GUI.BeginGroup(new Rect(left, r.y, nameW, r.height));
+            GUI.Label(new Rect(0, 0, nameW + 40, r.height), name, t);
+            GUI.EndGroup();
+            if (string.IsNullOrEmpty(details)) return;
+            var area = new Rect(left + nameW + 8, r.y, right - left - nameW - 8, r.height);
+            if (area.width < 12) return;
+            var content = new GUIContent(details);
+            float dw = t.CalcSize(content).x;
+            float offset = 0, loop = dw + MarqueeGap;
+            if (dw > area.width)
+            {
+                float phase = Time.unscaledTime % (MarqueeHold + loop / MarqueeSpeed);
+                offset = phase < MarqueeHold ? 0 : (phase - MarqueeHold) * MarqueeSpeed;
+            }
+            GUI.BeginGroup(area);
+            GUI.Label(new Rect(-offset, 0, dw + 2, r.height), content, t);
+            if (dw > area.width) GUI.Label(new Rect(loop - offset, 0, dw + 2, r.height), content, t);
+            GUI.EndGroup();
+        }
+
+        void AddBody(List<(string, string, Target, int, Color)> rows, int index, int indent)
         {
             var b = app.Catalog[index];
             var tint = BodyTint(b);
             if (!b.IsVisible)
             {
                 // A barycentre heads the tree as a title, not a selectable body.
-                rows.Add((b.Name.ToUpperInvariant() + "  (barycentre)", Target.None, 0, Dim));
+                rows.Add((b.Name.ToUpperInvariant(), "(barycentre)", Target.None, 0, Dim));
                 foreach (int child in app.Catalog.ChildrenOf(index)) AddBody(rows, child, indent);
                 return;
             }
-            rows.Add((b.Name + StatusMark(b), Target.OfBody(index), indent, b.Kind == BodyKind.Moon ? Color.Lerp(tint, Color.gray, 0.3f) : tint));
+            rows.Add((b.Name, StatusMark(b).Trim(), Target.OfBody(index), indent, b.Kind == BodyKind.Moon ? Color.Lerp(tint, Color.gray, 0.3f) : tint));
             foreach (int child in app.Catalog.ChildrenOf(index)) AddBody(rows, child, Math.Min(indent + 1, 2));
         }
 
