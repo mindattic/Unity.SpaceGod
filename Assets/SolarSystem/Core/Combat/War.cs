@@ -235,7 +235,7 @@ namespace SolarSystem.Core
             }
             foreach (var lurker in Fleet.Ships)
             {
-                if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Phase != ShipPhase.Lurk || lurker.Battle != null || lurker == world.PilotedShip) continue;
+                if (!Lurking(lurker)) continue;
                 if (pulseReady.TryGetValue(lurker, out double ready) && jd < ready) continue;
                 var lane = lurker.LaneLeg.Lane;
                 double station = lurker.LaneLeg.From == lane.A ? lurker.LaneHold : 1 - lurker.LaneHold;
@@ -255,6 +255,12 @@ namespace SolarSystem.Core
             laneSeen.Clear();
             foreach (var kv in seen) laneSeen[kv.Key] = kv.Value;
         }
+
+        /// <summary>A raider lying in wait beside its lane, pulse at the ready: not one in a fight, at the helm, or off
+        /// running the player down (U.SPC-T273), which has left its station however its schedule still reads.</summary>
+        bool Lurking(Ship lurker) =>
+            !lurker.Destroyed && !lurker.IsEscort && lurker.Faction.IsPirate && lurker.Phase == ShipPhase.Lurk && lurker.Battle == null &&
+            lurker != world.PilotedShip && (world.Pursuit == null || world.Pursuit.Of(lurker) == null);
 
         void Interdict(Ship lurker, double station, List<Ship> victims, double jd)
         {
@@ -359,7 +365,7 @@ namespace SolarSystem.Core
             LaneThreat? best = null;
             foreach (var lurker in Fleet.Ships)
             {
-                if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Phase != ShipPhase.Lurk || lurker.Battle != null || lurker == world.PilotedShip) continue;
+                if (!Lurking(lurker)) continue;
                 if (lurker.LaneLeg.Lane != lane) continue;
                 if (pulseReady.TryGetValue(lurker, out double ready) && ready > jd) continue;
                 // The lurker's station and the pulse's reach, as fractions of the rider's own leg.

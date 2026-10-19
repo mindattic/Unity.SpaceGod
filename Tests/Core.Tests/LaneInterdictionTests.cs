@@ -112,6 +112,21 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ARaiderOffRunningThePlayerDownSpringsNoPulseOnTheLaneItLeft()
+        {
+            var t = Create();
+            // The raider has left its lurk to chase someone (U.SPC-T273): its schedule still reads "lurking".
+            t.W.Pursuit.Begin(t.Lurker, new DVec3(1e6, 0, 0), DVec3.Zero, StartJd);
+            for (double jd = StartJd; jd < t.Pilot.PhaseEndJd; jd += 5 * Second)
+            {
+                Step(t, jd);
+                Assert.That(t.W.War.ThreatAhead(t.Pilot, jd), Is.Null, "a field ahead from a raider that is not there");
+                Assert.That(t.Pilot.Battle, Is.Null, "thrown out of the lane by a raider off on a chase");
+            }
+            Assert.That(t.Lurker.Battle, Is.Null);
+        }
+
+        [Test]
         public void ThePulseThrowsTheHullOutStunnedIntoAFightOnTheLaneItFliesItself()
         {
             var t = Create();
