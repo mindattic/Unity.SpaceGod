@@ -416,6 +416,33 @@ namespace SolarSystem.Core.Tests
             Assert.That(w.War.SiegeDays(port), Is.EqualTo(0).Within(1e-9));
         }
 
+        /// <summary>
+        /// U.SPC-T297: a port an enemy occupied, besieged back by its old owner, is liberated, not left "occupied from" the
+        /// very power that holds it (its garrison never rebuilt, its people able to rise and "declare" for their own owner).
+        /// </summary>
+        [Test]
+        public void APortBesiegedBackByItsOldOwnerIsNoLongerOccupied()
+        {
+            var w = CreateWorld();
+            double jd = StartJd;
+            var owner = MakeFaction(w, "Homeland");
+            var occupier = MakeFaction(w, "Occupier");
+            w.Diplomacy.Set(owner, occupier, Relation.War);
+            int body = w.Catalog["Pluto"].Index;
+            var port = w.Economy.Add("Lonely Port", body, SettlementKind.Colony, occupier, population: 0);
+            port.OccupiedFrom = owner;
+            port.MaxPlatforms = 0;
+            var leader = ParkWarship(w, owner, ShipClass.Destroyer, body);
+            w.War.Orders[leader] = new GroupOrder { Kind = OrderKind.Siege, Body = body };
+            for (int day = 0; day < 30 && port.Owner != owner; day++)
+            {
+                jd += 1;
+                w.War.Update(jd);
+            }
+            Assert.That(port.Owner, Is.EqualTo(owner));
+            Assert.That(port.OccupiedFrom, Is.Null, "the port is still 'occupied from' its own owner");
+        }
+
         [Test]
         public void CaptureRevokesATradersBookingOnceItCanNoLongerDockThere()
         {

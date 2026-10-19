@@ -2509,6 +2509,8 @@ namespace SolarSystem.Core
                 {
                     var old = st.Owner;
                     Economy.Capture(st, besieger);
+                    // Taken back by the power it was occupied from: liberated, no longer occupied (U.SPC-T297).
+                    if (st.OccupiedFrom == besieger) st.OccupiedFrom = null;
                     siegeDays.Remove(st);
                     besiegers.Remove(st);
                     RevokeBookings();
