@@ -76,6 +76,28 @@ namespace SolarSystem.Core.Tests
             Assert.That(g.Wars.Declare(barnard.World.Sol, authority, StartJd), Is.Null, "the Authority is already fighting a war");
         }
 
+        /// <summary>
+        /// U.SPC-T295: a war fleet on its way home that came out beside its own home gate, now the enemy's and fortified,
+        /// held there to take it; once released it is home, not "arrived" at its home system to stay there for good.
+        /// </summary>
+        [Test]
+        public void AFleetHeldAtAGateInItsOwnHomeSystemGoesHomeWhenReleased()
+        {
+            var g = Line(out var ac, out var barnard, out _);
+            var accord = ac.World.Sol;
+            var leader = ac.World.Fleet.Group(accord, StartJd, ShipClass.Battleship, "Long Reach", new[] { "Rigil Gate" });
+            var homeGate = ac.GateTo(barnard);
+            leader.Voyage = new Voyage
+            {
+                Purpose = VoyagePurpose.Campaign, Home = ac, Destination = ac, Route = new List<JumpGate>(), Faction = accord,
+                HomeRole = ShipRole.Patrol, HomeRoute = leader.Route, HomePorts = leader.Ports, HoldGate = homeGate, SetOutJd = StartJd,
+            };
+            Assert.That(leader.Voyage.Homeward, Is.True);
+            g.Traffic.Release(ac, leader, StartJd + 1);
+            Assert.That(leader.Voyage, Is.Null, "the fleet stayed on its voyage at home, for good");
+            Assert.That(leader.Role, Is.EqualTo(ShipRole.Patrol));
+        }
+
         [TestCase(false, TestName = "AScriptedCampaignInvadesOccupiesAndEndsInATreaty(unwatched)")]
         [TestCase(true, TestName = "AScriptedCampaignInvadesOccupiesAndEndsInATreaty(watched)")]
         public void AScriptedCampaignInvadesOccupiesAndEndsInATreaty(bool watched)

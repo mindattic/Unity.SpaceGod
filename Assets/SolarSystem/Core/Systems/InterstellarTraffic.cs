@@ -893,8 +893,9 @@ namespace SolarSystem.Core
             ship.GateKm = v.NextGate?.PositionKm;
             if (ship.GateKm == null && system == v.Destination && held != null && ship.Battle == null)
             {
-                // The way's end: it has arrived, as a fleet that met no gate in its way would have.
-                Arrive(system, ship, held, jd);
+                // The way's end: it has arrived (or is home), as a fleet that met no gate in its way would have.
+                if (v.Homeward) Home(system, ship, jd);
+                else Arrive(system, ship, held, jd);
                 return;
             }
             if (ship.Battle == null) system.World.Fleet.ScheduleNext(ship, jd);
