@@ -115,6 +115,40 @@ namespace SolarSystem.Core.Tests
             Assert.That(b.Mines, Is.Empty, "a mine went out from a hull with its systems knocked out");
         }
 
+        [Test]
+        public void AStunnedHullsCrewHoldTheirFireUntilItsSystemsComeBack()
+        {
+            var (b, me, them) = Duel(ShipClass.Destroyer, ShipClass.Destroyer, new DVec3(4, 0, 0), player: false);
+            them.Combat.ZeroAllShields();
+            double before = Health(them);
+            me.Stunned = 20;
+            for (int i = 0; i < 100; i++)
+            {
+                them.Stunned = 1;
+                me.Pos = DVec3.Zero;
+                them.Pos = new DVec3(4, 0, 0);
+                b.Advance(0.1);
+            }
+            Assert.That(Health(them), Is.EqualTo(before), "a stunned hull's guns fired");
+            Assert.That(b.Missiles.Count + b.Rounds.Count, Is.Zero);
+        }
+
+        [Test]
+        public void AStunnedCarrierFighterDriftsOnTheWayItWasGoing()
+        {
+            var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };
+            var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 1) { Launch = FighterAI.Launch, FighterStep = FighterAI.Step };
+            b.AddShip(Hull(ShipClass.Carrier, blue, 0), 0, DVec3.Zero, DVec3.UnitX);
+            b.AddShip(Hull(ShipClass.Destroyer, red, 1), 1, new DVec3(20, 0, 0), -DVec3.UnitX);
+            var fighter = b.Units.First(u => u.Kind == UnitKind.Fighter);
+            fighter.Vel = new DVec3(0, 0.2, 0);
+            fighter.Stunned = 5;
+            var from = fighter.Pos;
+            b.Advance(1);
+            Assert.That((fighter.Pos - (from + new DVec3(0, 0.2, 0))).Length, Is.LessThan(1e-9), "a stunned fighter flew on under its own drive");
+        }
+
         // ------------------------------------------------------------ mines
 
         [Test]

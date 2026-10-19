@@ -141,7 +141,8 @@ namespace SolarSystem.Core
         /// <summary>A fighter that has landed back aboard its carrier.</summary>
         public bool Docked;
 
-        /// <summary>Seconds left with drives and shields knocked out by an interdiction pulse.</summary>
+        /// <summary>Seconds left with its systems knocked out by an interdiction pulse or an EMP: drives, guns and
+        /// shield regeneration all down until it comes back.</summary>
         public double Stunned;
 
         public bool Present => !Dead && !Fled && !Docked;
@@ -1094,7 +1095,8 @@ namespace SolarSystem.Core
         void Fire(BattleUnit u, double dt)
         {
             var c = u.Combat;
-            if (u.Captured || u.Surrendering) return;
+            // Knocked out by a pulse or an EMP: no gun on the hull fires until its systems come back.
+            if (u.Captured || u.Surrendering || u.Stunned > 0) return;
             double accuracyScale = c.BridgeIntact ? 1 : 0.6;
             foreach (var s in c.Subsystems)
             {

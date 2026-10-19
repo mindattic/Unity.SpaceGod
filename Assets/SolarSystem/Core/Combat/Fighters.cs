@@ -110,6 +110,12 @@ namespace SolarSystem.Core
         public static void Step(Battle b, BattleUnit u, double dt)
         {
             var f = u.Fighter;
+            // Its drives knocked out (an EMP): it drifts on the way it was going until they come back.
+            if (u.Stunned > 0)
+            {
+                u.Pos += u.Vel * dt;
+                return;
+            }
             f.PhaseTime += dt;
             var carrier = f.Carrier;
             // Recalled: the shooting is over, or the carrier is pulling out.
