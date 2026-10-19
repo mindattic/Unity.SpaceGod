@@ -94,7 +94,7 @@ namespace SolarSystem.Views
             foreach (var e in effects) Draw(e, now);
             foreach (var b in war.Battles) DrawMissiles(b);
             foreach (var b in war.Battles) DrawRounds(b);
-            foreach (var b in war.Battles) DrawMinesAndTurrets(b);
+            foreach (var b in war.Battles) DrawMines(b);
 
             mesh.Clear();
             mesh.SetVertices(vertices);
@@ -464,11 +464,8 @@ namespace SolarSystem.Views
             }
         }
 
-        /// <summary>
-        /// Mines lying in wait (a dim dot, blinking fast once armed) and sentry turrets on station (a pod in its
-        /// side's colour, ringed, pulsing slower as it runs down) (U.SPC-T271).
-        /// </summary>
-        void DrawMinesAndTurrets(Battle b)
+        /// <summary>Mines lying in wait: a dim dot, blinking fast once armed (U.SPC-T271).</summary>
+        void DrawMines(Battle b)
         {
             float now = Time.unscaledTime;
             foreach (var m in b.Mines)
@@ -478,16 +475,6 @@ namespace SolarSystem.Views
                 var c = SideColour(b, m.Side, new Color(1f, 0.35f, 0.25f));
                 float blink = m.Armed ? (Mathf.Sin(now * 9f) > 0 ? 1.3f : 0.35f) : 0.4f;
                 Sprite(p, PixelSize(p, 4f), c * blink, Shape.Radial);
-            }
-            foreach (var u in b.Units)
-            {
-                if (u.Kind != UnitKind.Turret || !u.Present) continue;
-                var p = Point(b, u.Pos);
-                var c = SideColour(b, u.Side, Color.white);
-                float left = (float)Math.Max(0, (u.ExpiresAt - b.Seconds) / CombatSpec.SentryLifeS);
-                float pulse = 0.7f + 0.3f * Mathf.Sin(now * (2f + 4f * left));
-                Sprite(p, Mathf.Max((float)(u.LengthKm * app.BattleKmScale), PixelSize(p, 5f)), c * 1.3f, Shape.Radial);
-                Sprite(p, PixelSize(p, 11f), c * 0.6f * pulse, Shape.Ring);
             }
         }
 

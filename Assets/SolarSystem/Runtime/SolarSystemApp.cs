@@ -1452,11 +1452,10 @@ namespace SolarSystem
             // The right button launches missiles once the lock is made (U.SPC-T270); the guns fire down the crosshair.
             unit.PlayerSecondaryHeld = Input.LookHeld && armed;
             unit.PlayerAim = pilotAim;
-            // The rest of the arsenal (U.SPC-T271): the EMP on the middle button, a mine on Ctrl, a sentry turret on Alt.
+            // The rest of the arsenal (U.SPC-T271): the EMP on the middle button, a mine on Ctrl; an auto turret needs no hand.
             unit.PlayerEmpHeld = Input.FireEmp && armed;
             if (Input.DropMine && armed) unit.PlayerMineRequested = true;
-            if (Input.DeployTurret && armed) unit.PlayerTurretRequested = true;
-            // A fighter or turret locked in this fight is held as its unit; a ship as itself, so the lock outlives the fight.
+            // A fighter locked in this fight is held as its unit; a ship as itself, so the lock outlives the fight.
             if (pilotLockUnit != null && (!pilotLockUnit.Present || !ship.Battle.Units.Contains(pilotLockUnit))) pilotLockUnit = null;
             var lockUnit = pilotLockUnit ?? (pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null);
             if (lockUnit != unit.PlayerLockTarget) unit.LockProgress = 0;
@@ -1741,14 +1740,14 @@ namespace SolarSystem
                 pilotLockTarget = t;
                 return;
             }
-            // In a fight, the hostile nearest the crosshair: a fighter or a sentry turret as readily as a ship (U.SPC-T271).
+            // In a fight, the hostile nearest the crosshair: a fighter as readily as a ship (U.SPC-T271).
             var u = UnitNearestCrosshair();
             if (u == null) return;
             if (u.Ship != null) pilotLockTarget = Target.OfShip(u.Ship);
             else pilotLockUnit = u;
         }
 
-        /// <summary>A fighter or sentry turret locked in the flown hull's fight (a ship is held in <see cref="pilotLockTarget"/>).</summary>
+        /// <summary>A fighter locked in the flown hull's fight (a ship is held in <see cref="pilotLockTarget"/>).</summary>
         BattleUnit pilotLockUnit;
 
         /// <summary>The hostile in the flown hull's fight that sits nearest the crosshair, within <see cref="LockPickConeDeg"/> of it.</summary>

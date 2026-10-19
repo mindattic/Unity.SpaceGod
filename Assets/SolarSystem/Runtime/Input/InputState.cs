@@ -38,8 +38,8 @@ namespace SolarSystem.Input
         public bool Fire;
 
         /// <summary>While piloting, in a fight (U.SPC-T271): the EMP trigger (middle mouse, held), and a mine dropped
-        /// astern (Ctrl) or a sentry turret put out (Alt), each on the press.</summary>
-        public bool FireEmp, DropMine, DeployTurret;
+        /// astern (Ctrl, on the press).</summary>
+        public bool FireEmp, DropMine;
 
         public bool SelectClicked;
         public bool SelectDoubleClicked;
@@ -133,7 +133,6 @@ namespace SolarSystem.Input
             Fire = mouse.leftButton.isPressed && !pointerOverUi;
             FireEmp = mouse.middleButton.isPressed && !pointerOverUi;
             DropMine = kb.leftCtrlKey.wasPressedThisFrame || kb.rightCtrlKey.wasPressedThisFrame;
-            DeployTurret = kb.leftAltKey.wasPressedThisFrame || kb.rightAltKey.wasPressedThisFrame;
             LookHeld = mouse.rightButton.isPressed;
             LookDelta = LookHeld ? MouseDelta : Vector2.zero;
             if (mouse.rightButton.wasPressedThisFrame)
@@ -221,7 +220,7 @@ namespace SolarSystem.Input
             Scroll = 0;
             Roll = 0;
             ToggleFlightAssist = false;
-            Boost = Slow = Fire = Cruise = FireEmp = DropMine = DeployTurret = false;
+            Boost = Slow = Fire = Cruise = FireEmp = DropMine = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
             ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;

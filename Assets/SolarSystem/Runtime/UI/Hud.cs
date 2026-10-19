@@ -486,7 +486,6 @@ namespace SolarSystem.UI
             // The rest of the arsenal (U.SPC-T271): rounds left, and whether the mount is ready.
             AddMount(line, c, SubsystemKind.EmpLauncher, "EMP", "middle mouse");
             AddMount(line, c, SubsystemKind.MineLayer, "MINES", "Ctrl");
-            AddMount(line, c, SubsystemKind.TurretDeployer, "TURRETS", "Alt");
             if (line.Count > 0) DrawLabel(string.Join("    ", line), new Vector2(x0, y + 12), Dim, true);
         }
 
@@ -2701,7 +2700,7 @@ namespace SolarSystem.UI
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
                 "Combat  (piloting)   left mouse: guns, down the crosshair (watch the heat)   T lock the hull under it, hold the crosshair on it to lock   right mouse: missiles",
-                "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   Alt: put out a sentry turret",
+                "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   an auto turret fires on its own",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",

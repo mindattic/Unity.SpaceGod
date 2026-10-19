@@ -40,12 +40,13 @@ namespace SolarSystem.Core
         /// <summary>Lays proximity mines astern (U.SPC-T271).</summary>
         MineLayer,
 
-        /// <summary>Puts out a sentry turret that fights on its own for a while (U.SPC-T271).</summary>
-        TurretDeployer,
+        /// <summary>An automated gun on its own turret mount (U.SPC-T278): it traverses, picks its targets and fires by
+        /// itself, whoever is flying the hull and whether or not the trigger is held.</summary>
+        AutoTurret,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
-    public enum DeployKind { None, Mine, Turret }
+    public enum DeployKind { None, Mine }
 
     /// <summary>What a weapon does. Ranges are km, damage is hit points, cooldowns are seconds.</summary>
     public sealed class WeaponSpec
@@ -108,8 +109,9 @@ namespace SolarSystem.Core
         /// <summary>Proximity mines: <see cref="RangeKm"/> is the blast's reach, <see cref="Damage"/> its force at the centre.</summary>
         public static readonly WeaponSpec Mines = new WeaponSpec { RangeKm = 0.6, Damage = 300, Cooldown = 3, Accuracy = 1, Ammo = 6, Deploy = DeployKind.Mine };
 
-        /// <summary>Sentry turrets: two to a deployer, one every 25 seconds.</summary>
-        public static readonly WeaponSpec Turrets = new WeaponSpec { RangeKm = 6, Damage = 0, Cooldown = 25, Accuracy = 1, Ammo = 2, Deploy = DeployKind.Turret };
+        /// <summary>An auto turret: a light, fast-traversing kinetic gun its own fire control lays on whatever hostile
+        /// comes near, a fighter as readily as a hull (U.SPC-T278).</summary>
+        public static readonly WeaponSpec AutoTurret = new WeaponSpec { RangeKm = 1.8, Damage = 9, Cooldown = 0.25, Accuracy = 0.6, MuzzleSpeedKmS = 3.5 };
 
         /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
         public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };
@@ -186,8 +188,8 @@ namespace SolarSystem.Core
                 case SubsystemKind.Autocannon: return 60;
                 case SubsystemKind.LightRailgun: return 40;
                 case SubsystemKind.EmpLauncher:
-                case SubsystemKind.MineLayer:
-                case SubsystemKind.TurretDeployer: return 30;
+                case SubsystemKind.MineLayer: return 30;
+                case SubsystemKind.AutoTurret: return 50;
                 default: return 200;
             }
         }
@@ -208,7 +210,7 @@ namespace SolarSystem.Core
                 case SubsystemKind.LightRailgun: return WeaponSpec.LightRailgun;
                 case SubsystemKind.EmpLauncher: return WeaponSpec.Emp;
                 case SubsystemKind.MineLayer: return WeaponSpec.Mines;
-                case SubsystemKind.TurretDeployer: return WeaponSpec.Turrets;
+                case SubsystemKind.AutoTurret: return WeaponSpec.AutoTurret;
                 default: return null;
             }
         }
@@ -234,7 +236,7 @@ namespace SolarSystem.Core
                 case SubsystemKind.LightRailgun: return "Light railgun";
                 case SubsystemKind.EmpLauncher: return "EMP launcher";
                 case SubsystemKind.MineLayer: return "Mine layer";
-                case SubsystemKind.TurretDeployer: return "Turret deployer";
+                case SubsystemKind.AutoTurret: return "Auto turret";
                 default: return "Reactor";
             }
         }
@@ -497,8 +499,8 @@ namespace SolarSystem.Core
                     // to reload, piloted the same way as any other forward-mounted gun.
                     new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.03, 0.3, arcCenterDeg: 0, arcWidthDeg: 50),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, 0.05),
-                    // Its utility mount: sentry turrets to hold a hull it has latched onto (U.SPC-T271).
-                    new SubsystemDef(SubsystemKind.TurretDeployer, 0, -0.05, -0.2),
+                    // Its utility mount: an auto turret on the spine, covering it from fighters while it closes to latch (U.SPC-T278).
+                    new SubsystemDef(SubsystemKind.AutoTurret, 0, 0.06, -0.2),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.07, -0.1),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.1, arcCenterDeg: 0, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, -0.3, arcCenterDeg: 180, arcWidthDeg: 180),
@@ -598,23 +600,5 @@ namespace SolarSystem.Core
         };
 
         public const double PlatformLengthKm = 1.4;
-
-        /// <summary>A deployed sentry turret (U.SPC-T271): a small, unmanned gun pod that holds where it was put out
-        /// and shoots at whatever comes near, its autocannon at hulls and its point defence at missiles, until it
-        /// runs down after <see cref="SentryLifeS"/>.</summary>
-        public static readonly CombatSpec SentryTurret = new CombatSpec
-        {
-            DesignName = "Sentry turret", LengthKm = SentryLengthKm,
-            Hull = 700, Shield = 250, ShieldRegen = 10, Armor = 2, MaxSpeed = 0, Accel = 0, Decel = 0, TurnRateDegS = 0,
-            Layout = new[]
-            {
-                new SubsystemDef(SubsystemKind.Autocannon, 0, 0.2, 0),
-                new SubsystemDef(SubsystemKind.PointDefense, 0, -0.2, 0),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0),
-                new SubsystemDef(SubsystemKind.Reactor, 0, 0, 0),
-            },
-        };
-
-        public const double SentryLengthKm = 0.03, SentryLifeS = 90;
     }
 }

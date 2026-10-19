@@ -7,7 +7,8 @@ namespace SolarSystem.Core.Tests
 {
     /// <summary>
     /// The dogfight arsenal (U.SPC-T271): autocannons and light railguns as fittable guns, EMP rounds that stun
-    /// rather than hurt, proximity mines laid astern, and sentry turrets that fight on their own until they run down.
+    /// rather than hurt, proximity mines laid astern, and auto turrets on a hull's own hardpoints that fight on their
+    /// own (U.SPC-T278).
     /// </summary>
     [TestFixture]
     public class ArsenalTests
@@ -46,7 +47,7 @@ namespace SolarSystem.Core.Tests
                 Assert.That(utility, Is.GreaterThanOrEqualTo(0), c + " has no utility mount");
                 Assert.That(Outfitting.CanFit(l, gun, ModuleKind.LightRailgun), Is.True);
                 Assert.That(Outfitting.CanFit(l, gun, ModuleKind.HeavyLaser), Is.False, "a heavy laser is no fighter's gun");
-                foreach (var m in new[] { ModuleKind.EmpLauncher, ModuleKind.MineLayer, ModuleKind.TurretDeployer, ModuleKind.MissileLauncher })
+                foreach (var m in new[] { ModuleKind.EmpLauncher, ModuleKind.MineLayer, ModuleKind.AutoTurret, ModuleKind.MissileLauncher })
                     Assert.That(Outfitting.CanFit(l, utility, m), Is.True, c + " utility mount refused " + m);
             }
             var cruiser = new Loadout(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser, 0);
@@ -105,13 +106,13 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
-        public void AStunnedPilotsGunsAndDeployersStaySilent()
+        public void AStunnedHullLaysNoMines()
         {
-            var (b, me, them) = Duel(ShipClass.Breacher, ShipClass.Fighter, new DVec3(1, 0, 0));
+            var (b, me, them) = Duel(ShipClass.Freighter, ShipClass.Fighter, new DVec3(-1, 0, 0));
             me.Stunned = 5;
-            me.PlayerTurretRequested = true;
+            me.PlayerMineRequested = true;
             b.Advance(0.1);
-            Assert.That(b.Units.Any(u => u.Kind == UnitKind.Turret), Is.False, "a turret went out from a hull with its systems knocked out");
+            Assert.That(b.Mines, Is.Empty, "a mine went out from a hull with its systems knocked out");
         }
 
         // ------------------------------------------------------------ mines
@@ -157,43 +158,40 @@ namespace SolarSystem.Core.Tests
             Assert.That(b.Mines.Count, Is.GreaterThan(0), "a freighter with a fighter on its tail laid no mines");
         }
 
-        // ------------------------------------------------------------ sentry turrets
+        // ------------------------------------------------------------ auto turrets
 
         [Test]
-        public void ASentryTurretFightsOnItsOwnAndRunsDown()
+        public void AnAutoTurretOnTheHullFiresOnItsOwnAtAFighterWithNoTriggerHeld()
         {
-            var (b, me, them) = Duel(ShipClass.Breacher, ShipClass.Fighter, new DVec3(1.0, 0.5, 0));
-            me.PlayerTurretRequested = true;
-            b.Advance(0.1);
-            var turret = b.Units.FirstOrDefault(u => u.Kind == UnitKind.Turret);
-            Assert.That(turret, Is.Not.Null, "no turret went out on request");
-            Assert.That(turret.Side, Is.EqualTo(me.Side));
-
+            var (b, me, them) = Duel(ShipClass.Breacher, ShipClass.Fighter, new DVec3(0.6, 0.6, 0));
+            var turret = me.Combat.Subsystems.Single(s => s.Kind == SubsystemKind.AutoTurret);
+            Assert.That(turret.Def.Weapon, Is.SameAs(WeaponSpec.AutoTurret));
+            me.PlayerFireHeld = false;
             double before = Health(them);
+            bool fired = false;
             for (int i = 0; i < 100; i++)
             {
-                them.Pos = turret.Pos + new DVec3(0.8, 0, 0);
+                me.Forward = DVec3.UnitX;
+                them.Pos = new DVec3(0.6, 0.6, 0);
                 them.Vel = DVec3.Zero;
                 them.Stunned = 1;
+                double cd = turret.Cooldown;
                 b.Advance(0.1);
+                fired |= turret.Cooldown > cd + 1e-9;
             }
-            Assert.That(Health(them), Is.LessThan(before), "the turret never shot at the hostile beside it");
-
-            for (int i = 0; i < 1000 && turret.Present; i++) b.Advance(0.1);
-            Assert.That(turret.Present, Is.False, "the turret never ran down");
-            Assert.That(b.Seconds, Is.LessThan(CombatSpec.SentryLifeS + 5));
+            Assert.That(fired, Is.True, "the auto turret never fired at a fighter beside the hull");
+            Assert.That(Health(them), Is.LessThan(before), "the auto turret never hit the fighter beside the hull");
+            Assert.That(me.Heat, Is.EqualTo(0), "the pilot's own guns fired with no trigger held");
         }
 
         [Test]
-        public void ASentryTurretAloneDoesNotKeepABattleGoing()
+        public void AnAutoTurretFitsAWarshipsLightMountAsWellAsASmallCraftsUtilityMount()
         {
-            var (b, me, them) = Duel(ShipClass.Breacher, ShipClass.Fighter, new DVec3(1.0, 0.5, 0));
-            me.PlayerTurretRequested = true;
-            b.Advance(0.1);
-            // Its own side gone, the turret on its own is not a side still fighting.
-            me.Fled = true;
-            for (int i = 0; i < 20 && !b.Over; i++) b.Advance(0.1);
-            Assert.That(b.Over, Is.True);
+            var cruiser = new Loadout(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser, 0);
+            int light = cruiser.Slots.FindIndex(s => s.Kind == SlotKind.LightMount);
+            Assert.That(Outfitting.CanFit(cruiser, light, ModuleKind.AutoTurret), Is.True);
+            Assert.That(new ShipCombat(CombatSpec.Of(ShipClass.Breacher), ShipClass.Breacher).Subsystems.Any(s => s.Kind == SubsystemKind.AutoTurret), Is.True,
+                "the Breacher is built with an auto turret on its utility mount");
         }
 
         // ------------------------------------------------------------ missiles at fighters
