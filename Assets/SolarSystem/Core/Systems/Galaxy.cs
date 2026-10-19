@@ -80,8 +80,9 @@ namespace SolarSystem.Core
         {
             get
             {
+                // A ruin is nobody's to trade with (U.SPC-T298).
                 foreach (var s in World.Economy.Settlements)
-                    if (s.Kind != SettlementKind.Haven) return true;
+                    if (s.Kind != SettlementKind.Haven && !s.Fallen && s.Stage != ColonyStage.Ruin) return true;
                 return false;
             }
         }

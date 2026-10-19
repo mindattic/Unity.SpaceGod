@@ -31,6 +31,25 @@ namespace SolarSystem.Core.Tests
             foreach (var s in w.Economy.Settlements) s.Overflow = 0;
         }
 
+        /// <summary>
+        /// U.SPC-T298: a frontier system whose only outpost failed and fell to ruin is empty again: open to settlement, so
+        /// colonists can come back through the gate once the ruin's site is free, instead of a ruin keeping it "settled" for good.
+        /// </summary>
+        [Test]
+        public void AFrontierSystemWhoseOnlyOutpostFailedIsOpenToSettlementAgain()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var frontier = Open(g, sol, "Ross 154", StartJd + 1);
+            var site = frontier.World.Colonisation.Sites.Single(c => c.Habitat);
+            var outpost = Colonisation.Found(frontier.World.Economy, sol.World.Sol, site, 1000, StartJd + 2);
+            Assert.That(frontier.Settled, Is.True);
+            Assert.That(frontier.OpenToSettlement, Is.False);
+            frontier.World.Colonisation.Abandon(frontier.World.Economy, outpost, StartJd + 3);
+            Assert.That(frontier.Settled, Is.False, "a ruin keeps the system settled");
+            Assert.That(frontier.OpenToSettlement, Is.True);
+        }
+
         [Test]
         public void EveryFrontierStarHasAHabitatSiteToSettle()
         {
