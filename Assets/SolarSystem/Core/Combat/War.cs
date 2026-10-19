@@ -817,7 +817,16 @@ namespace SolarSystem.Core
                 if (side >= 0) Join(existing, ship, side, true);
                 return;
             }
-            TryStartBattle(body, ship.Faction, jd);
+            if (TryStartBattle(body, ship.Faction, jd) != null) return;
+            // Not fit to pick a fight itself: one waiting here that is falls on it instead, unless it is pulling back
+            // from a fight it has just lost (let go while it gets clear, see TryStartBattle).
+            if (Withdrawing(ship.Controller, jd)) return;
+            foreach (var s in PresentGroups(body))
+                if (s.Battle == null && (s.Spec.IsMilitary || s.Faction.IsPirate) && Diplomacy.Hostile(s.Faction, ship.Faction) && Willing(s.Controller, jd) && s.Combat.Armed)
+                {
+                    TryStartBattle(body, s.Faction, jd);
+                    return;
+                }
         }
 
         /// <summary>A player flies a piloted ship (excluded from every other gathering of "ships present" at a
@@ -839,7 +848,7 @@ namespace SolarSystem.Core
             if (b != null && (offsetFromBodyKm - b.Anchor).Length > Battle.EscapeKm * 0.8) return null;
             // Already left this one: not back in until it is over.
             if (b != null && b.UnitOf(ship) != null) return null;
-            b ??= TryStartBattle(body, ship.Faction, jd, offsetFromBodyKm);
+            b ??= TryStartBattle(body, ship.Faction, jd, offsetFromBodyKm, true);
             if (b == null) return null;
             bool h0 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[0]);
             bool h1 = Diplomacy.Hostile(ship.Faction, b.SideLeaders[1]);
@@ -991,14 +1000,25 @@ namespace SolarSystem.Core
             return b;
         }
 
-        /// <summary>Starts a battle at <paramref name="body"/> if <paramref name="aggressor"/> has a quarrel with anyone there.</summary>
-        public Battle TryStartBattle(int body, Faction aggressor, double jd, DVec3? anchor = null)
+        /// <summary>
+        /// Starts a battle at <paramref name="body"/> if <paramref name="aggressor"/> has a quarrel with anyone there and
+        /// is fit to pick it: one of its own warships or raiders there armed and willing, or the other side's platforms
+        /// (whose guns open on whoever comes into range). Where only the other side would fight, it is theirs to start
+        /// (see <see cref="OnArrived"/> and the daily sweep), with them as the aggressor, not the arrival of a hull that
+        /// can only run (U.SPC-T290). <paramref name="byPlayer"/>: for
+        /// the player's own ship, which is never one of the hulls counted here (see <see cref="TryStartPlayerBattle"/>).
+        /// </summary>
+        public Battle TryStartBattle(int body, Faction aggressor, double jd, DVec3? anchor = null) => TryStartBattle(body, aggressor, jd, anchor, false);
+
+        Battle TryStartBattle(int body, Faction aggressor, double jd, DVec3? anchor, bool byPlayer)
         {
             var present = PresentGroups(body);
             var hostile = new HashSet<Faction>();
             bool armed = aggressor.IsMilitary || aggressor.IsPirate;
             foreach (var s in present)
-                if (Diplomacy.Hostile(aggressor, s.Faction))
+                // A group withdrawing from a fight it lost is let go while it gets clear: no quarrel to pick with it
+                // (it is still swept in if a fight starts here over someone else).
+                if (Diplomacy.Hostile(aggressor, s.Faction) && !Withdrawing(s.Controller, jd))
                 {
                     hostile.Add(s.Faction);
                     armed |= s.Spec.IsMilitary || s.Faction.IsPirate;
@@ -1012,16 +1032,19 @@ namespace SolarSystem.Core
             if (hostile.Count == 0 || !armed) return null;
 
             // A fight needs someone fit and willing to start it: a healthy armed warship or a platform.
-            bool aggressorArmed = false, defenderArmed = false;
+            bool aggressorArmed = false, defenderArmed = false, aggressorFresh = false;
             foreach (var s in present)
             {
                 bool military = (s.Spec.IsMilitary || s.Faction.IsPirate) && Willing(s.Controller, jd) && s.Combat.Armed;
                 if (s.Faction == aggressor && military) aggressorArmed = true;
+                if (s.Faction == aggressor && !Withdrawing(s.Controller, jd)) aggressorFresh = true;
                 if (hostile.Contains(s.Faction) && military) defenderArmed = true;
             }
+            bool platforms = false;
             foreach (var st in Economy.At(body))
-                if (st.Platforms.Count > 0 && hostile.Contains(st.Owner)) defenderArmed = true;
-            if (!aggressorArmed && !defenderArmed) return null;
+                if (st.Platforms.Count > 0 && hostile.Contains(st.Owner)) platforms = true;
+            // Platforms open on a hostile hull come into range, but not again on one that has only just run from them.
+            if (!aggressorArmed && !(platforms && (aggressorFresh || byPlayer)) && !(byPlayer && defenderArmed)) return null;
 
             var b = NewBattle(body, jd, present, anchor);
             foreach (var s in present)
@@ -1049,7 +1072,10 @@ namespace SolarSystem.Core
 
         /// <summary>Fit to pick a fight: not withdrawing and not badly hurt.</summary>
         bool Willing(Ship leader, double jd) =>
-            !(retreating.TryGetValue(leader, out double until) && jd < until) && leader.Combat.Damage < 0.45 && leader.Combat.Armed;
+            !Withdrawing(leader, jd) && leader.Combat.Damage < 0.45 && leader.Combat.Armed;
+
+        /// <summary>Pulling back after a fight it ran from or lost (see <see cref="Resolve"/>).</summary>
+        bool Withdrawing(Ship leader, double jd) => retreating.TryGetValue(leader, out double until) && jd < until;
 
         int SideFor(Faction f, Faction aggressor, HashSet<Faction> hostile)
         {
