@@ -14,6 +14,12 @@ namespace SolarSystem.EditorTools
     /// and everything else is constructed at runtime from data.
     ///
     /// Batch: Unity -batchmode -quit -projectPath . -executeMethod SolarSystem.EditorTools.ProjectSetup.SetupAndBuild
+    ///
+    /// The scene is committed and is only written when it is missing (U.SPC-T262): Unity gives every
+    /// object a fresh random file ID, so regenerating it on each build left a no-op diff in git after
+    /// every deploy. A change to <see cref="CreateScene"/> therefore reaches the player only once the
+    /// scene is rebuilt (Solar System > Rebuild Main Scene, or -executeMethod ...ProjectSetup.CreateScene)
+    /// and committed together with the code change.
     /// </summary>
     [InitializeOnLoad]
     public static class ProjectSetup
@@ -72,12 +78,11 @@ namespace SolarSystem.EditorTools
             Debug.Log("[SolarSystem] Player built: " + PlayerPath + " (" + report.summary.totalSize / (1024 * 1024) + " MB)");
         }
 
-        /// <summary>Batch-mode entry point: regenerate the scene, then build. Exits non-zero on failure.</summary>
+        /// <summary>Batch-mode entry point: build, writing the scene first only if it is missing. Exits non-zero on failure.</summary>
         public static void SetupAndBuild()
         {
             try
             {
-                CreateScene();
                 BuildWindows();
                 EditorApplication.Exit(0);
             }
