@@ -497,6 +497,12 @@ namespace SolarSystem.Core
                 Recall(c, system, ship, jd, c.Supply.OutOfSupply ? "out of supply" : "its stores spent");
                 return;
             }
+            else if (v.Destination != c.Goal && v.HoldGate == null && !v.AtGate)
+            {
+                // Its way on was shut for good and it gave up where it was (U.SPC-T296): it goes home.
+                Recall(c, system, ship, jd, "its way shut");
+                return;
+            }
 
             // At an enemy gate: one it came out of, or one it has to go through.
             var gate = v.HoldGate ?? (v.AtGate && v.NextGate != null && v.NextGate.Home == system ? v.NextGate : null);

@@ -98,6 +98,29 @@ namespace SolarSystem.Core.Tests
             Assert.That(leader.Role, Is.EqualTo(ShipRole.Patrol));
         }
 
+        /// <summary>
+        /// U.SPC-T296: a war fleet whose way on is shut by a neutral's blockade, and stays shut, gives up and turns for home,
+        /// instead of waiting where it gave up for the rest of the war.
+        /// </summary>
+        [Test]
+        public void AWarFleetWhoseWayIsShutForGoodTurnsForHome()
+        {
+            var g = Line(out var ac, out var barnard, out var luhman);
+            var accord = ac.World.Sol;
+            var authority = luhman.World.Sol;
+            ac.World.Fleet.Group(accord, StartJd, ShipClass.Battleship, "Long Reach", new[] { "Rigil Gate" },
+                (ShipClass.Cruiser, "Vanguard"), (ShipClass.Destroyer, "Spur"));
+            var war = g.Wars.Declare(accord, authority, StartJd, luhman);
+            double jd = Run(g, StartJd, 30, () => war.Campaigns.Count > 0);
+            var campaign = war.Campaigns.FirstOrDefault();
+            Assert.That(campaign, Is.Not.Null, "no campaign set out");
+            // The Federation shuts its gate on the way at Barnard's Star, for longer than any war fleet will wait.
+            g.Traffic.Blockade(barnard.GateTo(luhman), jd, 400);
+            Run(g, jd, 60, () => campaign.Stage != CampaignStage.Marching);
+            Assert.That(campaign.Stage, Is.Not.EqualTo(CampaignStage.Marching), "the fleet waits where it gave up, for good");
+            Assert.That(campaign.Lost, Is.False);
+        }
+
         [TestCase(false, TestName = "AScriptedCampaignInvadesOccupiesAndEndsInATreaty(unwatched)")]
         [TestCase(true, TestName = "AScriptedCampaignInvadesOccupiesAndEndsInATreaty(watched)")]
         public void AScriptedCampaignInvadesOccupiesAndEndsInATreaty(bool watched)

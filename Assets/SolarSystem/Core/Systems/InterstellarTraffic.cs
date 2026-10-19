@@ -629,7 +629,8 @@ namespace SolarSystem.Core
             v.AtGate = false;
             v.WaitingSinceJd = double.NaN;
             ship.GateKm = null;
-            if (system == v.Home)
+            // A war fleet's voyage is its campaign's: it is not called off here but ended by the war (U.SPC-T296).
+            if (system == v.Home && v.Campaign == null)
             {
                 CancelVoyage(system, ship, jd);
                 return;
