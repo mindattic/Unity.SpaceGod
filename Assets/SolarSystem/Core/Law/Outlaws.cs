@@ -337,9 +337,12 @@ namespace SolarSystem.Core
             {
                 if (s.Destroyed || s.IsEscort || s.Derelict || s.GateDeparted || s.Faction == null || !s.Faction.IsPirate || s == world.PilotedShip) continue;
                 if (byShip.ContainsKey(s)) continue;
-                // A captain back with the raiders takes the next band that sails.
+                // A captain back with the raiders takes the next band that sails -- not one whose own captain the law
+                // already has on its books for what the band has done (that captain is the one wanted for it).
                 var ashore = All.Find(x => x.AtLarge && x.Ashore);
-                if (ashore != null)
+                var own = Law.FindRecord(s);
+                bool known = own != null && (own.Crimes.Count > 0 || own.Wanted || own.Notoriety > 0);
+                if (ashore != null && !known)
                 {
                     Rebind(ashore, s, jd);
                     continue;

@@ -304,6 +304,32 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void AFreedCaptainLeavesABandAlreadyWantedForItsOwnDeedsToItsOwnCaptain()
+        {
+            var w = CreateWorld();
+            int earth = Body(w, "Earth");
+            var o = WantedRaider(w, earth);
+            var (_, pod) = Eject(w, o, earth);
+            w.War.Crews.Collect(pod, w.Pirates, Hull(ShipClass.Destroyer, w.Pirates, 9003, "Lifeboat"), w.Diplomacy, StartJd + 0.5);
+            Assert.That(o.AtLarge && o.Ashore, Is.True);
+
+            // A band sails (through a gate, say) and is wanted for an attack before the day's roll-call reaches it.
+            var next = w.Fleet.AddShip("Fresh Blood", ShipClass.Destroyer, w.Pirates, ShipRole.Patrol);
+            w.Fleet.Station(next, Body(w, "Mars"), StartJd);
+            var record = w.Law.RecordOf(next);
+            w.Law.Commit(record, CrimeKind.Piracy, w.Sol, w.Sol, Body(w, "Mars"), StartJd + 0.6, "Ares Prime");
+            double bounty = record.TotalBounty;
+            w.Outlaws.Sync(StartJd + 1);
+
+            Assert.That(w.Law.FindRecord(next), Is.SameAs(record), "its own captain's books stand");
+            Assert.That(record.Crimes.Count, Is.EqualTo(1));
+            Assert.That(record.TotalBounty, Is.EqualTo(bounty));
+            Assert.That(w.Outlaws.Of(next).Record, Is.SameAs(record));
+            Assert.That(o.Ashore, Is.True, "the freed captain waits for a band of their own");
+            Assert.That(o.Record.Wanted, Is.True);
+        }
+
+        [Test]
         public void ACaptainInTheBrigOfAHullThatGoesDownBreaksOutIntoItsPods()
         {
             var w = CreateWorld();
