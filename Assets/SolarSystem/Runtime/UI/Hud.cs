@@ -470,7 +470,7 @@ namespace SolarSystem.UI
             var me = app.PilotOffsetKm;
             var myVel = app.PilotVelocityKmS;
             float y = 118;
-            DrawLabel("HUNTED", new Vector2(Screen.width - 380, y), HostileColor, false);
+            DrawLabel("HUNTED", new Vector2(SafeRight - 380, y), HostileColor, false);
             y += 22;
             foreach (var g in pursuit.Groups)
             {
@@ -482,7 +482,7 @@ namespace SolarSystem.UI
                 if (g.EmpCharge >= 0)
                     line += "   EMP " + Math.Max(0, Pursuit.EmpChargeSeconds - g.EmpCharge).ToString("0.0", CultureInfo.InvariantCulture) + " s (clear " +
                             Mathf.RoundToInt((float)(Pursuit.EmpRangeKm * 1.25)) + " km)";
-                DrawLabel(line, new Vector2(Screen.width - 380, y), g.EmpCharge >= 0 ? LockColor : Dim, true);
+                DrawLabel(line, new Vector2(SafeRight - 380, y), g.EmpCharge >= 0 ? LockColor : Dim, true);
                 y += 18;
             }
         }
@@ -854,6 +854,18 @@ namespace SolarSystem.UI
             : control == PilotControl.Helm ? "W/S throttle, A/D Q/E turn the hull, mouse looks around"
             : "WASD throttle/strafe, mouse steers the nose";
 
+        /// <summary>
+        /// The band of the screen the HUD's corner panels keep to (widescreen support, U.SPC-T289): the whole width up to
+        /// 21:9, and on anything wider (32:9 at 5120 x 1440) a 21:9 band in the middle, so the readouts stay where the eye
+        /// is rather than out at the far edges of the screen. The view itself still fills the whole width.
+        /// </summary>
+        public static float SafeLeft => (Screen.width - SafeWidth) * 0.5f;
+        public static float SafeRight => SafeLeft + SafeWidth;
+        static float SafeWidth => Mathf.Min(Screen.width, Screen.height * MaxHudAspect);
+
+        /// <summary>The widest aspect the HUD spreads across.</summary>
+        const float MaxHudAspect = 21f / 9f;
+
         static readonly Color CrosshairColor = new Color(0.55f, 0.95f, 1f, 0.9f);
 
         /// <summary>The crosshair: four ticks about an open centre, so the target under it stays visible.</summary>
@@ -949,7 +961,7 @@ namespace SolarSystem.UI
             list.Sort((a, b) => a.ExpiresJd.CompareTo(b.ExpiresJd));
             int n = Mathf.Min(5, list.Count);
             float w = 380, rowH = 40;
-            var r = Panel(new Rect(Screen.width - w - 10, 72, w, 30 + n * rowH));
+            var r = Panel(new Rect(SafeRight - w - 10, 72, w, 30 + n * rowH));
             GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 18), "OPPORTUNITIES" + (app.IsPiloting ? "" : "   (pilot a ship to answer)"), small);
             var player = app.PlayerHelioKm();
             var old = GUI.contentColor;
@@ -1095,7 +1107,7 @@ namespace SolarSystem.UI
         {
             float w = 268;
             float h = navigatorOpen ? Mathf.Min(Screen.height - 24, 640) : 34;
-            var r = Panel(new Rect(10, 10, w, h));
+            var r = Panel(new Rect(SafeLeft + 10, 10, w, h));
             if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (navigatorOpen ? "[-]  " : "[+]  ") + "NAVIGATOR", title)) navigatorOpen = !navigatorOpen;
             if (!navigatorOpen) return;
 
@@ -1554,7 +1566,7 @@ namespace SolarSystem.UI
 
             float w = 410;
             float h = 64 + lines.Count * 19 + 30;
-            var r = Panel(new Rect(Screen.width - w - 10, Screen.height - h - 10, w, h));
+            var r = Panel(new Rect(SafeRight - w - 10, Screen.height - h - 10, w, h));
             var old = GUI.contentColor;
             GUI.contentColor = headingColor;
             GUI.Label(new Rect(r.x + 14, r.y + 8, w - 28, 24), heading, title);
@@ -2117,7 +2129,7 @@ namespace SolarSystem.UI
             const float rowH = 17;
             float w = canTrade ? 600 : 430;
             float h = marketOpen ? 62 + GoodInfo.Count * rowH + (canTrade ? 20 : 0) + extra + lawRow : 34;
-            var r = Panel(new Rect(Screen.width - w - 10, 72, w, h));
+            var r = Panel(new Rect(SafeRight - w - 10, 72, w, h));
             string heading = market != null ? "MARKET  ·  " + market.Name : "MARKET  ·  system average";
             if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (marketOpen ? "[-]  " : "[+]  ") + heading, title)) marketOpen = !marketOpen;
             if (!marketOpen) return;
@@ -2457,7 +2469,7 @@ namespace SolarSystem.UI
             const float cell = 28f;
             float w = Math.Max(260, hold.Width * cell + 24);
             float h = cargoOpen ? 74 + hold.Height * cell + (cargoSelected != null ? 28 : 0) : 34;
-            var r = Panel(new Rect(10, Screen.height - h - 56, w, h));
+            var r = Panel(new Rect(SafeLeft + 10, Screen.height - h - 56, w, h));
 
             if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (cargoOpen ? "[-]  " : "[+]  ") + "CARGO HOLD  ·  " + ship.Name, title)) cargoOpen = !cargoOpen;
             if (!cargoOpen) return;
@@ -2890,7 +2902,7 @@ namespace SolarSystem.UI
                 "F5  quicksave   F8  quickload   F6  save slots   (autosaves every 5 minutes and on quit; -continue resumes the latest)",
             };
             float w = 610, h = helpOpen ? 42 + help.Length * 17 : 34;
-            var r = Panel(new Rect(10, Screen.height - h - 10, w, h));
+            var r = Panel(new Rect(SafeLeft + 10, Screen.height - h - 10, w, h));
             if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (helpOpen ? "[-]  " : "[+]  ") + "CONTROLS", title)) helpOpen = !helpOpen;
             if (!helpOpen) return;
             for (int i = 0; i < help.Length; i++)
