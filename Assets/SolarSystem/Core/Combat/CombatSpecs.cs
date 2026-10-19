@@ -27,7 +27,25 @@ namespace SolarSystem.Core
         Bridge,
         Hangar,
         Reactor,
+
+        /// <summary>A fittable rapid-fire kinetic gun (U.SPC-T271): a fighter's main gun, or a light mount's on a bigger hull.</summary>
+        Autocannon,
+
+        /// <summary>A fighter-sized railgun: a slow, hard, fast-flying slug for a gun mount (U.SPC-T271).</summary>
+        LightRailgun,
+
+        /// <summary>Fires a homing electromagnetic burst that knocks out the drives and shields of what it bursts by (U.SPC-T271).</summary>
+        EmpLauncher,
+
+        /// <summary>Lays proximity mines astern (U.SPC-T271).</summary>
+        MineLayer,
+
+        /// <summary>Puts out a sentry turret that fights on its own for a while (U.SPC-T271).</summary>
+        TurretDeployer,
     }
+
+    /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
+    public enum DeployKind { None, Mine, Turret }
 
     /// <summary>What a weapon does. Ranges are km, damage is hit points, cooldowns are seconds.</summary>
     public sealed class WeaponSpec
@@ -65,6 +83,33 @@ namespace SolarSystem.Core
         /// shot landing hard rather than sustained fire. Hypervelocity, but still slow enough next to
         /// its own long range to take a real second or two in flight.</summary>
         public static readonly WeaponSpec Railgun = new WeaponSpec { RangeKm = 30, Damage = 260, Cooldown = 12, Accuracy = 0.85, MuzzleSpeedKmS = 14 };
+
+        /// <summary>An electromagnetic burst (<see cref="EmpLauncher"/>): seconds of dead drives and shields it leaves a
+        /// small hull it bursts beside (a big one shrugs it off sooner), and how near the burst it reaches, km.</summary>
+        public double EmpSeconds, EmpRadiusKm;
+
+        /// <summary>What it puts out into the battle (a mine, a sentry turret) instead of firing at a target.</summary>
+        public DeployKind Deploy;
+
+        /// <summary>Mines, sentry turrets and EMP rounds: a hull's means of getting away or holding ground, not of
+        /// fighting, so they make no hull armed, count for nothing in its strength and turn no broadside.</summary>
+        public bool Supporting => Deploy != DeployKind.None || EmpSeconds > 0;
+
+        /// <summary>A fittable autocannon: the fighter's rapid kinetic gun, as a module (U.SPC-T271).</summary>
+        public static readonly WeaponSpec Autocannon = new WeaponSpec { RangeKm = 1.6, Damage = 14, Cooldown = 0.3, Accuracy = 0.55, MuzzleSpeedKmS = 3.5 };
+
+        /// <summary>A fighter-sized railgun: four times the reach of an autocannon and a slug that hits five times as
+        /// hard and flies far faster, one shot every two seconds -- the sniper's gun of a dogfight.</summary>
+        public static readonly WeaponSpec LightRailgun = new WeaponSpec { RangeKm = 6, Damage = 80, Cooldown = 2.0, Accuracy = 0.85, MuzzleSpeedKmS = 9 };
+
+        /// <summary>A homing EMP round: no damage, but a fighter it bursts beside drifts dead for eight seconds.</summary>
+        public static readonly WeaponSpec Emp = new WeaponSpec { RangeKm = 5, Damage = 0, Cooldown = 18, Accuracy = 1, Missile = true, MissileSpeedKmS = 1.6, Salvo = 1, Ammo = 4, EmpSeconds = 8, EmpRadiusKm = 0.5 };
+
+        /// <summary>Proximity mines: <see cref="RangeKm"/> is the blast's reach, <see cref="Damage"/> its force at the centre.</summary>
+        public static readonly WeaponSpec Mines = new WeaponSpec { RangeKm = 0.6, Damage = 300, Cooldown = 3, Accuracy = 1, Ammo = 6, Deploy = DeployKind.Mine };
+
+        /// <summary>Sentry turrets: two to a deployer, one every 25 seconds.</summary>
+        public static readonly WeaponSpec Turrets = new WeaponSpec { RangeKm = 6, Damage = 0, Cooldown = 25, Accuracy = 1, Ammo = 2, Deploy = DeployKind.Turret };
 
         /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
         public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };
@@ -118,7 +163,7 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Hardpoints are built to take punishment; a capital ship loses guns one at a time.</summary>
-        static double DefaultHp(SubsystemKind k) => BaseHp(k) * (k == SubsystemKind.FighterGuns || k == SubsystemKind.Torpedo ? 1 : 3);
+        static double DefaultHp(SubsystemKind k) => BaseHp(k) * (k == SubsystemKind.FighterGuns || k == SubsystemKind.Torpedo || k == SubsystemKind.Autocannon ? 1 : 3);
 
         static double BaseHp(SubsystemKind k)
         {
@@ -138,6 +183,11 @@ namespace SolarSystem.Core
                 case SubsystemKind.Drill: return 600;
                 case SubsystemKind.FighterGuns: return 30;
                 case SubsystemKind.Torpedo: return 30;
+                case SubsystemKind.Autocannon: return 60;
+                case SubsystemKind.LightRailgun: return 40;
+                case SubsystemKind.EmpLauncher:
+                case SubsystemKind.MineLayer:
+                case SubsystemKind.TurretDeployer: return 30;
                 default: return 200;
             }
         }
@@ -154,6 +204,11 @@ namespace SolarSystem.Core
                 case SubsystemKind.FighterGuns: return WeaponSpec.FighterGuns;
                 case SubsystemKind.Torpedo: return WeaponSpec.Torpedo;
                 case SubsystemKind.BoardingPods: return WeaponSpec.Pods;
+                case SubsystemKind.Autocannon: return WeaponSpec.Autocannon;
+                case SubsystemKind.LightRailgun: return WeaponSpec.LightRailgun;
+                case SubsystemKind.EmpLauncher: return WeaponSpec.Emp;
+                case SubsystemKind.MineLayer: return WeaponSpec.Mines;
+                case SubsystemKind.TurretDeployer: return WeaponSpec.Turrets;
                 default: return null;
             }
         }
@@ -175,6 +230,11 @@ namespace SolarSystem.Core
                 case SubsystemKind.Hangar: return "Hangar";
                 case SubsystemKind.BoardingPods: return "Boarding pods";
                 case SubsystemKind.Drill: return "Drill prow";
+                case SubsystemKind.Autocannon: return "Autocannon";
+                case SubsystemKind.LightRailgun: return "Light railgun";
+                case SubsystemKind.EmpLauncher: return "EMP launcher";
+                case SubsystemKind.MineLayer: return "Mine layer";
+                case SubsystemKind.TurretDeployer: return "Turret deployer";
                 default: return "Reactor";
             }
         }
@@ -393,6 +453,8 @@ namespace SolarSystem.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.07, 0),
+                    // Its utility mount: mines laid astern for whatever chases it (U.SPC-T271).
+                    new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true, arcCenterDeg: 180),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.03, 0.43),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.3, arcCenterDeg: 0, arcWidthDeg: 90),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.1, 0.05, -0.1, arcCenterDeg: 90, arcWidthDeg: 90),
@@ -435,6 +497,8 @@ namespace SolarSystem.Core
                     // to reload, piloted the same way as any other forward-mounted gun.
                     new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.03, 0.3, arcCenterDeg: 0, arcWidthDeg: 50),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, 0.05),
+                    // Its utility mount: sentry turrets to hold a hull it has latched onto (U.SPC-T271).
+                    new SubsystemDef(SubsystemKind.TurretDeployer, 0, -0.05, -0.2),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.07, -0.1),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.1, arcCenterDeg: 0, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, -0.3, arcCenterDeg: 180, arcWidthDeg: 180),
@@ -456,7 +520,9 @@ namespace SolarSystem.Core
                     // The "light fighter": the fastest, most agile hull in the game carries the
                     // fastest-firing forward gun to match -- rapid, low-damage autocannon fire, not a
                     // single hard-hitting shot.
-                    new SubsystemDef(SubsystemKind.FighterGuns, 0, -0.01, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.01, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    // Its utility mount: an EMP launcher to stop what it cannot outgun (U.SPC-T271).
+                    new SubsystemDef(SubsystemKind.EmpLauncher, 0, -0.03, 0),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.035, 0.05),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.03, arcCenterDeg: 0, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
@@ -476,8 +542,10 @@ namespace SolarSystem.Core
                 {
                     // A dedicated dogfighter: twin forward guns rather than the Courier's single gun,
                     // traded against a lighter hull than either existing "fighter" archetype.
-                    new SubsystemDef(SubsystemKind.FighterGuns, -0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
-                    new SubsystemDef(SubsystemKind.FighterGuns, 0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, -0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    // Its utility mount: a missile rack (U.SPC-T271).
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.03, 0),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.035, 0.05),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.03, arcCenterDeg: 0, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
@@ -530,5 +598,23 @@ namespace SolarSystem.Core
         };
 
         public const double PlatformLengthKm = 1.4;
+
+        /// <summary>A deployed sentry turret (U.SPC-T271): a small, unmanned gun pod that holds where it was put out
+        /// and shoots at whatever comes near, its autocannon at hulls and its point defence at missiles, until it
+        /// runs down after <see cref="SentryLifeS"/>.</summary>
+        public static readonly CombatSpec SentryTurret = new CombatSpec
+        {
+            DesignName = "Sentry turret", LengthKm = SentryLengthKm,
+            Hull = 700, Shield = 250, ShieldRegen = 10, Armor = 2, MaxSpeed = 0, Accel = 0, Decel = 0, TurnRateDegS = 0,
+            Layout = new[]
+            {
+                new SubsystemDef(SubsystemKind.Autocannon, 0, 0.2, 0),
+                new SubsystemDef(SubsystemKind.PointDefense, 0, -0.2, 0),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0),
+                new SubsystemDef(SubsystemKind.Reactor, 0, 0, 0),
+            },
+        };
+
+        public const double SentryLengthKm = 0.03, SentryLifeS = 90;
     }
 }

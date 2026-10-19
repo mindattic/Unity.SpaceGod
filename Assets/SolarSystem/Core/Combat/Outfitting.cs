@@ -36,11 +36,20 @@ namespace SolarSystem.Core
 
         /// <summary>Cells for prisoners taken off prizes, handed over in port for bounty or ransom.</summary>
         Brig,
+
+        // The dogfight arsenal (U.SPC-T271).
+        Autocannon,
+        LightRailgun,
+        EmpLauncher,
+        MineLayer,
+        TurretDeployer,
     }
 
-    /// <summary>The kinds of slot a hull offers: its weapon hardpoints (light ones take point defence or a
-    /// laser, heavy ones any turret), its shield and engine mounts, and its internal bays.</summary>
-    public enum SlotKind { LightMount, HeavyMount, ShieldMount, EngineMount, InternalBay }
+    /// <summary>The kinds of slot a hull offers: its weapon hardpoints (light ones take point defence, a laser or an
+    /// autocannon, heavy ones any turret), its shield and engine mounts, its internal bays, and a small craft's gun
+    /// mounts (an autocannon, a light railgun or a laser) and utility mount (missiles, an EMP launcher, mines or
+    /// sentry turrets) (U.SPC-T271).</summary>
+    public enum SlotKind { LightMount, HeavyMount, ShieldMount, EngineMount, InternalBay, GunMount, UtilityMount }
 
     /// <summary>One module: what it is called, what a yard builds it from (tonnes of alloys, electronics,
     /// machinery and munitions, scaled with the hull for plate, drives, generators and racks) and its mass.</summary>
@@ -83,6 +92,11 @@ namespace SolarSystem.Core
             new ModuleSpec(ModuleKind.CargoRack, "Cargo racks", 120, true, (Good.Alloys, 80), (Good.Machinery, 10)),
             new ModuleSpec(ModuleKind.Scanner, "Scanner suite", 25, false, (Good.Electronics, 25), (Good.Alloys, 10)),
             new ModuleSpec(ModuleKind.Brig, "Brig", 80, false, (Good.Alloys, 40), (Good.Electronics, 6), (Good.Machinery, 4)),
+            new ModuleSpec(ModuleKind.Autocannon, "Autocannon", 20, false, (Good.Alloys, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.LightRailgun, "Light railgun", 35, false, (Good.Alloys, 12), (Good.Electronics, 6), (Good.Machinery, 5)),
+            new ModuleSpec(ModuleKind.EmpLauncher, "EMP launcher", 25, false, (Good.Alloys, 6), (Good.Electronics, 14), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.MineLayer, "Mine layer", 40, false, (Good.Alloys, 10), (Good.Machinery, 4), (Good.Munitions, 9)),
+            new ModuleSpec(ModuleKind.TurretDeployer, "Turret deployer", 45, false, (Good.Alloys, 18), (Good.Electronics, 10), (Good.Machinery, 6), (Good.Munitions, 3)),
         };
 
         public static ModuleSpec Of(ModuleKind k) => All[(int)k];
@@ -99,10 +113,13 @@ namespace SolarSystem.Core
         {
             switch (slot)
             {
-                case SlotKind.LightMount: return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret;
+                case SlotKind.LightMount: return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret || m == ModuleKind.Autocannon;
                 case SlotKind.HeavyMount:
                     return m == ModuleKind.LaserTurret || m == ModuleKind.HeavyLaser || m == ModuleKind.MissileLauncher ||
-                           m == ModuleKind.PointDefense || (m == ModuleKind.Railgun && bearsOnBow);
+                           m == ModuleKind.PointDefense || m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun || (m == ModuleKind.Railgun && bearsOnBow);
+                case SlotKind.GunMount: return m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun || m == ModuleKind.LaserTurret;
+                case SlotKind.UtilityMount:
+                    return m == ModuleKind.MissileLauncher || m == ModuleKind.EmpLauncher || m == ModuleKind.MineLayer || m == ModuleKind.TurretDeployer;
                 case SlotKind.ShieldMount: return m == ModuleKind.ShieldGenerator || m == ModuleKind.HardenedShield;
                 case SlotKind.EngineMount: return m == ModuleKind.Engine || m == ModuleKind.TorchEngine;
                 default: return m == ModuleKind.ArmourPlating || m == ModuleKind.CargoRack || m == ModuleKind.Scanner || m == ModuleKind.Brig;
@@ -119,6 +136,11 @@ namespace SolarSystem.Core
                 case ModuleKind.Railgun: return SubsystemKind.Railgun;
                 case ModuleKind.MissileLauncher: return SubsystemKind.MissileLauncher;
                 case ModuleKind.PointDefense: return SubsystemKind.PointDefense;
+                case ModuleKind.Autocannon: return SubsystemKind.Autocannon;
+                case ModuleKind.LightRailgun: return SubsystemKind.LightRailgun;
+                case ModuleKind.EmpLauncher: return SubsystemKind.EmpLauncher;
+                case ModuleKind.MineLayer: return SubsystemKind.MineLayer;
+                case ModuleKind.TurretDeployer: return SubsystemKind.TurretDeployer;
                 case ModuleKind.ShieldGenerator:
                 case ModuleKind.HardenedShield: return SubsystemKind.ShieldGenerator;
                 default: return SubsystemKind.Engine;
@@ -156,6 +178,8 @@ namespace SolarSystem.Core
                 {
                     case SlotKind.LightMount: return "Light mount";
                     case SlotKind.HeavyMount: return "Weapon mount";
+                    case SlotKind.GunMount: return "Gun mount";
+                    case SlotKind.UtilityMount: return "Utility mount";
                     case SlotKind.ShieldMount: return "Shield mount";
                     case SlotKind.EngineMount: return "Engine mount";
                     default: return "Internal bay";
@@ -189,7 +213,7 @@ namespace SolarSystem.Core
             for (int i = 0; i < design.Layout.Length; i++)
             {
                 var d = design.Layout[i];
-                var slot = SlotOf(d.Kind);
+                var slot = SlotOf(d.Kind, cls);
                 if (slot == null) continue;
                 Slots.Add(new OutfitSlot(slot.Value, i, StockOf(d.Kind), d.ContainsYaw(0)));
             }
@@ -198,10 +222,18 @@ namespace SolarSystem.Core
             for (int i = 0; i < Slots.Count; i++) Fitted[i] = Slots[i].Stock;
         }
 
-        static SlotKind? SlotOf(SubsystemKind k)
+        static SlotKind? SlotOf(SubsystemKind k, ShipClass cls)
         {
+            bool small = cls == ShipClass.Fighter || cls == ShipClass.Courier || cls == ShipClass.Breacher;
             switch (k)
             {
+                // A small craft's missile rack is its utility mount, not a warship's turret mount.
+                case SubsystemKind.MissileLauncher when small: return SlotKind.UtilityMount;
+                case SubsystemKind.Autocannon:
+                case SubsystemKind.LightRailgun: return SlotKind.GunMount;
+                case SubsystemKind.EmpLauncher:
+                case SubsystemKind.MineLayer:
+                case SubsystemKind.TurretDeployer: return SlotKind.UtilityMount;
                 case SubsystemKind.PointDefense: return SlotKind.LightMount;
                 case SubsystemKind.LaserTurret:
                 case SubsystemKind.HeavyLaser:
@@ -224,6 +256,11 @@ namespace SolarSystem.Core
                 case SubsystemKind.Railgun: return ModuleKind.Railgun;
                 case SubsystemKind.ShieldGenerator: return ModuleKind.ShieldGenerator;
                 case SubsystemKind.Engine: return ModuleKind.Engine;
+                case SubsystemKind.Autocannon: return ModuleKind.Autocannon;
+                case SubsystemKind.LightRailgun: return ModuleKind.LightRailgun;
+                case SubsystemKind.EmpLauncher: return ModuleKind.EmpLauncher;
+                case SubsystemKind.MineLayer: return ModuleKind.MineLayer;
+                case SubsystemKind.TurretDeployer: return ModuleKind.TurretDeployer;
                 default: return null;
             }
         }

@@ -1017,6 +1017,7 @@ namespace SolarSystem
             if (ship.Battle == null && !ship.Destroyed && !ship.Derelict && !ship.IsEscort) Fleet.ScheduleNext(ship, Clock.Jd);
             Piloted = Target.None;
             pilotLockTarget = Target.None;
+            pilotLockUnit = null;
             pilotBoosting = false;
             pilotCruise = default;
             SpaceCamera.PilotLockTarget = Target.None;
@@ -1034,6 +1035,7 @@ namespace SolarSystem
             Piloted = Target.None;
             World.PilotedShip = null;
             pilotLockTarget = Target.None;
+            pilotLockUnit = null;
             pilotBoosting = false;
             pilotCruise = default;
             SpaceCamera.PilotLockTarget = Target.None;
@@ -1189,6 +1191,7 @@ namespace SolarSystem
 
             if (Input.LockTarget) ToggleLockTarget();
             if (!pilotLockTarget.IsNone && (!pilotLockTarget.IsShip || pilotLockTarget.Ship.Destroyed)) pilotLockTarget = Target.None;
+            if (ship.Battle == null) pilotLockUnit = null;
             SpaceCamera.PilotLockTarget = pilotLockTarget;
 
             var input = new PilotInput
@@ -1379,6 +1382,7 @@ namespace SolarSystem
             SeedPilot(arrived.Orbit.Center, DVec3.Zero, arrived.Orbit.V);
             pilotBattleCheckTimer = 0;
             pilotLockTarget = Target.None;
+            pilotLockUnit = null;
             SpaceCamera.PilotLockTarget = Target.None;
             nearGate = null;
             // Arriving beside an on-ramp is not flying in through it.
@@ -1448,7 +1452,13 @@ namespace SolarSystem
             // The right button launches missiles once the lock is made (U.SPC-T270); the guns fire down the crosshair.
             unit.PlayerSecondaryHeld = Input.LookHeld && armed;
             unit.PlayerAim = pilotAim;
-            var lockUnit = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
+            // The rest of the arsenal (U.SPC-T271): the EMP on the middle button, a mine on Ctrl, a sentry turret on Alt.
+            unit.PlayerEmpHeld = Input.FireEmp && armed;
+            if (Input.DropMine && armed) unit.PlayerMineRequested = true;
+            if (Input.DeployTurret && armed) unit.PlayerTurretRequested = true;
+            // A fighter or turret locked in this fight is held as its unit; a ship as itself, so the lock outlives the fight.
+            if (pilotLockUnit != null && (!pilotLockUnit.Present || !ship.Battle.Units.Contains(pilotLockUnit))) pilotLockUnit = null;
+            var lockUnit = pilotLockUnit ?? (pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null);
             if (lockUnit != unit.PlayerLockTarget) unit.LockProgress = 0;
             unit.PlayerLockTarget = lockUnit;
             UpdateSurrenderPrompts(ship.Battle, unit);
@@ -1717,35 +1727,51 @@ namespace SolarSystem
         /// camera itself leans toward the lock in <see cref="Cameras.SpaceCamera"/>'s focus update).</summary>
         void ToggleLockTarget()
         {
-            if (!pilotLockTarget.IsNone) { pilotLockTarget = Target.None; return; }
+            if (!pilotLockTarget.IsNone || pilotLockUnit != null)
+            {
+                pilotLockTarget = Target.None;
+                pilotLockUnit = null;
+                return;
+            }
             // The piloted ship is itself the selection while piloting, so it can't stand in the way of the hovered one.
             bool Other(Target c) => c.IsShip && c.Ship != Piloted.Ship;
-            var t = Other(Selected) ? Selected : Other(Hovered) ? Hovered : NearestToCrosshair();
-            if (t.IsShip) pilotLockTarget = t;
+            var t = Other(Selected) ? Selected : Other(Hovered) ? Hovered : Target.None;
+            if (t.IsShip)
+            {
+                pilotLockTarget = t;
+                return;
+            }
+            // In a fight, the hostile nearest the crosshair: a fighter or a sentry turret as readily as a ship (U.SPC-T271).
+            var u = UnitNearestCrosshair();
+            if (u == null) return;
+            if (u.Ship != null) pilotLockTarget = Target.OfShip(u.Ship);
+            else pilotLockUnit = u;
         }
 
-        /// <summary>The hull fought over that sits nearest the crosshair, within <see cref="LockPickConeDeg"/> of it:
-        /// what T locks when nothing is hovered or selected.</summary>
-        Target NearestToCrosshair()
+        /// <summary>A fighter or sentry turret locked in the flown hull's fight (a ship is held in <see cref="pilotLockTarget"/>).</summary>
+        BattleUnit pilotLockUnit;
+
+        /// <summary>The hostile in the flown hull's fight that sits nearest the crosshair, within <see cref="LockPickConeDeg"/> of it.</summary>
+        BattleUnit UnitNearestCrosshair()
         {
             var battle = Piloted.Ship?.Battle;
             var me = battle?.UnitOf(Piloted.Ship);
-            if (me == null) return Target.None;
-            Ship best = null;
+            if (me == null) return null;
+            BattleUnit best = null;
             double bestCos = Math.Cos(LockPickConeDeg * Mathf.Deg2Rad);
             foreach (var o in battle.Units)
             {
-                if (o.Ship == null || o == me || !o.Present || !battle.Hostile(me, o)) continue;
+                if (o == me || !o.Present || !battle.Hostile(me, o)) continue;
                 var to = o.Pos - me.Pos;
                 if (to.LengthSquared < 1e-12) continue;
                 double cos = DVec3.Dot(pilotAim, to.Normalized);
                 if (cos > bestCos)
                 {
                     bestCos = cos;
-                    best = o.Ship;
+                    best = o;
                 }
             }
-            return best != null ? Target.OfShip(best) : Target.None;
+            return best;
         }
 
         const double LockPickConeDeg = 15;

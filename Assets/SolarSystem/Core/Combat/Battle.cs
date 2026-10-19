@@ -8,6 +8,10 @@ namespace SolarSystem.Core
         Ship,
         Platform,
         Fighter,
+
+        /// <summary>A sentry turret put out by a hull's deployer (U.SPC-T271): it holds where it was left, fights on
+        /// its own and runs down after <see cref="CombatSpec.SentryLifeS"/>; it does not keep a battle going.</summary>
+        Turret,
     }
 
     /// <summary>One combatant in a battle. Positions are km from the battle's anchor, ecliptic axes.</summary>
@@ -140,7 +144,14 @@ namespace SolarSystem.Core
 
         public bool Present => !Dead && !Fled && !Docked;
         public double Radius => LengthKm * 0.5;
-        public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : "Fighter";
+        public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : Kind == UnitKind.Turret ? "Sentry turret" : "Fighter";
+
+        /// <summary>A sentry turret: the battle second it runs down.</summary>
+        public double ExpiresAt;
+
+        /// <summary>While <see cref="PlayerControlled"/>: the EMP trigger held, and a mine or a sentry turret asked
+        /// for this frame (the battle clears each once it has tried, U.SPC-T271).</summary>
+        public bool PlayerEmpHeld, PlayerMineRequested, PlayerTurretRequested;
 
         /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north).</summary>
         public void Basis(out DVec3 right, out DVec3 up)
@@ -182,6 +193,26 @@ namespace SolarSystem.Core
         Missile,
         Torpedo,
         Pod,
+
+        /// <summary>An EMP round: it bursts beside its target and stuns rather than damages (U.SPC-T271).</summary>
+        Emp,
+    }
+
+    /// <summary>
+    /// A proximity mine (U.SPC-T271): it sits where it was laid, arms after a moment, and blows when a hull hostile to
+    /// its layer comes within its trigger, hurting everything hostile within its blast.
+    /// </summary>
+    public sealed class Mine
+    {
+        public DVec3 Pos, Vel;
+        public int Side;
+        public double Damage, BlastKm;
+
+        /// <summary>Seconds until it is armed, and until it fizzles out unexploded.</summary>
+        public double ArmIn, Life;
+        public bool Gone;
+
+        public bool Armed => ArmIn <= 0;
     }
 
     /// <summary>A boarding pod or breacher stuck in a hull: where (ship lengths in that hull's frame), whose, and pointing which way.</summary>
@@ -219,6 +250,9 @@ namespace SolarSystem.Core
         /// <summary>A pod's squad: who they fight for and how good they are.</summary>
         public Faction Owner;
         public double Marines;
+
+        /// <summary>An EMP round's stun and reach (see <see cref="WeaponSpec.EmpSeconds"/>).</summary>
+        public double EmpSeconds, EmpRadiusKm;
     }
 
     /// <summary>
@@ -285,6 +319,15 @@ namespace SolarSystem.Core
 
         /// <summary>A hull breaking off, weapons powered down, hailing to ask terms.</summary>
         Hail,
+
+        /// <summary>A mine going off (Size: its blast, km).</summary>
+        MineBlast,
+
+        /// <summary>An EMP round bursting (Size: its reach, km).</summary>
+        EmpBurst,
+
+        /// <summary>A mine laid, or a sentry turret put out.</summary>
+        Deployed,
     }
 
     /// <summary>Something to draw: a beam, a hit, an explosion. A and B are battle-local km.</summary>
@@ -327,6 +370,7 @@ namespace SolarSystem.Core
         public readonly List<BattleUnit> Units = new List<BattleUnit>();
         public readonly List<Missile> Missiles = new List<Missile>();
         public readonly List<KineticRound> Rounds = new List<KineticRound>();
+        public readonly List<Mine> Mines = new List<Mine>();
         public readonly List<Embedded> Embedded = new List<Embedded>();
 
         /// <summary>Set for an ambush beside a hyperlane; null for a battle at a body.</summary>
@@ -500,6 +544,11 @@ namespace SolarSystem.Core
                     FighterStep?.Invoke(this, u, dt);
                     continue;
                 }
+                if (u.Kind == UnitKind.Turret)
+                {
+                    StepTurret(u, dt);
+                    continue;
+                }
                 Think(u, dt);
                 Move(u, dt);
             }
@@ -509,9 +558,12 @@ namespace SolarSystem.Core
                 if (!u.Present) continue;
                 if (u.PlayerControlled) StepPlayerWeapons(u, dt);
                 Fire(u, dt);
+                // A mine or turret asked for is laid now or not at all, not saved up for when the mount is ready.
+                if (u.PlayerControlled) u.PlayerMineRequested = u.PlayerTurretRequested = false;
             }
             StepMissiles(dt);
             StepRounds(dt);
+            StepMines(dt);
             StepBoarding(dt);
             StepSurrenders(dt);
             double track = 1 - Math.Exp(-dt / Gunnery.TrackingLagS);
@@ -541,7 +593,7 @@ namespace SolarSystem.Core
             bool any0 = false, any1 = false, fight0 = false, fight1 = false;
             foreach (var u in Units)
             {
-                if (!u.Present || u.Kind == UnitKind.Fighter || u.Captured) continue;
+                if (!u.Present || u.Kind == UnitKind.Fighter || u.Kind == UnitKind.Turret || u.Captured) continue;
                 // Marines alone make a combatant only of a hull that will fly a boarding approach: the AI's,
                 // never one the player is flying (see Think), which with no guns has nothing left to fight with.
                 bool willing = !u.Fleeing && !u.Surrendering && !u.Combat.Disabled && (u.Combat.Armed || (CanBoard(u) && !u.PlayerControlled));
@@ -793,7 +845,7 @@ namespace SolarSystem.Core
             Dictionary<int, double> byArc = null;
             foreach (var s in u.Combat.Subsystems)
             {
-                if (!s.Def.IsWeapon || s.Destroyed || s.Kind == SubsystemKind.PointDefense || s.Kind == SubsystemKind.BoardingPods) continue;
+                if (!s.Def.IsWeapon || s.Destroyed || s.Kind == SubsystemKind.PointDefense || s.Kind == SubsystemKind.BoardingPods || s.Def.Weapon.Supporting) continue;
                 var w = s.Def.Weapon;
                 if (w.Missile && s.Ammo <= 0) continue;
                 byArc ??= new Dictionary<int, double>();
@@ -889,6 +941,11 @@ namespace SolarSystem.Core
                     FirePods(u, s);
                     continue;
                 }
+                if (w.Deploy != DeployKind.None)
+                {
+                    TryDeploy(u, s, w);
+                    continue;
+                }
                 var origin = u.PointOf(s.Def);
 
                 if (w.AntiSmall)
@@ -918,14 +975,15 @@ namespace SolarSystem.Core
                     // The player's own nose guns: no AI target selection, no autofire. Side/aft
                     // batteries (a broadside hull's real firepower) fall through to the branch below
                     // completely unchanged, so piloting never silences a ship's crewed turrets.
-                    if (!w.Missile)
+                    if (w.EmpSeconds > 0) target = u.PlayerEmpHeld ? PlayerEmpTarget(u, origin, w) : null;
+                    else if (!w.Missile)
                     {
                         // Down the crosshair, hitting only what the shot really meets (U.SPC-T270).
                         if (u.PlayerFireHeld && !u.Overheated) FirePlayerGun(u, s, origin, w);
                         else s.Aim = DVec3.Zero;
                         continue;
                     }
-                    target = u.PlayerSecondaryHeld && u.LockProgress >= 1 ? PlayerLockedTarget(u, w, origin) : null;
+                    else target = u.PlayerSecondaryHeld && u.LockProgress >= 1 ? PlayerLockedTarget(u, w, origin) : null;
                 }
                 else
                 {
@@ -958,6 +1016,8 @@ namespace SolarSystem.Core
                             Pos = origin, Vel = (u.Forward + spread + s.Aim).Normalized * (w.MissileSpeedKmS * 0.3) + u.Vel,
                             Target = target, TargetSub = sub, Damage = w.Damage, Speed = w.MissileSpeedKmS,
                             Hp = s.Kind == SubsystemKind.Torpedo ? 25 : 12, Life = 90, Side = u.Side, Torpedo = s.Kind == SubsystemKind.Torpedo,
+                            Kind = w.EmpSeconds > 0 ? MissileKind.Emp : s.Kind == SubsystemKind.Torpedo ? MissileKind.Torpedo : MissileKind.Missile,
+                            EmpSeconds = w.EmpSeconds, EmpRadiusKm = w.EmpRadiusKm,
                         });
                     }
                     Emit(FxKind.MissileLaunch, origin, origin + s.Aim, 0, u.Side, u, s.Index);
@@ -979,9 +1039,9 @@ namespace SolarSystem.Core
                 if (target.Kind == UnitKind.Fighter) size *= w.AntiSmall ? 1.4 : 0.35;
                 double chance = w.Accuracy * accuracyScale * size * (1 - 0.4 * dist / w.RangeKm);
                 bool hit = rng.NextDouble() < chance;
-                var kind = s.Kind == SubsystemKind.FighterGuns ? FxKind.Guns
+                var kind = s.Kind == SubsystemKind.FighterGuns || s.Kind == SubsystemKind.Autocannon ? FxKind.Guns
                     : w.AntiSmall ? FxKind.PointDefense
-                    : s.Kind == SubsystemKind.Railgun ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
+                    : s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
                     : hit ? FxKind.Beam : FxKind.BeamMiss;
 
                 if (w.MuzzleSpeedKmS > 0)
@@ -1031,7 +1091,7 @@ namespace SolarSystem.Core
             {
                 Pos = origin, Vel = vel, Target = target, TargetSub = targetSub, Damage = w.Damage,
                 ArriveIn = arriveIn, Life = arriveIn + (hit ? 0 : 0.5), Side = u.Side, Hit = hit,
-                Railgun = mount.Kind == SubsystemKind.Railgun,
+                Railgun = mount.Kind == SubsystemKind.Railgun || mount.Kind == SubsystemKind.LightRailgun,
             });
         }
 
@@ -1081,12 +1141,12 @@ namespace SolarSystem.Core
         void FirePlayerGun(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w)
         {
             var aim = u.PlayerAim.LengthSquared > 1e-12 ? u.PlayerAim.Normalized : u.Forward;
-            var sight = Gunnery.Gimbal(aim, u.Forward, s.Kind == SubsystemKind.Railgun ? Gunnery.RailgunGimbalDeg : Gunnery.GimbalDeg);
+            var sight = Gunnery.Gimbal(aim, u.Forward, s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun ? Gunnery.RailgunGimbalDeg : Gunnery.GimbalDeg);
             double converge = FirstHostileAlong(u.Side, u.Pos, sight, w.RangeKm, out _);
             if (converge < 0) converge = w.RangeKm;
             var toConverge = u.Pos + sight * converge - origin;
             var dir = toConverge.LengthSquared > 1e-12 ? toConverge.Normalized : sight;
-            double scatter = w.MuzzleSpeedKmS > 0 && s.Kind != SubsystemKind.Railgun ? Gunnery.AutocannonScatterDeg : Gunnery.BeamScatterDeg;
+            double scatter = w.MuzzleSpeedKmS > 0 && s.Kind != SubsystemKind.Railgun && s.Kind != SubsystemKind.LightRailgun ? Gunnery.AutocannonScatterDeg : Gunnery.BeamScatterDeg;
             dir = Gunnery.Scatter(dir, scatter * Astro.Deg2Rad, rng);
             s.Aim = dir;
             // The player's trigger keeps the gun's own rhythm, not a crew's jittered one.
@@ -1128,11 +1188,12 @@ namespace SolarSystem.Core
             bool beam = w.MuzzleSpeedKmS <= 0;
             if (!beam)
             {
-                Emit(s.Kind == SubsystemKind.Railgun ? FxKind.Railgun : FxKind.Guns, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
+                bool slug = s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun;
+                Emit(slug ? FxKind.Railgun : FxKind.Guns, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
                 Rounds.Add(new KineticRound
                 {
                     Pos = origin, Vel = u.Vel + dir * w.MuzzleSpeedKmS, Damage = w.Damage, Life = w.RangeKm / w.MuzzleSpeedKmS,
-                    Side = u.Side, Railgun = s.Kind == SubsystemKind.Railgun, Aimed = true,
+                    Side = u.Side, Railgun = slug, Aimed = true,
                 });
                 return;
             }
@@ -1208,6 +1269,144 @@ namespace SolarSystem.Core
             return best;
         }
 
+        // ---------------------------------------------------------------- the dogfight arsenal (U.SPC-T271)
+
+        /// <summary>How long a mine takes to arm once laid, and how long it lies waiting, seconds.</summary>
+        public const double MineArmSeconds = 1.5, MineLifeSeconds = 240;
+
+        /// <summary>How near a mine a hostile hull must come to set it off, km beyond the hull's own size.</summary>
+        public const double MineTriggerKm = 0.12;
+
+        /// <summary>Lays a mine or puts out a sentry turret when the mount's owner wants one: the player when asked,
+        /// a crew when something is on its tail (a mine) or closing in (a turret).</summary>
+        void TryDeploy(BattleUnit u, Subsystem s, WeaponSpec w)
+        {
+            bool mine = w.Deploy == DeployKind.Mine;
+            bool want = u.PlayerControlled ? (mine ? u.PlayerMineRequested : u.PlayerTurretRequested) : AiWantsDeploy(u, mine);
+            if (!want || s.Ammo <= 0 || u.Stunned > 0) return;
+            s.Ammo--;
+            s.Cooldown = w.Cooldown;
+            if (mine)
+            {
+                var at = u.Pos - u.Forward * (u.Radius + 0.04);
+                Mines.Add(new Mine { Pos = at, Side = u.Side, Damage = w.Damage, BlastKm = w.RangeKm, ArmIn = MineArmSeconds, Life = MineLifeSeconds });
+                Emit(FxKind.Deployed, at, at, 0.02, u.Side, u, s.Index);
+                return;
+            }
+            u.Basis(out var right, out _);
+            var spec = CombatSpec.SentryTurret;
+            var pos = u.Pos + right * (u.Radius + spec.LengthKm * 2) * (rng.Next(2) == 0 ? -1 : 1);
+            var turret = NewUnit(UnitKind.Turret, u.Side, u.Faction, new ShipCombat(spec), spec.LengthKm, pos, u.Forward);
+            turret.Vel = u.Vel * 0.3;
+            turret.ExpiresAt = Seconds + CombatSpec.SentryLifeS;
+            Emit(FxKind.Deployed, pos, pos, spec.LengthKm, u.Side, turret, -1);
+        }
+
+        /// <summary>A crew lays a mine with a hostile on its tail (close astern), and puts out a turret with one closing in.</summary>
+        bool AiWantsDeploy(BattleUnit u, bool mine)
+        {
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || o.Captured || o.Surrendering || o.Kind == UnitKind.Turret || !o.Combat.Armed) continue;
+                var to = o.Pos - u.Pos;
+                double d = to.Length;
+                if (mine ? d < 2.5 && d > 1e-6 && DVec3.Dot(u.Forward, to / d) < -0.3 : d < 5) return true;
+            }
+            return false;
+        }
+
+        /// <summary>What the player's EMP launcher fires at: the locked hull if it is in reach, else the hostile nearest
+        /// the crosshair (within 25 degrees of it) that is not already drifting dead.</summary>
+        BattleUnit PlayerEmpTarget(BattleUnit u, DVec3 origin, WeaponSpec w)
+        {
+            var locked = PlayerLockedTarget(u, w, origin);
+            if (locked != null) return locked;
+            var aim = u.PlayerAim.LengthSquared > 1e-12 ? u.PlayerAim.Normalized : u.Forward;
+            BattleUnit best = null;
+            double bestCos = Math.Cos(25 * Astro.Deg2Rad);
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || o.Stunned > 0) continue;
+                var to = o.Pos - origin;
+                double d = to.Length;
+                if (d < 1e-6 || d - o.Radius > w.RangeKm) continue;
+                double cos = DVec3.Dot(aim, to / d);
+                if (cos > bestCos)
+                {
+                    bestCos = cos;
+                    best = o;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>The stun an EMP burst leaves a hull of <paramref name="lengthKm"/>: the full
+        /// <paramref name="seconds"/> for a small craft, less for a bigger hull with more to knock out.</summary>
+        public static double EmpStunSeconds(double seconds, double lengthKm) => seconds * Math.Min(1, 0.2 / Math.Max(lengthKm, 1e-6));
+
+        /// <summary>An EMP round bursts: every hull hostile to <paramref name="side"/> within its reach has its drives and
+        /// guns knocked out (<see cref="BattleUnit.Stunned"/>) and its shields halved.</summary>
+        public void EmpBurst(DVec3 at, int side, double seconds, double radiusKm)
+        {
+            Emit(FxKind.EmpBurst, at, at, radiusKm, side, null, -1);
+            foreach (var o in Units)
+            {
+                if (o.Side == side || !o.Present) continue;
+                if ((o.Pos - at).Length > radiusKm + Gunnery.HitRadius(o)) continue;
+                o.Stunned = Math.Max(o.Stunned, EmpStunSeconds(seconds, o.LengthKm));
+                foreach (var g in o.Combat.Subsystems)
+                    if (g.Kind == SubsystemKind.ShieldGenerator) g.Shield *= 0.5;
+            }
+        }
+
+        /// <summary>Mines arm, wait and run out; an armed one with a hostile hull inside its trigger blows, hurting
+        /// everything hostile in its blast, harder the nearer the centre.</summary>
+        void StepMines(double dt)
+        {
+            foreach (var m in Mines)
+            {
+                if (m.Gone) continue;
+                m.Pos += m.Vel * dt;
+                m.ArmIn -= dt;
+                m.Life -= dt;
+                if (m.Life <= 0)
+                {
+                    m.Gone = true;
+                    continue;
+                }
+                if (!m.Armed) continue;
+                bool tripped = false;
+                foreach (var o in Units)
+                    if (o.Side != m.Side && o.Present && o.Kind != UnitKind.Turret && (o.Pos - m.Pos).Length <= MineTriggerKm + Gunnery.HitRadius(o))
+                    {
+                        tripped = true;
+                        break;
+                    }
+                if (!tripped) continue;
+                m.Gone = true;
+                Emit(FxKind.MineBlast, m.Pos, m.Pos, m.BlastKm, m.Side, null, -1);
+                for (int i = 0; i < Units.Count; i++)
+                {
+                    var o = Units[i];
+                    if (o.Side == m.Side || !o.Present) continue;
+                    double d = Math.Max(0, (o.Pos - m.Pos).Length - Gunnery.HitRadius(o));
+                    if (d > m.BlastKm) continue;
+                    ApplyDamage(o, null, m.Damage * (1 - d / m.BlastKm), m.Pos);
+                }
+            }
+            Mines.RemoveAll(m => m.Gone);
+        }
+
+        /// <summary>A sentry turret holds where it was put out, drifting to a stop, and runs down at its time.</summary>
+        void StepTurret(BattleUnit u, double dt)
+        {
+            u.Pos += u.Vel * dt;
+            u.Vel *= Math.Exp(-dt * 0.5);
+            if (Seconds < u.ExpiresAt) return;
+            u.Dead = true;
+            Emit(FxKind.UnitDestroyed, u.Pos, u.Pos, u.LengthKm, u.Side, u, -1);
+        }
+
         /// <summary>
         /// The player's guns cool and the missile lock builds or slips (U.SPC-T270): the lock grows while the
         /// crosshair sits on the locked target and, once made, holds while the target stays ahead of the nose.
@@ -1267,13 +1466,15 @@ namespace SolarSystem.Core
             var t = u.Target;
             // Its own target only while that is still a fair one: not struck its colours, not since taken
             // by this side (a capture doesn't clear everyone's target the way a surrender does).
-            if (t != null && Hostile(u, t) && !t.Surrendering && !t.Captured && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile))
+            bool emp = w.EmpSeconds > 0;
+            if (t != null && Hostile(u, t) && !t.Surrendering && !t.Captured && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile && !emp) && !(emp && t.Stunned > 0))
                 return t;
             BattleUnit any = null;
             double nearest = w.RangeKm;
             foreach (var o in Units)
             {
-                if (!Hostile(u, o) || o.Captured || o.Surrendering || (o.Kind == UnitKind.Fighter && (w.Missile || u.Kind != UnitKind.Fighter))) continue;
+                // An EMP round is for a small craft too, but wasted on one already drifting dead (U.SPC-T271).
+                if (!Hostile(u, o) || o.Captured || o.Surrendering || (emp && o.Stunned > 0) || (o.Kind == UnitKind.Fighter && !emp && (w.Missile || u.Kind != UnitKind.Fighter))) continue;
                 double d = (o.Pos - origin).Length - o.Radius;
                 if (d < nearest)
                 {
@@ -1318,6 +1519,8 @@ namespace SolarSystem.Core
                     case SubsystemKind.HeavyLaser:
                     case SubsystemKind.LaserTurret:
                     case SubsystemKind.Railgun:
+                    case SubsystemKind.Autocannon:
+                    case SubsystemKind.LightRailgun:
                     case SubsystemKind.MissileLauncher: w = 3; break;
                     case SubsystemKind.ShieldGenerator: w = s.Shield > 0 ? 2.5 : 0.5; break;
                     case SubsystemKind.Engine: w = 1.4; break;
@@ -1445,6 +1648,7 @@ namespace SolarSystem.Core
                 {
                     m.Gone = true;
                     if (m.Kind == MissileKind.Pod) PodHit(m, t, aim);
+                    else if (m.Kind == MissileKind.Emp) EmpBurst(m.Pos, m.Side, m.EmpSeconds, m.EmpRadiusKm);
                     else ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t), m.Damage, aim);
                 }
             }
@@ -1464,7 +1668,7 @@ namespace SolarSystem.Core
             double best = s.Def.Weapon.RangeKm;
             foreach (var o in Units)
             {
-                if (!Hostile(u, o) || o.Captured || o.Kind == UnitKind.Fighter) continue;
+                if (!Hostile(u, o) || o.Captured || o.Kind == UnitKind.Fighter || o.Kind == UnitKind.Turret) continue;
                 // A hull waiting on terms isn't fired on, pods included -- unless the terms are to take it.
                 if (o.Surrendering && !o.SurrenderOpenToBoarding) continue;
                 if (o.Combat.Shield > o.Combat.Spec.Shield * 0.05 && o.Combat.HasShieldGenerator) continue;
@@ -1724,7 +1928,7 @@ namespace SolarSystem.Core
         {
             sideStrength[0] = sideStrength[1] = 0;
             foreach (var u in Units)
-                if (u.Present && !u.Captured && !u.Surrendering && u.Side >= 0 && u.Side < 2)
+                if (u.Present && !u.Captured && !u.Surrendering && u.Kind != UnitKind.Turret && u.Side >= 0 && u.Side < 2)
                     sideStrength[u.Side] += u.Combat.Strength;
         }
 

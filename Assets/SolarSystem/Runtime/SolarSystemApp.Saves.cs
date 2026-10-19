@@ -221,6 +221,7 @@ namespace SolarSystem
         {
             Piloted = Target.None;
             pilotLockTarget = Target.None;
+            pilotLockUnit = null;
             pilotBoosting = false;
             pilot = default;
             rideWarpBefore = -1;

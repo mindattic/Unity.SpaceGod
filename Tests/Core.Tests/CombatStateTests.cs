@@ -204,7 +204,8 @@ namespace SolarSystem.Core.Tests
         {
             var combat = Make(ShipClass.Freighter);
             Assert.That((combat.Subsystems).Any(s => s.Kind == SubsystemKind.PointDefense), Is.True);
-            Assert.That((combat.Subsystems).Any(s => s.Def.IsWeapon && s.Kind != SubsystemKind.PointDefense), Is.False);
+            // A freighter's mine layer (U.SPC-T271) is no gun: it supports, it does not fight.
+            Assert.That((combat.Subsystems).Any(s => s.Def.IsWeapon && s.Kind != SubsystemKind.PointDefense && !s.Def.Weapon.Supporting), Is.False);
             Assert.That(combat.Armed, Is.False);
         }
 

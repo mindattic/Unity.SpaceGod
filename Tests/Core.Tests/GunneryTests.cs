@@ -150,7 +150,7 @@ namespace SolarSystem.Core.Tests
             Assert.That(player.Overheated, Is.True, "a minute of held fire never overheated the guns");
             Assert.That(t, Is.InRange(2, 20), "overheated far too soon or too late");
 
-            var gun = player.Combat.Subsystems.First(s => s.Kind == SubsystemKind.FighterGuns);
+            var gun = player.Combat.Subsystems.First(s => s.Kind == SubsystemKind.Autocannon);
             double cooldown = gun.Cooldown;
             b.Advance(0.5);
             Assert.That(gun.Cooldown, Is.LessThanOrEqualTo(cooldown), "an overheated gun fired");

@@ -481,8 +481,27 @@ namespace SolarSystem.UI
             DrawGauge(new Rect(x0 + 2 * (w + 14), y, w, 6), (float)(c.Subsystems.Sum(s => s.Shield) / maxShield), new Color(0.45f, 0.7f, 1f), "SHIELDS");
             DrawGauge(new Rect(x0 + 3 * (w + 14), y, w, 6), (float)(c.Hull / Math.Max(1e-9, c.Spec.Hull)), ProgradeColor, "HULL");
             int missiles = c.Subsystems.Where(s => !s.Destroyed && s.Def.Weapon != null && s.Def.Weapon.Missile && s.Kind != SubsystemKind.Torpedo).Sum(s => s.Ammo);
-            if (missiles > 0)
-                DrawLabel("MISSILES " + missiles + (me.LockProgress >= 1 ? "  (right mouse)" : "  (T lock, hold the crosshair on it)"), new Vector2(x0, y + 12), Dim, true);
+            var line = new List<string>();
+            if (missiles > 0) line.Add("MISSILES " + missiles + (me.LockProgress >= 1 ? " (right mouse)" : " (T lock, hold the crosshair on it)"));
+            // The rest of the arsenal (U.SPC-T271): rounds left, and whether the mount is ready.
+            AddMount(line, c, SubsystemKind.EmpLauncher, "EMP", "middle mouse");
+            AddMount(line, c, SubsystemKind.MineLayer, "MINES", "Ctrl");
+            AddMount(line, c, SubsystemKind.TurretDeployer, "TURRETS", "Alt");
+            if (line.Count > 0) DrawLabel(string.Join("    ", line), new Vector2(x0, y + 12), Dim, true);
+        }
+
+        /// <summary>A mount's rounds left and its key, or that it is still cycling.</summary>
+        static void AddMount(List<string> line, ShipCombat c, SubsystemKind kind, string name, string key)
+        {
+            int ammo = 0;
+            bool ready = false;
+            foreach (var s in c.Subsystems)
+            {
+                if (s.Kind != kind || s.Destroyed) continue;
+                ammo += s.Ammo;
+                ready |= s.Ammo > 0 && s.Cooldown <= 0;
+            }
+            if (ammo > 0) line.Add(name + " " + ammo + (ready ? " (" + key + ")" : " (cycling)"));
         }
 
         /// <summary>The fastest round the flown hull's own guns fire, km/s; 0 if they are all beams.</summary>
@@ -2682,6 +2701,7 @@ namespace SolarSystem.UI
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
                 "Combat  (piloting)   left mouse: guns, down the crosshair (watch the heat)   T lock the hull under it, hold the crosshair on it to lock   right mouse: missiles",
+                "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   Alt: put out a sentry turret",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",

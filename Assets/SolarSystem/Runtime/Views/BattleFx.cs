@@ -94,6 +94,7 @@ namespace SolarSystem.Views
             foreach (var e in effects) Draw(e, now);
             foreach (var b in war.Battles) DrawMissiles(b);
             foreach (var b in war.Battles) DrawRounds(b);
+            foreach (var b in war.Battles) DrawMinesAndTurrets(b);
 
             mesh.Clear();
             mesh.SetVertices(vertices);
@@ -204,6 +205,18 @@ namespace SolarSystem.Views
                     e.Color = new Color(1f, 1f, 0.8f) * 1.3f;
                     e.Life = 3f;
                     break;
+                case FxKind.MineBlast:
+                    e.Color = new Color(1f, 0.55f, 0.2f) * 2f;
+                    e.Life = 0.9f;
+                    break;
+                case FxKind.EmpBurst:
+                    e.Color = new Color(0.45f, 0.85f, 1f) * 1.6f;
+                    e.Life = 1.1f;
+                    break;
+                case FxKind.Deployed:
+                    e.Color = Color.Lerp(faction, Color.white, 0.5f);
+                    e.Life = 0.5f;
+                    break;
                 default:
                     return;
             }
@@ -284,6 +297,31 @@ namespace SolarSystem.Views
                     float r = (float)(e.Size * 1.1 * app.BattleKmScale);
                     float blink = Mathf.Sin(age * 6f) > 0 ? 1f : 0.35f;
                     Sprite(c, Mathf.Max(r, PixelSize(c, 26)), e.Color * fade * blink, Shape.Ring);
+                    break;
+                }
+                case FxKind.MineBlast:
+                {
+                    // A fireball swelling to the blast's reach, and its shock ring racing past it.
+                    var c = Point(e.Battle, e.A);
+                    float r = (float)(e.Size * app.BattleKmScale);
+                    Sprite(c, Mathf.Max(r * (0.3f + 0.7f * Mathf.Sqrt(t)), PixelSize(c, 14)), e.Color * fade, Shape.Radial);
+                    Sprite(c, Mathf.Max(r * (0.5f + t), PixelSize(c, 20)), e.Color * fade * 0.6f, Shape.Ring);
+                    break;
+                }
+                case FxKind.EmpBurst:
+                {
+                    // A crackling blue shell out to the burst's reach (the interdiction pulse in miniature).
+                    var c = Point(e.Battle, e.A);
+                    float r = (float)(e.Size * app.BattleKmScale) * (0.2f + 0.8f * Mathf.Sqrt(t));
+                    float flicker = 0.75f + 0.25f * Mathf.Sin(age * 60f);
+                    Sprite(c, Mathf.Max(r, PixelSize(c, 18)), e.Color * fade * flicker, Shape.Ring);
+                    if (age < 0.15f) Sprite(c, PixelSize(c, 30), Color.white * (1 - age / 0.15f), Shape.Radial);
+                    break;
+                }
+                case FxKind.Deployed:
+                {
+                    var c = Point(e.Battle, e.A);
+                    Sprite(c, PixelSize(c, 8 + 16 * t), e.Color * fade, Shape.Ring);
                     break;
                 }
                 case FxKind.Pulse:
@@ -424,6 +462,39 @@ namespace SolarSystem.Views
                 var tail = Point(b, r.Pos - r.Vel * (r.Railgun ? 0.05 : 0.08));
                 Ribbon(tail, p, r.Railgun ? 1.8f : 1.4f, c * 0.6f);
             }
+        }
+
+        /// <summary>
+        /// Mines lying in wait (a dim dot, blinking fast once armed) and sentry turrets on station (a pod in its
+        /// side's colour, ringed, pulsing slower as it runs down) (U.SPC-T271).
+        /// </summary>
+        void DrawMinesAndTurrets(Battle b)
+        {
+            float now = Time.unscaledTime;
+            foreach (var m in b.Mines)
+            {
+                if (m.Gone) continue;
+                var p = Point(b, m.Pos);
+                var c = SideColour(b, m.Side, new Color(1f, 0.35f, 0.25f));
+                float blink = m.Armed ? (Mathf.Sin(now * 9f) > 0 ? 1.3f : 0.35f) : 0.4f;
+                Sprite(p, PixelSize(p, 4f), c * blink, Shape.Radial);
+            }
+            foreach (var u in b.Units)
+            {
+                if (u.Kind != UnitKind.Turret || !u.Present) continue;
+                var p = Point(b, u.Pos);
+                var c = SideColour(b, u.Side, Color.white);
+                float left = (float)Math.Max(0, (u.ExpiresAt - b.Seconds) / CombatSpec.SentryLifeS);
+                float pulse = 0.7f + 0.3f * Mathf.Sin(now * (2f + 4f * left));
+                Sprite(p, Mathf.Max((float)(u.LengthKm * app.BattleKmScale), PixelSize(p, 5f)), c * 1.3f, Shape.Radial);
+                Sprite(p, PixelSize(p, 11f), c * 0.6f * pulse, Shape.Ring);
+            }
+        }
+
+        static Color SideColour(Battle b, int side, Color fallback)
+        {
+            var f = side >= 0 && side < 2 ? b.SideLeaders[side] : null;
+            return f != null ? Color.Lerp(new Color(f.Color.R, f.Color.G, f.Color.B), Color.white, 0.35f) : fallback;
         }
 
         Vector3 Point(Battle b, DVec3 local) => app.Relative(app.BattleScene(b, local));
