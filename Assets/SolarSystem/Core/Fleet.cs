@@ -105,6 +105,24 @@ namespace SolarSystem.Core
         /// <summary>Ships see each other coming and sidestep (see <see cref="StepAvoidance"/>).</summary>
         public bool AvoidCollisions = true;
 
+        /// <summary>
+        /// Run at a coarse level of detail (U.SPC-T104): the fleet of a system nobody is looking at (see
+        /// <see cref="Galaxy.Focus"/>). Its pilots do not sidestep one another (that is flying round each
+        /// other for the eye, not the schedule), and a slow boat looks for its launch window on a coarser grid
+        /// of dates and flight times. Every schedule, route, cargo and propellant charge is still the real
+        /// one, so a fleet promoted back to full detail flies on from where it is without a jump.
+        /// </summary>
+        public bool Coarse
+        {
+            get => coarse;
+            set
+            {
+                coarse = value;
+                if (value) evasion.Clear();
+            }
+        }
+        bool coarse;
+
         /// <summary>How far ahead (days) ships look for a close pass: about an hour and a quarter.</summary>
         public const double AvoidanceHorizonDays = 0.05;
 
@@ -169,7 +187,7 @@ namespace SolarSystem.Core
         {
             double dt = double.IsNaN(lastAvoidanceJd) ? 0 : jd - lastAvoidanceJd;
             lastAvoidanceJd = jd;
-            if (!AvoidCollisions || dt <= 0) return;
+            if (!AvoidCollisions || coarse || dt <= 0) return;
             var list = new List<Ship>();
             // A held ship (the one the player is flying) isn't where its schedule says: nobody steers round that ghost.
             foreach (var s in ships) if (Manoeuvrable(s) && (IsHeld == null || !IsHeld(s))) list.Add(s);
@@ -1245,8 +1263,9 @@ namespace SolarSystem.Core
                 if (!obstacles.Contains(other) && catalog[other].IsVisible && !catalog[other].IsStar) obstacles.Add(other);
 
             // Bodies sit at the ends, where the ship is slow but a planet is passed in minutes: sample
-            // the first and last few percent densely, and test each segment, not just its ends.
-            const int samples = 384;
+            // the first and last few percent densely, and test each segment, not just its ends. At coarse
+            // detail a third as many samples: the segments between them are still tested whole.
+            int samples = coarse ? 128 : 384;
             double total = ship.PhaseEndJd - ship.PhaseStartJd;
             var previous = new DVec3[obstacles.Count];
             for (int k = 0; k <= samples; k++)
@@ -2400,7 +2419,8 @@ namespace SolarSystem.Core
                     }
                 }
             }
-            const int steps = 16;
+            // At coarse detail (a system nobody is looking at) the grid is half as fine and the escape burn is not timed to the turn.
+            int steps = coarse ? 8 : 16, refine = coarse ? 2 : 4;
             double step = maxWait / steps;
             // A coarse look over the whole span, then every flight time around the best date found.
             for (int i = 0; i <= steps; i++) Try(step * i, CoarseTimeFactors);
@@ -2408,13 +2428,13 @@ namespace SolarSystem.Core
             {
                 double centre = bestWait;
                 if (step > 0)
-                    for (int i = -4; i <= 4; i++) Try(centre + step * i / 4.0, TransferTimeFactors);
+                    for (int i = -refine; i <= refine; i++) Try(centre + step * i / refine, TransferTimeFactors);
                 else Try(centre, TransferTimeFactors);
             }
             if (bestWait < 0) return false;
             // Time the escape burn to the ship's place in its parking orbit: within one turn of it, the
             // moment it lies the right way round from where it is going.
-            if (period > 0 && period < 5)
+            if (period > 0 && period < 5 && !coarse)
             {
                 double centre = bestWait, days = bestDays;
                 for (int i = -12; i <= 12; i++) if (i != 0) Try(centre + period * i / 24.0, TransferTimeFactors, days);

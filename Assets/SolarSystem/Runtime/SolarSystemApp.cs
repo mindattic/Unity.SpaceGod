@@ -356,6 +356,9 @@ namespace SolarSystem
                 Destroy(systemRoot.gameObject);
             }
             ActiveSystem = system;
+            // The system the player is in runs at full detail, the rest at coarse (U.SPC-T104): this one is brought
+            // up to the moment from its last coarse step before anything of it is drawn.
+            Galaxy.Promote(system, Clock.Jd);
             systemRoot = new GameObject(system.Name).transform;
             systemRoot.SetParent(worldRoot, false);
             SystemVisible = true;

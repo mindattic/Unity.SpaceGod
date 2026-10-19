@@ -24,6 +24,12 @@ namespace SolarSystem.Core
         readonly int earthIndex = -1;
         readonly double moonMassFraction;
 
+        // HelioAt's last answer for each body, and the lunar theory's (see HelioAt).
+        readonly double[] memoJd;
+        readonly DVec3[] memoHelio;
+        double lunarJd = double.NaN;
+        DVec3 lunarPos;
+
         public Ephemeris(BodyCatalog catalog)
         {
             Catalog = catalog;
@@ -31,6 +37,9 @@ namespace SolarSystem.Core
             helio = new DVec3[catalog.Count];
             velocity = new DVec3[catalog.Count];
             frames = new FrameBasis[catalog.Count];
+            memoJd = new double[catalog.Count];
+            memoHelio = new DVec3[catalog.Count];
+            for (int i = 0; i < memoJd.Length; i++) memoJd[i] = double.NaN;
 
             for (int i = 0; i < catalog.Count; i++)
             {
@@ -97,18 +106,38 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Heliocentric position of one body at an arbitrary date, without touching the cached frame.</summary>
+        /// <remarks>
+        /// Each body keeps the last date it was asked for and the answer (U.SPC-T104): a flight plan samples a
+        /// world, its moons and the frame they share at the same date one after another, and the moons' parents
+        /// and the Earth's lunar theory are then worked out once, not once a moon. The answer is the same either way.
+        /// </remarks>
         public DVec3 HelioAt(int body, double jd)
         {
             var b = Catalog[body];
             if (b.Elements == null) return DVec3.Zero;
-            var rel = body == moonIndex ? LunarTheory.Position(jd) : frames[body].ToEcliptic(Kepler.Position(b.Elements.At(jd))) * b.OrbitScale;
+            if (memoJd[body] == jd) return memoHelio[body];
+            var rel = body == moonIndex ? Lunar(jd) : frames[body].ToEcliptic(Kepler.Position(b.Elements.At(jd))) * b.OrbitScale;
             if (body == earthIndex)
                 rel -= RelativeAt(moonIndex, jd) * moonMassFraction;
-            return HelioAt(b.ParentIndex, jd) + rel;
+            var at = HelioAt(b.ParentIndex, jd) + rel;
+            memoJd[body] = jd;
+            memoHelio[body] = at;
+            return at;
         }
 
         DVec3 RelativeAt(int body, double jd) =>
-            body == moonIndex ? LunarTheory.Position(jd) : frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd))) * Catalog[body].OrbitScale;
+            body == moonIndex ? Lunar(jd) : frames[body].ToEcliptic(Kepler.Position(Catalog[body].Elements.At(jd))) * Catalog[body].OrbitScale;
+
+        /// <summary>The Moon about the Earth by the lunar theory, worked out once for each date asked in turn.</summary>
+        DVec3 Lunar(double jd)
+        {
+            if (lunarJd != jd)
+            {
+                lunarPos = LunarTheory.Position(jd);
+                lunarJd = jd;
+            }
+            return lunarPos;
+        }
 
         /// <summary>
         /// Samples one full orbit starting at the body's current position and running backwards

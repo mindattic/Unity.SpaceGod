@@ -187,12 +187,62 @@ namespace SolarSystem.Core
         /// <summary>The ships crossing between systems and the voyages that send them (see <see cref="InterstellarTraffic"/>).</summary>
         public InterstellarTraffic Traffic { get; private set; }
 
-        /// <summary>Every system to <paramref name="jd"/>, then the traffic between them.</summary>
+        /// <summary>
+        /// The system simulated at full detail (U.SPC-T104): the one the player is in. Every other system keeps
+        /// running at once, but at coarse detail (<see cref="World.Coarse"/>), stepped on a fixed grid of
+        /// <see cref="CoarseStepDays"/> rather than every frame. Null runs every system at full detail.
+        /// </summary>
+        public StarSystem Focus { get; set; }
+
+        /// <summary>How often (days) a system at coarse detail is stepped: every six hours, on the hour.</summary>
+        public double CoarseStepDays = 0.25;
+
+        /// <summary>Whether <paramref name="s"/> runs at full detail: it is the <see cref="Focus"/>, or there is none.</summary>
+        public bool AtFullDetail(StarSystem s) => Focus == null || s == Focus;
+
+        /// <summary>
+        /// Every system to <paramref name="jd"/>, then the traffic between them. The <see cref="Focus"/> is run to
+        /// the moment; the others to the last <see cref="CoarseStepDays"/> mark at or before it, so where they
+        /// stand never depends on the frame rate. A system that has just become the focus is first brought up
+        /// to the moment at coarse detail, from its last mark, and only then promoted: it carries on from exactly
+        /// the state it had reached, with every ship, cargo and battle where it was. One the player has left is
+        /// demoted as it stands and steps on from the next mark.
+        /// </summary>
         public void Update(double jd)
         {
-            foreach (var s in Systems) s.Update(jd);
+            foreach (var s in Systems)
+            {
+                if (AtFullDetail(s))
+                {
+                    s.Update(jd);
+                    s.World.Coarse = false;
+                }
+                else
+                {
+                    s.World.Coarse = true;
+                    double mark = CoarseMark(jd);
+                    if (!(mark <= s.World.Jd)) s.Update(mark);
+                }
+            }
             Traffic?.Update(jd);
         }
+
+        /// <summary>
+        /// Makes <paramref name="system"/> the <see cref="Focus"/> now (the player has arrived there): it is brought
+        /// up to <paramref name="jd"/> from its last coarse step, at the detail it was running at, and goes on at
+        /// full detail from there, with nothing it was doing interrupted. The old focus drops to coarse detail
+        /// at the next <see cref="Update"/>.
+        /// </summary>
+        public void Promote(StarSystem system, double jd)
+        {
+            Focus = system;
+            if (system == null) return;
+            if (!(jd <= system.World.Jd)) system.Update(jd);
+            system.World.Coarse = false;
+        }
+
+        /// <summary>The last coarse step at or before <paramref name="jd"/>.</summary>
+        public double CoarseMark(double jd) => Math.Floor(jd / CoarseStepDays + 1e-9) * CoarseStepDays;
 
         public StarSystem Find(string name)
         {

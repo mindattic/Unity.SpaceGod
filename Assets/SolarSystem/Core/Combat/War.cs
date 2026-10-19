@@ -190,7 +190,7 @@ namespace SolarSystem.Core
                     b.Fresh = false;
                     continue;
                 }
-                b.Advance(seconds);
+                b.Advance(seconds, world.Coarse);
                 // The player who has left the fight (flown out of it, or let go for the cargo) is free of it
                 // now, not when the rest have finished: free to cruise, take the gate or engage elsewhere.
                 foreach (var u in b.Units)

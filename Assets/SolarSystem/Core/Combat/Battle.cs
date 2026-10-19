@@ -427,17 +427,31 @@ namespace SolarSystem.Core
 
         // ---------------------------------------------------------------- stepping
 
-        public void Advance(double seconds)
+        /// <summary>A step (seconds) of a battle fought at coarse detail, in a system nobody is looking at (U.SPC-T104).</summary>
+        public const double CoarseStep = 15;
+
+        /// <summary>The most coarse steps one advance takes: enough for six hours, the coarse worlds' own step.</summary>
+        const int MaxCoarseStepsPerAdvance = 1600;
+
+        /// <summary>
+        /// Fights <paramref name="seconds"/> more of the battle: in steps of a second (<see cref="MaxStep"/>), or
+        /// at <paramref name="coarse"/> detail (a system nobody is looking at, see <see cref="World.Coarse"/>) in
+        /// steps of <see cref="CoarseStep"/>, the same fight resolved fifteen times more cheaply. A battle can go
+        /// from one to the other at any step and carries on as it stands.
+        /// </summary>
+        public void Advance(double seconds, bool coarse = false)
         {
             if (Over || seconds <= 0) return;
             accumulator += seconds;
-            int steps = (int)Math.Ceiling(accumulator / MaxStep - 1e-9);
-            double dt = MaxStep;
-            if (steps > MaxStepsPerAdvance)
+            double unit = coarse ? CoarseStep : MaxStep;
+            int cap = coarse ? MaxCoarseStepsPerAdvance : MaxStepsPerAdvance;
+            int steps = (int)Math.Ceiling(accumulator / unit - 1e-9);
+            double dt = unit;
+            if (steps > cap)
             {
                 // Far behind (a year per second): take coarser steps, up to 20 s; drop the rest.
-                dt = Math.Min(20, accumulator / MaxStepsPerAdvance);
-                steps = MaxStepsPerAdvance;
+                dt = Math.Min(Math.Max(20, unit), accumulator / cap);
+                steps = cap;
             }
             for (int i = 0; i < steps && !Over; i++)
             {

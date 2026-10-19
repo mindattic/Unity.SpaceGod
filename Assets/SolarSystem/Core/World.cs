@@ -106,8 +106,26 @@ namespace SolarSystem.Core
 
         double nextRecountJd;
 
+        /// <summary>The date the world has been run to (NaN before its first <see cref="Update"/>).</summary>
+        public double Jd { get; private set; } = double.NaN;
+
+        /// <summary>
+        /// Run at a coarse level of detail (U.SPC-T104): a system the player is not in, stepped every few hours
+        /// rather than every frame (see <see cref="Galaxy.Focus"/>). Trade, industry and the markets are
+        /// integrated over the step as they always are; ships keep their real schedules but fly without
+        /// sidestepping one another and plan their windows on a coarser grid (<see cref="Fleet.Coarse"/>); and
+        /// battles are fought out in steps of <see cref="Battle.CoarseStep"/> seconds rather than one. Nothing is
+        /// summarised away, so a world promoted back to full detail carries on from exactly where it stands.
+        /// </summary>
+        public bool Coarse
+        {
+            get => Fleet.Coarse;
+            set => Fleet.Coarse = value;
+        }
+
         public void Update(double jd)
         {
+            Jd = jd;
             Fleet.Update(jd);
             Economy.AdvanceTo(jd);
             Companies.Update(jd);
