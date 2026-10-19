@@ -462,6 +462,14 @@ namespace SolarSystem.Core
             fleet.ReachedRing = war.OnArrived;
             // Merchants heading into a fight that has just broken out turn aside for somewhere safe.
             war.BattleStarted += b => DivertAround(b, b.StartJd);
+            // A free ship does not wander to a known haven, or an armed port, of someone hostile to it: their platforms
+            // would fire on it every time it came back (U.SPC-T291).
+            fleet.Shuns = (ship, body) =>
+            {
+                foreach (var s in economy.At(body))
+                    if ((s.Kind == SettlementKind.Haven || s.Platforms.Count > 0) && Diplomacy.Hostile(ship.Faction, s.Owner)) return true;
+                return false;
+            };
             fleet.ChooseNext = (ship, here, when) =>
             {
                 // In port, a ship on propellant tops up its tanks before it plans the next run.

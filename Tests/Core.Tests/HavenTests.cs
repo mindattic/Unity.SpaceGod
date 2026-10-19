@@ -283,5 +283,35 @@ namespace SolarSystem.Core.Tests
             Assert.That(named.Name, Is.EqualTo("Battle of Psyche"), "once found, the first battle there is named for it");
             Assert.That(w.Events.Last(e => e.Text.StartsWith(named.Name)).Body, Is.EqualTo(h.Body));
         }
+
+        /// <summary>
+        /// U.SPC-T291: a free ship picked a known, hostile haven as somewhere to wander to like any other world, and
+        /// its platforms fired on it each time it came back (15-25 short empty battles a year at a visible haven).
+        /// Blackwater sits on Deimos, so a free ship off Phobos, its nearest neighbour, would pick it most often.
+        /// </summary>
+        [Test]
+        public void AFreeShipNeverWandersToAKnownHostileHaven()
+        {
+            var w = CreateWorld();
+            var h = Haven(w, "Blackwater");
+            Assume.That(h.Hidden, Is.False);
+            Assume.That(h.Platforms.Count, Is.GreaterThan(0));
+            Assume.That(w.Diplomacy.Hostile(w.Independents, h.Owner), Is.True);
+            var ship = w.Fleet.AddShip("Drifter", ShipClass.Courier, w.Independents, ShipRole.Free);
+            ship.Ports = w.FreeShipPorts();
+            Assert.That(ship.Ports, Does.Contain(h.Body), "a visible haven's rock is still somewhere a free ship can be");
+            int phobos = w.Catalog["Phobos"].Index;
+
+            int picks = 0;
+            for (int k = 0; k < 300; k++)
+            {
+                w.Fleet.Station(ship, phobos, StartJd);
+                ship.Propellant = ship.PropellantCapacity;
+                w.Fleet.ScheduleNext(ship, StartJd);
+                if (ship.DestinationBody != phobos) picks++;
+                Assert.That(ship.DestinationBody, Is.Not.EqualTo(h.Body), $"pick {k} sends it to {h.Name}");
+            }
+            Assert.That(picks, Is.GreaterThan(30), "it still goes elsewhere");
+        }
     }
 }

@@ -56,6 +56,12 @@ namespace SolarSystem.Core
         /// <summary>Picks a ship's next destination body (never the one it is at), or returns -1 for the built-in choice.</summary>
         public Func<Ship, int, double, int> ChooseNext;
 
+        /// <summary>
+        /// Worlds a free ship will not pick on a whim: a known haven or an armed port held by someone hostile to it,
+        /// whose platforms would open on it each time it came (U.SPC-T291). Null for none.
+        /// </summary>
+        public Func<Ship, int, bool> Shuns;
+
         /// <summary>Overrides how long a ship lingers in port, given the default; null keeps the default.</summary>
         public Func<Ship, double, double> Dwell;
 
@@ -1524,7 +1530,7 @@ namespace SolarSystem.Core
                     var weights = new double[ship.Ports.Length];
                     for (int i = 0; i < ship.Ports.Length; i++)
                     {
-                        if (ship.Ports[i] == here) continue;
+                        if (ship.Ports[i] == here || (Shuns != null && Shuns(ship, ship.Ports[i]))) continue;
                         double au = (ephemeris.HelioAt(ship.Ports[i], jd) - herePos).Length / Astro.AuKm;
                         weights[i] = 1.0 / ((0.05 + au) * (0.05 + au));
                         total += weights[i];
@@ -1535,7 +1541,8 @@ namespace SolarSystem.Core
                         pick -= weights[i];
                         if (weights[i] > 0 && pick <= 0) return ship.Ports[i];
                     }
-                    return ship.Ports[0] == here ? ship.Ports[Math.Min(1, ship.Ports.Length - 1)] : ship.Ports[0];
+                    // Nowhere it would go but places it shuns: it stays put.
+                    return total > 0 ? ship.Ports[Array.FindLastIndex(weights, x => x > 0)] : here;
                 }
 
                 default:
