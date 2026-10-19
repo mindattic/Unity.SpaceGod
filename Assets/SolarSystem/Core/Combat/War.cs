@@ -1979,7 +1979,9 @@ namespace SolarSystem.Core
                 if (s.Derelict && !s.Destroyed && jd - s.DerelictSinceJd > 25) s.Destroyed = true;
             Wrecks.AdvanceTo(jd);
             Crews.Daily(Diplomacy, jd);
-            Crews.Recruit(Fleet.Factions, Economy.Settlements, 1);
+            // A polity recruits once a day from every settlement it holds in any system, by the world that keeps its books.
+            var polities = world.Polities;
+            Crews.Recruit(polities.KeptBy(world, Fleet.Factions), polities.Worlds.Count > 1 ? polities.Settlements : Economy.Settlements, 1);
             if (Fleet.Lanes != null)
                 foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.SetDanger(lane, Fleet.Lanes.Danger[lane] * 0.85);
             MergeGroups();

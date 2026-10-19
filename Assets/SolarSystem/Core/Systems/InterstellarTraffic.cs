@@ -128,6 +128,14 @@ namespace SolarSystem.Core
         /// <summary>Ships inside a gate right now.</summary>
         public IReadOnlyList<Passage> InGates => inGates;
 
+        /// <summary>Every ship inside a gate right now (in no system's fleet until it comes out at the far end).</summary>
+        public IEnumerable<Ship> InTransit()
+        {
+            foreach (var p in inGates)
+                foreach (var s in p.Ships)
+                    yield return s;
+        }
+
         /// <summary>What each system knows of the others, and how old it is (U.SPC-T100).</summary>
         public Newswire News { get; }
 

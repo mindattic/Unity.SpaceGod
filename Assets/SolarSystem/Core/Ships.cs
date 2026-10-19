@@ -113,6 +113,12 @@ namespace SolarSystem.Core
         /// <summary>A navy that fights wars and builds warships (not the independents).</summary>
         public bool IsMilitary { get; set; }
 
+        /// <summary>What sort of power it is: a state, a company, free traders or a pirate clan (see <see cref="Polities"/>).</summary>
+        public PolityKind Kind { get; set; } = PolityKind.State;
+
+        /// <summary>The seat of its government, as founded (see <see cref="Polities.CapitalOf"/>, which follows it when it is lost); null for none.</summary>
+        public Settlement Capital { get; set; }
+
         /// <summary>How good its marines are, man for man (1 = average). Upgrades raise it.</summary>
         public double MarineQuality { get; set; } = 1;
 

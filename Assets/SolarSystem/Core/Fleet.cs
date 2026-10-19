@@ -1775,6 +1775,13 @@ namespace SolarSystem.Core
             return f;
         }
 
+        /// <summary>Gives a faction that already exists (an interstellar polity, see <see cref="Polities"/>) a presence in this system.</summary>
+        public Faction AddFaction(Faction f)
+        {
+            if (!factions.Contains(f)) factions.Add(f);
+            return f;
+        }
+
         public Ship AddShip(string name, ShipClass c, Faction faction, ShipRole role)
         {
             var ship = new Ship

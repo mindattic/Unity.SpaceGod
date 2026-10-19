@@ -75,7 +75,7 @@ namespace SolarSystem.Core
         /// <summary>
         /// Whether this end lets a ship of <paramref name="faction"/> through at <paramref name="jd"/>:
         /// an unowned gate lets anyone through; an owned one never opens for its owner's declared
-        /// enemies (at war in the owner's own system), and under a blockade opens for its owner alone.
+        /// enemies (at war in the one table every system shares), and under a blockade opens for its owner alone.
         /// Raiders, who are nobody's declared enemy, slip through an open gate like anyone else.
         /// </summary>
         public bool Admits(Faction faction, double jd)

@@ -33,6 +33,9 @@ namespace SolarSystem.Views
             /// <summary>What the HUD writes beside it: the system's name for a simulated system's first star, null for none.</summary>
             public string Label;
 
+            /// <summary>The simulated system whose name it carries (its first star), for who holds it; null otherwise.</summary>
+            public StarSystem Of;
+
             public DVec3 PositionLy;
             public Color Color;
             public float Size;
@@ -66,7 +69,8 @@ namespace SolarSystem.Views
                     // (Proxima, Epsilon Indi B) its own; a close partner (Alpha Centauri B, Sirius B) none, as it would overlap.
                     bool far = system.Ephemeris.Helio(b.Index).Length > 500 * Astro.AuKm;
                     string label = !labelled ? (b.Name == "Sun" ? "Sol" : system.Name) : far ? b.Name : null;
-                    Add(b.Name, system.PositionLy + offsetLy, new Color(c.R, c.G, c.B), size, system: !labelled || far, label);
+                    var star = Add(b.Name, system.PositionLy + offsetLy, new Color(c.R, c.G, c.B), size, system: !labelled || far, label);
+                    if (!labelled) star.Of = system;
                     labelled = true;
                 }
             }
@@ -81,7 +85,7 @@ namespace SolarSystem.Views
             Root.SetActive(false);
         }
 
-        void Add(string name, DVec3 ly, Color color, float size, bool system, string label)
+        Star Add(string name, DVec3 ly, Color color, float size, bool system, string label)
         {
             var go = new GameObject(name);
             go.transform.SetParent(Root.transform, false);
@@ -93,7 +97,9 @@ namespace SolarSystem.Views
             m.SetFloat("_Falloff", 2.4f);
             mr.sharedMaterial = m;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            stars.Add(new Star { Name = name, Label = label, PositionLy = ly, Color = color, Size = size, System = system, T = go.transform, Material = m });
+            var star = new Star { Name = name, Label = label, PositionLy = ly, Color = color, Size = size, System = system, T = go.transform, Material = m };
+            stars.Add(star);
+            return star;
         }
 
         public bool Visible

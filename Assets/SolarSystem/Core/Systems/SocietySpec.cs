@@ -150,27 +150,22 @@ namespace SolarSystem.Core
         /// and factories are then sized so that the system as a whole makes a little more of every good than it
         /// uses (<see cref="BalanceSupply"/>), leaving the traders a living carrying the rest about.
         /// </summary>
-        public static World CreateSettled(Ephemeris ephemeris, double jd, int seed, SocietySpec society)
+        public static World CreateSettled(Ephemeris ephemeris, double jd, int seed, SocietySpec society, Polities polities = null)
         {
             double startJd = jd - 45;
             double scale = society.Scale;
-            var w = new World(ephemeris, startJd, seed);
+            var w = new World(ephemeris, startJd, seed, polities);
             var fleet = w.Fleet;
 
-            Faction Make(FactionSpec f)
-            {
-                var x = fleet.AddFaction(f.Name, f.Prefix, f.Color);
-                x.MarineQuality = f.Marines;
-                x.Treasury = f.Treasury * scale;
-                return x;
-            }
+            // Each power is an interstellar polity (U.SPC-T91): a frontier colony's own state, or one that already holds
+            // other systems (the Sol Federation at Barnard's Star), which this system's holdings then join.
+            Faction Make(FactionSpec f, PolityKind kind) => w.Polity(f.Name, f.Prefix, f.Color, kind, f.Treasury * scale, f.Marines);
 
-            var authority = w.Sol = Make(society.Authority);
+            var authority = w.Sol = Make(society.Authority, PolityKind.State);
             authority.IsMilitary = true;
-            var company = w.Belt = Make(society.Company);
-            w.Independents = Make(society.Traders);
-            w.Pirates = society.Raiders != null ? Make(society.Raiders) : fleet.AddFaction("Unknown", "", new Rgb(0.8f, 0.3f, 0.3f));
-            w.Pirates.IsPirate = true;
+            var company = w.Belt = Make(society.Company, PolityKind.Company);
+            w.Independents = Make(society.Traders, PolityKind.FreeTraders);
+            w.Pirates = society.Raiders != null ? Make(society.Raiders, PolityKind.PirateClan) : w.UnknownRaiders();
             // Rivals, not enemies: the hook for a war later.
             w.RivalA = authority;
             w.RivalB = company;
@@ -265,7 +260,8 @@ namespace SolarSystem.Core
             w.FoundCompanies(startJd, table.ToArray());
             w.AddFreeShips(startJd, society.Yachts, society.Prospectors);
             if (haven != null) war.RaisePirateGroup(startJd, haven.Body);
-            Crews.MusterReserves(fleet.Factions, e.Settlements);
+            w.SeatCapitals();
+            w.MusterReserves();
 
             w.Update(jd);
             return w;

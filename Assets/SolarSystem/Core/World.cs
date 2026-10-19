@@ -15,7 +15,11 @@ namespace SolarSystem.Core
         public BodyCatalog Catalog => Ephemeris.Catalog;
         public Fleet Fleet { get; }
         public Economy Economy { get; }
-        public Diplomacy Diplomacy { get; } = new Diplomacy();
+        /// <summary>The interstellar polities this world's factions belong to (U.SPC-T91): shared by every system of a galaxy.</summary>
+        public Polities Polities { get; }
+
+        /// <summary>Who is at war with whom: the one table every system shares (see <see cref="Polities.Diplomacy"/>).</summary>
+        public Diplomacy Diplomacy => Polities.Diplomacy;
         public War War { get; private set; }
 
         /// <summary>Stations, yards, factories and spacecraft in orbit, and the docking rings over populous worlds.</summary>
@@ -98,9 +102,11 @@ namespace SolarSystem.Core
 
         int builtCount;
 
-        World(Ephemeris ephemeris, double startJd, int seed)
+        World(Ephemeris ephemeris, double startJd, int seed, Polities polities)
         {
             Ephemeris = ephemeris;
+            Polities = polities ?? new Polities();
+            Polities.Register(this);
             Fleet = new Fleet(ephemeris, seed);
             Economy = new Economy(Diplomacy, startJd, seed + 1);
             Adventures = new EventDirector(seed + 5);
@@ -263,32 +269,62 @@ namespace SolarSystem.Core
             return best?.Owner;
         }
 
+        // ---------------------------------------------------------------- polities
+
+        /// <summary>
+        /// Founds the polity called <paramref name="name"/> here, or, if another system already has, gives it a presence
+        /// here (U.SPC-T91): it is the same faction, so this system's holdings add their revenues to its one treasury
+        /// (<paramref name="treasury"/> is added either way) and its ships join its one navy. Its marines, colours and
+        /// kind are those it was founded with.
+        /// </summary>
+        public Faction Polity(string name, string prefix, Rgb color, PolityKind kind, double treasury, double marines = 1)
+        {
+            var f = Polities.Find(name);
+            if (f == null)
+            {
+                f = new Faction(name, prefix, color) { Kind = kind, MarineQuality = marines };
+                f.IsPirate = kind == PolityKind.PirateClan;
+                Polities.Found(f, this);
+            }
+            f.Treasury += treasury;
+            return Fleet.AddFaction(f);
+        }
+
+        /// <summary>The raiders of a system with no clan of its own: one unknown, the same in every such system.</summary>
+        Faction UnknownRaiders() => Polity("Unknown", "", new Rgb(0.8f, 0.3f, 0.3f), PolityKind.PirateClan, 0);
+
+        /// <summary>Gives each polity present here and still without a seat its capital: its most populous settlement.</summary>
+        void SeatCapitals()
+        {
+            foreach (var f in Fleet.Factions)
+                if (f.Capital == null) Polities.CapitalOf(f);
+        }
+
+        /// <summary>
+        /// Every hull is crewed; from here on new ones draw on a real reserve of trained spacers, mustered from every
+        /// settlement a polity holds in any system (a polity joined here is mustered again, with this system's people).
+        /// </summary>
+        void MusterReserves() => Crews.MusterReserves(Fleet.Factions, Polities.Settlements);
+
+        /// <summary>Who holds this system (see <see cref="Polities.HolderOf"/>).</summary>
+        public Faction Holder => Polities.HolderOf(this);
+
         // ---------------------------------------------------------------- the default system
 
-        public static World CreateDefault(Ephemeris ephemeris, double jd, int seed = 1977)
+        public static World CreateDefault(Ephemeris ephemeris, double jd, int seed = 1977, Polities polities = null)
         {
             double startJd = jd - 45;
-            var w = new World(ephemeris, startJd, seed);
+            var w = new World(ephemeris, startJd, seed, polities);
             var fleet = w.Fleet;
             var economy = w.Economy;
 
-            w.Sol = fleet.AddFaction("Sol Federation", "SFS", new Rgb(0.35f, 0.65f, 1f));
-            w.Belt = fleet.AddFaction("Belt Consortium", "BCS", new Rgb(1f, 0.6f, 0.25f));
-            w.Reach = fleet.AddFaction("Outer Reach Compact", "ORS", new Rgb(0.72f, 0.5f, 1f));
-            w.Independents = fleet.AddFaction("Independent", "MV", new Rgb(0.85f, 0.85f, 0.78f));
-            w.Pirates = fleet.AddFaction("Black Banner", "", new Rgb(0.95f, 0.22f, 0.2f));
+            // The core: the Federation governs Earth, the Moon and Mars, and from Earth the frontier it holds beyond the gates.
+            w.Sol = w.Polity(SolFederation, "SFS", SolFederationColor, PolityKind.State, 4e9, 1.25);
+            w.Belt = w.Polity("Belt Consortium", "BCS", new Rgb(1f, 0.6f, 0.25f), PolityKind.State, 2.5e9, 1.0);
+            w.Reach = w.Polity("Outer Reach Compact", "ORS", new Rgb(0.72f, 0.5f, 1f), PolityKind.State, 3.5e9, 1.15);
+            w.Independents = w.Polity("Independent", "MV", new Rgb(0.85f, 0.85f, 0.78f), PolityKind.FreeTraders, 6e8, 0.6);
+            w.Pirates = w.Polity("Black Banner", "", new Rgb(0.95f, 0.22f, 0.2f), PolityKind.PirateClan, 2e8, 1.1);
             w.Sol.IsMilitary = w.Belt.IsMilitary = w.Reach.IsMilitary = true;
-            w.Pirates.IsPirate = true;
-            w.Sol.MarineQuality = 1.25;
-            w.Reach.MarineQuality = 1.15;
-            w.Belt.MarineQuality = 1.0;
-            w.Pirates.MarineQuality = 1.1;
-            w.Independents.MarineQuality = 0.6;
-            w.Sol.Treasury = 4e9;
-            w.Belt.Treasury = 2.5e9;
-            w.Reach.Treasury = 3.5e9;
-            w.Independents.Treasury = 6e8;
-            w.Pirates.Treasury = 2e8;
             w.Diplomacy.Set(w.Sol, w.Reach, Relation.War);
             w.RivalA = w.Sol;
             w.RivalB = w.Reach;
@@ -319,12 +355,17 @@ namespace SolarSystem.Core
             // The Banner's second band sails from its biggest belt hideout; recruiting fills the other
             // havens first (it raises each new band at the standing haven with the fewest).
             war.RaisePirateGroup(startJd, w.Catalog[BeltHavens[0].body].Index);
-            // Every hull is crewed; from here on new ones draw on a real reserve of trained spacers.
-            Crews.MusterReserves(fleet.Factions, economy.Settlements);
+            w.SeatCapitals();
+            w.MusterReserves();
 
             w.Update(jd);
             return w;
         }
+
+        /// <summary>The polity that holds the core: Sol, and the frontier at Barnard's Star.</summary>
+        public const string SolFederation = "Sol Federation";
+
+        public static readonly Rgb SolFederationColor = new Rgb(0.35f, 0.65f, 1f);
 
         /// <summary>Connects the markets, the wars and the fleet's schedule (the same in every system).</summary>
         void Wire(double startJd, int seed, Hyperlanes lanes)
@@ -458,26 +499,18 @@ namespace SolarSystem.Core
         /// Kentaurus Free Traders carry most of the freight; and the Long Dark raid the long lanes
         /// from a derelict station out by Proxima. All fiction, on real (and candidate) worlds.
         /// </summary>
-        public static World CreateAlphaCentauri(Ephemeris ephemeris, double jd, int seed = 4243)
+        public static World CreateAlphaCentauri(Ephemeris ephemeris, double jd, int seed = 4243, Polities polities = null)
         {
             double startJd = jd - 45;
-            var w = new World(ephemeris, startJd, seed);
+            var w = new World(ephemeris, startJd, seed, polities);
             var fleet = w.Fleet;
 
-            var accord = w.Sol = fleet.AddFaction("Centauri Accord", "CAS", new Rgb(0.3f, 0.88f, 0.75f));
-            var combine = w.Belt = fleet.AddFaction("Toliman Combine", "TCV", new Rgb(1f, 0.78f, 0.3f));
-            w.Independents = fleet.AddFaction("Kentaurus Free Traders", "KFT", new Rgb(0.78f, 0.84f, 0.92f));
-            w.Pirates = fleet.AddFaction("Long Dark", "", new Rgb(0.85f, 0.25f, 0.6f));
+            // The Centauri government, its own state beyond the Federation.
+            var accord = w.Sol = w.Polity("Centauri Accord", "CAS", new Rgb(0.3f, 0.88f, 0.75f), PolityKind.State, 9e8, 1.15);
+            var combine = w.Belt = w.Polity("Toliman Combine", "TCV", new Rgb(1f, 0.78f, 0.3f), PolityKind.Company, 7e8, 0.8);
+            w.Independents = w.Polity("Kentaurus Free Traders", "KFT", new Rgb(0.78f, 0.84f, 0.92f), PolityKind.FreeTraders, 1.2e8, 0.6);
+            w.Pirates = w.Polity("Long Dark", "", new Rgb(0.85f, 0.25f, 0.6f), PolityKind.PirateClan, 8e7, 1.2);
             accord.IsMilitary = true;
-            w.Pirates.IsPirate = true;
-            accord.MarineQuality = 1.15;
-            combine.MarineQuality = 0.8;
-            w.Independents.MarineQuality = 0.6;
-            w.Pirates.MarineQuality = 1.2;
-            accord.Treasury = 9e8;
-            combine.Treasury = 7e8;
-            w.Independents.Treasury = 1.2e8;
-            w.Pirates.Treasury = 8e7;
             // Rivals, not enemies: the hook for a war later.
             w.RivalA = accord;
             w.RivalB = combine;
@@ -524,7 +557,8 @@ namespace SolarSystem.Core
             w.AddFreeShips(startJd, new[] { "First Light", "Long Look", "Terminator Dawn" }, new[] { "Red Dust" });
             int haven = w.Catalog["Blackhollow"].Index;
             war.RaisePirateGroup(startJd, haven);
-            Crews.MusterReserves(fleet.Factions, w.Economy.Settlements);
+            w.SeatCapitals();
+            w.MusterReserves();
 
             w.Update(jd);
             return w;
@@ -535,14 +569,13 @@ namespace SolarSystem.Core
         /// settlements, lanes or ships. Two factions exist only so the game layer has someone to
         /// hand a ship to (a survey service and the raiders it will one day meet); both are fiction.
         /// </summary>
-        public static World CreateUnsettled(Ephemeris ephemeris, double jd, int seed = 1)
+        public static World CreateUnsettled(Ephemeris ephemeris, double jd, int seed = 1, Polities polities = null)
         {
             double startJd = jd - 45;
-            var w = new World(ephemeris, startJd, seed);
-            var fleet = w.Fleet;
-            w.Sol = w.Independents = fleet.AddFaction("Survey Service", "SSV", new Rgb(0.7f, 0.85f, 0.95f));
-            w.Pirates = fleet.AddFaction("Unknown", "", new Rgb(0.8f, 0.3f, 0.3f));
-            w.Pirates.IsPirate = true;
+            var w = new World(ephemeris, startJd, seed, polities);
+            // One survey service and one unknown for every empty system: they are the same polities everywhere.
+            w.Sol = w.Independents = w.Polity("Survey Service", "SSV", new Rgb(0.7f, 0.85f, 0.95f), PolityKind.FreeTraders, 0);
+            w.Pirates = w.UnknownRaiders();
             w.MerchantTarget = w.MerchantCap = 0;
             w.NavyCap = w.NavyCapAtWar = 0;
             w.PirateGroupCap = 0;

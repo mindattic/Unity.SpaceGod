@@ -204,6 +204,9 @@ namespace SolarSystem.UI
                     if (s.Label == null) continue;
                     bool system = s.System;
                     string name = s.Label;
+                    // A simulated system's first star names who holds it (U.SPC-T91).
+                    var holder = s.Of?.Holder;
+                    if (holder != null) name += "  ·  " + holder.Name;
                     double ly = s.PositionLy.Length;
                     DrawLabel(system ? name.ToUpperInvariant() : name + (ly > 0.01 ? "  " + ly.ToString("0.0", CultureInfo.InvariantCulture) + " ly" : ""),
                         p + new Vector2(10, -8), system ? Accent : new Color(c.r, c.g, c.b, 0.75f), !system);
@@ -1102,6 +1105,16 @@ namespace SolarSystem.UI
                 if (GUI.Button(new Rect(r.x + 10, sy, w - 20, rowHeight), label, here ? buttonActive : button) && !here) app.TravelTo(system);
                 sy += rowHeight + (app.Galaxy.Systems.Count > 4 ? 2 : 3);
                 if (!here) continue;
+                // Who holds it (U.SPC-T91): the polity owning its biggest settlement, which may hold other systems too.
+                var holder = system.Holder;
+                if (holder != null)
+                {
+                    var old = GUI.contentColor;
+                    GUI.contentColor = new Color(holder.Color.R, holder.Color.G, holder.Color.B);
+                    GUI.Label(new Rect(r.x + 12, sy, w - 24, 15), "   Held by " + holder.Name, small);
+                    GUI.contentColor = old;
+                    sy += 15;
+                }
                 // This system's own gates: where each leads, how long the crossing, and whether it is shut.
                 foreach (var gate in system.Gates)
                 {
@@ -1142,6 +1155,7 @@ namespace SolarSystem.UI
                 rows.Add(("", Target.None, 0, Color.clear));
                 var fc = new Color(faction.Color.R, faction.Color.G, faction.Color.B);
                 rows.Add((faction.Name.ToUpperInvariant() + "   " + Credits(faction.Treasury), Target.None, 0, fc));
+                rows.Add((PolityText(faction), Target.None, 1, Color.Lerp(fc, Color.gray, 0.35f)));
                 foreach (var ship in app.Fleet.Ships)
                 {
                     if (ship.Faction != faction || ship.IsEscort || ship.Destroyed) continue;
@@ -1623,10 +1637,41 @@ namespace SolarSystem.UI
                    ",  " + Credits(co.IncomePerDay) + "/day" + order;
         }
 
+        /// <summary>
+        /// A polity across the whole network (U.SPC-T91): what it is, its capital (and the system, when elsewhere), the
+        /// systems it holds and its warships wherever they are; its treasury is the one on the line above.
+        /// </summary>
+        string PolityText(Faction f)
+        {
+            var polities = app.World.Polities;
+            string kind = f.Kind switch
+            {
+                PolityKind.Company => "company",
+                PolityKind.FreeTraders => "free traders",
+                PolityKind.PirateClan => "pirate clan",
+                _ => "state",
+            };
+            var capital = polities.CapitalOf(f);
+            string seat = "";
+            if (capital != null)
+            {
+                var at = polities.WorldOf(capital);
+                string system = null;
+                foreach (var x in app.Galaxy.Systems)
+                    if (x.World == at && at != app.World) system = x.Name;
+                seat = (f.IsPirate ? ",  den " : ",  capital ") + capital.Name + (system != null ? " (" + system + ")" : "");
+            }
+            int held = f.IsPirate ? 0 : polities.SystemsHeldBy(f).Count;
+            int navy = f.IsMilitary || f.IsPirate ? polities.Navy(f).Count : 0;
+            return kind + seat + (held > 0 ? ",  holds " + held + (held == 1 ? " system" : " systems") : "") +
+                   (navy > 0 ? ",  " + navy + (f.IsPirate ? " raiders" : " warships") : "");
+        }
+
         void AddSettlementLines(List<(string key, string value)> lines, Settlement s)
         {
             lines.Add(("", ""));
-            lines.Add((s.Name, s.Owner.Name + " " + KindName(s.Kind) + ", pop " + People(s.Population)));
+            bool seat = app.World.Polities.CapitalOf(s.Owner) == s;
+            lines.Add((s.Name, s.Owner.Name + " " + KindName(s.Kind) + (seat ? " (capital)" : "") + ", pop " + People(s.Population)));
             var houses = app.World.Companies;
             if (houses != null)
                 foreach (var co in houses.All)

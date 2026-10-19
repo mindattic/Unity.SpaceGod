@@ -308,8 +308,11 @@ namespace SolarSystem.Core.Tests
             var g = Create();
             var sol = g.Find("Sol System");
             var ac = g.Find("Alpha Centauri");
-            var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Courier && !s.Destroyed && s.Faction == sol.World.Independents);
-            double jd = RunUntil(g, StartJd, 20, () => ship.Phase == ShipPhase.Parked && ship.Battle == null);
+            // The first independent courier free to go: in port, out of any fight, its tanks not run dry.
+            Ship ship = null;
+            double jd = RunUntil(g, StartJd, 20, () => (ship = sol.World.Fleet.Ships.FirstOrDefault(s => s.Role == ShipRole.Courier && !s.Destroyed &&
+                s.Faction == sol.World.Independents && s.Phase == ShipPhase.Parked && s.Battle == null && s.Voyage == null && !s.OutOfPropellant)) != null);
+            Assert.That(ship, Is.Not.Null, "no courier free to send");
             var v = g.Traffic.Send(ship, sol, ac, VoyagePurpose.Courier, jd);
             Assert.That(v, Is.Not.Null);
             var direct = sol.GateTo(ac);

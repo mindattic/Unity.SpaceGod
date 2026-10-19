@@ -72,13 +72,15 @@ namespace SolarSystem.Core
         {
             var s = new SocietySpec
             {
-                Authority = new FactionSpec("Barnard Compact", "BNC", C(0.95f, 0.55f, 0.4f), 6e8, 1.1),
+                // The Federation's own frontier (U.SPC-T91): the one star past Centauri it governs from Earth, with the same
+                // treasury, navy and capital as at home; the farther systems are states of their own.
+                Authority = new FactionSpec(World.SolFederation, "SFS", World.SolFederationColor, 6e8, 1.25),
                 Company = new FactionSpec("Arrowhead Metals", "AHM", C(0.85f, 0.8f, 0.45f), 5e8, 0.8),
                 Traders = new FactionSpec("Runaway Star Traders", "RST", C(0.8f, 0.82f, 0.9f), 1e8, 0.6),
                 Raiders = new FactionSpec("The Drift", "", C(0.75f, 0.3f, 0.55f), 6e7, 1.15),
-                Summary = "The first star past Centauri the gates reached: a busy frontier of hot mining worlds and a hub station in the habitable zone.",
+                Summary = "The first star past Centauri the gates reached, and the Sol Federation's frontier province: a busy frontier of hot mining worlds and a hub station in the habitable zone.",
             };
-            s.Station("Arrow Station", "Barnard's Star", 0.075, 30, "The Barnard Compact's hub in the habitable zone, outside all four planets' orbits.");
+            s.Station("Arrow Station", "Barnard's Star", 0.075, 30, "The Federation's hub in the habitable zone, outside all four planets' orbits.");
             s.Station("Longwater", "Barnard's Star", 0.6, 200, "An ice harvester working a comet swarm (no belt is known here).");
             s.Station("Slipstream", "Barnard's Star", 0.3, 120, "A raider hold in a dead freighter's hull, parked off the lanes.");
             s.Add("Arrow Station", "Arrow Station", Station, Gov, 260e3, "The only temperate orbit in the system; a station, since every planet is too hot.",

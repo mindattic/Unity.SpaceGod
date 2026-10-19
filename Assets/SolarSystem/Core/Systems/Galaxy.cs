@@ -96,40 +96,45 @@ namespace SolarSystem.Core
             World.Update(jd);
         }
 
-        public static StarSystem CreateSol(double jd)
+        /// <summary>Who holds the system: the owner of its most populous settlement (see <see cref="Polities.HolderOf"/>); null if unsettled.</summary>
+        public Faction Holder => World.Holder;
+
+        public static StarSystem CreateSol(double jd, Polities polities = null)
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
             eph.Update(jd);
-            return new StarSystem("Sol System", DVec3.Zero, eph, World.CreateDefault(eph, jd), null, new List<DebrisDisc>(), 2.2 * Astro.AuKm);
+            return new StarSystem("Sol System", DVec3.Zero, eph, World.CreateDefault(eph, jd, polities: polities), null, new List<DebrisDisc>(), 2.2 * Astro.AuKm);
         }
 
-        public static StarSystem CreateAlphaCentauri(double jd) => Create(AlphaCentauri.Spec(), jd, World.CreateAlphaCentauri);
+        public static StarSystem CreateAlphaCentauri(double jd, Polities polities = null) =>
+            Create(AlphaCentauri.Spec(), jd, (eph, at, seed) => World.CreateAlphaCentauri(eph, at, seed, polities), polities);
 
         /// <summary>
         /// A nearby system with the society planned for it (<see cref="NearbySocieties"/>, U.SPC-T90): its stations
         /// added to the catalogue entry, its settlements, lanes and traffic built by <see cref="World.CreateSettled"/>.
         /// A system with no society planned is left unsettled.
         /// </summary>
-        public static StarSystem CreateSettled(SystemSpec spec, double jd)
+        public static StarSystem CreateSettled(SystemSpec spec, double jd, Polities polities = null)
         {
             var society = NearbySocieties.For(spec);
-            if (society == null) return Create(spec, jd);
+            if (society == null) return Create(spec, jd, polities: polities);
             society.AddStations(spec);
-            return Create(spec, jd, (eph, at, seed) => World.CreateSettled(eph, at, seed, society));
+            return Create(spec, jd, (eph, at, seed) => World.CreateSettled(eph, at, seed, society, polities), polities);
         }
 
         /// <summary>
         /// Builds a system from its catalogue entry. <paramref name="world"/> makes its game layer
-        /// (settlements, fleets); left out, the system is unsettled (see <see cref="World.CreateUnsettled"/>).
+        /// (settlements, fleets); left out, the system is unsettled (see <see cref="World.CreateUnsettled"/>), its
+        /// survey service one of <paramref name="polities"/>.
         /// </summary>
-        public static StarSystem Create(SystemSpec spec, double jd, Func<Ephemeris, double, int, World> world = null)
+        public static StarSystem Create(SystemSpec spec, double jd, Func<Ephemeris, double, int, World> world = null, Polities polities = null)
         {
             var built = StarSystemBuilder.Build(spec);
             var catalog = new BodyCatalog(built.Bodies);
             foreach (var d in built.Discs) d.HostIndex = catalog[d.HostName].Index;
             var eph = new Ephemeris(catalog);
             eph.Update(jd);
-            var w = world != null ? world(eph, jd, SeedOf(spec.Name)) : World.CreateUnsettled(eph, jd, SeedOf(spec.Name));
+            var w = world != null ? world(eph, jd, SeedOf(spec.Name)) : World.CreateUnsettled(eph, jd, SeedOf(spec.Name), polities);
             double span = double.IsNaN(spec.OverviewSpanAu) ? OverviewSpan(catalog) : spec.OverviewSpanAu * Astro.AuKm;
             return new StarSystem(spec.Name, spec.PositionLy, eph, w, spec, built.Discs, span);
         }
@@ -199,6 +204,12 @@ namespace SolarSystem.Core
 
         /// <summary>The ships crossing between systems and the voyages that send them (see <see cref="InterstellarTraffic"/>).</summary>
         public InterstellarTraffic Traffic { get; private set; }
+
+        /// <summary>
+        /// The interstellar polities (U.SPC-T91): every system's factions, one object each however many systems they
+        /// hold, with one diplomacy table between them all.
+        /// </summary>
+        public Polities Polities { get; } = new Polities();
 
         /// <summary>
         /// The system simulated at full detail (U.SPC-T104): the one the player is in. Every other system keeps
@@ -282,11 +293,12 @@ namespace SolarSystem.Core
         public static Galaxy CreateDefault(double jd)
         {
             var g = new Galaxy();
-            var sol = StarSystem.CreateSol(jd);
-            var alphaCentauri = StarSystem.CreateAlphaCentauri(jd);
+            // Sol first: the Federation is founded there, with its capital on Earth, before its frontier joins it.
+            var sol = StarSystem.CreateSol(jd, g.Polities);
+            var alphaCentauri = StarSystem.CreateAlphaCentauri(jd, g.Polities);
             g.Systems.Add(sol);
             g.Systems.Add(alphaCentauri);
-            foreach (var spec in NearbySystems.All()) g.Systems.Add(StarSystem.CreateSettled(spec, jd));
+            foreach (var spec in NearbySystems.All()) g.Systems.Add(StarSystem.CreateSettled(spec, jd, g.Polities));
             var simulated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var s in g.Systems)
                 if (s.Spec?.NeighbourName != null) simulated.Add(s.Spec.NeighbourName);
@@ -294,6 +306,7 @@ namespace SolarSystem.Core
                 if (!simulated.Contains(n.Name)) g.NearbyStars.Add(n);
             g.Network = GateNetwork.Build(g.Systems);
             g.Traffic = new InterstellarTraffic(g, jd);
+            g.Polities.InTransit = g.Traffic.InTransit;
             return g;
         }
 
