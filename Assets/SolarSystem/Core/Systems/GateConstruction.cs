@@ -399,6 +399,8 @@ namespace SolarSystem.Core
             if (p.Work == GateJob.Repair)
             {
                 p.Gate.Integrity = 1;
+                // The ring is rebuilt with its forts (U.SPC-T294), not left open to the next war fleet.
+                GateNetwork.Fortify(p.Gate);
                 Repaired++;
                 Log(p, jd, $"{p.Builder.Name} has rebuilt the {p.Gate.Name}: the way to {p.Gate.Destination?.Name} is open again");
                 Completed?.Invoke(p);
@@ -420,6 +422,9 @@ namespace SolarSystem.Core
             link.AtA.Owner = p.Builder;
             // The far end is the far system's own, if anyone holds it; an empty system's is the builder's.
             link.AtB.Owner = p.To.Holder ?? (p.To.Settled ? p.To.World.Sol : p.Builder);
+            // Both ends armed like every other held gate (U.SPC-T92, U.SPC-T294).
+            GateNetwork.Fortify(link.AtA);
+            GateNetwork.Fortify(link.AtB);
             p.Gate = link.AtA;
             p.To.World.Fleet.AddFaction(p.Builder);
             Built++;

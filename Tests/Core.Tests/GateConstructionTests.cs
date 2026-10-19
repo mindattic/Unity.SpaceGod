@@ -284,6 +284,48 @@ namespace SolarSystem.Core.Tests
             Assert.That(g.Network.Route(sol, ac), Is.EqualTo(new List<JumpGate> { gate }));
         }
 
+        /// <summary>
+        /// U.SPC-T294: a gate the builders finish is armed like every other held gate (U.SPC-T92), both ends by the rule
+        /// <see cref="GateNetwork.Fortify()"/> uses, so a war fleet has forts to fight there, not an open door.
+        /// </summary>
+        [Test]
+        public void ANewGateOpensWithItsForts()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var wolf = g.Find("Wolf 359");
+            var fed = sol.World.Sol;
+            Assert.That(fed.IsMilitary && fed.Kind == PolityKind.State, Is.True, "the Federation is a state with a navy");
+            var works = new GateConstruction(g, StartJd);
+            var p = works.Start(fed, sol, wolf, null, StartJd);
+            for (double jd = StartJd; p.Active && jd < StartJd + 10 * Year; jd += 1) works.Step(p, jd + 1, 1);
+            Assert.That(p.Stage, Is.EqualTo(GateStage.Done));
+            var gate = sol.GateTo(wolf);
+            Assert.That(gate.MaxForts, Is.EqualTo(GateNetwork.GateForts));
+            Assert.That(gate.Forts.Count, Is.EqualTo(GateNetwork.GateForts), "the builder's end opens guarded");
+            var far = gate.Partner;
+            int farForts = far.Owner != null && far.Owner.IsMilitary && far.Owner.Kind == PolityKind.State ? GateNetwork.GateForts : 0;
+            Assert.That(far.MaxForts, Is.EqualTo(farForts));
+            Assert.That(far.Forts.Count, Is.EqualTo(farForts), "the far end by the same rule as every held gate");
+        }
+
+        /// <summary>U.SPC-T294: a wrecked gate whose forts went down with it is rebuilt with its forts, not left open to the next fleet.</summary>
+        [Test]
+        public void ARebuiltGateGetsItsFortsBack()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var ac = g.Find("Alpha Centauri");
+            var gate = sol.GateTo(ac);
+            Assert.That(gate.Forts.Count, Is.EqualTo(GateNetwork.GateForts));
+            g.Construction.Damage(gate, 1, StartJd);
+            gate.Forts.Clear();
+            for (double jd = StartJd; gate.Integrity < 1 && jd < StartJd + 5 * Year; jd += 1) g.Construction.Update(jd + 1);
+            Assert.That(gate.Integrity, Is.EqualTo(1));
+            Assert.That(gate.MaxForts, Is.EqualTo(GateNetwork.GateForts));
+            Assert.That(gate.Forts.Count, Is.EqualTo(GateNetwork.GateForts));
+        }
+
         [Test]
         public void GatesOnAWarsFrontLineAreSabotagedAndOnlyRebuiltInPeace()
         {

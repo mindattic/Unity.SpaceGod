@@ -175,11 +175,22 @@ namespace SolarSystem.Core
         public void Fortify()
         {
             foreach (var l in links)
-                foreach (var g in new[] { l.AtA, l.AtB })
-                {
-                    g.MaxForts = g.Owner != null && g.Owner.IsMilitary && g.Owner.Kind == PolityKind.State ? GateForts : 0;
-                    while (g.Forts.Count < g.MaxForts) g.Forts.Add(new ShipCombat(CombatSpec.Platform));
-                }
+            {
+                Fortify(l.AtA);
+                Fortify(l.AtB);
+            }
+        }
+
+        /// <summary>
+        /// Arms one gate by the same rule as <see cref="Fortify()"/>: its owner's full complement of forts if a state with a
+        /// navy holds it, none otherwise. Used for a gate the builders have just finished or rebuilt (U.SPC-T294), so it
+        /// opens guarded like every other held gate.
+        /// </summary>
+        public static void Fortify(JumpGate g)
+        {
+            if (g == null) return;
+            g.MaxForts = g.Owner != null && g.Owner.IsMilitary && g.Owner.Kind == PolityKind.State ? GateForts : 0;
+            while (g.Forts.Count < g.MaxForts) g.Forts.Add(new ShipCombat(CombatSpec.Platform));
         }
 
         /// <summary>
