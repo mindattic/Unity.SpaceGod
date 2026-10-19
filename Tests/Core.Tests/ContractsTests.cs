@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// U.SPC-T101: the contracts boards. Stations post jobs from what the sim actually needs -- freight to markets

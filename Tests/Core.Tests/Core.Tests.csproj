@@ -4,7 +4,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
-    <AssemblyName>SolarSystem.Core.Tests</AssemblyName>
+    <AssemblyName>UnitySpace.Core.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -13,6 +13,6 @@
     <PackageReference Include="NUnit.Analyzers" Version="4.7.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../SolarSystem.Core/SolarSystem.Core.csproj" />
+    <ProjectReference Include="../UnitySpace.Core/UnitySpace.Core.csproj" />
   </ItemGroup>
 </Project>

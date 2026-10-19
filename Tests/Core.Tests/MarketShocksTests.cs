@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>Economic events driven by sim state (U.SPC-T58): each shock moves the markets and is reported in the news as it happens.</summary>
     [TestFixture]

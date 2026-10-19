@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// Light fighters flown by their crews in a dogfight (U.SPC-T274): on the player's own airframe, they lay their guns

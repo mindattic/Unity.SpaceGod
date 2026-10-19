@@ -1,7 +1,7 @@
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>Unit tests for <see cref="Wreck"/>/<see cref="Wrecks"/> (U.SPC-T39): the lasting hulk and
     /// debris field a destroyed ship leaves behind, independent of the rest of <see cref="War"/>.</summary>

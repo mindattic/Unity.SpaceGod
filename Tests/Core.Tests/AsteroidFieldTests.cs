@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     [TestFixture]
     public class AsteroidFieldTests
@@ -16,7 +16,7 @@ namespace SolarSystem.Core.Tests
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null)
             {
-                var p = Path.Combine(dir.FullName, "Assets", "SolarSystem", "Resources", "Data", "asteroids.bytes");
+                var p = Path.Combine(dir.FullName, "Assets", "UnitySpace", "Resources", "Data", "asteroids.bytes");
                 if (File.Exists(p)) return p;
                 dir = dir.Parent;
             }

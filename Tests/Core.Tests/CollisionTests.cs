@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>Collisions and ramming (U.SPC-T60): volumes, momentum exchange, and damage by kinetic energy to the struck side.</summary>
     [TestFixture]
@@ -335,7 +335,7 @@ namespace SolarSystem.Core.Tests
             string path = null;
             for (; dir != null && path == null; dir = dir.Parent)
             {
-                var p = Path.Combine(dir.FullName, "Assets", "SolarSystem", "Resources", "Data", "asteroids.bytes");
+                var p = Path.Combine(dir.FullName, "Assets", "UnitySpace", "Resources", "Data", "asteroids.bytes");
                 if (File.Exists(p)) path = p;
             }
             Assert.That(path, Is.Not.Null);

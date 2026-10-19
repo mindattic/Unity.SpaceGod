@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T96: the Lagrange points of every body pair, the infrastructure placed at them

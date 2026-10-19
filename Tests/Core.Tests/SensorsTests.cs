@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// U.SPC-T66: sensors, signatures and stealth. Ships give off heat and EM (a drive burn and weapons fire bright,

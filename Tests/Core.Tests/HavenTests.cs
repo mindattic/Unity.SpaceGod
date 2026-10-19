@@ -1,8 +1,8 @@
 using System.Linq;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T43: Sol's hidden pirate havens on real belt asteroids (Psyche, Lutetia, Ida) --

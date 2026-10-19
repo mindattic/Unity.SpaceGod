@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// U.SPC-T103: the galaxy map. Every system with the gate network between them, coloured by who holds it, the traffic

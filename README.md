@@ -1,4 +1,4 @@
-# UnitySolarSystem
+# UnitySpace
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
@@ -49,7 +49,7 @@ The same moment, focused on Earth, before and after pressing G. At gameplay scal
 
 ### Real surfaces weather and asteroids
 
-- **Real maps on 19 worlds.** The Moon (LRO LROC colour), Mercury (MESSENGER), Mars (Viking), the four Galilean moons (Galileo and Voyager), Titan, Enceladus, Phobos, Deimos, Ceres (Dawn), Pluto and Charon (New Horizons), Triton, Miranda, Titania and Oberon (Voyager), with relief shading from real elevation data on the Moon (LOLA), Mars (MOLA) and Mercury (MESSENGER DEM). Every map is turned by its IAU prime meridian, or faces its planet for synchronous moons, so the Moon shows Earth its real near side and Pluto keeps its 0° meridian on Charon. Gaps the spacecraft never imaged are a flat neutral grey, and every caveat (Io's muted false colour, Triton's ultraviolet-based colour reduced to brightness, Titan's haze) is listed in [SOURCES.md](Assets/SolarSystem/Resources/Textures/SOURCES.md).
+- **Real maps on 19 worlds.** The Moon (LRO LROC colour), Mercury (MESSENGER), Mars (Viking), the four Galilean moons (Galileo and Voyager), Titan, Enceladus, Phobos, Deimos, Ceres (Dawn), Pluto and Charon (New Horizons), Triton, Miranda, Titania and Oberon (Voyager), with relief shading from real elevation data on the Moon (LOLA), Mars (MOLA) and Mercury (MESSENGER DEM). Every map is turned by its IAU prime meridian, or faces its planet for synchronous moons, so the Moon shows Earth its real near side and Pluto keeps its 0° meridian on Charon. Gaps the spacecraft never imaged are a flat neutral grey, and every caveat (Io's muted false colour, Triton's ultraviolet-based colour reduced to brightness, Titan's haze) is listed in [SOURCES.md](Assets/UnitySpace/Resources/Textures/SOURCES.md).
 - **Gas giants that move with their real winds.** Each latitude of Jupiter, Saturn, Uranus and Neptune drifts at its measured zonal wind speed (Cassini, Voyager and Hubble profiles; Jupiter's 23.7°N jet runs 165 m/s, about 13° of longitude a day) through a looping flow map with advected turbulence, on the simulation clock. Jupiter's Great Red Spot sits at its current System III longitude (BAA and JUPOS measurements, drifting 0.31° a day) and turns counter-clockwise, an anticyclone, about once in 6 days. The swirl fades out at time warps where it would strobe.
 - **Titan and Venus as eyes see them.** Titan is an orange haze ball with Cassini's 938 nm surface map faint beneath; Venus is its nearly featureless cloud deck, super-rotating in 4 days.
 - **The asteroid belt, fully populated.** 111,267 real asteroids from the JPL Small-Body Database (every numbered main-belt asteroid brighter than H 15.5, and every Jupiter Trojan brighter than H 15), each propagated on its own Kepler orbit on the GPU in one draw call, mapped through the same gameplay/realistic scale as the planets. The Kirkwood gaps and the two Trojan clouds come straight from the data. Vesta, Pallas, Hygiea, Juno, Psyche, Interamnia and the Trojan Achilles are labelled; the Trojans Hektor, Patroclus and Eurybates are full bodies.
@@ -67,7 +67,7 @@ The same moment, focused on Earth, before and after pressing G. At gameplay scal
 The orbits are real; everything below is fiction, placed on worlds that plausibly hold what they produce.
 
 - **Economy.** Sixteen goods: food, water and medical supplies; helium-3; nickel-iron, copper, zinc, platinum-group metals, rare earths and titanium; hydrocarbons and nitrogen; refined alloys, electronics, machinery and munitions. Eighteen settlements (Earth's orbital industry, Tycho City, Ares Prime, Ceres Hub, Ganymede Union, Kraken Port on Titan and so on) mine what their world has (ice moons sell water, Titan hydrocarbons, Io copper and zinc from its sulphide flows), turn it into goods through production chains (smelters, electronics fabs, machine works, pharmaceutical labs, munitions plants, shipyards), feed their people and price every good from their stock against what they use. Facilities grow when what they make sells dear and shrink when it is glutted.
-- **People and labour.** Each person eats, drinks and breathes by NASA's planning figures: 1.76 kg of food a day, and the water a closed loop loses (98% recovered on a station, as on the ISS since 2023, less in a colony with showers), plus the water split for oxygen and the nitrogen that replaces leaked air. Populations grow when fed, shrink when not, and migrate toward food, water and better expected wages, never across a war front. Every facility needs a crew, life support first; short-handed it makes less, and under a quarter of its crew it stalls. Wages are taxed into the owner's treasury alongside port taxes, and the treasury pays for new hulls, refits, defence platforms and every warship's daily upkeep, so a starving, emptying economy really does weaken its navy. Figures and assumptions are in [Economy/SOURCES.md](Assets/SolarSystem/Core/Economy/SOURCES.md).
+- **People and labour.** Each person eats, drinks and breathes by NASA's planning figures: 1.76 kg of food a day, and the water a closed loop loses (98% recovered on a station, as on the ISS since 2023, less in a colony with showers), plus the water split for oxygen and the nitrogen that replaces leaked air. Populations grow when fed, shrink when not, and migrate toward food, water and better expected wages, never across a war front. Every facility needs a crew, life support first; short-handed it makes less, and under a quarter of its crew it stalls. Wages are taxed into the owner's treasury alongside port taxes, and the treasury pays for new hulls, refits, defence platforms and every warship's daily upkeep, so a starving, emptying economy really does weaken its navy. Figures and assumptions are in [Economy/SOURCES.md](Assets/UnitySpace/Core/Economy/SOURCES.md).
 - **Trade.** Freighters, ore haulers and couriers each pick the cargo and destination that earn the most per day of travel, counting deliveries already on the way, so goods flow from surplus to shortage without a script. Every run is priced by what it really costs: the propellant its burns throw out with that cargo aboard (at the local price), a toll for every hyperlane it rides (paid to whoever keeps that system's ramps), and the crew's days. A run the tanks cannot cover, with a reserve, is left out; a ship running low with nothing to carry makes for the nearest port that sells propellant. Owners post supply contracts for essentials their outposts are short of. Profits go to the ship's faction, ports tax the trade, and traders steer clear of where the fighting has been.
 - **Propellant.** Every hull has a fusion drive with its own exhaust velocity (2,200 km/s for an ore hauler to 4,500 for a courier) and a dry mass and tanks of its own, and the rocket equation sets what each manoeuvre costs: a full hold cuts a freighter's delta-v by nearly two thirds. Civilian ships pay for every transit from their tanks (the flip-and-burn plus matching velocity at each end and its gravity correction, or a transfer orbit's escape, capture and trim burns; hyperlane rides cost no propellant) and fill up in port with water or hydrocarbons, whichever is cheaper there, and the helium-3 that burns them. Those sales are propellant demand the markets stock for. A ship that cannot cover its next trip waits in port for propellant; one that runs dry in flight (now and then a holed tank vents most of what it carries) drifts where its tanks gave out and calls for a tanker, which fills it in a couple of days at a premium, and its call is a distress adventure the player can answer by pumping some of their own reaction mass across.
 - **War.** The Sol Federation and the Outer Reach Compact are at war (it cools to ceasefires and flares up again); the Belt Consortium trades with both and hunts pirates; the Black Banner raids busy ports from Blackwater on Deimos and from three hidden bases on real belt asteroids (Hollow Iron on Psyche, Lantern Rock on Lutetia, Dactyl's Rest on Ida). A hidden haven is off the map until a warship's scanners pass within 2 million km of it (a merchant's within 1 million), a navy's sensors hold raiders parked there or burning in to it, a navy follows beaten raiders home, or captured raiders give it away. A navy that finds one sends a strong group to break its two gun platforms and then board it (seizing its stolen goods) or level it; a pilot who has broken one can do the same (1 board, 2 destroy). A fallen haven's raiders lie low and no new bands sail from it until the pirates rebuild it, 180 days on. Fleet groups take orders (patrol, attack a weak enemy port, defend one under attack, besiege, refit at a yard). A battle starts wherever hostile forces meet: groups, merchants or a settlement's orbital defence platforms. A port with no platforms left, held by a besieging group for 4 to 20 days, changes hands; refits and new hulls are paid for in alloys, electronics and munitions bought from the yard's market.
@@ -105,7 +105,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
   - **Alpha Centauri A and B** on their real 79.8-year orbit (Akeson et al. 2021), swinging between 11.2 and 35.4 AU apart around their barycentre.
   - **Proxima Centauri**, 12,000 AU out on its half-million-year orbit, placed where its sky position and distance put it today.
   - **Planets:** Proxima d and b (confirmed), Proxima c (**disputed**) and the JWST giant around A, "S1" (**candidate**). Unconfirmed worlds are labelled wherever they are named.
-  - **Assumptions**, listed in [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md): orbital planes, phases, radii and the stars' poles.
+  - **Assumptions**, listed in [Core/Systems/SOURCES.md](Assets/UnitySpace/Core/Systems/SOURCES.md): orbital planes, phases, radii and the stars' poles.
 - **Simulation:** every system runs all the time on the shared clock. Only the one you are in is drawn.
 - **Lighting:** the two brightest stars where the camera is light the scene, each in the colour of its photosphere (A white, B orange, Proxima red). Proxima flares now and then.
 - **Getting there:** click **Alpha Centauri** under **STAR SYSTEMS** in the navigator. The camera:
@@ -136,7 +136,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - **Planets:** the confirmed ones come from the NASA Exoplanet Archive, with their real periods, axes, eccentricities and masses ("at least" where only m sin i is known). Candidates (Wolf 359 b, Lalande 21185 d, Luyten d and e) are labelled as such. Each planet is flagged inside or outside its star's habitable zone (Kopparapu et al. 2013).
 - **Debris belts:** Epsilon Eridani's three belts and Tau Ceti's disc are drawn in their measured planes.
 - **Unsettled:** these systems have no settlements, lanes or ships yet. Anything put there later is game-layer fiction.
-- **Sources:** every value is listed in [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md).
+- **Sources:** every value is listed in [Core/Systems/SOURCES.md](Assets/UnitySpace/Core/Systems/SOURCES.md).
 
 ### Orbital industry and docking rings
 
@@ -189,7 +189,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - Selection brackets, hover highlight, an off-screen pointer to the selected target, and the flight path of the selected ship (lanes included).
 - Body panels show each settlement's exports, shortages and defences; ship panels show cargo and trade profit, or hull, shields, lost hardpoints, fighters aboard and orders. **M** opens a market board, **B** jumps to the biggest battle and drops to battle time (real time), a ticker reports battles, captures, surrenders, launches, ceasefires, economic shocks and price spikes, and **X** opens the full news feed.
 - The market board, cargo hold and controls panel collapse to their title bar with their [-] button.
-- **Save and load.** The whole simulation saves to a file and resumes exactly where it was: the clock and warp, every system's world (ships and their cargo, holds, tanks and loadouts, battles in progress, markets, factions and treasuries, wars and sieges, wrecks, escape pods and prisoners, the law's records and bounties, adventures and reputation), the gates and the traffic between the stars, and the ship you were flying, moving as it was. F5 quicksaves and F8 loads the quicksave; F6 opens the slots (the quicksave, three slots of your own and three autosaves, each showing where and when it was saved, who was flying and their purse). An autosave is taken every five minutes and when the app closes, the oldest of the three making way; `-continue` resumes the latest save. Saves live in `%USERPROFILE%\AppData\LocalLow\MindAttic\Unity Solar System\Saves`.
+- **Save and load.** The whole simulation saves to a file and resumes exactly where it was: the clock and warp, every system's world (ships and their cargo, holds, tanks and loadouts, battles in progress, markets, factions and treasuries, wars and sieges, wrecks, escape pods and prisoners, the law's records and bounties, adventures and reputation), the gates and the traffic between the stars, and the ship you were flying, moving as it was. F5 quicksaves and F8 loads the quicksave; F6 opens the slots (the quicksave, three slots of your own and three autosaves, each showing where and when it was saved, who was flying and their purse). An autosave is taken every five minutes and when the app closes, the oldest of the three making way; `-continue` resumes the latest save. Saves live in `%USERPROFILE%\AppData\LocalLow\MindAttic\UnitySpace\Saves`.
 
 | Carrier group in formation | Freighter mid-burn | Saturn |
 | --- | --- | --- |
@@ -204,32 +204,32 @@ Prerequisites:
 - Optionally the .NET 10 SDK, to run the core tests.
 
 ```bash
-git clone https://github.com/mindattic/UnitySolarSystem.git
+git clone https://github.com/mindattic/UnitySpace.git
 git clone https://github.com/mindattic/MindAttic.Capture.git
 ```
 
-1. Open the `UnitySolarSystem` folder in Unity Hub. The first import takes a few minutes. The editor opens `Assets/Scenes/SolarSystem.unity` automatically (or use **Solar System > Rebuild Main Scene**).
+1. Open the `UnitySpace` folder in Unity Hub. The first import takes a few minutes. The editor opens `Assets/Scenes/UnitySpace.unity` automatically (or use **Solar System > Rebuild Main Scene**).
 2. Press Play. You start in free swim beside Earth, with Earth selected, gameplay scale on and the clock at the current date. The controls panel is open; H hides it.
 
 Any scene works, because `Bootstrap` creates the app if the scene does not have one.
 
 ## Building and deployment
 
-In the editor, **Solar System > Build Windows Player** builds `Builds/Windows/UnitySolarSystem.exe`. Headless, with the editor closed:
+In the editor, **Solar System > Build Windows Player** builds `Builds/Windows/UnitySpace.exe`. Headless, with the editor closed:
 
 ```bash
-Unity.exe -batchmode -quit -projectPath . -executeMethod SolarSystem.EditorTools.ProjectSetup.SetupAndBuild
+Unity.exe -batchmode -quit -projectPath . -executeMethod UnitySpace.EditorTools.ProjectSetup.SetupAndBuild
 ```
 
-Building never rewrites `Assets/Scenes/SolarSystem.unity`: it is generated by `ProjectSetup.CreateScene` only when it is missing, because Unity gives every regenerated object a fresh file ID and a rebuild would leave a no-op diff in git. If you change what `CreateScene` puts in the scene, run **Solar System > Rebuild Main Scene** and commit the scene with the code change, or the player keeps the old one.
+Building never rewrites `Assets/Scenes/UnitySpace.unity`: it is generated by `ProjectSetup.CreateScene` only when it is missing, because Unity gives every regenerated object a fresh file ID and a rebuild would leave a no-op diff in git. If you change what `CreateScene` puts in the scene, run **Solar System > Rebuild Main Scene** and commit the scene with the code change, or the player keeps the old one.
 
-`tools/deploy.ps1` does a clean build and publishes it: it stops any running copy, deletes `Builds\Windows` (never `Library\`), builds in batch mode with the Unity version from `ProjectSettings/ProjectVersion.txt`, and copies the player to `C:\Apps\UnitySolarSystem\`. Add `-Launch` to start it afterwards.
+`tools/deploy.ps1` does a clean build and publishes it: it stops any running copy, deletes `Builds\Windows` (never `Library\`), builds in batch mode with the Unity version from `ProjectSettings/ProjectVersion.txt`, and copies the player to `C:\Apps\UnitySpace\`. Add `-Launch` to start it afterwards.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 ```
 
-`deploy.bat` at the repo root runs the same script and also refreshes a **Unity Solar System** shortcut on the Desktop that starts the published copy. In Claude Code, `/deploy` starts `deploy.bat` in its own window and `/run` starts the published game. A prompt hook (`.claude/hooks/instant-commands.ps1`) handles both before any model turn, so the orchestrator's pace holds never apply to them.
+`deploy.bat` at the repo root runs the same script and also refreshes a **UnitySpace** shortcut on the Desktop that starts the published copy. In Claude Code, `/deploy` starts `deploy.bat` in its own window and `/run` starts the published game. A prompt hook (`.claude/hooks/instant-commands.ps1`) handles both before any model turn, so the orchestrator's pace holds never apply to them.
 
 `tools\launch.bat` (or `tools\launch.ps1`) always redeploys first, then offers Normal Play, Demo + Capture (`-demo -capture video screen 5`) or Quit.
 
@@ -242,16 +242,16 @@ powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 | `-continue` | resumes the latest save (quicksave, slot or autosave) instead of starting at today's date |
 | `-capture ...` | records the session through MindAttic.Capture (below); independent of `-demo` |
 
-Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Capture is compiled into capture-enabled players only: build one with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/UnitySolarSystem.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`). Capture is off unless `-capture` is on the command line.
+Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Capture is compiled into capture-enabled players only: build one with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/UnitySpace.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`). Capture is off unless `-capture` is on the command line.
 
 | Command | Result |
 | --- | --- |
-| `UnitySolarSystem.exe -demo -capture screen` | runs the tour once, saves a PNG at each stop and quits (how the images above were made) |
-| `UnitySolarSystem.exe -demo -capture video screen 5` | the tour, filmed, with a PNG every 5 seconds as well as at each stop |
-| `UnitySolarSystem.exe -capture video` | films the session from start to exit at native resolution |
-| `UnitySolarSystem.exe -capture screen 5` | a PNG every 5 seconds until exit |
+| `UnitySpace.exe -demo -capture screen` | runs the tour once, saves a PNG at each stop and quits (how the images above were made) |
+| `UnitySpace.exe -demo -capture video screen 5` | the tour, filmed, with a PNG every 5 seconds as well as at each stop |
+| `UnitySpace.exe -capture video` | films the session from start to exit at native resolution |
+| `UnitySpace.exe -capture screen 5` | a PNG every 5 seconds until exit |
 
-Everything goes to `R:\MindAttic\Capture\UnitySolarSystem\`; each tour screenshot's `.json` sidecar names the stop it shows (`"tag": "03-carrier-group"`). In the editor, the **MindAttic > Capture** menu records video or screenshots in Play Mode, and F12 takes a screenshot.
+Everything goes to `R:\MindAttic\Capture\UnitySpace\`; each tour screenshot's `.json` sidecar names the stop it shows (`"tag": "03-carrier-group"`). In the editor, the **MindAttic > Capture** menu records video or screenshots in Play Mode, and F12 takes a screenshot.
 
 ## Controls
 
@@ -314,7 +314,7 @@ While piloting:
 ## Project layout
 
 ```text
-Assets/SolarSystem/
+Assets/UnitySpace/
   Core/                 engine-free simulation (compiled by Tests/ as plain .NET)
     Kepler.cs             Kepler's equation, perifocal to ecliptic, vis-viva
     OrbitalElements.cs    JPL-style elements with secular rates
@@ -340,7 +340,7 @@ Assets/SolarSystem/
     AsteroidField.cs      111,267 SBDB asteroids, Kepler propagation (CPU and GPU-mirror)
   Runtime/
     Bootstrap.cs          creates the app in any scene; -demo starts the tour
-    SolarSystemApp.cs     frame loop, floating origin, picking, ship placement, piloting
+    UnitySpaceApp.cs     frame loop, floating origin, picking, ship placement, piloting
     SceneTour.cs          the scripted camera tour; CaptureRunner.cs runs it for -demo
     ModelViewer.cs        the F9 model viewer
     Camera/SpaceCamera.cs free swim, focus orbit, fly-to, SOI reference frames
@@ -352,7 +352,7 @@ Assets/SolarSystem/
   Resources/              shaders, colour maps, ship models
   Editor/ProjectSetup.cs  scene generation and player build
 Tests/
-  SolarSystem.Core/       builds Core as a plain .NET library
+  UnitySpace.Core/       builds Core as a plain .NET library
   Core.Tests/             NUnit tests over Core (dotnet test)
 tools/                  deploy.ps1, launch.ps1, launch.bat
 docs/                   USER_STORIES.md and the README images
@@ -448,20 +448,20 @@ Planned, from the open tickets in [docs/USER_STORIES.md](docs/USER_STORIES.md):
 ## Documentation
 
 - [docs/USER_STORIES.md](docs/USER_STORIES.md): every story and ticket, with the test that proves each one. It is generated from the MindAttic.Workflow database; change tickets with the workflow CLI, not by hand.
-- [Assets/SolarSystem/Resources/Textures/SOURCES.md](Assets/SolarSystem/Resources/Textures/SOURCES.md): where every surface map comes from and its caveats.
-- [Assets/SolarSystem/Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md): Alpha Centauri, nearby stars, spacecraft orbits and ring sites, with the assumptions made.
+- [Assets/UnitySpace/Resources/Textures/SOURCES.md](Assets/UnitySpace/Resources/Textures/SOURCES.md): where every surface map comes from and its caveats.
+- [Assets/UnitySpace/Core/Systems/SOURCES.md](Assets/UnitySpace/Core/Systems/SOURCES.md): Alpha Centauri, nearby stars, spacecraft orbits and ring sites, with the assumptions made.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repo.
 
 ## License
 
 The code has no LICENSE file yet, so all rights are reserved. Third-party assets keep their own licences:
 
-- Planet colour maps: NASA / USGS (public domain). The Saturn, Uranus and Neptune maps are by [Solar System Scope](https://www.solarsystemscope.com/textures/), **CC BY 4.0**. Details in [Assets/SolarSystem/Resources/Textures/SOURCES.md](Assets/SolarSystem/Resources/Textures/SOURCES.md).
+- Planet colour maps: NASA / USGS (public domain). The Saturn, Uranus and Neptune maps are by [Solar System Scope](https://www.solarsystemscope.com/textures/), **CC BY 4.0**. Details in [Assets/UnitySpace/Resources/Textures/SOURCES.md](Assets/UnitySpace/Resources/Textures/SOURCES.md).
 - Moon colour and LOLA elevation: [NASA SVS CGI Moon Kit](https://svs.gsfc.nasa.gov/4720/) (Ernie Wright; LRO LROC and LOLA teams). Jupiter: Hubble OPAL map via [NASA SVS](https://svs.gsfc.nasa.gov/12021/) (Simon, Wong, Orton). Moon, planet and satellite mosaics and DEMs: USGS Astrogeology, NASA PDS (MOLA MEGDR), and JPL's Solar System Simulator maps (Caltech/JPL/USGS) for Miranda, Titania and Oberon.
 - Asteroids: [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html). Great Red Spot position and drift: British Astronomical Association Jupiter Section and JUPOS. Zonal winds: Porco et al. 2003, Sánchez-Lavega et al. 2000, Sromovsky et al.
 - Freighter, ore hauler and courier models: [Kenney Space Kit](https://kenney.nl/assets/space-kit), CC0.
 - Hull plating: [ambientCG MetalPlates015A](https://ambientcg.com/a/MetalPlates015A), CC0.
-- Alpha Centauri, nearby stars, spacecraft orbits and ring sites: see [Core/Systems/SOURCES.md](Assets/SolarSystem/Core/Systems/SOURCES.md).
+- Alpha Centauri, nearby stars, spacecraft orbits and ring sites: see [Core/Systems/SOURCES.md](Assets/UnitySpace/Core/Systems/SOURCES.md).
 - Orbital data: JPL Solar System Dynamics, the IAU WGCCRE report, and NASA planetary fact sheets.
 
 Part of [MindAttic](https://mindattic.com) — see more projects at [github.com/mindattic](https://github.com/mindattic). Related: [ExperimentSolarSystem](https://github.com/mindattic/ExperimentSolarSystem), the Babylon.js predecessor, and [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture), which records it.

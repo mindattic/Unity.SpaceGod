@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// Fighter escorts for the merchant fleet (U.SPC-T275): a freighter in port takes on a wing sized by its cargo and

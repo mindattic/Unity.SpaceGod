@@ -1,0 +1,19 @@
+{
+    "name": "UnitySpace.Editor",
+    "rootNamespace": "UnitySpace.EditorTools",
+    "references": [
+        "UnitySpace.Core",
+        "UnitySpace.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

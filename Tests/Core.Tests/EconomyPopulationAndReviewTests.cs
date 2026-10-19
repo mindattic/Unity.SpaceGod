@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T32: <see cref="Economy.Consume"/> (feeding people and growing or shrinking

@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// U.SPC-T57, propellant and freight cost: the rocket equation sets every manoeuvre's propellant from

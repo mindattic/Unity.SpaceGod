@@ -1,7 +1,7 @@
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T29: <see cref="Diplomacy"/>'s relation bookkeeping and the two gates

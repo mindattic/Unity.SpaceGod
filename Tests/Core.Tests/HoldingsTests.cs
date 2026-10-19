@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// U.SPC-T102: the player's fleet and property. The player buys hulls (or takes ships they have into their fleet),

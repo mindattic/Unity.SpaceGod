@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// U.SPC-T63: capture alive vs dead. A bounty pays in full alive and at <see cref="Outlaws.DeadShare"/> dead; a

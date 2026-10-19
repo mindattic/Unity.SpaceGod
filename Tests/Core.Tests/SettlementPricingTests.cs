@@ -1,8 +1,8 @@
 using System;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>Unit tests for the pricing and market-sizing math on <see cref="Settlement"/>, isolated
     /// from the rest of the simulation by setting Demand/Supply/Stock/Inbound directly.</summary>

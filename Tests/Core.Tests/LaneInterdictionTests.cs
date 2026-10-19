@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>
     /// The player riding a lane through a raider's lurk (U.SPC-T42): the emitter's field picked up ahead with a countdown,

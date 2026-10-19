@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     /// <summary>Gate construction and expansion (U.SPC-T97): what a gate costs and takes, and a network that grows.</summary>
     [TestFixture]

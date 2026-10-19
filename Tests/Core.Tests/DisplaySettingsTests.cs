@@ -1,9 +1,9 @@
 using System.Linq;
 using System.Collections.Generic;
 using NUnit.Framework;
-using SolarSystem.Core;
+using UnitySpace.Core;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     [TestFixture]
     public class DisplaySettingsTests

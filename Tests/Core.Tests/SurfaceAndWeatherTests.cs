@@ -1,8 +1,8 @@
 using System;
-using SolarSystem.Core;
+using UnitySpace.Core;
 using NUnit.Framework;
 
-namespace SolarSystem.Core.Tests
+namespace UnitySpace.Core.Tests
 {
     [TestFixture]
     public class SurfaceAndWeatherTests
