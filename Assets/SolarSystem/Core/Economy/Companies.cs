@@ -280,6 +280,9 @@ namespace SolarSystem.Core
                 c.Flag.Treasury -= ship.CargoCost;
             }
             ship.Faction = c.Flag;
+            // A hull taken over abroad (its company merged into another) carries on with its run under the new flag, rather
+            // than flying on with a voyage still in the old one's name.
+            if (ship.Voyage != null && ship.Voyage.Faction != null) ship.Voyage.Faction = c.Flag;
             ship.CompanyBookedCredits = ship.Credits;
             ship.LoadedFrom = null;
             if (!c.Ships.Contains(ship)) c.Ships.Add(ship);
