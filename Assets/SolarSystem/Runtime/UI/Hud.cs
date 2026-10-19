@@ -107,6 +107,7 @@ namespace SolarSystem.UI
             }
             DrawFlightMarkers();
             DrawCombatHud();
+            DrawHunters();
             DrawTopBar();
             if (app.ShowNews) DrawNews();
             else DrawTicker();
@@ -434,6 +435,37 @@ namespace SolarSystem.UI
             var size = small.CalcSize(content);
             var p = new Vector2((Screen.width - size.x) * 0.5f, Screen.height - 66);
             DrawLabel(readout, p, assist ? Dim : RetrogradeColor, true);
+        }
+
+        // ---------------------------------------------------------------- the chase (U.SPC-T273)
+
+        /// <summary>
+        /// Hostiles running the ship down: each group's name, range and closing speed, and an EMP charging with the seconds
+        /// left and how far off it reaches, top right under the readouts.
+        /// </summary>
+        void DrawHunters()
+        {
+            if (!app.IsPiloting || Event.current.type != EventType.Repaint) return;
+            var pursuit = app.World.Pursuit;
+            if (pursuit == null || !pursuit.Active) return;
+            var me = app.PilotOffsetKm;
+            var myVel = app.PilotVelocityKmS;
+            float y = 118;
+            DrawLabel("HUNTED", new Vector2(Screen.width - 380, y), HostileColor, false);
+            y += 22;
+            foreach (var g in pursuit.Groups)
+            {
+                var rel = g.Pos - me;
+                double d = rel.Length;
+                double closing = d > 1e-9 ? -DVec3.Dot(g.Vel - myVel, rel / d) : 0;
+                string line = g.Faction.Name + " " + g.Leader.Name + (g.Ships.Count > 1 ? " +" + (g.Ships.Count - 1) : "") + "   " + RangeText(d) +
+                              "   closing " + closing.ToString("0.0", CultureInfo.InvariantCulture) + " km/s";
+                if (g.EmpCharge >= 0)
+                    line += "   EMP " + Math.Max(0, Pursuit.EmpChargeSeconds - g.EmpCharge).ToString("0.0", CultureInfo.InvariantCulture) + " s (clear " +
+                            Mathf.RoundToInt((float)(Pursuit.EmpRangeKm * 1.25)) + " km)";
+                DrawLabel(line, new Vector2(Screen.width - 380, y), g.EmpCharge >= 0 ? LockColor : Dim, true);
+                y += 18;
+            }
         }
 
         // ---------------------------------------------------------------- aimed combat (U.SPC-T270)
@@ -770,7 +802,7 @@ namespace SolarSystem.UI
             else if (app.PilotStunSeconds > 0)
             {
                 head = "EMP  ·  DRIVES AND SHIELDS DOWN  ·  " + Mathf.CeilToInt((float)app.PilotStunSeconds) + " s";
-                tail = "thrown out of the lane by the pulse: drifting, no thrust, no turning, no guns until the systems come back";
+                tail = "knocked out by an electromagnetic pulse: drifting, no thrust, no turning, no guns until the systems come back";
             }
             else if (app.CanRejoinLane)
             {

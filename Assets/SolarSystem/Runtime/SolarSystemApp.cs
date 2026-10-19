@@ -692,7 +692,12 @@ namespace SolarSystem
                 return;
             }
             if (i.ToggleScale) ToggleScale();
-            if (i.TimeFaster) Clock.Faster();
+            // Being run down, time stays at the pace the chase is flown (U.SPC-T273).
+            if (i.TimeFaster)
+            {
+                if (IsPiloting && World.Pursuit != null && World.Pursuit.Active) ShowToast("Being hunted: time stays at real speed until you shake them off or fight");
+                else Clock.Faster();
+            }
             if (i.TimeSlower) Clock.Slower();
             if (i.TogglePause) TogglePause();
             if (i.ResetTime && !IsPiloting) ResetToNow();
@@ -1120,6 +1125,9 @@ namespace SolarSystem
                 pilotBoosting = false;
                 pilotCruise = default;
                 nearGate = null;
+                // Nobody runs down a ship no one is flying: the chasers go back to their business.
+                if (World.Pursuit != null && World.Pursuit.Active) World.Pursuit.ReleaseAll(Clock.Jd);
+                pilotEmpSeconds = 0;
                 World.Sensors?.UpdatePilot(null, default, false, Clock.Jd);
                 // A patrol's hail ends with the helm, so it is not answered later by whatever hull is flown next.
                 World.Law?.UpdatePilot(null, 0, default, default, Clock.Jd);
@@ -1141,6 +1149,12 @@ namespace SolarSystem
             // Riding a lane, or thrown out of one this frame into an ambush (U.SPC-T42).
             if (ship.Phase == ShipPhase.Lane || (rideWarpBefore >= 0 && ship.Battle != null))
             {
+                // Into a lane, the chase is shaken off.
+                if (World.Pursuit != null && World.Pursuit.Active)
+                {
+                    World.Pursuit.ReleaseAll(Clock.Jd);
+                    ShowToast("Into the lane: the hunters are left behind");
+                }
                 UpdateLaneRide(ship);
                 ShowWarNotices();
                 return;
@@ -1246,6 +1260,8 @@ namespace SolarSystem
             World.Outlaws.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
             // Contracts worked at the helm: crates handed over, passengers put ashore, patrols flown, bodies surveyed (U.SPC-T101).
             World.Contracts?.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, Clock.Jd);
+            // Hostiles that see the ship turn to run it down (U.SPC-T273).
+            UpdatePursuit(ship, dt);
             // Through a gate, the hull flown on is another one, in another system: nothing more for this one this frame.
             if (UpdateGateActivation(ship)) return;
             UpdateLaneEntry(ship);
@@ -1276,6 +1292,68 @@ namespace SolarSystem
             if (uv.sqrMagnitude < 1e-12f || Mathf.Abs(Vector3.Dot(fv.normalized, uv.normalized)) > 0.98f) uv = Mathf.Abs(fv.normalized.y) > 0.98f ? Vector3.right : Vector3.up;
             return Quaternion.LookRotation(fv, uv);
         }
+
+        /// <summary>Real seconds between looks for hostiles that might turn to run the ship down.</summary>
+        const float PursuitCheckIntervalS = 4f;
+        float pursuitCheckTimer;
+
+        /// <summary>Seconds left with the drives knocked out by a hunter's EMP out of battle (see <see cref="PilotStunSeconds"/>).</summary>
+        double pilotEmpSeconds;
+
+        /// <summary>
+        /// The chase (U.SPC-T273): every few seconds, hostiles whose scanners make the ship out may turn to run it down,
+        /// showing up on its scanners some hundreds of km off; every frame they close, charge and set off EMPs, and start
+        /// the fight where the ship is once they are close, or give up. Time is held at real speed when they make contact.
+        /// </summary>
+        void UpdatePursuit(Ship ship, float dt)
+        {
+            var pursuit = World.Pursuit;
+            if (pursuit == null) return;
+            pilotEmpSeconds = Math.Max(0, pilotEmpSeconds - dt);
+            double jd = Clock.Jd;
+            pursuitCheckTimer -= dt;
+            if (pursuitCheckTimer <= 0 && ship.Battle == null)
+            {
+                pursuitCheckTimer = PursuitCheckIntervalS;
+                foreach (var g in pursuit.Consider(ship, pilotFrameBody, pilotOffsetKm, pilotVelKmS, jd))
+                {
+                    if (Clock.WarpIndex > 0) Clock.SetWarp(0);
+                    ShowToast("CONTACT: " + HunterName(g) + " has turned to run you down, " + Mathf.RoundToInt((float)(g.Pos - pilotOffsetKm).Length) + " km out");
+                }
+            }
+            if (!pursuit.Active) return;
+            foreach (var (g, what) in pursuit.Step(ship, pilotOffsetKm, pilotVelKmS, dt, jd))
+            {
+                switch (what)
+                {
+                    case PursuitEvent.EmpCharging:
+                        ShowToast("EMP CHARGING on the " + g.Leader.Name + ": get more than " + Mathf.RoundToInt((float)(Pursuit.EmpRangeKm * 1.25)) + " km clear in " +
+                                  Mathf.RoundToInt((float)Pursuit.EmpChargeSeconds) + " s");
+                        break;
+                    case PursuitEvent.EmpHit:
+                        pilotEmpSeconds = Pursuit.EmpStunSeconds;
+                        pilotCruise = default;
+                        ShowToast("EMP from the " + g.Leader.Name + ": drives down for " + Mathf.RoundToInt((float)Pursuit.EmpStunSeconds) + " s");
+                        break;
+                    case PursuitEvent.EmpMissed:
+                        ShowToast("The " + g.Leader.Name + "'s EMP goes off short of you");
+                        break;
+                    case PursuitEvent.Engage:
+                        var battle = World.War.TryStartPursuit(ship, g, pilotFrameBody, pilotOffsetKm, pilotForward, jd);
+                        if (battle == null) break;
+                        pursuit.Engaged(g);
+                        EnterBattleTime(battle);
+                        ShowToast(HunterName(g) + " engages: fight or run");
+                        break;
+                    case PursuitEvent.GaveUp:
+                        ShowToast("The " + g.Leader.Name + " has given up the chase");
+                        break;
+                }
+            }
+        }
+
+        static string HunterName(Pursuer g) =>
+            "the " + g.Faction.Name + " " + g.Leader.Spec.Class.ToString().ToLowerInvariant() + " " + g.Leader.Name + (g.Ships.Count > 1 ? " and " + (g.Ships.Count - 1) + " more" : "");
 
         /// <summary>Thrust, km/s^2, above which the piloted ship's drive shows as a burn on others' scanners (about 0.01 g).</summary>
         const double PilotBurnKmS2 = 1e-4;
@@ -1375,6 +1453,8 @@ namespace SolarSystem
             // The system left behind no longer sees the pilot, nor holds a patrol's hail on it.
             World.Sensors?.UpdatePilot(null, default, false, Clock.Jd);
             World.Law?.UpdatePilot(null, 0, default, default, Clock.Jd);
+            // Through the gate, the chase is left behind in the system the ship has left.
+            World.Pursuit?.ReleaseAll(Clock.Jd);
             Activate(destination);
             Piloted = Target.OfShip(arrived);
             World.PilotedShip = arrived;
@@ -1997,6 +2077,19 @@ namespace SolarSystem
                         shipRotationInitialised[i] = true;
                         // Its own state, not whatever the schedule last drew (an entry glow, a drive flame).
                         shipStates[i] = new ShipState(Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm, pilotForward, pilotVelKmS.Length, false, 0);
+                        continue;
+                    }
+                    // Running the player down (U.SPC-T273): where the chase has it, nose on its way, drive lit.
+                    var chase = World.Pursuit != null && World.Pursuit.Active ? World.Pursuit.Of(ship) : null;
+                    if (chase != null)
+                    {
+                        int frame = World.Pursuit.Body;
+                        var off = Pursuit.OffsetOf(chase, ship);
+                        var heading = chase.Vel.LengthSquared > 1e-12 ? chase.Vel.Normalized : (pilotOffsetKm - off).Normalized;
+                        shipScene[i] = bodyScene[frame] + Scale.LocalOffset(Catalog[frame], off);
+                        shipRotation[i] = ToRotation(heading, DVec3.UnitZ);
+                        shipRotationInitialised[i] = true;
+                        shipStates[i] = new ShipState(Ephemeris.Helio(frame) + off, heading, chase.Vel.Length, true, 0);
                         continue;
                     }
 

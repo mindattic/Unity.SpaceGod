@@ -922,6 +922,50 @@ namespace SolarSystem.Core
             Enforce(ship, hunter, body, offsetFromBodyKm, forward, jd, "Bounty hunt off ",
                 (leader, b) => $"{b.Name}: the bounty hunter {leader.Name} closes on the wanted {ship.Name}");
 
+        /// <summary>
+        /// A group running the player's ship down has caught it (U.SPC-T273): the fight is where the player is, anywhere
+        /// in open space, with the group's ships where the chase had them about it (no more than
+        /// <see cref="PursuitStartKm"/> off). Joins the player's own fight if one is on. Null if the player is not the
+        /// group's to fight.
+        /// </summary>
+        public Battle TryStartPursuit(Ship ship, Pursuer g, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd)
+        {
+            if (ship == null || ship.Destroyed || ship.Planetside || g == null || g.Leader.Destroyed) return null;
+            var b = ship.Battle;
+            int side;
+            if (b != null)
+            {
+                var mine = b.UnitOf(ship);
+                if (mine == null) return null;
+                side = 1 - mine.Side;
+            }
+            else
+            {
+                b = new Battle(nextBattleId++, body, "Run down off " + Catalog[body].Name, offsetFromBodyKm, jd, rng.Next()) { AggressorSide = 1 };
+                Hook(b);
+                var approach = g.Pos - offsetFromBodyKm;
+                b.ApproachAxis = approach.LengthSquared > 1e-9 ? approach.Normalized : DVec3.UnitX;
+                var unit = b.AddShip(ship, 0, DVec3.Zero, forward);
+                unit.PlayerControlled = true;
+                side = 1;
+                Battles.Add(b);
+                world.Log(jd, $"{b.Name}: the {g.Faction.Name} {g.Leader.Name} runs down the {ship.Name}", WorldEventKind.Battle, Shown(b));
+                BattleStarted?.Invoke(b);
+            }
+            foreach (var s in g.Ships)
+            {
+                if (s.Destroyed || s.Battle != null) continue;
+                var at = Pursuit.OffsetOf(g, s) - b.Anchor;
+                if (at.Length > PursuitStartKm) at = at.Normalized * PursuitStartKm;
+                var face = (b.UnitOf(ship)?.Pos ?? DVec3.Zero) - at;
+                b.AddShip(s, side, at, face.LengthSquared > 1e-12 ? face : DVec3.UnitX);
+            }
+            return b;
+        }
+
+        /// <summary>The furthest a chasing ship starts from the anchor of the fight it catches the player in, km.</summary>
+        const double PursuitStartKm = 20;
+
         Battle Enforce(Ship ship, Ship patrol, int body, DVec3 offsetFromBodyKm, DVec3 forward, double jd, string name, Func<Ship, Battle, string> news)
         {
             if (ship == null || patrol == null || ship.Destroyed || ship.Battle != null || ship.Planetside) return null;

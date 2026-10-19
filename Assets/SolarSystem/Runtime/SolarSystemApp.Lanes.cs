@@ -70,7 +70,8 @@ namespace SolarSystem
             {
                 var ship = IsPiloting ? Piloted.Ship : null;
                 var unit = ship?.Battle?.UnitOf(ship);
-                return unit != null && unit.Stunned > 0 ? unit.Stunned : 0;
+                // A hunter's EMP out of battle (U.SPC-T273) knocks the drives out just as a pulse or an EMP round in one.
+                return Math.Max(unit != null && unit.Stunned > 0 ? unit.Stunned : 0, pilotEmpSeconds);
             }
         }
 

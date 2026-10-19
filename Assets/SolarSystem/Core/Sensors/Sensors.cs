@@ -354,6 +354,13 @@ namespace SolarSystem.Core
                 helio = pilotHelio;
                 return pilotBurning;
             }
+            // A group running the player down is where the chase has it, its drive lit (U.SPC-T273).
+            var chasing = world.Pursuit != null && world.Pursuit.Active ? world.Pursuit.HelioOf(s, jd) : null;
+            if (chasing != null)
+            {
+                helio = chasing.Value;
+                return true;
+            }
             var st = world.Fleet.StateOf(s, jd);
             helio = st.HelioKm;
             var c = s.Controller;

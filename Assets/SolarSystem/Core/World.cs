@@ -64,6 +64,9 @@ namespace SolarSystem.Core
         /// <summary>Named outlaw captains, the ports' bounty boards and the bounty hunters who work them (see <see cref="Core.Outlaws"/>).</summary>
         public Outlaws Outlaws { get; private set; }
 
+        /// <summary>Hostile groups running the piloted ship down (U.SPC-T273).</summary>
+        public Pursuit Pursuit { get; private set; }
+
         /// <summary>The trading companies that own and run the merchant fleet (U.SPC-T99; see <see cref="Core.Companies"/>).</summary>
         public Companies Companies { get; private set; }
 
@@ -332,6 +335,7 @@ namespace SolarSystem.Core
             Law = new Law(this, Adventures.Reputation);
             // The law judges a battle first; then the outlaws' records take in what their bands did in it.
             Outlaws = new Outlaws(this, seed + 11);
+            Pursuit = new Pursuit(this, seed + 13);
             war.BattleStarted += Outlaws.OnBattleStarted;
             war.BattleEnded += Law.OnBattleEnded;
             war.BattleEnded += Outlaws.OnBattleEnded;
@@ -388,7 +392,9 @@ namespace SolarSystem.Core
             economy.ShipBuilt = OnShipBuilt;
             economy.CanCrew = (yard, cls) => Crews.CanCrew(yard.Owner, cls);
             fleet.BeforeEvent = economy.AdvanceTo;
-            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip || (ship.Voyage != null && ship.Voyage.AtGate);
+            // A group running the player down is flown by the chase, not its schedule (U.SPC-T273).
+            fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip || (ship.Voyage != null && ship.Voyage.AtGate) ||
+                                   (Pursuit != null && Pursuit.Active && Pursuit.Of(ship) != null);
             // The player's captains keep their own time in port (mining a claim, waiting on a charge).
             fleet.Dwell = (ship, normal) => Holdings.Owns(ship) ? Holdings.Dwell(ship, normal) : war.Dwell(ship, normal);
             fleet.Arrived = (ship, when) =>
