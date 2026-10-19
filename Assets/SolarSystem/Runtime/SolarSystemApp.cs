@@ -1443,8 +1443,14 @@ namespace SolarSystem
             unit.Forward = pilotForward;
             // No firing while cruising -- the cruise drive is a travel tier, not a combat one.
             // Nor while a pulse has the hull's systems down.
-            unit.PlayerFireHeld = Input.Fire && !pilotCruise.Active && !ClickPanelOpen && unit.Stunned <= 0;
-            unit.PlayerLockTarget = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
+            bool armed = !pilotCruise.Active && !ClickPanelOpen && unit.Stunned <= 0;
+            unit.PlayerFireHeld = Input.Fire && armed;
+            // The right button launches missiles once the lock is made (U.SPC-T270); the guns fire down the crosshair.
+            unit.PlayerSecondaryHeld = Input.LookHeld && armed;
+            unit.PlayerAim = pilotAim;
+            var lockUnit = pilotLockTarget.IsShip ? ship.Battle.UnitOf(pilotLockTarget.Ship) : null;
+            if (lockUnit != unit.PlayerLockTarget) unit.LockProgress = 0;
+            unit.PlayerLockTarget = lockUnit;
             UpdateSurrenderPrompts(ship.Battle, unit);
         }
 
@@ -1714,9 +1720,41 @@ namespace SolarSystem
             if (!pilotLockTarget.IsNone) { pilotLockTarget = Target.None; return; }
             // The piloted ship is itself the selection while piloting, so it can't stand in the way of the hovered one.
             bool Other(Target c) => c.IsShip && c.Ship != Piloted.Ship;
-            var t = Other(Selected) ? Selected : Other(Hovered) ? Hovered : Target.None;
+            var t = Other(Selected) ? Selected : Other(Hovered) ? Hovered : NearestToCrosshair();
             if (t.IsShip) pilotLockTarget = t;
         }
+
+        /// <summary>The hull fought over that sits nearest the crosshair, within <see cref="LockPickConeDeg"/> of it:
+        /// what T locks when nothing is hovered or selected.</summary>
+        Target NearestToCrosshair()
+        {
+            var battle = Piloted.Ship?.Battle;
+            var me = battle?.UnitOf(Piloted.Ship);
+            if (me == null) return Target.None;
+            Ship best = null;
+            double bestCos = Math.Cos(LockPickConeDeg * Mathf.Deg2Rad);
+            foreach (var o in battle.Units)
+            {
+                if (o.Ship == null || o == me || !o.Present || !battle.Hostile(me, o)) continue;
+                var to = o.Pos - me.Pos;
+                if (to.LengthSquared < 1e-12) continue;
+                double cos = DVec3.Dot(pilotAim, to.Normalized);
+                if (cos > bestCos)
+                {
+                    bestCos = cos;
+                    best = o.Ship;
+                }
+            }
+            return best != null ? Target.OfShip(best) : Target.None;
+        }
+
+        const double LockPickConeDeg = 15;
+
+        /// <summary>The flown hull's own battle unit, if it is in a fight.</summary>
+        public BattleUnit PilotUnit => IsPiloting && Piloted.Ship?.Battle != null ? Piloted.Ship.Battle.UnitOf(Piloted.Ship) : null;
+
+        /// <summary>The locked hull's battle unit, if it is in the flown hull's fight.</summary>
+        public BattleUnit PilotLockUnit => PilotUnit?.PlayerLockTarget;
 
         /// <summary>Camera elevation of the system overview, degrees.</summary>
         public const float OverviewPitch = 52f;

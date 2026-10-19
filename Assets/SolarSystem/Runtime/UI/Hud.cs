@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Globalization;
 using SolarSystem.Cameras;
 using SolarSystem.Core;
@@ -105,6 +106,7 @@ namespace SolarSystem.UI
                 return;
             }
             DrawFlightMarkers();
+            DrawCombatHud();
             DrawTopBar();
             if (app.ShowNews) DrawNews();
             else DrawTicker();
@@ -428,6 +430,121 @@ namespace SolarSystem.UI
             var p = new Vector2((Screen.width - size.x) * 0.5f, Screen.height - 66);
             DrawLabel(readout, p, assist ? Dim : RetrogradeColor, true);
         }
+
+        // ---------------------------------------------------------------- aimed combat (U.SPC-T270)
+
+        static readonly Color HostileColor = new Color(1f, 0.4f, 0.35f, 0.95f);
+        static readonly Color LockColor = new Color(1f, 0.85f, 0.3f, 0.95f);
+
+        /// <summary>
+        /// In a fight at the helm: the locked hull's box with the lock building on it, the lead pip where the
+        /// guns' rounds will meet it, and the gauges a pilot fights by -- heat, boost, shields and hull, missiles.
+        /// </summary>
+        void DrawCombatHud()
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            var me = app.PilotUnit;
+            if (me == null || app.Travel.Active) return;
+            var battle = app.Piloted.Ship.Battle;
+            var c = me.Combat;
+
+            var locked = me.PlayerLockTarget;
+            if (locked != null && locked.Present && app.ToGui(app.BattleScene(battle, locked.Pos), out var lp, out _))
+            {
+                bool made = me.LockProgress >= 1;
+                // The box closes in on the hull as the lock builds.
+                float half = Mathf.Lerp(46f, 18f, (float)me.LockProgress);
+                DrawBrackets(new Rect(lp.x - half, lp.y - half, half * 2, half * 2), made ? LockColor : HostileColor, made ? 2.5f : 1.5f);
+                string state = made ? "LOCKED" : "LOCKING " + Mathf.RoundToInt((float)me.LockProgress * 100) + "%";
+                DrawLabel(state + "  " + RangeText((locked.Pos - me.Pos).Length), lp + new Vector2(half + 6, -8), made ? LockColor : HostileColor, true);
+            }
+
+            // The lead pip for the guns' rounds, on the locked hull or else the one nearest the crosshair.
+            double speed = RoundSpeed(c);
+            var pipOn = locked != null && locked.Present ? locked : NearestHostileToAim(battle, me);
+            if (speed > 0 && pipOn != null)
+            {
+                var lead = Gunnery.LeadPoint(me.Pos, me.Vel, pipOn.Pos, pipOn.Vel, speed);
+                if (app.ToGui(app.BattleScene(battle, lead), out var pip, out _))
+                {
+                    DrawRing(pip, 7, HostileColor);
+                    if (app.ToGui(app.BattleScene(battle, pipOn.Pos), out var at, out _) && (at - pip).sqrMagnitude > 64)
+                        DrawLine(at, pip, new Color(HostileColor.r, HostileColor.g, HostileColor.b, 0.35f), 1f);
+                }
+            }
+
+            // The gauges, in a row above the flight readout.
+            float w = 120, x0 = Screen.width * 0.5f - 2 * (w + 14) + 7, y = Screen.height - 98;
+            DrawGauge(new Rect(x0, y, w, 6), (float)me.Heat, me.Overheated ? HostileColor : new Color(1f, 0.7f, 0.3f), me.Overheated ? "OVERHEATED" : "HEAT");
+            DrawGauge(new Rect(x0 + (w + 14), y, w, 6), (float)c.BoostFraction, Accent, "BOOST");
+            double maxShield = Math.Max(1e-9, c.Spec.Shield);
+            DrawGauge(new Rect(x0 + 2 * (w + 14), y, w, 6), (float)(c.Subsystems.Sum(s => s.Shield) / maxShield), new Color(0.45f, 0.7f, 1f), "SHIELDS");
+            DrawGauge(new Rect(x0 + 3 * (w + 14), y, w, 6), (float)(c.Hull / Math.Max(1e-9, c.Spec.Hull)), ProgradeColor, "HULL");
+            int missiles = c.Subsystems.Where(s => !s.Destroyed && s.Def.Weapon != null && s.Def.Weapon.Missile && s.Kind != SubsystemKind.Torpedo).Sum(s => s.Ammo);
+            if (missiles > 0)
+                DrawLabel("MISSILES " + missiles + (me.LockProgress >= 1 ? "  (right mouse)" : "  (T lock, hold the crosshair on it)"), new Vector2(x0, y + 12), Dim, true);
+        }
+
+        /// <summary>The fastest round the flown hull's own guns fire, km/s; 0 if they are all beams.</summary>
+        static double RoundSpeed(ShipCombat c)
+        {
+            double speed = 0;
+            foreach (var s in c.Subsystems)
+            {
+                var w = s.Def.Weapon;
+                if (s.Destroyed || w == null || w.Missile || w.AntiSmall || Math.Abs(Astro.WrapDegrees360(s.Def.ArcCenterDeg)) > 0.01) continue;
+                speed = Math.Max(speed, w.MuzzleSpeedKmS);
+            }
+            return speed;
+        }
+
+        /// <summary>The hostile hull nearest the crosshair, within 20 degrees of it.</summary>
+        BattleUnit NearestHostileToAim(Battle battle, BattleUnit me)
+        {
+            BattleUnit best = null;
+            double bestCos = Math.Cos(20 * Math.PI / 180);
+            var aim = app.PilotAimDirection;
+            foreach (var o in battle.Units)
+            {
+                if (o == me || !battle.Hostile(me, o)) continue;
+                var to = o.Pos - me.Pos;
+                if (to.LengthSquared < 1e-12) continue;
+                double cos = DVec3.Dot(aim, to.Normalized);
+                if (cos > bestCos)
+                {
+                    bestCos = cos;
+                    best = o;
+                }
+            }
+            return best;
+        }
+
+        void DrawGauge(Rect r, float fraction, Color color, string caption)
+        {
+            fraction = Mathf.Clamp01(fraction);
+            var old = GUI.color;
+            GUI.color = new Color(0, 0, 0, 0.5f);
+            GUI.DrawTexture(r, Icons.White);
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(r.x, r.y, r.width * fraction, r.height), Icons.White);
+            GUI.color = old;
+            DrawLabel(caption, new Vector2(r.x, r.y - 17), color, true);
+        }
+
+        /// <summary>A small open ring of eight dots.</summary>
+        void DrawRing(Vector2 p, float radius, Color color)
+        {
+            var old = GUI.color;
+            GUI.color = color;
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * Mathf.PI / 4;
+                GUI.DrawTexture(new Rect(p.x + Mathf.Cos(a) * radius - 1.5f, p.y + Mathf.Sin(a) * radius - 1.5f, 3, 3), Icons.White);
+            }
+            GUI.color = old;
+        }
+
+        static string RangeText(double km) => km < 10 ? (km * 1000).ToString("N0", CultureInfo.InvariantCulture) + " m" : km.ToString("0.0", CultureInfo.InvariantCulture) + " km";
 
         // ---------------------------------------------------------------- hyperlane rides (U.SPC-T41)
 
@@ -2564,6 +2681,7 @@ namespace SolarSystem.UI
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
+                "Combat  (piloting)   left mouse: guns, down the crosshair (watch the heat)   T lock the hull under it, hold the crosshair on it to lock   right mouse: missiles",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",

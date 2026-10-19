@@ -49,9 +49,29 @@ namespace SolarSystem.Core
         /// <summary>While <see cref="PlayerControlled"/>: whether the player is holding the fire trigger this frame.</summary>
         public bool PlayerFireHeld;
 
-        /// <summary>While <see cref="PlayerControlled"/>: the target a forward missile launcher fires at. Direct-fire
-        /// weapons ignore this and aim wherever the hull's own nose (<see cref="Forward"/>) is pointed instead.</summary>
+        /// <summary>While <see cref="PlayerControlled"/>: the target a forward missile launcher fires at, once
+        /// <see cref="LockProgress"/> has made the lock. Direct-fire weapons ignore this and fire down the
+        /// crosshair (<see cref="PlayerAim"/>) instead.</summary>
         public BattleUnit PlayerLockTarget;
+
+        /// <summary>While <see cref="PlayerControlled"/>: where the crosshair points (unit, ecliptic axes), the
+        /// line the player's guns swing to meet (<see cref="Gunnery"/>, U.SPC-T270). Zero means down the nose.</summary>
+        public DVec3 PlayerAim;
+
+        /// <summary>While <see cref="PlayerControlled"/>: the missile trigger held this frame.</summary>
+        public bool PlayerSecondaryHeld;
+
+        /// <summary>The player's guns' heat, 0-1: firing builds it, and once it reaches 1 they are
+        /// <see cref="Overheated"/> until it has fallen below <see cref="Gunnery.HeatRecoverBelow"/>.</summary>
+        public double Heat;
+        public bool Overheated;
+
+        /// <summary>The missile lock on <see cref="PlayerLockTarget"/>, 0-1: made at 1 (see <see cref="Gunnery.LockSeconds"/>).</summary>
+        public double LockProgress;
+
+        /// <summary>The velocity gunners read this hull as having: its real one, eased in over
+        /// <see cref="Gunnery.TrackingLagS"/>, so a steady course is tracked and a sudden jink is not (U.SPC-T270).</summary>
+        public DVec3 SeenVel;
 
         public BattleUnit Target;
         public double RetargetIn;
@@ -230,6 +250,10 @@ namespace SolarSystem.Core
         /// draws the two differently).</summary>
         public bool Railgun;
         public bool Gone;
+
+        /// <summary>An aimed round (U.SPC-T270): no roll at the muzzle and no <see cref="Target"/>; it hits
+        /// whatever hostile hull it actually flies through, or nothing (see <see cref="Gunnery"/>).</summary>
+        public bool Aimed;
     }
 
     public enum FxKind
@@ -482,15 +506,19 @@ namespace SolarSystem.Core
             for (int i = 0; i < Units.Count; i++)
             {
                 var u = Units[i];
-                if (u.Present) Fire(u, dt);
+                if (!u.Present) continue;
+                if (u.PlayerControlled) StepPlayerWeapons(u, dt);
+                Fire(u, dt);
             }
             StepMissiles(dt);
             StepRounds(dt);
             StepBoarding(dt);
             StepSurrenders(dt);
+            double track = 1 - Math.Exp(-dt / Gunnery.TrackingLagS);
             foreach (var u in Units)
             {
                 if (!u.Present) continue;
+                u.SeenVel += (u.Vel - u.SeenVel) * track;
                 var c = u.Combat;
                 if (u.Stunned > 0) u.Stunned -= dt;
                 else c.RegenShields(Seconds, dt);
@@ -890,7 +918,14 @@ namespace SolarSystem.Core
                     // The player's own nose guns: no AI target selection, no autofire. Side/aft
                     // batteries (a broadside hull's real firepower) fall through to the branch below
                     // completely unchanged, so piloting never silences a ship's crewed turrets.
-                    target = u.PlayerFireHeld ? (w.Missile ? PlayerLockedTarget(u, w, origin) : NearestAlignedHostile(u, origin, w)) : null;
+                    if (!w.Missile)
+                    {
+                        // Down the crosshair, hitting only what the shot really meets (U.SPC-T270).
+                        if (u.PlayerFireHeld && !u.Overheated) FirePlayerGun(u, s, origin, w);
+                        else s.Aim = DVec3.Zero;
+                        continue;
+                    }
+                    target = u.PlayerSecondaryHeld && u.LockProgress >= 1 ? PlayerLockedTarget(u, w, origin) : null;
                 }
                 else
                 {
@@ -926,6 +961,16 @@ namespace SolarSystem.Core
                         });
                     }
                     Emit(FxKind.MissileLaunch, origin, origin + s.Aim, 0, u.Side, u, s.Index);
+                    continue;
+                }
+
+                if (target.PlayerControlled)
+                {
+                    // At the player's own hull every shot is aimed and real (U.SPC-T270): led, late on a target
+                    // crossing the gunner's sights and scattered by his skill, it hits only if it meets the hull.
+                    var dir = AimAt(u, origin, target, aimPoint, w, accuracyScale);
+                    s.Aim = dir;
+                    ResolveShot(u, s, origin, dir, w);
                     continue;
                 }
 
@@ -998,6 +1043,11 @@ namespace SolarSystem.Core
             foreach (var r in Rounds)
             {
                 if (r.Gone) continue;
+                if (r.Aimed)
+                {
+                    StepAimedRound(r, dt);
+                    continue;
+                }
                 r.Pos += r.Vel * dt;
                 r.ArriveIn -= dt;
                 r.Life -= dt;
@@ -1022,25 +1072,168 @@ namespace SolarSystem.Core
         static bool IsPlayerAimable(SubsystemDef d) =>
             !(d.Weapon != null && d.Weapon.AntiSmall) && Math.Abs(Astro.WrapDegrees360(d.ArcCenterDeg)) < 0.01;
 
-        /// <summary>Boresight aim-assist for a player's direct-fire guns: the most dead-ahead hostile
-        /// within a forgiving cone (real flight sticks aren't pixel-perfect) and the weapon's range.
-        /// Picks the best alignment rather than the nearest hit, so a closer target well off-axis
-        /// doesn't steal the shot from a distant one sitting right on the reticle.</summary>
-        BattleUnit NearestAlignedHostile(BattleUnit u, DVec3 origin, WeaponSpec w)
+        /// <summary>
+        /// One of the player's guns fires down the crosshair (U.SPC-T270): swung off the nose as far as its
+        /// gimbal lets it (<see cref="Gunnery.Gimbal"/>), converged on whatever hostile the line of sight meets
+        /// (else at the gun's range) so guns spread along the hull all land where the crosshair is, and
+        /// building heat. What it hits is <see cref="ResolveShot"/>'s to decide.
+        /// </summary>
+        void FirePlayerGun(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w)
         {
-            const double AimConeCos = 0.985; // ~10 degrees either side of dead ahead
-            BattleUnit best = null;
-            double bestCos = AimConeCos;
+            var aim = u.PlayerAim.LengthSquared > 1e-12 ? u.PlayerAim.Normalized : u.Forward;
+            var sight = Gunnery.Gimbal(aim, u.Forward, s.Kind == SubsystemKind.Railgun ? Gunnery.RailgunGimbalDeg : Gunnery.GimbalDeg);
+            double converge = FirstHostileAlong(u.Side, u.Pos, sight, w.RangeKm, out _);
+            if (converge < 0) converge = w.RangeKm;
+            var toConverge = u.Pos + sight * converge - origin;
+            var dir = toConverge.LengthSquared > 1e-12 ? toConverge.Normalized : sight;
+            double scatter = w.MuzzleSpeedKmS > 0 && s.Kind != SubsystemKind.Railgun ? Gunnery.AutocannonScatterDeg : Gunnery.BeamScatterDeg;
+            dir = Gunnery.Scatter(dir, scatter * Astro.Deg2Rad, rng);
+            s.Aim = dir;
+            // The player's trigger keeps the gun's own rhythm, not a crew's jittered one.
+            s.Cooldown = w.Cooldown;
+            u.Heat += w.Damage * Gunnery.HeatPerDamage;
+            if (u.Heat >= 1)
+            {
+                u.Heat = 1;
+                u.Overheated = true;
+            }
+            ResolveShot(u, s, origin, dir, w);
+        }
+
+        /// <summary>
+        /// Where a gunner lays his gun on the player's hull: led for the round's flight (none for a beam), but
+        /// trailing a target that crosses his sights by a reaction lag, and scattered, both less the better the
+        /// gun (<see cref="WeaponSpec.Accuracy"/>, cut by a lost bridge). A hull flying straight is hit; one
+        /// turning, jinking or sliding across the line is missed.
+        /// </summary>
+        DVec3 AimAt(BattleUnit u, DVec3 origin, BattleUnit target, DVec3 aimPoint, WeaponSpec w, double accuracyScale)
+        {
+            double skill = Math.Max(0, Math.Min(1, w.Accuracy * accuracyScale));
+            // Where he sees it: carried on from a moment ago at the velocity he has read it as having, so a hull that
+            // has just changed course is not where he thinks.
+            var seen = aimPoint - (target.Vel - target.SeenVel) * (Gunnery.TrackingLagS * (1 - 0.5 * skill));
+            var point = w.MuzzleSpeedKmS > 0 ? Gunnery.LeadPoint(origin, u.Vel, seen, target.SeenVel, w.MuzzleSpeedKmS) : seen;
+            var to = point - origin;
+            var dir = to.LengthSquared > 1e-12 ? to.Normalized : u.Forward;
+            return Gunnery.Scatter(dir, Gunnery.MaxScatterDeg * (1 - skill) * Astro.Deg2Rad, rng);
+        }
+
+        /// <summary>
+        /// An aimed shot from <paramref name="origin"/> down <paramref name="dir"/>: a beam lands at once on the
+        /// first hostile hull it meets within range, a round flies off to hit whatever it meets on the way
+        /// (<see cref="StepAimedRound"/>). Either hits the hardpoint nearest where it struck.
+        /// </summary>
+        void ResolveShot(BattleUnit u, Subsystem s, DVec3 origin, DVec3 dir, WeaponSpec w)
+        {
+            bool beam = w.MuzzleSpeedKmS <= 0;
+            if (!beam)
+            {
+                Emit(s.Kind == SubsystemKind.Railgun ? FxKind.Railgun : FxKind.Guns, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
+                Rounds.Add(new KineticRound
+                {
+                    Pos = origin, Vel = u.Vel + dir * w.MuzzleSpeedKmS, Damage = w.Damage, Life = w.RangeKm / w.MuzzleSpeedKmS,
+                    Side = u.Side, Railgun = s.Kind == SubsystemKind.Railgun, Aimed = true,
+                });
+                return;
+            }
+            double t = FirstHostileAlong(u.Side, origin, dir, w.RangeKm, out var hit);
+            if (hit == null)
+            {
+                Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.BeamMiss, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
+                return;
+            }
+            var at = origin + dir * t;
+            var sub = SubsystemNear(hit, at);
+            Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.Beam, origin, at, w.Damage, u.Side, hit, sub?.Index ?? -1);
+            ApplyDamage(hit, sub, w.Damage, at);
+        }
+
+        /// <summary>An aimed round flies on, and hits the first hostile hull its path crosses this step.</summary>
+        void StepAimedRound(KineticRound r, double dt)
+        {
+            var step = r.Vel * dt;
+            double len = step.Length;
+            r.Life -= dt;
+            if (len > 1e-12)
+            {
+                double t = FirstHostileAlong(r.Side, r.Pos, step / len, len, out var hit);
+                if (hit != null)
+                {
+                    var at = r.Pos + step / len * t;
+                    r.Gone = true;
+                    ApplyDamage(hit, SubsystemNear(hit, at), r.Damage, at);
+                    return;
+                }
+            }
+            r.Pos += step;
+            if (r.Life <= 0) r.Gone = true;
+        }
+
+        /// <summary>How far down a line of fire the first hull hostile to <paramref name="side"/> lies, within
+        /// <paramref name="maxKm"/>; -1 (and no <paramref name="hit"/>) if the line is clear.</summary>
+        double FirstHostileAlong(int side, DVec3 origin, DVec3 dir, double maxKm, out BattleUnit hit)
+        {
+            hit = null;
+            double best = -1;
             foreach (var o in Units)
             {
-                if (!Hostile(u, o) || !o.Present) continue;
-                var to = o.Pos - origin;
-                double dist = to.Length;
-                if (dist < 1e-6 || dist - o.Radius > w.RangeKm) continue;
-                double cos = DVec3.Dot(u.Forward, to.Normalized);
-                if (cos > bestCos) { bestCos = cos; best = o; }
+                if (o.Side == side || !o.Present) continue;
+                double t = Gunnery.RaySphere(origin, dir, maxKm, o.Pos, Gunnery.HitRadius(o));
+                if (t >= 0 && (best < 0 || t < best))
+                {
+                    best = t;
+                    hit = o;
+                }
             }
             return best;
+        }
+
+        /// <summary>The hardpoint nearest where a shot struck, if one is close enough to have taken it (within a
+        /// sixth of the hull's length); otherwise the shot is to the hull.</summary>
+        static Subsystem SubsystemNear(BattleUnit target, DVec3 at)
+        {
+            if (target.Kind == UnitKind.Fighter) return null;
+            Subsystem best = null;
+            double bestD = target.LengthKm / 6;
+            foreach (var s in target.Combat.Subsystems)
+            {
+                if (s.Destroyed) continue;
+                double d = (target.PointOf(s.Def) - at).Length;
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// The player's guns cool and the missile lock builds or slips (U.SPC-T270): the lock grows while the
+        /// crosshair sits on the locked target and, once made, holds while the target stays ahead of the nose.
+        /// </summary>
+        void StepPlayerWeapons(BattleUnit u, double dt)
+        {
+            u.Heat = Math.Max(0, u.Heat - Gunnery.HeatCoolPerS * dt);
+            if (u.Overheated && u.Heat < Gunnery.HeatRecoverBelow) u.Overheated = false;
+
+            var t = u.PlayerLockTarget;
+            if (t == null || !t.Present || !Hostile(u, t))
+            {
+                u.LockProgress = 0;
+                return;
+            }
+            var to = t.Pos - u.Pos;
+            if (to.LengthSquared < 1e-12) return;
+            var dir = to.Normalized;
+            var aim = u.PlayerAim.LengthSquared > 1e-12 ? u.PlayerAim.Normalized : u.Forward;
+            if (u.LockProgress >= 1)
+            {
+                if (DVec3.Dot(u.Forward, dir) < Math.Cos(Gunnery.LockHoldDeg * Astro.Deg2Rad)) u.LockProgress = 0;
+                return;
+            }
+            bool onIt = DVec3.Dot(aim, dir) >= Math.Cos(Gunnery.LockConeDeg * Astro.Deg2Rad);
+            u.LockProgress = onIt ? Math.Min(1, u.LockProgress + dt / Gunnery.LockSeconds) : Math.Max(0, u.LockProgress - 2 * dt / Gunnery.LockSeconds);
         }
 
         /// <summary>A player's locked-on missile target, valid only while it is still hostile, present
