@@ -108,6 +108,22 @@ namespace SolarSystem.Core
             return was && !Working;
         }
 
+        /// <summary>
+        /// How busy the gate is (U.SPC-T94): ships through it, in or out, over about the last
+        /// <see cref="InterstellarTraffic.GateTrafficDays"/> (decaying). Where raiders lie in wait for traffic.
+        /// </summary>
+        public double Traffic;
+
+        /// <summary>Raids sprung on its approach so far (see <see cref="War.GateAmbushes"/>).</summary>
+        public int Ambushes;
+
+        /// <summary>How far inside the gate (toward the root) raiders lying in wait hold: clear of the
+        /// structure, where ships coming out and ships going in both pass.</summary>
+        public const double ApproachInsetKm = 600;
+
+        /// <summary>The gate's approach, relative to its system's root: <see cref="ApproachInsetKm"/> inside it.</summary>
+        public DVec3 ApproachKm => PositionKm - PositionKm.Normalized * ApproachInsetKm;
+
         public bool InRange(DVec3 shipHelioKm) => (shipHelioKm - PositionKm).Length <= ActivationRangeKm;
 
         /// <summary>Whether a ship at <paramref name="shipHelioKm"/> (relative to this gate's own

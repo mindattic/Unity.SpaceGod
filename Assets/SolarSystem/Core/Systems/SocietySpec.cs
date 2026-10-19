@@ -58,6 +58,9 @@ namespace SolarSystem.Core
 
         public bool Hidden;
 
+        /// <summary>A lawless station with a black market (U.SPC-T94, see <see cref="Settlement.Lawless"/>).</summary>
+        public bool Lawless;
+
         /// <summary>Why it is where it is (what makes the place plausible).</summary>
         public string Note;
     }
@@ -81,6 +84,10 @@ namespace SolarSystem.Core
 
         /// <summary>The invented stations the settlements need, added to the system's bodies.</summary>
         public readonly List<StationSpec> Stations = new List<StationSpec>();
+
+        /// <summary>Hides in the system's belts and discs where a pirate clan could one day found a haven (stations named in
+        /// <see cref="Stations"/>, empty at the start; U.SPC-T94).</summary>
+        public readonly List<string> HavenSites = new List<string>();
 
         public readonly List<(string a, string b, double bend)> Lanes = new List<(string, string, double)>();
 
@@ -125,12 +132,13 @@ namespace SolarSystem.Core
         }
 
         public SettlementSpec Add(string name, string body, SettlementKind kind, SocietyRole owner, double population, string note,
-            Good[] mines = null, IndustryKind[] makes = null, double shipyard = 0, double munitions = 0, bool hidden = false)
+            Good[] mines = null, IndustryKind[] makes = null, double shipyard = 0, double munitions = 0, bool hidden = false, bool lawless = false)
         {
             var s = new SettlementSpec
             {
                 Name = name, Body = body, Kind = kind, Owner = owner, Population = population, Note = note,
                 Mines = mines ?? new Good[0], Makes = makes ?? new IndustryKind[0], Shipyard = shipyard, Munitions = munitions, Hidden = hidden,
+                Lawless = lawless,
             };
             Settlements.Add(s);
             return s;
@@ -140,6 +148,13 @@ namespace SolarSystem.Core
             Stations.Add(new StationSpec { Name = name, Host = host, AAu = aAu, MeanAnomalyDeg = meanAnomalyDeg, Summary = "Fiction. " + summary });
 
         public void Lane(string a, string b, double bend) => Lanes.Add((a, b, bend));
+
+        /// <summary>A hide in a belt or disc, empty until a clan founds a haven there (U.SPC-T94): a station body of its own.</summary>
+        public void HavenSite(string name, string host, double aAu, double meanAnomalyDeg, string summary)
+        {
+            Station(name, host, aAu, meanAnomalyDeg, summary);
+            HavenSites.Add(name);
+        }
     }
 
     public sealed partial class World
@@ -178,6 +193,7 @@ namespace SolarSystem.Core
             {
                 var s = e.Add(spec.Name, w.Catalog[spec.Body].Index, spec.Kind, Of(spec.Owner), spec.Population * scale);
                 s.Hidden = spec.Hidden;
+                s.Lawless = spec.Lawless;
                 if (spec.Kind == SettlementKind.Haven)
                 {
                     haven ??= s;
@@ -260,6 +276,7 @@ namespace SolarSystem.Core
             w.FoundCompanies(startJd, table.ToArray());
             w.AddFreeShips(startJd, society.Yachts, society.Prospectors);
             if (haven != null) war.RaisePirateGroup(startJd, haven.Body);
+            foreach (var site in society.HavenSites) w.HavenSites.Add(w.Catalog[site].Index);
             w.SeatCapitals();
             w.MusterReserves();
 

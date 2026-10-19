@@ -103,6 +103,15 @@ namespace SolarSystem.Core
         /// </summary>
         public Func<Ship, int, double, int> VoyageOrders;
 
+        /// <summary>This system's jump gates (see <see cref="StarSystem.Gates"/>); empty for a world on its own.</summary>
+        public readonly List<JumpGate> Gates = new List<JumpGate>();
+
+        /// <summary>
+        /// Hides in this system's belts and discs where no haven stands yet (body indices): where a pirate clan from
+        /// elsewhere can found one (U.SPC-T94, see <see cref="FoundHaven"/>).
+        /// </summary>
+        public readonly List<int> HavenSites = new List<int>();
+
         int builtCount;
 
         World(Ephemeris ephemeris, double startJd, int seed, Polities polities)
@@ -291,6 +300,41 @@ namespace SolarSystem.Core
             }
             f.Treasury += treasury;
             return Fleet.AddFaction(f);
+        }
+
+        /// <summary>People a clan's newly founded haven starts with.</summary>
+        public const double FoundedHavenPopulation = 5e3;
+
+        /// <summary>
+        /// A pirate clan founds a haven here (U.SPC-T94): a hidden hold at <paramref name="body"/> (one of the
+        /// <see cref="HavenSites"/>), feeding itself, with one gun platform, and the clan gains a presence in this system.
+        /// Where no clan of its own holds a haven here, this one's raiders are now the system's: new bands sail from the
+        /// haven (one at a time) and a bounty hunter can be fitted out to go after them.
+        /// </summary>
+        public Settlement FoundHaven(string name, int body, Faction clan, double jd)
+        {
+            if (clan == null || !clan.IsPirate) return null;
+            Fleet.AddFaction(clan);
+            var s = Economy.Add(name, body, SettlementKind.Haven, clan, FoundedHavenPopulation);
+            s.Hidden = true;
+            Subsist(s, (st, g, perDay) => st.Facilities.Add(new Facility(Recipe.Mine(g, perDay), 1)),
+                (st, k, level) => st.Facilities.Add(new Facility(Recipe.Of(k), level)));
+            Economy.Open(s);
+            // Stocked for a start, as havens are at the beginning.
+            for (int i = 0; i < GoodInfo.Count; i++) s.Stock[i] = s.Target((Good)i);
+            s.RefreshPrices();
+            s.MaxPlatforms = 1;
+            s.Platforms.Add(new ShipCombat(CombatSpec.Platform));
+            HavenSites.Remove(body);
+            bool ownClan = false;
+            foreach (var h in Economy.Settlements)
+                if (h != s && h.Kind == SettlementKind.Haven && !h.Fallen && h.Owner == Pirates) ownClan = true;
+            if (!ownClan) Pirates = clan;
+            PirateGroupCap = Math.Max(PirateGroupCap, 1);
+            PirateIncomePerDay = Math.Max(PirateIncomePerDay, 2e5);
+            HunterCap = Math.Max(HunterCap, 1);
+            Log(jd, $"A new raider hold is whispered of somewhere in the dark: {clan.Name} have come to {Catalog.Root.Name}", WorldEventKind.Info, -1);
+            return s;
         }
 
         /// <summary>The raiders of a system with no clan of its own: one unknown, the same in every such system.</summary>
@@ -483,6 +527,8 @@ namespace SolarSystem.Core
                     int ordered = VoyageOrders(ship, here, when);
                     if (ordered >= 0) return ordered;
                 }
+                // A clan's smuggler lies at its haven between runs (U.SPC-T94).
+                if (ship.Runner) return ship.Route != null && ship.Route.Length > 0 ? ship.Route[0] : here;
                 // The player's own ships go where their captains' standing orders take them.
                 if (Holdings.Owns(ship)) return Holdings.ChooseNext(ship, here, when);
                 // A merchant, courier or free ship on a contract goes where it takes it; an idle one may take one here.

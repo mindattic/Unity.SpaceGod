@@ -126,7 +126,8 @@ namespace SolarSystem.Core
                 With(Volatiles, Good.HeliumThree), I(Pharma, Fab), shipyard: 0.4);
             s.Add("Ironrain", "Ironrain", Station, Co, 55e3, "Iron and silicates rained out of the cloud decks.",
                 G(Good.NickelIron, Good.Titanium), I(Smelter, Works));
-            s.Add("Scree", "Scree", Outpost, Co, 35e3, "Metals and rare metals from captured rubble.", With(Precious, Good.Copper, Good.Zinc));
+            // Too far out and too small for the Authority's writ: its middlemen keep a black market (U.SPC-T94).
+            s.Add("Scree", "Scree", Outpost, Co, 35e3, "Metals and rare metals from captured rubble.", With(Precious, Good.Copper, Good.Zinc), lawless: true);
             s.Lane("Cloudbreak", "Scree", 0.05);
             s.Lane("Cloudbreak", "Ironrain", -0.03);
             s.Lane("Scree", "Ironrain", 0.03);
@@ -155,7 +156,7 @@ namespace SolarSystem.Core
             s.Station("Cinderfall", "Wolf 359", 0.4, 260, "A smelting station on a captured swarm of rock (no belt is known here).");
             s.Add("Flarewall", "Flarewall", Station, Gov, 100e3, "The temperate orbit; nothing else at this star is.", null, I(Fab, Works, Pharma), shipyard: 0.6, munitions: 0.4);
             s.Add("Howling Deep", "Wolf 359 b", Station, Gov, 80e3, "An aerostat skimming the cold giant (a candidate planet).", With(Skimmed, Good.Water));
-            s.Add("Cinderfall", "Cinderfall", Outpost, Co, 70e3, "Ore and rare metals from the rubble.", Join(Metals, Precious), I(Smelter));
+            s.Add("Cinderfall", "Cinderfall", Outpost, Co, 70e3, "Ore and rare metals from the rubble.", Join(Metals, Precious), I(Smelter), lawless: true);
             s.Lane("Flarewall", "Cinderfall", 0.05);
             s.Lane("Cinderfall", "Wolf 359 b", -0.04);
             s.Lane("Flarewall", "Wolf 359 b", 0.03);
@@ -251,6 +252,7 @@ namespace SolarSystem.Core
             s.Add("AEgir Skimmer", "Epsilon Eridani b", Station, Gov, 90e3, "An aerostat skimming the Jupiter-mass giant, with labs on its hydrocarbons.", Skimmed, I(Pharma));
             s.Add("Hlesey", "Hlesey", Station, Co, 70e3, "Water and nitrogen from the outer belt's ice.", Volatiles);
             s.Add("Wavecrest", "Wavecrest", Haven, Raid, 8e3, "The Wave Daughters' hold.", hidden: true);
+            s.HavenSite("Farstrand", "Epsilon Eridani", 70, 200, "An empty hide among the icy debris of the 70 AU ring: room for another clan's hold.");
             s.Lane("Eridanus", "Ran", 0.05);
             s.Lane("Ran", "Epsilon Eridani b", -0.04);
             s.Lane("Epsilon Eridani b", "Hlesey", 0.04);
@@ -340,7 +342,10 @@ namespace SolarSystem.Core
             s.Add("Frostfall", "Tau Ceti f", Outpost, Gov, 140e3, "A cold super-Earth just past the habitable zone: ice and titanium under domes.",
                 G(Good.Water, Good.Nitrogen, Good.Titanium, Good.RareEarths));
             s.Add("Kiln", "Tau Ceti h", Outpost, Co, 110e3, "A hot world's metal mines, and the fabs and works they feed.", Join(Metals, new[] { Good.Platinum }), I(Smelter, Fab, Works), shipyard: 0.3);
-            s.Add("Cometreach", "Cometreach", Station, Co, 60e3, "Water, hydrocarbons and helium-3 from the disc's comets, and labs on the hydrocarbons.", With(Volatiles, Good.HeliumThree), I(Pharma));
+            s.Add("Cometreach", "Cometreach", Station, Co, 60e3, "Water, hydrocarbons and helium-3 from the disc's comets, and labs on the hydrocarbons.", With(Volatiles, Good.HeliumThree), I(Pharma),
+                lawless: true);
+            // Deep in the disc, a hollow where a clan from elsewhere could hide a haven (U.SPC-T94).
+            s.HavenSite("Driftglass", "Tau Ceti", 30, 300, "A hollow comet deep in the debris disc, dark and empty: room for a raider hold.");
             s.Lane("Cetus Station", "Tau Ceti f", 0.04);
             s.Lane("Cetus Station", "Tau Ceti h", -0.05);
             s.Lane("Tau Ceti f", "Cometreach", 0.04);

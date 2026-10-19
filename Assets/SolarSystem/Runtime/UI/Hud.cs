@@ -2563,6 +2563,7 @@ namespace SolarSystem.UI
                 case OrderKind.Repair: return "Refit at " + where;
                 case OrderKind.Raid: return "Raid shipping at " + where;
                 case OrderKind.Hunt: return "Hunt pirates at " + where;
+                case OrderKind.GateWatch: return "Lie in wait off the jump gates (" + where + ")";
                 default: return "Patrol, next " + where;
             }
         }

@@ -18,6 +18,9 @@ namespace SolarSystem.Core
 
         /// <summary>Storm a pirate haven: break its garrison, then board and take it or destroy it.</summary>
         Assault,
+
+        /// <summary>Lie in wait off a jump gate, where traffic bunches up going in and coming out (pirates; U.SPC-T94).</summary>
+        GateWatch,
     }
 
     /// <summary>
@@ -113,6 +116,22 @@ namespace SolarSystem.Core
         /// <summary>Raised when a battle begins (the app may want to slow time or point the camera).</summary>
         public event Action<Battle> BattleStarted;
 
+        /// <summary>Raised when a pirate clan takes loot or a prize here: the clan, what it was worth (credits) and the date
+        /// (U.SPC-T94; the clans' victims put a price on them, see <see cref="PirateClans"/>).</summary>
+        public event Action<Faction, double, double> Plundered;
+
+        /// <summary>The chance a raider group, deciding where to go next, lies in wait off its system's busiest gate instead.</summary>
+        public const double GateWatchChance = 0.2;
+
+        /// <summary>A gate must have seen at least this much traffic lately (<see cref="JumpGate.Traffic"/>) to be worth watching.</summary>
+        public const double MinGateTraffic = 2;
+
+        /// <summary>Raiders lying off a gate fall on ships that come within this of them (km): everyone going in or coming out.</summary>
+        public const double GateAmbushRangeKm = 3000;
+
+        /// <summary>A fight off a system's root (out at a jump gate, not over a world) takes in only those this close to it (km).</summary>
+        public const double GateFightRangeKm = 20000;
+
         /// <summary>Raised as a battle is resolved, before its survivors go back to their schedules: every unit's
         /// fate (dead, fled, taken, ransomed) is final. The law judges what was done in it (see <see cref="Law.OnBattleEnded"/>).</summary>
         public event Action<Battle, double> BattleEnded;
@@ -198,6 +217,7 @@ namespace SolarSystem.Core
                 if (b.Over) Resolve(b, jd);
             }
             Interdictions(jd);
+            GateAmbushes(jd);
             if (jd >= nextPodSweepJd)
             {
                 double days = Math.Min(1, jd - nextPodSweepJd + PodSweepDays);
@@ -328,7 +348,7 @@ namespace SolarSystem.Core
             Battles.Add(b);
             lanes0().Danger.TryGetValue(lane, out double danger);
             lanes0().SetDanger(lane, danger + 3);
-            world.Log(jd, $"{world.Pirates.Name} raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
+            world.Log(jd, $"{lurker.Faction.Name} raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
             BumpDanger(lane.A, 1);
             BumpDanger(lane.B, 1);
             BattleStarted?.Invoke(b);
@@ -451,7 +471,7 @@ namespace SolarSystem.Core
                 case SurrenderTerms.RansomCargo:
                     if (ship.HasCargo)
                     {
-                        if (captor != null && captor.IsPirate) Loot(ship);
+                        if (captor != null && captor.IsPirate) Loot(ship, captor, b);
                         else
                         {
                             if (captor != null) captor.Treasury += ship.CargoTonnes * GoodInfo.Of(ship.CargoGood).BasePrice * 0.8;
@@ -539,14 +559,15 @@ namespace SolarSystem.Core
                         ship.CargoDestination = null;
                         ship.CargoTonnes -= left;
                     }
-                    Loot(ship);
+                    Loot(ship, captor, b);
                 }
-                if (warship && hull >= 0.3) how = Steal(ship, captor, b, jd) ? $"pressed into {world.Pirates.Name} service" : "scuttled";
+                if (warship && hull >= 0.3) how = Steal(ship, captor, b, jd) ? $"pressed into {captor.Name} service" : "scuttled";
                 else if (warship) { Scuttle(ship, b, u, jd); how = "scuttled, its crew put off in the pods"; }
                 else if (adrift) { LeaveAdrift(ship, b, u, captor, good, left, jd); how = "stripped and left adrift"; }
                 else if (roll < 0.85)
                 {
-                    world.Pirates.Treasury += Economy.HullPrice(ship.Spec.Class) * 0.25;
+                    captor.Treasury += Economy.HullPrice(ship.Spec.Class) * 0.25;
+                    Plundered?.Invoke(captor, Economy.HullPrice(ship.Spec.Class), jd);
                     // Its crew go with it, as hostages to be ransomed.
                     TakeCrewCaptive(ship, captor, jd);
                     Detach(ship);
@@ -554,7 +575,7 @@ namespace SolarSystem.Core
                     // A hull lost to its owners like any other.
                     losses.TryGetValue(ship.Faction, out int lost);
                     losses[ship.Faction] = lost + 1;
-                    how = $"taken to {HavenName()} and sold to the breakers";
+                    how = $"taken to {HavenName(captor)} and sold to the breakers";
                 }
                 else { Scuttle(ship, b, u, jd); how = "scuttled, its crew put off in the pods"; }
             }
@@ -590,11 +611,13 @@ namespace SolarSystem.Core
             world.Log(jd, $"The {ship.Name} is {how} by the {captor.Name}" + (prisoners >= 1 ? $", {prisoners:0} of its crew taken prisoner" : ""), WorldEventKind.Capture, Shown(b));
         }
 
-        void Loot(Ship ship)
+        void Loot(Ship ship, Faction clan, Battle b)
         {
             Economy.Release(ship);
-            DeliverLoot(ship.CargoGood, ship.CargoTonnes);
-            world.Pirates.Treasury += ship.CargoTonnes * GoodInfo.Of(ship.CargoGood).BasePrice * 0.3;
+            double value = ship.CargoTonnes * GoodInfo.Of(ship.CargoGood).BasePrice;
+            DeliverLoot(clan, ship.CargoGood, ship.CargoTonnes, b);
+            clan.Treasury += value * 0.3;
+            Plundered?.Invoke(clan, value, lastJd);
             ship.HasCargo = false;
             ship.CargoDestination = null;
             ship.Cargo = null;
@@ -803,11 +826,20 @@ namespace SolarSystem.Core
             // On the ground (or on the way down or up) a ship is out of the fight.
             if (ship.Destroyed || ship.Battle != null || ship.Planetside) return;
             int body = ship.Orbit.Body;
+            // Raiders home with plunder put it in the haven's stores (U.SPC-T94).
+            if (ship.Faction.IsPirate) UnloadPlunder(ship.Controller, body);
+            // A clan's smuggler docks at a lawless station unchallenged: its guns look the other way (U.SPC-T94).
+            if (ship.Runner)
+                foreach (var st in Economy.At(body))
+                    if (st.Lawless && !st.Fallen) return;
             // Anyone who turns up at a hidden haven's rock sees it.
             if (!ship.Faction.IsPirate)
                 foreach (var st in Economy.At(body))
                     if (st.Hidden) Discover(st, ship.Faction, jd, $"the {ship.Name} comes upon it");
+            // Off the system's root (at a jump gate's approach) only what is near it counts (U.SPC-T94).
+            DVec3? at = body == Catalog.Root.Index ? ship.Controller.Orbit.OffsetAt(jd) : (DVec3?)null;
             var existing = BattleAt(body);
+            if (existing != null && at is DVec3 here && (existing.Anchor - here).Length > GateFightRangeKm) existing = null;
             if (existing != null)
             {
                 // Join the side it can fight beside: against one side's leader and not the other's.
@@ -817,14 +849,14 @@ namespace SolarSystem.Core
                 if (side >= 0) Join(existing, ship, side, true);
                 return;
             }
-            if (TryStartBattle(body, ship.Faction, jd) != null) return;
+            if (TryStartBattle(body, ship.Faction, jd, at) != null) return;
             // Not fit to pick a fight itself: one waiting here that is falls on it instead, unless it is pulling back
             // from a fight it has just lost (let go while it gets clear, see TryStartBattle).
             if (Withdrawing(ship.Controller, jd)) return;
-            foreach (var s in PresentGroups(body))
+            foreach (var s in PresentGroups(body, at, jd))
                 if (s.Battle == null && (s.Spec.IsMilitary || s.Faction.IsPirate) && Diplomacy.Hostile(s.Faction, ship.Faction) && Willing(s.Controller, jd) && s.Combat.Armed)
                 {
-                    TryStartBattle(body, s.Faction, jd);
+                    TryStartBattle(body, s.Faction, jd, at);
                     return;
                 }
         }
@@ -1012,7 +1044,11 @@ namespace SolarSystem.Core
 
         Battle TryStartBattle(int body, Faction aggressor, double jd, DVec3? anchor, bool byPlayer)
         {
-            var present = PresentGroups(body);
+            // Off the system's root (out at a jump gate) a fight takes in only those near where it starts, not every ship
+            // at every gate (U.SPC-T94).
+            DVec3? near = null;
+            if (body == Catalog.Root.Index) near = anchor ?? SpotOf(aggressor, body, jd);
+            var present = PresentGroups(body, near, jd);
             var hostile = new HashSet<Faction>();
             bool armed = aggressor.IsMilitary || aggressor.IsPirate;
             foreach (var s in present)
@@ -1046,7 +1082,7 @@ namespace SolarSystem.Core
             // Platforms open on a hostile hull come into range, but not again on one that has only just run from them.
             if (!aggressorArmed && !(platforms && (aggressorFresh || byPlayer)) && !(byPlayer && defenderArmed)) return null;
 
-            var b = NewBattle(body, jd, present, anchor);
+            var b = NewBattle(body, jd, present, anchor ?? near);
             foreach (var s in present)
             {
                 int side = SideFor(s.Faction, aggressor, hostile);
@@ -1154,8 +1190,9 @@ namespace SolarSystem.Core
             return -1;
         }
 
-        /// <summary>Ships parked at a body and free to fight (escorts included), not already in a battle.</summary>
-        List<Ship> PresentGroups(int body)
+        /// <summary>Ships parked at a body and free to fight (escorts included), not already in a battle; given
+        /// <paramref name="near"/>, only those within <see cref="GateFightRangeKm"/> of that point off the body.</summary>
+        List<Ship> PresentGroups(int body, DVec3? near = null, double jd = 0)
         {
             var list = new List<Ship>();
             foreach (var s in Fleet.Ships)
@@ -1165,9 +1202,18 @@ namespace SolarSystem.Core
                 var c = s.Controller;
                 // A stripped, abandoned hulk is not a fighting group.
                 if (c.Destroyed || s.Derelict || c.Derelict || !Fleet.IsAt(c, body)) continue;
+                if (near is DVec3 at && (c.Orbit.OffsetAt(jd) - at).Length > GateFightRangeKm) continue;
                 list.Add(s);
             }
             return list;
+        }
+
+        /// <summary>Where <paramref name="f"/>'s first group parked at <paramref name="body"/> is (km off it), or null.</summary>
+        DVec3? SpotOf(Faction f, int body, double jd)
+        {
+            foreach (var s in Fleet.Ships)
+                if (!s.Destroyed && !s.IsEscort && s.Faction == f && s != world.PilotedShip && Fleet.IsAt(s, body)) return s.Orbit.OffsetAt(jd);
+            return null;
         }
 
         Battle NewBattle(int body, double jd, List<Ship> present, DVec3? at = null)
@@ -1183,6 +1229,12 @@ namespace SolarSystem.Core
             bool concealed = HidesHaven(body);
             string place = !concealed ? b0.Name : b0.TrojanPoint != LagrangePoint.None ? "the Trojans" : b0.Kind == BodyKind.Asteroid ? "the Belt" : "the Dark";
             int key = concealed ? (b0.Kind == BodyKind.Asteroid ? ConcealedBelt : ConcealedDark) : body;
+            // A fight out at a jump gate is named for the gate (U.SPC-T94).
+            if (body == Catalog.Root.Index && at is DVec3 spot && GateNear(spot) is JumpGate gate)
+            {
+                place = "the " + gate.Name;
+                key = GateKey - world.Gates.IndexOf(gate);
+            }
             battleCount.TryGetValue(key, out int n);
             battleCount[key] = n + 1;
             string kind = concealed ? "Skirmish in " : "Battle of ";
@@ -1195,8 +1247,96 @@ namespace SolarSystem.Core
             return b;
         }
 
-        // battleCount keys for concealed skirmishes (body indices are never negative).
-        const int ConcealedBelt = -1, ConcealedDark = -2;
+        // battleCount keys for concealed skirmishes and fights at gates (body indices are never negative).
+        const int ConcealedBelt = -1, ConcealedDark = -2, GateKey = -10;
+
+        /// <summary>The gate whose approach <paramref name="offsetKm"/> (off the system root) is on, or null.</summary>
+        JumpGate GateNear(DVec3 offsetKm)
+        {
+            JumpGate best = null;
+            double bestKm = GateFightRangeKm;
+            foreach (var g in world.Gates)
+            {
+                double km = (g.PositionKm - offsetKm).Length;
+                if (km < bestKm)
+                {
+                    bestKm = km;
+                    best = g;
+                }
+            }
+            return best;
+        }
+
+        // ---------------------------------------------------------------- gate ambushes
+
+        /// <summary>
+        /// Raiders lying in wait off a jump gate (U.SPC-T94, <see cref="Ship.StakeoutKm"/>) fall on whatever comes within
+        /// <see cref="GateAmbushRangeKm"/> of them: ships held at the gate waiting to go through, ships just come out of it,
+        /// merchants and navies alike -- unless the warships there are more than the band can take on, when it lets them be.
+        /// Run every update, and by the gate traffic as ships go in and come out, so a quick passage between coarse steps is
+        /// still caught.
+        /// </summary>
+        public void GateAmbushes(double jd)
+        {
+            if (world.Gates.Count == 0) return;
+            int root = Catalog.Root.Index;
+            if (BattleAt(root) != null || (lastBattleEndJd.TryGetValue(root, out double ended) && jd - ended < 0.1)) return;
+            foreach (var lurker in Fleet.Ships)
+            {
+                if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Runner || lurker.StakeoutKm == null) continue;
+                if (lurker.Battle != null || lurker == world.PilotedShip || !Fleet.IsAt(lurker, root) || !Willing(lurker, jd)) continue;
+                var at = lurker.Orbit.OffsetAt(jd);
+                Ship prey = null;
+                double guns = 0;
+                foreach (var s in Fleet.Ships)
+                {
+                    if (s.Destroyed || s.Battle != null || s == world.PilotedShip || s.Derelict || !Fleet.IsAt(s.Controller, root)) continue;
+                    if (!Diplomacy.Hostile(lurker.Faction, s.Faction) || (s.Controller.Orbit.OffsetAt(jd) - at).Length > GateAmbushRangeKm) continue;
+                    if (s.Spec.IsMilitary || s.Faction.IsPirate) guns += s.Combat.Strength;
+                    else if (!s.IsEscort) prey ??= s;
+                }
+                if (prey == null && guns <= 0) continue;
+                if (guns > GroupStrength(lurker) * 0.8) continue;
+                var b = TryStartBattle(root, lurker.Faction, jd, at);
+                if (b == null) continue;
+                var gate = GateNear(at);
+                if (gate != null) gate.Ambushes++;
+                world.Log(jd, $"{lurker.Faction.Name} raiders ({lurker.Name}) lying off the {gate?.Name ?? "gates"} fall on " +
+                    (prey != null ? $"the {prey.Name}" : "the warships coming through"), WorldEventKind.Battle, root);
+                return;
+            }
+        }
+
+        /// <summary>
+        /// The gate a raider band of <paramref name="clan"/> would lie in wait off: the busiest (most traffic lately, see
+        /// <see cref="JumpGate.Traffic"/>), or null when none has seen <see cref="MinGateTraffic"/>.
+        /// </summary>
+        public JumpGate BusiestGate(Faction clan, double jd)
+        {
+            JumpGate best = null;
+            double bestScore = 0;
+            foreach (var g in world.Gates)
+            {
+                if (g.Traffic < MinGateTraffic || !g.Working) continue;
+                double score = g.Traffic * (0.7 + rng.NextDouble() * 0.6);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = g;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Sends a raider band to lie in wait off <paramref name="gate"/> until <paramref name="untilJd"/>.</summary>
+        public void StakeOut(Ship leader, JumpGate gate, double untilJd)
+        {
+            // Each band holds its own spot on the approach, a little off the line in.
+            var axis = gate.PositionKm.Normalized;
+            var side = DVec3.Cross(axis, Math.Abs(axis.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX).Normalized;
+            leader.StakeoutKm = gate.ApproachKm + side * ((rng.NextDouble() - 0.5) * 400);
+            leader.StakeoutUntilJd = untilJd;
+        }
 
         /// <summary>Whether <paramref name="body"/> hosts a hidden haven nobody has found yet.</summary>
         bool HidesHaven(int body)
@@ -1293,6 +1433,7 @@ namespace SolarSystem.Core
             var fled = new int[2];
             var lootTonnes = 0.0;
             var lootValue = 0.0;
+            Faction lootClan = null;
             // Ships already let go of this battle (a pilot who left it) have moved on: whatever they are
             // doing now -- flying, another fight -- is not this battle's to reset.
             var left = new HashSet<BattleUnit>();
@@ -1316,9 +1457,10 @@ namespace SolarSystem.Core
                         Economy.Release(ship);
                         if (b.SideLeaders[1 - u.Side] != null && b.SideLeaders[1 - u.Side].IsPirate)
                         {
+                            lootClan = b.SideLeaders[1 - u.Side];
                             lootTonnes += ship.CargoTonnes * 0.6;
                             lootValue += ship.CargoTonnes * 0.6 * GoodInfo.Of(ship.CargoGood).BasePrice;
-                            DeliverLoot(ship.CargoGood, ship.CargoTonnes * 0.6);
+                            DeliverLoot(lootClan, ship.CargoGood, ship.CargoTonnes * 0.6, b);
                             // What they hauled off is no longer in the wreck to salvage.
                             if (Wrecks.Of(ship) is Wreck wreck)
                                 for (int i = 0; i < wreck.Salvage.Count; i++)
@@ -1385,13 +1527,56 @@ namespace SolarSystem.Core
             string text = $"{b.Name} ends: {winner}. Losses {Short(b, 0)} {lost[0]}, {Short(b, 1)} {lost[1]}";
             if (lootTonnes > 0) text += $"; pirates take {lootTonnes:N0} t of cargo";
             world.Log(jd, text, WorldEventKind.Battle, Shown(b));
-            if (lootValue > 0) world.Pirates.Treasury += lootValue * 0.3;
+            if (lootValue > 0 && lootClan != null)
+            {
+                lootClan.Treasury += lootValue * 0.3;
+                Plundered?.Invoke(lootClan, lootValue, jd);
+            }
         }
 
-        void DeliverLoot(Good g, double tonnes)
+        /// <summary>
+        /// Loot taken by <paramref name="clan"/> (U.SPC-T94): into the clan's own haven in this system, if it has one standing;
+        /// else into the hold of its band in the fight, to carry home through the gates; else it is lost.
+        /// </summary>
+        void DeliverLoot(Faction clan, Good g, double tonnes, Battle b)
         {
-            var haven = FirstLiveHaven();
-            if (haven != null) haven.Stock[(int)g] += tonnes;
+            if (tonnes <= 0) return;
+            var haven = LiveHavenOf(clan);
+            if (haven != null)
+            {
+                haven.Stock[(int)g] += tonnes;
+                return;
+            }
+            if (b == null) return;
+            foreach (var u in b.Units)
+            {
+                var c = u.Ship?.Controller;
+                if (c == null || u.Dead || c.Destroyed || c.Faction != clan || c.Runner) continue;
+                c.Plunder ??= new double[GoodInfo.Count];
+                c.Plunder[(int)g] += tonnes;
+                return;
+            }
+        }
+
+        /// <summary>A standing haven of <paramref name="clan"/>'s in this system, or null.</summary>
+        public Settlement LiveHavenOf(Faction clan)
+        {
+            foreach (var s in Economy.Settlements)
+                if (s.Kind == SettlementKind.Haven && !s.Fallen && s.Owner == clan) return s;
+            return null;
+        }
+
+        /// <summary>A raider band at a standing haven of its own clan unloads its plunder into the haven's stores.</summary>
+        public void UnloadPlunder(Ship ship, int body)
+        {
+            if (ship?.Plunder == null || ship.Runner) return;
+            foreach (var st in Economy.At(body))
+            {
+                if (st.Kind != SettlementKind.Haven || st.Fallen || st.Owner != ship.Faction) continue;
+                for (int i = 0; i < GoodInfo.Count; i++) st.Stock[i] += ship.Plunder[i];
+                ship.Plunder = null;
+                return;
+            }
         }
 
         /// <summary>When a flagship is lost its strongest surviving escort takes the group.</summary>
@@ -1495,6 +1680,7 @@ namespace SolarSystem.Core
                 case OrderKind.Assault:
                 case OrderKind.Defend: return 1.0;
                 case OrderKind.Raid: return 1.5 + rng.NextDouble();
+                case OrderKind.GateWatch: return 0.5;
                 default: return normal;
             }
         }
@@ -1576,11 +1762,13 @@ namespace SolarSystem.Core
         {
             // A fresh plan: an ambush planned earlier and not yet reached no longer stands.
             leader.LurkLane = null;
+            var watch = leader.StakeoutKm;
+            leader.StakeoutKm = null;
             var home = HomeHaven(leader);
             // A group whose haven has been taken or destroyed is out of the game: it lies low where it is,
             // no raids and no ambushes, until the haven is rebuilt.
             if (home != null && home.Fallen) return new GroupOrder { Kind = OrderKind.Patrol, Body = here };
-            home ??= FirstLiveHaven();
+            home ??= LiveHavenOf(leader.Faction) ?? FirstLiveHaven();
             int haven = home?.Body ?? -1;
             if (withdrawing || GroupDamage(leader) > 0.3 || MissilesLow(leader) || !leader.Combat.Armed)
                 return new GroupOrder { Kind = OrderKind.Repair, Body = haven >= 0 ? haven : here };
@@ -1588,6 +1776,31 @@ namespace SolarSystem.Core
             // Home is under attack: back to defend it.
             if (haven >= 0 && EnemiesAt(haven, leader.Faction) && (haven == here || Fleet.EstimateTravelDays(leader, here, haven, jd) < 30))
                 return new GroupOrder { Kind = OrderKind.Defend, Body = haven };
+
+            // A hold full of plunder goes home to the haven's stores first (U.SPC-T94).
+            if (leader.PlunderTonnes > 0 && home != null && home.Owner == leader.Faction)
+            {
+                if (haven == here) UnloadPlunder(leader, here);
+                else return new GroupOrder { Kind = OrderKind.Repair, Body = haven };
+            }
+
+            // Lying in wait off a jump gate (U.SPC-T94): hold there till the watch is up; or, now and then, go and lie off
+            // the busiest gate, where traffic bunches up going in and coming out.
+            int root = Catalog.Root.Index;
+            if (watch is DVec3 spot && jd < leader.StakeoutUntilJd)
+            {
+                leader.StakeoutKm = spot;
+                return new GroupOrder { Kind = OrderKind.GateWatch, Body = root };
+            }
+            if (here != root && world.Gates.Count > 0 && rng.NextDouble() < GateWatchChance && BusiestGate(leader.Faction, jd) is JumpGate gate)
+            {
+                double days = Fleet.EstimateTravelDays(leader, here, root, jd);
+                if (days < 30)
+                {
+                    StakeOut(leader, gate, jd + days + 2 + rng.NextDouble() * 2);
+                    return new GroupOrder { Kind = OrderKind.GateWatch, Body = root };
+                }
+            }
 
             // Lie in wait beside a busy hyperlane.
             var lanes = Fleet.Lanes;
@@ -1681,7 +1894,7 @@ namespace SolarSystem.Core
 
         int HavenBody() => FirstLiveHaven()?.Body ?? -1;
 
-        string HavenName() => FirstLiveHaven()?.Name ?? "a pirate haven";
+        string HavenName(Faction clan = null) => (clan != null ? LiveHavenOf(clan) : null)?.Name ?? FirstLiveHaven()?.Name ?? "a pirate haven";
 
         /// <summary>The first haven still standing (not taken or destroyed), or null.</summary>
         Settlement FirstLiveHaven()
@@ -1725,7 +1938,7 @@ namespace SolarSystem.Core
             bool first = st.KnownTo.Count == 0;
             st.KnownTo.Add(by);
             string text = first
-                ? $"The {by.Name} find a hidden {world.Pirates.Name} haven, {st.Name}, on {Catalog[st.Body].Name}: {how}"
+                ? $"The {by.Name} find a hidden {st.Owner.Name} haven, {st.Name}, on {Catalog[st.Body].Name}: {how}"
                 : $"The {by.Name} learn where {st.Name} ({Catalog[st.Body].Name}) lies: {how}";
             world.Log(jd, text, WorldEventKind.Info, st.Body);
             return true;
@@ -1898,7 +2111,7 @@ namespace SolarSystem.Core
             st.Fallen = false;
             st.Population = st.InitialPopulation;
             while (st.Platforms.Count < st.MaxPlatforms) st.Platforms.Add(new ShipCombat(CombatSpec.Platform));
-            world.Log(jd, $"The {world.Pirates.Name} have rebuilt {st.Name} ({Catalog[st.Body].Name})", WorldEventKind.Info, st.Body);
+            world.Log(jd, $"The {st.Owner.Name} have rebuilt {st.Name} ({Catalog[st.Body].Name})", WorldEventKind.Info, st.Body);
         }
 
         /// <summary>Days an assaulting group has held a broken haven (see <see cref="HavenAssaultDays"/>).</summary>
@@ -1939,7 +2152,7 @@ namespace SolarSystem.Core
         bool PiratesAt(int body)
         {
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate && s.Phase == ShipPhase.Parked && s.Orbit.Body == body) return true;
+                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate && !s.Runner && s.Phase == ShipPhase.Parked && s.Orbit.Body == body) return true;
             return false;
         }
 
@@ -2078,10 +2291,10 @@ namespace SolarSystem.Core
             {
                 // Not the player's ship: its fights start only where the player engages (TryStartPlayerBattle).
                 if (s.Destroyed || s.IsEscort || s.Battle != null || s.Phase != ShipPhase.Parked || s == world.PilotedShip) continue;
-                if (!(s.Spec.IsMilitary || s.Faction.IsPirate) || !Willing(s, jd)) continue;
+                if (!(s.Spec.IsMilitary || s.Faction.IsPirate) || s.Runner || !Willing(s, jd)) continue;
                 int body = s.Orbit.Body;
                 if (lastBattleEndJd.TryGetValue(body, out double ended) && jd - ended < 0.5) continue;
-                if (BattleAt(body) == null) TryStartBattle(body, s.Faction, jd);
+                if (BattleAt(body) == null) TryStartBattle(body, s.Faction, jd, body == Catalog.Root.Index ? s.Orbit.OffsetAt(jd) : (DVec3?)null);
             }
         }
 
@@ -2391,7 +2604,7 @@ namespace SolarSystem.Core
             int groups = 0;
             var based = new Dictionary<Settlement, int>();
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate)
+                if (!s.Destroyed && !s.IsEscort && s.Faction.IsPirate && !s.Runner)
                 {
                     groups++;
                     if (HomeHaven(s) is Settlement h) based[h] = (based.TryGetValue(h, out int n) ? n : 0) + 1;

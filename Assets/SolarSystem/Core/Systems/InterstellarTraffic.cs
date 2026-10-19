@@ -24,6 +24,15 @@ namespace SolarSystem.Core
 
         /// <summary>A war fleet on campaign against another power's systems (U.SPC-T92, see <see cref="InterstellarWars"/>).</summary>
         Campaign,
+
+        /// <summary>A pirate clan's smuggler running loot to a black market in another system (U.SPC-T94).</summary>
+        Smuggle,
+
+        /// <summary>A raider band moving to its clan's haven in another system, or off to found one (U.SPC-T94).</summary>
+        Relocate,
+
+        /// <summary>A bounty hunter group gone after a pirate clan with a price on it in another system (U.SPC-T94).</summary>
+        Hunt,
     }
 
     /// <summary>
@@ -69,6 +78,15 @@ namespace SolarSystem.Core
 
         /// <summary>The enemy gate a war fleet holds beside, having come out of it, until it has taken it (U.SPC-T92); null when none.</summary>
         public JumpGate HoldGate;
+
+        /// <summary>A smuggler's market at the far end (a black market's body there), or a band's haven or haven site; -1 if none.</summary>
+        public int TargetBody = -1;
+
+        /// <summary>The name a band off to found a haven will give it (U.SPC-T94).</summary>
+        public string SiteName;
+
+        /// <summary>The hull that set out (a bounty hunter's), whose place at home the ship takes up again when it is back.</summary>
+        public Ship Origin;
 
         /// <summary>Light-years along the outbound route (what tolls and fees scale with).</summary>
         public double Ly;
@@ -219,12 +237,19 @@ namespace SolarSystem.Core
         /// <summary>Daily chance a yacht or survey ship sets out for an unsettled system.</summary>
         public const double SurveyChancePerDay = 0.03;
 
+        /// <summary>A gate's traffic (<see cref="JumpGate.Traffic"/>) counts the ships through it over about this many days.</summary>
+        public const double GateTrafficDays = 30;
+
+        /// <summary>The pirate clans' business across the gates: havens, smuggling, splits and the hunt for them (U.SPC-T94).</summary>
+        public PirateClans Clans { get; }
+
         public InterstellarTraffic(Galaxy galaxy, double jd, int seed = 1601)
         {
             this.galaxy = galaxy;
             rng = new Random(seed);
             nextDailyJd = jd + 0.5;
             News = new Newswire(galaxy, jd);
+            Clans = new PirateClans(galaxy, this, seed + 7);
             foreach (var system in galaxy.Systems) Register(system);
         }
 
@@ -233,9 +258,10 @@ namespace SolarSystem.Core
         {
             s.World.ReachedGate += (ship, when) => OnReachedGate(s, ship, when);
             s.World.VoyageOrders = (ship, here, when) => Orders(s, ship, here, when);
+            Clans.Watch(s);
         }
 
-        GateNetwork Network => galaxy.Network;
+        internal GateNetwork Network => galaxy.Network;
 
         /// <summary>Gate arrivals, emergences and blocked ships to <paramref name="jd"/>; each day, new voyages.</summary>
         public void Update(double jd)
@@ -407,6 +433,7 @@ namespace SolarSystem.Core
                 Link = link, From = system, Jd = jd, Purpose = v.Purpose, Faction = leader.Faction, Ships = p.Ships.Count,
                 Tonnes = leader.HasCargo ? leader.CargoTonnes : 0,
             });
+            gate.Traffic += 1;
             string group = p.Ships.Count > 1 ? $" and {p.Ships.Count - 1} more" : "";
             world.Log(jd, $"{leader.Name}{group} enter{(p.Ships.Count > 1 ? "" : "s")} the {gate.Name} for {gate.Destination.Name}", WorldEventKind.Info, system.Catalog.Root.Index);
         }
@@ -468,6 +495,9 @@ namespace SolarSystem.Core
             else Arrive(system, leader, p.To, jd);
             foreach (var s in p.Ships) world.NotifyAdded(s);
             News.Carried(system, p.News, leader.Name, jd);
+            p.To.Traffic += 1;
+            // Raiders lying off the gate see it come out (U.SPC-T94), however quickly it moves on.
+            world.War.GateAmbushes(double.IsNaN(world.Jd) ? jd : Math.Max(jd, world.Jd));
         }
 
         /// <summary>Back where it belongs: takes up its old role, route and ports.</summary>
@@ -480,6 +510,14 @@ namespace SolarSystem.Core
             ship.Route = v.HomeRoute;
             ship.RouteIndex = 0;
             ship.Ports = v.HomePorts ?? ship.Ports;
+            // A bounty hunter takes up its old place on the home boards (U.SPC-T94).
+            if (v.Purpose == VoyagePurpose.Hunt && v.Origin != null) system.World.Outlaws?.OnSuccession(v.Origin, ship);
+            // A smuggler back with goods it could not sell puts them back in the haven's stores.
+            if (ship.Runner && ship.Plunder != null && system.World.War.LiveHavenOf(ship.Faction) is Settlement haven)
+            {
+                for (int i = 0; i < GoodInfo.Count; i++) haven.Stock[i] += ship.Plunder[i];
+                ship.Plunder = null;
+            }
             system.World.Fleet.ScheduleNext(ship, jd);
             system.World.Log(jd, $"{ship.Name} is home from {Describe(v)}", WorldEventKind.Info, system.Catalog.Root.Index);
         }
@@ -491,6 +529,9 @@ namespace SolarSystem.Core
             VoyagePurpose.Campaign => "a campaign beyond the gates",
             VoyagePurpose.Survey => "a survey beyond the gates",
             VoyagePurpose.Courier => "a mail run beyond the gates",
+            VoyagePurpose.Smuggle => "a smuggling run beyond the gates",
+            VoyagePurpose.Hunt => "a hunt beyond the gates",
+            VoyagePurpose.Relocate => "a move beyond the gates",
             _ => "a run beyond the gates",
         };
 
@@ -534,6 +575,7 @@ namespace SolarSystem.Core
                     }
                     break;
                 case VoyagePurpose.Expedition:
+                case VoyagePurpose.Hunt:
                     ship.Route = null;
                     ship.Ports = null;
                     v.StayUntilJd = jd + 20 + rng.NextDouble() * 10;
@@ -544,9 +586,17 @@ namespace SolarSystem.Core
                     ship.Ports = null;
                     v.StayUntilJd = double.PositiveInfinity;
                     break;
+                case VoyagePurpose.Smuggle:
+                    // Until it has sold (see Orders), and no longer than this.
+                    ship.Ports = world.FreeShipPorts();
+                    v.StayUntilJd = jd + 30;
+                    break;
+                case VoyagePurpose.Relocate:
+                    Clans.Settle(system, ship, jd);
+                    return;
             }
             ship.Role = v.Purpose == VoyagePurpose.Survey ? ShipRole.Free : v.HomeRole;
-            if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign)
+            if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign || v.Purpose == VoyagePurpose.Hunt)
                 ship.Ports ??= world.FreeShipPorts();
             world.Log(jd, $"{ship.Name} of {ship.Faction.Name} comes through the {cameIn.Partner.Name} from {v.Home.Name}", WorldEventKind.Info, system.Catalog.Root.Index);
             world.Fleet.ScheduleNext(ship, jd);
@@ -627,6 +677,20 @@ namespace SolarSystem.Core
             var war = system.World.War;
             if (v.Purpose == VoyagePurpose.Raid)
             {
+                // Lying in wait off a gate till the watch is up; or, now and then, off the busiest one (U.SPC-T94).
+                int root = system.Catalog.Root.Index;
+                var watch = ship.StakeoutKm;
+                ship.StakeoutKm = null;
+                if (watch is DVec3 spot && jd < ship.StakeoutUntilJd)
+                {
+                    ship.StakeoutKm = spot;
+                    return root;
+                }
+                if (here != root && rng.NextDouble() < War.GateWatchChance && war.BusiestGate(ship.Faction, jd) is JumpGate gate)
+                {
+                    war.StakeOut(ship, gate, jd + system.World.Fleet.EstimateTravelDays(ship, here, root, jd) + 2 + rng.NextDouble() * 2);
+                    return root;
+                }
                 // The busiest port with guns it can face; it hangs about a port that is paying off.
                 int best = -1;
                 double bestScore = 0;
@@ -646,14 +710,27 @@ namespace SolarSystem.Core
                 }
                 return best >= 0 ? best : here;
             }
-            if (v.Purpose == VoyagePurpose.Expedition)
+            if (v.Purpose == VoyagePurpose.Smuggle) return Clans.SmugglerOrders(system, ship, here, jd);
+            if (v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Hunt)
             {
-                // The quarry's haven, if it is known; else wherever its raiders are; else the busiest port.
+                // The quarry's haven, if it is known (to it); else wherever its raiders are; else the busiest port.
                 foreach (var s in economy.Settlements)
-                    if (s.Kind == SettlementKind.Haven && !s.Fallen && !s.Hidden && (v.Quarry == null || s.Owner == v.Quarry || s.Owner.IsPirate))
+                    if (s.Kind == SettlementKind.Haven && !s.Fallen && s.KnownBy(ship.Faction) && (v.Quarry == null || s.Owner == v.Quarry || s.Owner.IsPirate))
+                    {
+                        // A hidden hold found, its guns silenced: a navy storms it, boarding it if it has the marines (U.SPC-T94).
+                        // (An open one, like Blackwater, the navies leave be.)
+                        if (s.Body == here && s.Hidden && v.Purpose == VoyagePurpose.Expedition && war.CanAssault(s, ship))
+                        {
+                            war.AssaultHaven(s, ship, war.HasMarines(ship), jd);
+                            continue;
+                        }
                         return s.Body;
+                    }
                 foreach (var t in system.World.Fleet.Ships)
-                    if (!t.Destroyed && !t.IsEscort && t.Faction.IsPirate && t.Orbit != null && t.Phase == ShipPhase.Parked) return t.Orbit.Body;
+                    if (!t.Destroyed && !t.IsEscort && t.Faction.IsPirate && !t.Runner && (v.Quarry == null || t.Faction == v.Quarry) && t.Orbit != null && t.Phase == ShipPhase.Parked)
+                        return t.Orbit.Body;
+                foreach (var t in system.World.Fleet.Ships)
+                    if (!t.Destroyed && !t.IsEscort && t.Faction.IsPirate && !t.Runner && t.Orbit != null && t.Phase == ShipPhase.Parked) return t.Orbit.Body;
                 var ports = system.World.PortBodies();
                 return ports.Length > 0 ? ports[rng.Next(ports.Length)] : here;
             }
@@ -697,11 +774,19 @@ namespace SolarSystem.Core
                 var (from, to, quarry, asked) = expeditionsWanted[i];
                 if (DispatchExpedition(from, to, quarry, jd) || jd - asked > 20) expeditionsWanted.RemoveAt(i);
             }
+            // The clans: their smugglers, their moves, their splits; and the navies and hunters sent after them.
+            Clans.Daily(jd);
             outCache = null;
+            double fade = Math.Exp(-1 / GateTrafficDays);
+            foreach (var link in Network.Links)
+            {
+                link.AtA.Traffic *= fade;
+                link.AtB.Traffic *= fade;
+            }
         }
 
         /// <summary>A ship that can be sent: its own master (not an escort, not the player's), idle in port, not fighting.</summary>
-        static bool Idle(World world, Ship s) =>
+        internal static bool Idle(World world, Ship s) =>
             !s.Destroyed && !s.IsEscort && !s.Derelict && s.Battle == null && s != world.PilotedShip && s.Voyage == null && s.GateKm == null &&
             (s.Phase == ShipPhase.Parked || s.Phase == ShipPhase.Landed) && s.Orbit != null
             // Nor one of the player's own fleet: it sails where its captain's standing orders take it.
@@ -710,13 +795,13 @@ namespace SolarSystem.Core
             && !s.OutOfPropellant;
 
         /// <summary>The body a ship in port is at (its ring's world when landed).</summary>
-        static int PortOf(Ship s) => s.Phase == ShipPhase.Landed && s.Ring != null ? s.Ring.Body : s.Orbit.Body;
+        internal static int PortOf(Ship s) => s.Phase == ShipPhase.Landed && s.Ring != null ? s.Ring.Body : s.Orbit.Body;
 
         /// <summary>The voyages under way, while <see cref="Daily"/> sends ships out (null otherwise).</summary>
         List<Voyage> outCache;
 
         /// <summary>How many of <paramref name="home"/>'s ships with <paramref name="purpose"/> are out (on the way, abroad or coming back).</summary>
-        int Out(StarSystem home, VoyagePurpose purpose, StarSystem bound = null)
+        internal int Out(StarSystem home, VoyagePurpose purpose, StarSystem bound = null)
         {
             int n = 0;
             bool Counts(Voyage v) => v != null && v.Home == home && v.Purpose == purpose && (bound == null || v.Destination == bound || (v.Homeward && v.Route.Count > 0 && v.Route[0].Home == bound) || v.Destination == bound);
@@ -816,8 +901,9 @@ namespace SolarSystem.Core
         }
 
         /// <summary>Starts <paramref name="ship"/> on a voyage from <paramref name="from"/> to <paramref name="to"/> by <paramref name="route"/>.</summary>
-        Voyage SetOut(StarSystem from, StarSystem to, Ship ship, VoyagePurpose purpose, List<JumpGate> route, double jd)
+        internal Voyage SetOut(StarSystem from, StarSystem to, Ship ship, VoyagePurpose purpose, List<JumpGate> route, double jd)
         {
+            ship.StakeoutKm = null;
             var v = new Voyage
             {
                 Purpose = purpose, Home = from, Destination = to, Route = route, SetOutJd = jd, Ly = GateNetwork.RouteLy(route), Faction = ship.Faction,
@@ -1022,7 +1108,7 @@ namespace SolarSystem.Core
         }
 
         /// <summary>A navy group sent after raiders to the system they came from; false if none could go yet.</summary>
-        bool DispatchExpedition(StarSystem from, StarSystem to, Faction quarry, double jd)
+        internal bool DispatchExpedition(StarSystem from, StarSystem to, Faction quarry, double jd)
         {
             var world = from.World;
             var navy = world.Sol;
@@ -1062,6 +1148,7 @@ namespace SolarSystem.Core
                 // A freighter sells what it carries before it goes (unless it has been at it far too long).
                 if (ship.HasCargo && v.Purpose == VoyagePurpose.Trade && jd < v.StayUntilJd + 30) continue;
                 var route = Network.Route(system, v.Home, ship.Faction, jd);
+                ship.StakeoutKm = null;
                 if (route == null || route.Count == 0) continue;
                 // It knows home's markets only by the news that has reached it here (U.SPC-T100).
                 var homeNews = News.Known(system, v.Home);

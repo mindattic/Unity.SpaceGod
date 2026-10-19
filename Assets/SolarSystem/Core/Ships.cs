@@ -468,6 +468,34 @@ namespace SolarSystem.Core
         /// </summary>
         public DVec3? GateKm;
 
+        /// <summary>
+        /// A raider group lying in wait off a jump gate (U.SPC-T94): the point on the gate's approach (km from the
+        /// system root) it holds, where traffic bunches up going in and coming out, until <see cref="StakeoutUntilJd"/>.
+        /// Null otherwise. See <see cref="War.GateAmbushes"/>.
+        /// </summary>
+        public DVec3? StakeoutKm;
+        public double StakeoutUntilJd;
+
+        /// <summary>Plunder aboard, tonnes of each good (indexed by <see cref="Good"/>): what a raider band took and is
+        /// carrying home, or what a clan's smuggler is running to a black market (U.SPC-T94). Null when there is none.</summary>
+        public double[] Plunder;
+
+        /// <summary>Tonnes of plunder aboard.</summary>
+        public double PlunderTonnes
+        {
+            get
+            {
+                double t = 0;
+                if (Plunder != null)
+                    foreach (var x in Plunder) t += x;
+                return t;
+            }
+        }
+
+        /// <summary>A pirate clan's smuggling hull (U.SPC-T94): it carries loot to black markets and lies at its haven between runs,
+        /// never raiding (see <see cref="PirateClans"/>).</summary>
+        public bool Runner;
+
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;
 
@@ -520,6 +548,9 @@ namespace SolarSystem.Core
             // Still its company's hull over there; the company books its trade as before.
             Company = Company,
             CompanyBookedCredits = CompanyBookedCredits,
+            // The loot or contraband aboard goes with it.
+            Plunder = (double[])Plunder?.Clone(),
+            Runner = Runner,
         };
 
         public override string ToString() => Name;

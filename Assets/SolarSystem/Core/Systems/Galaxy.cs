@@ -24,7 +24,12 @@ namespace SolarSystem.Core
         public IReadOnlyList<JumpGate> Gates => gates;
         readonly List<JumpGate> gates = new List<JumpGate>();
 
-        internal void AddGate(JumpGate gate) => gates.Add(gate);
+        internal void AddGate(JumpGate gate)
+        {
+            gates.Add(gate);
+            // Its world's raiders can lie in wait off it (U.SPC-T94).
+            World.Gates.Add(gate);
+        }
 
         /// <summary>This system's gate straight to <paramref name="other"/>, or null if they are not directly linked.</summary>
         public JumpGate GateTo(StarSystem other)

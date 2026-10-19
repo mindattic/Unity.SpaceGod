@@ -670,6 +670,12 @@ namespace SolarSystem.Core
                 Burn(ship, departJd, to, () => FixedPoint(to, gate));
                 return;
             }
+            if (ship.StakeoutKm is DVec3 approach && to == catalog.Root.Index)
+            {
+                // Raiders out to lie in wait off a gate (U.SPC-T94): the same fixed point off the root.
+                Burn(ship, departJd, to, () => FixedPoint(to, approach));
+                return;
+            }
             // A slow boat that judged the lanes' tolls dearer than the time flies straight across on a transfer orbit.
             bool direct = ship.PlannedDirect && UsesConics(ship);
             ship.PlannedDirect = false;

@@ -175,6 +175,8 @@ namespace SolarSystem.Core
                 Produce(s, dt);
                 Consume(s, dt);
                 if (s.Kind == SettlementKind.Haven) Fence(s, dt);
+                // A lawless station's middlemen pass what they bought on the black market into its own stores (U.SPC-T94).
+                if (s.Lawless) BlackMarket.Launder(s, dt);
                 s.DaysSinceCapture += dt;
                 s.RefreshPrices();
             }
@@ -1045,8 +1047,10 @@ namespace SolarSystem.Core
             sold = 0;
             if (!CanTrade(ship, s)) return LawRefuses(ship, s) ? TradeOutcome.Refused : TradeOutcome.CannotDock;
             var hold = ship.PersonalHold;
-            // A lawful market will not touch stolen goods; a haven takes anything.
-            bool fence = s.Owner != null && s.Owner.IsPirate;
+            // A lawful market will not touch stolen goods; a haven takes anything, and a lawless station's black market
+            // takes stolen goods at its own prices (U.SPC-T94).
+            bool haven = s.Owner != null && s.Owner.IsPirate;
+            bool fence = haven || BlackMarket.Takes(s);
             double factor = PriceFactorOf(ship, s);
             var stopped = TradeOutcome.Ok;
             for (int i = 0; i < crates; i++)
@@ -1063,10 +1067,13 @@ namespace SolarSystem.Core
                 if (item == null) { stopped = stolenOnly ? TradeOutcome.Contraband : TradeOutcome.NothingToSell; break; }
 
                 double tonnes = item.Tonnes;
-                double value = s.SaleValue(good, tonnes) / factor;
+                // Stolen goods sold at a lawless station go to its black market, not its open board.
+                bool black = item.Stolen && !haven;
+                double value = (black ? BlackMarket.SaleValue(s, good, tonnes) : s.SaleValue(good, tonnes)) / factor;
                 double tax = value * PortTax;
                 hold.Remove(item);
-                s.Stock[(int)good] += tonnes;
+                if (black) s.BlackStock[(int)good] += tonnes;
+                else s.Stock[(int)good] += tonnes;
                 s.Owner.Treasury += tax;
                 s.TradeVolumeCredits += value;
                 ship.Faction.Treasury += value - tax;

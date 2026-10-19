@@ -126,6 +126,16 @@ namespace SolarSystem.Core
         /// </summary>
         public bool Hidden;
 
+        /// <summary>
+        /// A lawless station (U.SPC-T94): a company camp too far out and too small to keep a constabulary, whose
+        /// middlemen run a black market (see <see cref="BlackMarket"/>) and whose guns look the other way when a clan's
+        /// smuggler docks. Havens are black markets too, of their own clan's loot.
+        /// </summary>
+        public bool Lawless;
+
+        /// <summary>Stolen goods held in a lawless station's black market, tonnes (a haven keeps its loot in <see cref="Stock"/>).</summary>
+        public readonly double[] BlackStock = new double[GoodInfo.Count];
+
         /// <summary>The factions that have found this hidden haven.</summary>
         public readonly HashSet<Faction> KnownTo = new HashSet<Faction>();
 
