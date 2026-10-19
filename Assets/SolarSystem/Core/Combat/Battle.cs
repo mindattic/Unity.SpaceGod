@@ -1113,7 +1113,8 @@ namespace SolarSystem.Core
             {
                 var w = s.Def.Weapon;
                 if (w == null || s.Destroyed) continue;
-                s.Cooldown -= dt;
+                // A fleet out of supply reloads slower: short of rounds, of spares for its mounts, of power to spare (U.SPC-T93).
+                s.Cooldown -= dt * c.Readiness;
                 if (s.Cooldown > 0 || s.Kind == SubsystemKind.Torpedo) continue;
                 if (s.Kind == SubsystemKind.BoardingPods)
                 {
@@ -2182,7 +2183,8 @@ namespace SolarSystem.Core
 
         bool StrikesColours(BattleUnit u) =>
             Morale.StrikesColours(DamageTollOf(u), OutgunnedOf(u),
-                Morale.Resolve(u.Faction, u.Ship != null && u.Ship.Spec.IsMilitary) * (u.Side >= 0 && u.Side < 2 ? Dread[u.Side] : 1), u.MoraleThreshold);
+                Morale.Resolve(u.Faction, u.Ship != null && u.Ship.Spec.IsMilitary) * (u.Side >= 0 && u.Side < 2 ? Dread[u.Side] : 1) * Morale.SupplyResolve(u.Combat.Readiness),
+                u.MoraleThreshold);
 
         /// <summary>
         /// Strikes <paramref name="u"/>'s colours: it breaks off, powers down its weapons and hails,

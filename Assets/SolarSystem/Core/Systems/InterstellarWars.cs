@@ -56,6 +56,9 @@ namespace SolarSystem.Core
         /// <summary>Destroyed or taken to the last hull.</summary>
         public bool Lost;
 
+        /// <summary>What it has left of its propellant, munitions and spares, and its supply line (U.SPC-T93, see <see cref="MilitaryLogistics"/>).</summary>
+        public readonly FleetSupply Supply = new FleetSupply();
+
         public bool Active => Stage != CampaignStage.Over;
 
         public override string ToString() => $"{Faction?.Name} campaign for {Goal?.Name} ({Stage})";
@@ -146,6 +149,9 @@ namespace SolarSystem.Core
         /// <summary>Marines on the ground, fighting garrisons.</summary>
         public IReadOnlyList<Landing> Landings => landings;
 
+        /// <summary>The war fleets' supply: their stores, naval bases and supply convoys (U.SPC-T93).</summary>
+        public readonly MilitaryLogistics Logistics;
+
         /// <summary>Troops a settlement's own garrison musters, per person living there.</summary>
         public const double GarrisonPerPerson = 0.001;
 
@@ -189,6 +195,7 @@ namespace SolarSystem.Core
         {
             this.galaxy = galaxy;
             rng = new Random(seed);
+            Logistics = new MilitaryLogistics(galaxy);
             nextDailyJd = jd + 0.75;
             nextDeclareJd = jd + 60;
         }
@@ -454,7 +461,11 @@ namespace SolarSystem.Core
             var (system, ship) = Locate(c);
             if (ship == null)
             {
-                if (InGate(c)) return;
+                if (InGate(c))
+                {
+                    Logistics.InGate(c, jd);
+                    return;
+                }
                 // Gone from every system and no gate holds it: home (its voyage over), or lost with every hull.
                 if (c.Stage != CampaignStage.Returning)
                 {
@@ -468,6 +479,7 @@ namespace SolarSystem.Core
             c.Flagship = ship.Name;
             var v = ship.Voyage;
             var world = system.World;
+            Logistics.Day(c, system, ship, jd);
             if (ship.Battle != null) return;
             if (c.Stage == CampaignStage.Returning)
             {
@@ -477,6 +489,12 @@ namespace SolarSystem.Core
             else if (GroupDamage(world, ship) > 0.4 || ship.Combat.Damage > 0.45 || !ship.Combat.Armed)
             {
                 Recall(c, system, ship, jd, "battered");
+                return;
+            }
+            else if (c.Supply.MustWithdraw)
+            {
+                // Its stores run down and nothing on its way to it: it cannot carry the campaign on (U.SPC-T93).
+                Recall(c, system, ship, jd, c.Supply.OutOfSupply ? "out of supply" : "its stores spent");
                 return;
             }
 
@@ -691,6 +709,7 @@ namespace SolarSystem.Core
         {
             c.Stage = CampaignStage.Over;
             c.EndedJd = jd;
+            Logistics.Ended(c);
             landings.RemoveAll(l => l.Campaign == c && l.Troops <= 0);
         }
 

@@ -64,6 +64,14 @@ namespace SolarSystem.Core
         /// <summary>The inside of the hull: compartments, who is in them, and any boarding fight.</summary>
         public readonly Interior Interior;
 
+        /// <summary>
+        /// How fit to fight the hull's war fleet is for what it has left of its propellant, munitions and spares (U.SPC-T93),
+        /// 1 in supply down to <see cref="FleetSupply.ReadinessFloor"/> with nothing left: its guns reload that much slower in
+        /// battle, its crew strike their colours sooner, and it mends itself in the field that much slower. Set each day by
+        /// <see cref="MilitaryLogistics"/> for a fleet on campaign; 1 again at any port of its own.
+        /// </summary>
+        public double Readiness = 1;
+
         /// <param name="hull">The ship class, or null for a defence platform.</param>
         public ShipCombat(CombatSpec spec, ShipClass? hull = null) : this(spec, hull, null) { }
 
@@ -94,6 +102,7 @@ namespace SolarSystem.Core
                 Hull = spec.Hull * HullFraction,
                 Fighters = Math.Min(spec.Squadrons * 6, Fighters),
                 BoostFraction = BoostFraction,
+                Readiness = Readiness,
             };
             for (int i = 0; i < c.Subsystems.Count && i < Subsystems.Count; i++)
             {

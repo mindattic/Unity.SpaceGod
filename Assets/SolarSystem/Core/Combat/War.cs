@@ -2401,6 +2401,8 @@ namespace SolarSystem.Core
                 }
                 // Prisoners in the brig go ashore at any port of the owner's, for their bounty or ransom (U.SPC-T65).
                 if (port != null && s.Prisoners > 0 && s != world.PilotedShip) Outfitting.HandOverPrisoners(Economy, s, port);
+                // In a port of its own a hull is in supply again: tanks, magazines and stores (U.SPC-T93).
+                if (port != null && s.Voyage?.Campaign == null) s.Combat.Readiness = 1;
                 if (s.Faction.Treasury <= 0) continue;
                 if (yard == null) continue;
 

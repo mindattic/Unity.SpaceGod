@@ -35,6 +35,12 @@ namespace SolarSystem.Core
         }
 
         /// <summary>
+        /// How a crew's resolve holds up with its fleet's <paramref name="readiness"/> (U.SPC-T93, see
+        /// <see cref="ShipCombat.Readiness"/>): undimmed in supply, down to 0.4 of it on empty magazines and dry tanks.
+        /// </summary>
+        public static double SupplyResolve(double readiness) => 0.4 + 0.6 * Clamp01(readiness);
+
+        /// <summary>
         /// Combined damage toll, 0 (pristine) to 1 (wrecked): hull loss counts for more than a dropped
         /// screen, since a hull-stripped ship is closer to destruction either way.
         /// </summary>
