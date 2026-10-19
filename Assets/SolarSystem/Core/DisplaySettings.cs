@@ -116,6 +116,68 @@ namespace SolarSystem.Core
             return list;
         }
 
+        /// <summary>The aspect ratios the Display page offers, narrowest first (U.SPC-T284): ultrawide 21:9 and super-ultrawide
+        /// 32:9 among them.</summary>
+        public static readonly string[] Aspects = { "4:3", "5:4", "16:10", "16:9", "21:9", "32:9" };
+
+        static readonly double[] AspectValues = { 4.0 / 3, 5.0 / 4, 16.0 / 10, 16.0 / 9, 21.0 / 9, 32.0 / 9 };
+
+        /// <summary>
+        /// The aspect ratio a size is sold as: the nearest of <see cref="Aspects"/> within 6%, so 2560 x 1080 and
+        /// 3440 x 1440 (really 64:27 and 43:18) are 21:9 and 5120 x 1440 is 32:9; "Other" for anything further off.
+        /// </summary>
+        public static string AspectOf(int width, int height)
+        {
+            if (width <= 0 || height <= 0) return "Other";
+            double r = (double)width / height;
+            int best = -1;
+            double bestGap = 0.06;
+            for (int i = 0; i < AspectValues.Length; i++)
+            {
+                double gap = Math.Abs(r / AspectValues[i] - 1);
+                if (gap < bestGap)
+                {
+                    bestGap = gap;
+                    best = i;
+                }
+            }
+            return best >= 0 ? Aspects[best] : "Other";
+        }
+
+        /// <summary>The usual sizes of each aspect, so a widescreen or ultrawide one can be picked even where the screen
+        /// does not list it (a window or a borderless window can be any size that fits the screen).</summary>
+        static readonly (int w, int h)[] StandardSizes =
+        {
+            (1024, 768), (1280, 960), (1600, 1200),
+            (1280, 1024),
+            (1280, 800), (1440, 900), (1680, 1050), (1920, 1200), (2560, 1600),
+            (1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3200, 1800), (3840, 2160), (5120, 2880),
+            (2560, 1080), (3440, 1440), (3840, 1600), (5120, 2160),
+            (3840, 1080), (5120, 1440), (7680, 2160),
+        };
+
+        /// <summary>
+        /// <paramref name="listed"/> (what the screen offers) with the usual sizes of every aspect added that fit within
+        /// <paramref name="maxWidth"/> x <paramref name="maxHeight"/> (the screen's own size); each size once, smallest
+        /// first. An added size has no refresh rate of its own.
+        /// </summary>
+        public static List<DisplayResolution> WithStandardSizes(IReadOnlyList<DisplayResolution> listed, int maxWidth, int maxHeight)
+        {
+            var all = new List<DisplayResolution>(listed);
+            foreach (var (w, h) in StandardSizes)
+                if (w <= maxWidth && h <= maxHeight) all.Add(new DisplayResolution(w, h, 0));
+            return Distinct(all);
+        }
+
+        /// <summary>The sizes of <paramref name="list"/> of aspect <paramref name="aspect"/> (null or "All": every one).</summary>
+        public static List<DisplayResolution> OfAspect(IReadOnlyList<DisplayResolution> list, string aspect)
+        {
+            var result = new List<DisplayResolution>();
+            foreach (var r in list)
+                if (string.IsNullOrEmpty(aspect) || aspect == "All" || AspectOf(r.Width, r.Height) == aspect) result.Add(r);
+            return result;
+        }
+
         /// <summary>Which of <paramref name="list"/> is <paramref name="width"/> x <paramref name="height"/>, or failing
         /// that the one closest to it in pixel count (-1 for an empty list): what the menu starts with picked.</summary>
         public static int IndexOfNearest(IReadOnlyList<DisplayResolution> list, int width, int height)

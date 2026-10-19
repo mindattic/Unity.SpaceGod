@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Generic;
 using NUnit.Framework;
 using SolarSystem.Core;
@@ -128,5 +129,40 @@ namespace SolarSystem.Core.Tests
             // The chase camera and the piloted hull's selection stay: P is the way to let go of the helm.
             Assert.That(EscapeKey.Route(false, true, true, true), Is.EqualTo(EscapeAction.OpenPauseMenu));
         }
-    }
+    
+        // ------------------------------------------------------------ aspect ratios (U.SPC-T284)
+
+        [Test]
+        public void SizesAreSoldByTheirAspectRatioUltrawideIncluded()
+        {
+            Assert.That(DisplaySettings.AspectOf(1920, 1080), Is.EqualTo("16:9"));
+            Assert.That(DisplaySettings.AspectOf(1920, 1200), Is.EqualTo("16:10"));
+            Assert.That(DisplaySettings.AspectOf(2560, 1080), Is.EqualTo("21:9"));
+            Assert.That(DisplaySettings.AspectOf(3440, 1440), Is.EqualTo("21:9"));
+            Assert.That(DisplaySettings.AspectOf(5120, 1440), Is.EqualTo("32:9"));
+            Assert.That(DisplaySettings.AspectOf(1024, 768), Is.EqualTo("4:3"));
+            Assert.That(DisplaySettings.AspectOf(1000, 100), Is.EqualTo("Other"));
+        }
+
+        [Test]
+        public void ASuperUltrawideScreenOffersItsOwnSizeAndTheUsualUltrawideOnesThatFit()
+        {
+            // A 5120 x 1440 screen that lists only a few modes of its own.
+            var listed = DisplaySettings.Distinct(new[]
+            {
+                new DisplayResolution(5120, 1440, 240), new DisplayResolution(5120, 1440, 120), new DisplayResolution(2560, 1440, 144),
+            });
+            var all = DisplaySettings.WithStandardSizes(listed, 5120, 1440);
+            Assert.That(all.Count(r => r.SameSize(5120, 1440)), Is.EqualTo(1), "each size once");
+            Assert.That(all.Single(r => r.SameSize(5120, 1440)).RefreshHz, Is.EqualTo(240), "a listed size keeps its best refresh rate");
+            Assert.That(all.Any(r => r.SameSize(3440, 1440)), Is.True, "no 21:9 size to pick on a 32:9 screen");
+            Assert.That(all.Any(r => r.Width > 5120 || r.Height > 1440), Is.False, "a size bigger than the screen was offered");
+
+            var ultrawide = DisplaySettings.OfAspect(all, "21:9");
+            Assert.That(ultrawide, Is.Not.Empty);
+            Assert.That(ultrawide.All(r => DisplaySettings.AspectOf(r.Width, r.Height) == "21:9"), Is.True);
+            Assert.That(DisplaySettings.OfAspect(all, "32:9").Any(r => r.SameSize(5120, 1440)), Is.True);
+            Assert.That(DisplaySettings.OfAspect(all, "All").Count, Is.EqualTo(all.Count));
+        }
+}
 }

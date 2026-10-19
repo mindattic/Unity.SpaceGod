@@ -25,7 +25,10 @@ namespace SolarSystem.UI
         float timeScaleBefore = 1;
 
         /// <summary>The Display page's sizes, the settings it is editing (not yet applied), and how far its list is scrolled.</summary>
-        List<DisplayResolution> resolutions;
+        List<DisplayResolution> resolutions, allResolutions;
+
+        /// <summary>The aspect ratio the resolution list is narrowed to (U.SPC-T284), or "All".</summary>
+        string aspect = "All";
         DisplaySettings pending;
         Vector2 resolutionScroll;
 
@@ -96,9 +99,23 @@ namespace SolarSystem.UI
         void OpenDisplay()
         {
             page = Page.Display;
-            resolutions = DisplayOptions.Resolutions();
+            allResolutions = DisplayOptions.Resolutions();
             pending = DisplayOptions.Current;
             notice = null;
+            // Open on the screen's own aspect, so a widescreen or ultrawide player starts among their own sizes.
+            PickAspect(DisplaySettings.AspectOf(pending.Width, pending.Height));
+        }
+
+        /// <summary>Narrows the resolution list to <paramref name="a"/> (every size if none is of it).</summary>
+        void PickAspect(string a)
+        {
+            aspect = a;
+            resolutions = DisplaySettings.OfAspect(allResolutions, aspect);
+            if (resolutions.Count == 0)
+            {
+                aspect = "All";
+                resolutions = allResolutions;
+            }
             int i = DisplaySettings.IndexOfNearest(resolutions, pending.Width, pending.Height);
             resolutionScroll = new Vector2(0, Mathf.Max(0, i - 4) * RowH);
         }
@@ -192,16 +209,26 @@ namespace SolarSystem.UI
 
         void DrawDisplay()
         {
-            const float w = 560, h = 400;
+            const float w = 600, h = 456;
             var r = Centred(w, h);
             GUI.Box(r, GUIContent.none, panel);
             GUI.Label(new Rect(r.x + 20, r.y + 14, w - 40, 22), "DISPLAY", title);
             GUI.Label(new Rect(r.x + 20, r.y + 38, w - 40, 18),
                 "Nothing changes until Apply  ·  now: " + DisplayOptions.Current, small);
 
+            // Aspect ratio first (U.SPC-T284): it narrows the resolution list below to widescreen, ultrawide and so on.
+            GUI.Label(new Rect(r.x + 20, r.y + 64, 120, 20), "Aspect ratio", text);
+            var aspects = new List<string> { "All" };
+            foreach (var a in DisplaySettings.Aspects)
+                if (DisplaySettings.OfAspect(allResolutions, a).Count > 0) aspects.Add(a);
+            float aw = (w - 40 - (aspects.Count - 1) * 6) / aspects.Count;
+            for (int i = 0; i < aspects.Count; i++)
+                if (GUI.Button(new Rect(r.x + 20 + i * (aw + 6), r.y + 88, aw, 28), aspects[i], aspect == aspects[i] ? buttonActive : button))
+                    PickAspect(aspects[i]);
+
             // Resolution: one row per size, the one picked highlighted.
-            const float listW = 250, listH = 260;
-            float top = r.y + 66;
+            const float listW = 270, listH = 260;
+            float top = r.y + 126;
             GUI.Label(new Rect(r.x + 20, top, listW, 20), "Resolution", text);
             var view = new Rect(r.x + 20, top + 24, listW, listH);
             GUI.Box(view, GUIContent.none, panel);
@@ -211,7 +238,8 @@ namespace SolarSystem.UI
             {
                 var res = resolutions[i];
                 bool picked = res.SameSize(pending.Width, pending.Height);
-                if (GUI.Button(new Rect(0, i * RowH, content.width, RowH - 2), res.ToString(), picked ? rowSelected : row))
+                string label = res.ToString() + (aspect == "All" ? "   " + DisplaySettings.AspectOf(res.Width, res.Height) : "");
+                if (GUI.Button(new Rect(0, i * RowH, content.width, RowH - 2), label, picked ? rowSelected : row))
                     pending = pending.WithSize(res.Width, res.Height);
             }
             GUI.EndScrollView();
@@ -230,6 +258,9 @@ namespace SolarSystem.UI
             if (GUI.Button(new Rect(x + half + 8, vy + 24, half, 28), "Off", !pending.VSync ? buttonActive : button)) pending = pending.WithVSync(false);
 
             if (!string.IsNullOrEmpty(notice)) GUI.Label(new Rect(x, vy + 66, cw, 40), notice, small);
+            // A size the screen does not list itself can be a window or a borderless window, not a mode to switch the screen to.
+            else if (pending.Mode == DisplayMode.Exclusive && !allResolutions.Exists(m => m.SameSize(pending.Width, pending.Height) && m.RefreshHz > 0))
+                GUI.Label(new Rect(x, vy + 66, cw, 40), "The screen does not offer this size as a mode: borderless windowed will show it", small);
 
             // Apply only once something differs from what is on the screen; Cancel throws the picks away.
             float by = r.yMax - 46;

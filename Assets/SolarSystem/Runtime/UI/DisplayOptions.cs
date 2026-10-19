@@ -56,13 +56,23 @@ namespace SolarSystem.UI
             PlayerPrefs.Save();
         }
 
-        /// <summary>The sizes the screen offers, once each at its best refresh rate, smallest first; at least the size
-        /// the game is drawn at now (the editor's game view lists nothing).</summary>
+        /// <summary>The sizes the screen offers, once each at its best refresh rate, and the usual widescreen and ultrawide
+        /// sizes that fit on it (U.SPC-T284), smallest first; at least the size the game is drawn at now (the editor's
+        /// game view lists nothing).</summary>
         public static List<DisplayResolution> Resolutions()
         {
             var modes = new List<DisplayResolution>();
-            foreach (var r in Screen.resolutions) modes.Add(new DisplayResolution(r.width, r.height, r.refreshRateRatio.value));
-            var list = DisplaySettings.Distinct(modes);
+            int maxW = Current.Width, maxH = Current.Height;
+            foreach (var r in Screen.resolutions)
+            {
+                modes.Add(new DisplayResolution(r.width, r.height, r.refreshRateRatio.value));
+                maxW = Mathf.Max(maxW, r.width);
+                maxH = Mathf.Max(maxH, r.height);
+            }
+            var native = Screen.currentResolution;
+            maxW = Mathf.Max(maxW, native.width);
+            maxH = Mathf.Max(maxH, native.height);
+            var list = DisplaySettings.WithStandardSizes(DisplaySettings.Distinct(modes), maxW, maxH);
             if (list.Count == 0) list.Add(new DisplayResolution(Current.Width, Current.Height, 0));
             return list;
         }
