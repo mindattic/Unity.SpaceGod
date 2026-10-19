@@ -1,0 +1,690 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using SolarSystem.Core;
+using UnityEngine;
+
+namespace SolarSystem.UI
+{
+    /// <summary>
+    /// The galaxy map (U.SPC-T103, F11 or the navigator's GALAXY MAP): every simulated star system at its real position,
+    /// seen from above the ecliptic and tilted to show depth, with the gate network between them. Each system is haloed
+    /// in the colour of the polity that holds it; each gate link is drawn as thick as the traffic through it, with that
+    /// traffic flowing along it; war fronts, shut gates, sieges and blockades are marked in red, raiders in orange, and
+    /// gates being built dashed. All of it is what the player knows (<see cref="GalaxyMap"/>): the system they are in as
+    /// it is, every other as the last news of it had it, and a system never heard from as a bare star.
+    ///
+    /// Click a star to inspect it (the panel on the right), double-click or TRAVEL to fly there through the gates (the
+    /// navigator's STAR SYSTEMS trip, <see cref="SolarSystemApp.TravelTo"/>). Drag to turn the map, shift-drag to pan,
+    /// the wheel to zoom. The view fills the screen; its panels keep to the middle 21:9 band, so on a 32:9 screen they
+    /// sit where the eye is rather than out at the far edges.
+    /// </summary>
+    public sealed class GalaxyMapScreen
+    {
+        readonly SolarSystemApp app;
+        GalaxyMapModel model;
+        float builtAt = -10f;
+        StarSystem builtFor;
+
+        StarSystem selected, hovered;
+        float yaw, tilt = 0.55f, zoom = 1f;
+        Vector2 pan;
+        bool fitted;
+        float fitScale = 1f;
+        DVec3 centreLy;
+
+        bool showTerritory = true, showFlows = true, showFronts = true, showPirates = true, showConstruction = true;
+
+        GUIStyle title, text, small, label, labelDim, button, buttonOn;
+        Texture2D panelTex, buttonTex, buttonOnTex, glow;
+
+        static readonly Color Accent = new Color(0.45f, 0.85f, 1f);
+        static readonly Color Dim = new Color(0.62f, 0.7f, 0.78f);
+        static readonly Color Unknown = new Color(0.5f, 0.54f, 0.6f);
+        static readonly Color FlowColor = new Color(1f, 0.82f, 0.4f);
+        static readonly Color FrontColor = new Color(1f, 0.3f, 0.26f);
+        static readonly Color PirateColor = new Color(1f, 0.55f, 0.15f);
+        static readonly Color BuildColor = new Color(0.75f, 0.8f, 0.9f);
+
+        /// <summary>The widest the panels spread, as width over height: 21:9, as the rest of the HUD.</summary>
+        const float MaxPanelAspect = 21f / 9f;
+
+        public GalaxyMapScreen(SolarSystemApp app) => this.app = app;
+
+        /// <summary>The middle band the panels keep to: the whole width up to 21:9, the middle 21:9 of anything wider.</summary>
+        static float BandWidth => Mathf.Min(Screen.width, Screen.height * MaxPanelAspect);
+        static float BandLeft => (Screen.width - BandWidth) * 0.5f;
+        static float BandRight => BandLeft + BandWidth;
+
+        /// <summary>Opened (again): starts on the system the player is in, framed to fit.</summary>
+        public void Opened()
+        {
+            selected = app.ActiveSystem;
+            fitted = false;
+            builtAt = -10f;
+        }
+
+        public void Draw()
+        {
+            EnsureStyles();
+            var screen = new Rect(0, 0, Screen.width, Screen.height);
+            // The map has the whole screen: nothing under it is clicked or steered while it is up.
+            if (Event.current.type == EventType.Layout || Event.current.type == EventType.Repaint)
+                if (!app.UiRects.Contains(screen)) app.UiRects.Add(screen);
+
+            double jd = app.Clock.Jd;
+            if (model == null || builtFor != app.ActiveSystem || Time.unscaledTime - builtAt > 0.25f)
+            {
+                model = GalaxyMap.Build(app.Galaxy, app.ActiveSystem, jd);
+                builtAt = Time.unscaledTime;
+                builtFor = app.ActiveSystem;
+            }
+            if (selected == null || model.Of(selected) == null) selected = app.ActiveSystem;
+
+            var old = GUI.color;
+            GUI.color = new Color(0.01f, 0.015f, 0.03f, 0.9f);
+            GUI.DrawTexture(screen, Texture2D.whiteTexture);
+            GUI.color = old;
+
+            const float legendW = 270, detailW = 360, headerH = 46;
+            float left = BandLeft + 10, right = BandRight - 10;
+            var header = new Rect(left, 10, right - left, headerH);
+            var legend = new Rect(left, header.yMax + 8, legendW, Screen.height - header.yMax - 18);
+            var detail = new Rect(right - detailW, header.yMax + 8, detailW, Screen.height - header.yMax - 18);
+            var canvas = new Rect(legend.xMax + 8, header.yMax + 8, detail.xMin - legend.xMax - 16, Screen.height - header.yMax - 18);
+
+            if (!fitted) Fit(canvas);
+            HandleInput(canvas);
+            if (Event.current.type == EventType.Repaint) DrawMap(canvas, jd);
+            DrawHeader(header, jd);
+            DrawLegend(legend);
+            DrawDetail(detail, jd);
+        }
+
+        // ---------------------------------------------------------------- projection
+
+        /// <summary>Frames every system: centred on their middle, scaled so the farthest fits the canvas.</summary>
+        void Fit(Rect canvas)
+        {
+            var systems = app.Galaxy.Systems;
+            var sum = DVec3.Zero;
+            foreach (var s in systems) sum += s.PositionLy;
+            centreLy = systems.Count > 0 ? sum / systems.Count : DVec3.Zero;
+            double reach = 1;
+            foreach (var s in systems) reach = Math.Max(reach, (s.PositionLy - centreLy).Length);
+            fitScale = 0.46f * Mathf.Min(canvas.width, canvas.height) / (float)reach;
+            // A wide canvas has room to spare across: use some of it.
+            fitScale *= Mathf.Clamp(canvas.width / Mathf.Max(canvas.height, 1f), 1f, 1.6f);
+            pan = Vector2.zero;
+            zoom = 1;
+            fitted = true;
+        }
+
+        /// <summary>A point (light-years) on the canvas: turned by the yaw about the ecliptic pole, tilted, scaled and panned.</summary>
+        Vector2 Project(Rect canvas, DVec3 ly, out float depth)
+        {
+            var d = ly - centreLy;
+            float c = Mathf.Cos(yaw), s = Mathf.Sin(yaw);
+            float x = (float)(d.X * c - d.Y * s);
+            float y = (float)(d.X * s + d.Y * c);
+            float z = (float)d.Z;
+            float up = y * Mathf.Cos(tilt) + z * Mathf.Sin(tilt);
+            depth = -y * Mathf.Sin(tilt) + z * Mathf.Cos(tilt);
+            float k = fitScale * zoom;
+            return canvas.center + pan + new Vector2(x * k, -up * k);
+        }
+
+        Vector2 Project(Rect canvas, DVec3 ly) => Project(canvas, ly, out _);
+
+        /// <summary>The same point dropped to the ecliptic plane (z = the map's middle): where a star's stalk stands.</summary>
+        Vector2 Foot(Rect canvas, DVec3 ly) => Project(canvas, new DVec3(ly.X, ly.Y, centreLy.Z));
+
+        StarSystem Nearest(Rect canvas, Vector2 mouse)
+        {
+            StarSystem best = null;
+            float bestPx = 22;
+            foreach (var m in model.Systems)
+            {
+                float px = (Project(canvas, m.System.PositionLy) - mouse).magnitude;
+                if (px < bestPx)
+                {
+                    bestPx = px;
+                    best = m.System;
+                }
+            }
+            return best;
+        }
+
+        // ---------------------------------------------------------------- input
+
+        void HandleInput(Rect canvas)
+        {
+            var e = Event.current;
+            if (!canvas.Contains(e.mousePosition))
+            {
+                if (e.type == EventType.Repaint) hovered = null;
+                return;
+            }
+            if (e.type == EventType.MouseMove || e.type == EventType.Repaint) hovered = Nearest(canvas, e.mousePosition);
+            switch (e.type)
+            {
+                case EventType.MouseDown when e.button == 0:
+                {
+                    var hit = Nearest(canvas, e.mousePosition);
+                    if (hit != null)
+                    {
+                        selected = hit;
+                        if (e.clickCount >= 2) Travel(hit);
+                    }
+                    e.Use();
+                    break;
+                }
+                case EventType.MouseDrag when e.button == 0 || e.button == 2:
+                    if (e.shift || e.button == 2) pan += e.delta;
+                    else
+                    {
+                        yaw += e.delta.x * 0.008f;
+                        tilt = Mathf.Clamp(tilt + e.delta.y * 0.008f, 0f, 1.45f);
+                    }
+                    e.Use();
+                    break;
+                case EventType.ScrollWheel:
+                {
+                    float before = zoom;
+                    zoom = Mathf.Clamp(zoom * Mathf.Pow(1.12f, -e.delta.y / 3f), 0.35f, 8f);
+                    // Zoom about the cursor: the point under it stays put.
+                    var towards = e.mousePosition - (canvas.center + pan);
+                    pan -= towards * (zoom / before - 1);
+                    e.Use();
+                    break;
+                }
+            }
+        }
+
+        void Travel(StarSystem to)
+        {
+            if (to == null || to == app.ActiveSystem) return;
+            if (app.IsPiloting)
+            {
+                app.ShowToast("Release the helm (P) before travelling to another system, or fly through the gate");
+                return;
+            }
+            app.ShowGalaxyMap = false;
+            app.TravelTo(to);
+        }
+
+        // ---------------------------------------------------------------- the map
+
+        void DrawMap(Rect canvas, double jd)
+        {
+            GUI.BeginClip(canvas);
+            var local = new Rect(0, 0, canvas.width, canvas.height);
+            var focus = selected != null && selected != app.ActiveSystem ? selected : hovered;
+            var route = focus != null && focus != app.ActiveSystem ? app.Galaxy.Network.Route(app.ActiveSystem, focus, null, jd) : null;
+            var onRoute = new HashSet<GateLink>();
+            if (route != null)
+                foreach (var g in route)
+                    onRoute.Add(g.Link);
+
+            // Stalks first: each star's height above or below the plane, so the depth reads.
+            foreach (var m in model.Systems)
+            {
+                var p = Project(local, m.System.PositionLy);
+                var f = Foot(local, m.System.PositionLy);
+                Line(f, p, new Color(Dim.r, Dim.g, Dim.b, 0.18f), 1f);
+                Disc(f, 3, new Color(Dim.r, Dim.g, Dim.b, 0.25f));
+            }
+
+            // Territory: a wash of the holder's colour round each system it holds, every other holder's share a smaller one.
+            if (showTerritory)
+                foreach (var m in model.Systems)
+                {
+                    if (!m.Known || m.Holdings.Count == 0) continue;
+                    var p = Project(local, m.System.PositionLy);
+                    double total = 0;
+                    foreach (var h in m.Holdings) total += h.Population;
+                    for (int i = m.Holdings.Count - 1; i >= 0; i--)
+                    {
+                        var h = m.Holdings[i];
+                        float share = total > 0 ? (float)(h.Population / total) : 1f / m.Holdings.Count;
+                        float r = i == 0 ? 46 + 10 * Mathf.Log10(1 + (float)total / 1e6f) : 18 + 30 * Mathf.Sqrt(share);
+                        Disc(p, r, Tint(h.Faction.Color, i == 0 ? 0.32f : 0.22f));
+                    }
+                }
+
+            // The gate links.
+            foreach (var l in model.Links)
+            {
+                var a = Project(local, l.A.PositionLy);
+                var b = Project(local, l.B.PositionLy);
+                if (l.UnderConstruction)
+                {
+                    if (!showConstruction) continue;
+                    Dashed(a, b, new Color(BuildColor.r, BuildColor.g, BuildColor.b, 0.55f), 1.5f, 6, 6);
+                    var mid = Vector2.Lerp(a, b, 0.5f);
+                    Line(a, Vector2.Lerp(a, b, (float)l.Progress), new Color(BuildColor.r, BuildColor.g, BuildColor.b, 0.9f), 2f);
+                    Label(mid + new Vector2(6, -16), "building " + (l.Progress * 100).ToString("0", CultureInfo.InvariantCulture) + "%", BuildColor, true);
+                    continue;
+                }
+                bool routed = l.Link != null && onRoute.Contains(l.Link);
+                if (!l.Known) Dashed(a, b, new Color(Unknown.r, Unknown.g, Unknown.b, 0.4f), 1f, 4, 6);
+                else Line(a, b, new Color(0.45f, 0.75f, 0.95f, 0.45f), 1.4f);
+                if (showFlows && l.Crossings > 0)
+                {
+                    float w = 2 + 7 * (float)l.Flow;
+                    Line(a, b, new Color(FlowColor.r, FlowColor.g, FlowColor.b, 0.28f), w);
+                    FlowDots(a, b, l);
+                }
+                if (routed) Line(a, b, new Color(Accent.r, Accent.g, Accent.b, 0.95f), 3f);
+                if (showFronts && l.WarFront) Dashed(a, b, FrontColor, 3.5f, 10, 6);
+                if (showFronts && l.Shut)
+                {
+                    // A bar across the line at the shut end.
+                    if (l.ShutAtA) Barrier(a, b);
+                    if (l.ShutAtB) Barrier(b, a);
+                }
+            }
+
+            // The stars.
+            foreach (var m in model.Systems)
+            {
+                var p = Project(local, m.System.PositionLy);
+                var c = StarColor(m.System);
+                if (!m.Known && !m.Here) c = Color.Lerp(c, Unknown, 0.6f);
+                Disc(p, 9, new Color(c.r, c.g, c.b, 0.35f));
+                Disc(p, 4.5f, c);
+                if (m.Here) Ring(p, 13, Accent, 2f);
+                if (m.System == selected) Brackets(p, 17, Accent);
+                else if (m.System == hovered) Brackets(p, 15, new Color(1, 1, 1, 0.6f));
+                if (showFronts && (m.Contested || m.Threats.Count > 0)) Ring(p, 20 + 2 * Mathf.Sin(Time.unscaledTime * 4), FrontColor, 2f);
+                if (showPirates && m.Pirates != PirateActivity.None)
+                {
+                    float size = m.Pirates == PirateActivity.High ? 15 : 11;
+                    var at = p + new Vector2(-20, 12);
+                    var old = GUI.color;
+                    GUI.color = new Color(PirateColor.r, PirateColor.g, PirateColor.b, m.Pirates == PirateActivity.High ? 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 5) : 0.8f);
+                    GUI.DrawTexture(new Rect(at.x - size * 0.5f, at.y - size * 0.5f, size, size), Icons.ForShip(ShipClass.Destroyer));
+                    GUI.color = old;
+                }
+
+                string name = m.System.Name == "Sol System" ? "SOL" : m.System.Name.ToUpperInvariant();
+                Label(p + new Vector2(12, -20), name, m.Here ? Accent : m.Known ? Color.white : Unknown, false);
+                string sub = m.Here ? "you are here"
+                    : !m.Known ? "no news"
+                    : (m.Holder != null ? m.Holder.Name + "  ·  " : "unclaimed  ·  ") + Age(m.AgeDays);
+                Label(p + new Vector2(12, -5), sub, m.Holder != null && showTerritory ? Tint(m.Holder.Color, 0.95f) : Dim, true);
+            }
+            GUI.EndClip();
+        }
+
+        /// <summary>Sparks along a link, as many as its traffic, each way in proportion to the crossings that way.</summary>
+        void FlowDots(Vector2 a, Vector2 b, MapLink l)
+        {
+            int n = 2 + Mathf.RoundToInt(5 * (float)l.Flow);
+            int towardB = Mathf.RoundToInt(n * (l.Crossings > 0 ? (float)l.TowardB / l.Crossings : 0.5f));
+            float t = Time.unscaledTime * 0.12f;
+            for (int i = 0; i < n; i++)
+            {
+                float f = Mathf.Repeat(t + i / (float)n + (l.A.Name.Length * 0.137f), 1f);
+                var p = i < towardB ? Vector2.Lerp(a, b, f) : Vector2.Lerp(b, a, f);
+                Disc(p, 2.6f, FlowColor);
+            }
+        }
+
+        void Barrier(Vector2 at, Vector2 toward)
+        {
+            var d = (toward - at).normalized;
+            var p = at + d * 22;
+            var n = new Vector2(-d.y, d.x);
+            Line(p - n * 8, p + n * 8, FrontColor, 3f);
+        }
+
+        static Color StarColor(StarSystem s)
+        {
+            var root = s.Catalog.Root;
+            foreach (var b in s.Catalog.Bodies)
+                if (b.IsStar)
+                {
+                    root = b;
+                    break;
+                }
+            var c = new Color(root.Color.R, root.Color.G, root.Color.B);
+            float max = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+            c = max > 0 ? c / max : Color.white;
+            return Color.Lerp(c, Color.white, 0.35f);
+        }
+
+        static Color Tint(Rgb c, float a) => new Color(c.R, c.G, c.B, a);
+
+        static string Age(double days) => double.IsNaN(days) ? "no news" : days <= 0 ? "live" : "news " + LightSpeed.Describe(days) + " old";
+
+        // ---------------------------------------------------------------- panels
+
+        void DrawHeader(Rect r, double jd)
+        {
+            GUI.Box(r, GUIContent.none, Panel);
+            GUI.Label(new Rect(r.x + 14, r.y + 7, 220, 20), "GALAXY MAP", title);
+            int known = 0;
+            foreach (var m in model.Systems)
+                if (m.Known) known++;
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 14, r.y + 26, r.width - 400, 16),
+                "As known in " + app.ActiveSystem.Name + "   ·   " + known + " of " + model.Systems.Count + " systems heard from   ·   " +
+                model.Links.Count + " gate links   ·   traffic over the last " + GalaxyMap.FlowWindowDays.ToString("0", CultureInfo.InvariantCulture) + " days", small);
+            GUI.contentColor = old;
+            if (GUI.Button(new Rect(r.xMax - 210, r.y + 10, 120, 26), "Reset view", button)) fitted = false;
+            if (GUI.Button(new Rect(r.xMax - 82, r.y + 10, 72, 26), "Close", button)) app.ShowGalaxyMap = false;
+        }
+
+        void DrawLegend(Rect r)
+        {
+            GUI.Box(r, GUIContent.none, Panel);
+            float y = r.y + 10;
+            float x = r.x + 12, w = r.width - 24;
+            Heading(ref y, x, w, "LAYERS");
+            Toggle(ref y, x, w, ref showTerritory, "Territory", "each system washed in its holder's colour");
+            Toggle(ref y, x, w, ref showFlows, "Traffic", "gate crossings: thicker is busier");
+            Toggle(ref y, x, w, ref showFronts, "Fronts & blockades", "war fronts, shut gates, sieges");
+            Toggle(ref y, x, w, ref showPirates, "Raiders", "raider hulls, havens and raids");
+            Toggle(ref y, x, w, ref showConstruction, "Gates being built", "dashed, filled as far as built");
+            y += 6;
+
+            Heading(ref y, x, w, "KEY");
+            Swatch(ref y, x, w, new Color(0.45f, 0.75f, 0.95f), "gate link", false);
+            Swatch(ref y, x, w, Unknown, "link to a system never heard from", true);
+            Swatch(ref y, x, w, FlowColor, "traffic through the gate", false);
+            Swatch(ref y, x, w, Accent, "the way there by the gates", false);
+            Swatch(ref y, x, w, FrontColor, "war front (dashed) or shut gate (bar)", true);
+            Swatch(ref y, x, w, PirateColor, "raiders about", false);
+            y += 6;
+
+            Heading(ref y, x, w, "WARS KNOWN");
+            if (model.Wars.Count == 0) Line(ref y, x, w, "none: the polities are at peace", Dim);
+            foreach (var war in model.Wars)
+            {
+                if (y > r.yMax - 110) break;
+                Line(ref y, x, w, war.A.Name + "  vs  " + war.B.Name, FrontColor);
+            }
+            y += 6;
+
+            Heading(ref y, x, w, "HOLDERS");
+            var seen = new List<Faction>();
+            foreach (var m in model.Systems)
+            {
+                if (m.Holder == null || seen.Contains(m.Holder)) continue;
+                seen.Add(m.Holder);
+                if (y > r.yMax - 90) break;
+                int held = 0;
+                foreach (var n in model.Systems)
+                    if (n.Holder == m.Holder) held++;
+                Line(ref y, x, w, "■  " + m.Holder.Name + "   " + held + (held == 1 ? " system" : " systems"), Tint(m.Holder.Color, 1));
+            }
+
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(x, r.yMax - 76, w, 70),
+                "Click a star to inspect it, double-click to travel.\nDrag to turn, shift-drag to pan, wheel to zoom.\nF11 or Esc closes the map.", small);
+            GUI.contentColor = old;
+        }
+
+        void DrawDetail(Rect r, double jd)
+        {
+            GUI.Box(r, GUIContent.none, Panel);
+            var s = selected ?? app.ActiveSystem;
+            var m = model.Of(s);
+            if (m == null) return;
+            float x = r.x + 14, w = r.width - 28, y = r.y + 10;
+            GUI.Label(new Rect(x, y, w, 22), s.Name.ToUpperInvariant(), title);
+            y += 24;
+            bool here = s == app.ActiveSystem;
+            if (here) Line(ref y, x, w, "You are here: seen as it is.", Accent);
+            else
+            {
+                var route = app.Galaxy.Network.Route(app.ActiveSystem, s, null, jd);
+                string way = route == null ? "no way through the gates" : route.Count + (route.Count == 1 ? " gate, " : " gates, ") +
+                                                                     Days(GateNetwork.RouteDays(route)) + " in the gates";
+                Line(ref y, x, w, Galaxy.DistanceLy(app.ActiveSystem, s).ToString("0.00", CultureInfo.InvariantCulture) + " ly away   ·   " + way, Color.white);
+                var openRoute = app.Galaxy.Network.Route(app.ActiveSystem, s, app.Piloted.Ship?.Faction ?? app.ActiveSystem.Holder, jd);
+                if (route != null && openRoute == null) Line(ref y, x, w, "Every way there is shut to you just now", FrontColor);
+                Line(ref y, x, w, app.Galaxy.Traffic?.News.Describe(app.ActiveSystem, s, jd) ?? "no news", Dim);
+                if (GUI.Button(new Rect(x, y + 2, w, 28), app.IsPiloting ? "TRAVEL  (release the helm first)" : "TRAVEL HERE THROUGH THE GATES", buttonOn)) Travel(s);
+                y += 36;
+            }
+            y += 4;
+
+            if (!m.Known)
+            {
+                Line(ref y, x, w, "Nothing has ever been heard from it: a star on the charts, and its gates.", Dim);
+                y += 6;
+            }
+            else
+            {
+                Heading(ref y, x, w, "WHO HOLDS IT");
+                if (m.Holdings.Count == 0) Line(ref y, x, w, "Nobody: no settled markets", Dim);
+                foreach (var h in m.Holdings)
+                    Line(ref y, x, w, h.Faction.Name + (h.Faction == m.Holder ? "  (holds it)" : "") + "   " + h.Ports + (h.Ports == 1 ? " port, " : " ports, ") + People(h.Population), Tint(h.Faction.Color, 1));
+                if (m.Contested) Line(ref y, x, w, "Contested: " + m.ContestedBy.A.Name + " and " + m.ContestedBy.B.Name + " are at war here", FrontColor);
+                foreach (var t in m.Threats)
+                {
+                    string what = t.BesiegedBy != null ? "under siege by the " + t.BesiegedBy.Name : "blockaded by the " + t.BlockadedBy.Name;
+                    Line(ref y, x, w, t.Port + " " + what, FrontColor);
+                }
+                y += 6;
+
+                Heading(ref y, x, w, "RAIDERS");
+                if (m.Pirates == PirateActivity.None) Line(ref y, x, w, "None reported", Dim);
+                else
+                    Line(ref y, x, w, (m.Pirates == PirateActivity.High ? "Heavy: " : "Some: ") + m.PirateShips + " armed raiders, " + m.Havens +
+                                      (m.Havens == 1 ? " haven known, " : " havens known, ") + m.Raids + (m.Raids == 1 ? " raid" : " raids") + " through its gates", PirateColor);
+                y += 6;
+            }
+
+            Heading(ref y, x, w, "GATES");
+            foreach (var l in model.Links)
+            {
+                if (l.A != s && l.B != s) continue;
+                if (y > r.yMax - 24) break;
+                var other = l.Other(s);
+                string line;
+                Color c;
+                if (l.UnderConstruction)
+                {
+                    line = "to " + other.Name + ": being built, " + (l.Progress * 100).ToString("0", CultureInfo.InvariantCulture) + "%" + (l.Builder != null ? " by the " + l.Builder.Name : "");
+                    c = BuildColor;
+                }
+                else
+                {
+                    line = "to " + other.Name + "   " + l.Link.Ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly";
+                    if (!l.Known) line += "   traffic unknown";
+                    else
+                    {
+                        line += "   " + l.Crossings + (l.Crossings == 1 ? " crossing" : " crossings");
+                        if (l.Tonnes > 0) line += ", " + Tonnes(l.Tonnes);
+                        if (l.Raids > 0) line += ", " + l.Raids + (l.Raids == 1 ? " raid" : " raids");
+                    }
+                    bool shutHere = l.A == s ? l.ShutAtA : l.ShutAtB;
+                    bool shutThere = l.A == s ? l.ShutAtB : l.ShutAtA;
+                    if (shutHere) line += "   SHUT here";
+                    else if (shutThere) line += "   SHUT at the far end";
+                    if (l.WarFront) line += "   FRONT";
+                    c = l.Shut || l.WarFront ? FrontColor : l.Known ? Color.white : Dim;
+                }
+                Line(ref y, x, w, line, c);
+            }
+        }
+
+        static string Days(double d) => d < 1 ? (d * 24).ToString("0", CultureInfo.InvariantCulture) + " h" : d.ToString("0.0", CultureInfo.InvariantCulture) + " days";
+
+        static string People(double n) => n >= 1e9 ? (n / 1e9).ToString("0.0", CultureInfo.InvariantCulture) + " bn people"
+            : n >= 1e6 ? (n / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " m people"
+            : n.ToString("N0", CultureInfo.InvariantCulture) + " people";
+
+        static string Tonnes(double t) => t >= 1e6 ? (t / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " Mt"
+            : t >= 1e3 ? (t / 1e3).ToString("0", CultureInfo.InvariantCulture) + " kt"
+            : t.ToString("0", CultureInfo.InvariantCulture) + " t";
+
+        // ---------------------------------------------------------------- drawing helpers
+
+        GUIStyle Panel => panelStyle ??= new GUIStyle { normal = { background = panelTex }, border = new RectOffset(2, 2, 2, 2) };
+        GUIStyle panelStyle;
+
+        void Heading(ref float y, float x, float w, string s)
+        {
+            var old = GUI.contentColor;
+            GUI.contentColor = Accent;
+            GUI.Label(new Rect(x, y, w, 16), s, small);
+            GUI.contentColor = old;
+            y += 18;
+        }
+
+        void Line(ref float y, float x, float w, string s, Color c)
+        {
+            var content = new GUIContent(s);
+            float h = Mathf.Max(16, text.CalcHeight(content, w));
+            var old = GUI.contentColor;
+            GUI.contentColor = c;
+            GUI.Label(new Rect(x, y, w, h), content, text);
+            GUI.contentColor = old;
+            y += h + 2;
+        }
+
+        void Toggle(ref float y, float x, float w, ref bool on, string name, string hint)
+        {
+            if (GUI.Button(new Rect(x, y, w, 22), (on ? "[x]  " : "[  ]  ") + name, on ? buttonOn : button)) on = !on;
+            y += 24;
+            var old = GUI.contentColor;
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(x + 4, y, w - 4, 14), hint, small);
+            GUI.contentColor = old;
+            y += 17;
+        }
+
+        void Swatch(ref float y, float x, float w, Color c, string s, bool dashed)
+        {
+            if (Event.current.type == EventType.Repaint)
+            {
+                var a = new Vector2(x, y + 8);
+                var b = new Vector2(x + 30, y + 8);
+                if (dashed) Dashed(a, b, c, 2.5f, 6, 4);
+                else Line(a, b, c, 2.5f);
+            }
+            var old = GUI.contentColor;
+            GUI.contentColor = Color.white;
+            GUI.Label(new Rect(x + 38, y, w - 38, 16), s, small);
+            GUI.contentColor = old;
+            y += 18;
+        }
+
+        void Label(Vector2 p, string s, Color c, bool minor)
+        {
+            var style = minor ? labelDim : label;
+            var content = new GUIContent(s);
+            var size = style.CalcSize(content);
+            var old = GUI.contentColor;
+            GUI.contentColor = new Color(0, 0, 0, 0.85f);
+            GUI.Label(new Rect(p.x + 1, p.y + 1, size.x, size.y), content, style);
+            GUI.contentColor = c;
+            GUI.Label(new Rect(p.x, p.y, size.x, size.y), content, style);
+            GUI.contentColor = old;
+        }
+
+        static void Line(Vector2 a, Vector2 b, Color color, float thickness)
+        {
+            var d = b - a;
+            float length = d.magnitude;
+            if (length < 0.5f) return;
+            var matrix = GUI.matrix;
+            var old = GUI.color;
+            GUIUtility.RotateAroundPivot(Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg, a);
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(a.x, a.y - thickness * 0.5f, length, thickness), Icons.White);
+            GUI.color = old;
+            GUI.matrix = matrix;
+        }
+
+        static void Dashed(Vector2 a, Vector2 b, Color color, float thickness, float dash, float gap)
+        {
+            float length = (b - a).magnitude;
+            if (length < 0.5f) return;
+            var d = (b - a) / length;
+            for (float s = 0; s < length; s += dash + gap)
+                Line(a + d * s, a + d * Mathf.Min(s + dash, length), color, thickness);
+        }
+
+        void Disc(Vector2 p, float r, Color c)
+        {
+            var old = GUI.color;
+            GUI.color = c;
+            GUI.DrawTexture(new Rect(p.x - r, p.y - r, r * 2, r * 2), glow);
+            GUI.color = old;
+        }
+
+        static void Ring(Vector2 p, float r, Color c, float thickness)
+        {
+            const int n = 28;
+            for (int i = 0; i < n; i++)
+            {
+                float a0 = i * Mathf.PI * 2 / n, a1 = (i + 1) * Mathf.PI * 2 / n;
+                Line(p + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * r, p + new Vector2(Mathf.Cos(a1), Mathf.Sin(a1)) * r, c, thickness);
+            }
+        }
+
+        static void Brackets(Vector2 p, float half, Color c)
+        {
+            float len = half * 0.5f;
+            var old = GUI.color;
+            GUI.color = c;
+            var w = Icons.White;
+            var r = new Rect(p.x - half, p.y - half, half * 2, half * 2);
+            GUI.DrawTexture(new Rect(r.xMin, r.yMin, len, 2), w);
+            GUI.DrawTexture(new Rect(r.xMin, r.yMin, 2, len), w);
+            GUI.DrawTexture(new Rect(r.xMax - len, r.yMin, len, 2), w);
+            GUI.DrawTexture(new Rect(r.xMax - 2, r.yMin, 2, len), w);
+            GUI.DrawTexture(new Rect(r.xMin, r.yMax - 2, len, 2), w);
+            GUI.DrawTexture(new Rect(r.xMin, r.yMax - len, 2, len), w);
+            GUI.DrawTexture(new Rect(r.xMax - len, r.yMax - 2, len, 2), w);
+            GUI.DrawTexture(new Rect(r.xMax - 2, r.yMax - len, 2, len), w);
+            GUI.color = old;
+        }
+
+        void EnsureStyles()
+        {
+            if (title != null) return;
+            panelTex = Hud.Solid(new Color(0.03f, 0.05f, 0.08f, 0.86f), new Color(0.3f, 0.6f, 0.75f, 0.45f));
+            buttonTex = Hud.Solid(new Color(0.12f, 0.18f, 0.24f, 0.95f), new Color(0.3f, 0.5f, 0.6f, 0.6f));
+            buttonOnTex = Hud.Solid(new Color(0.1f, 0.3f, 0.42f, 0.95f), new Color(0.45f, 0.85f, 1f, 0.8f));
+            glow = SoftDisc();
+            title = new GUIStyle { fontSize = 15, fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
+            text = new GUIStyle { fontSize = 12, normal = { textColor = Color.white }, wordWrap = true };
+            small = new GUIStyle { fontSize = 11, normal = { textColor = Dim }, wordWrap = true };
+            label = new GUIStyle { fontSize = 12, fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
+            labelDim = new GUIStyle { fontSize = 11, normal = { textColor = Color.white } };
+            button = new GUIStyle
+            {
+                fontSize = 12, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(8, 6, 0, 0), border = new RectOffset(2, 2, 2, 2),
+                normal = { background = buttonTex, textColor = Color.white },
+                hover = { background = buttonOnTex, textColor = Color.white },
+                active = { background = buttonOnTex, textColor = Accent },
+            };
+            buttonOn = new GUIStyle(button) { normal = { background = buttonOnTex, textColor = Color.white }, fontStyle = FontStyle.Bold };
+        }
+
+        /// <summary>A white disc fading out to its edge, tinted at draw time.</summary>
+        static Texture2D SoftDisc()
+        {
+            const int n = 64;
+            var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = (x + 0.5f) / n * 2 - 1, dy = (y + 0.5f) / n * 2 - 1;
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01(1 - r);
+                    t.SetPixel(x, y, new Color(1, 1, 1, Mathf.Clamp01(a * a * 1.6f + (r < 0.5f ? 0.35f * (1 - r * 2) : 0))));
+                }
+            t.Apply();
+            return t;
+        }
+    }
+}

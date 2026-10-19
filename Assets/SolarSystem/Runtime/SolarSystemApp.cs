@@ -195,13 +195,16 @@ namespace SolarSystem
         /// <summary>The player's fleet and property (F10): buy hulls and property, hire captains, give standing orders, read the books.</summary>
         public bool ShowFleet { get; set; }
 
+        /// <summary>The galaxy map (F11, U.SPC-T103): a full screen of every system, its holder, the gate traffic, fronts and raiders.</summary>
+        public bool ShowGalaxyMap { get; set; }
+
         /// <summary>The news feed panel in place of the four-line ticker (X).</summary>
         public bool ShowNews { get; set; }
         public bool ShowSpawn { get; set; }
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || ShowSaves || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet)); // market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
+        bool ClickPanelOpen => ShowSpawn || ShowSaves || ShowGalaxyMap || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet)); // market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -536,6 +539,8 @@ namespace SolarSystem
             float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
             bool overUi = IsPointerOverUi();
             Input.Poll(overUi, ModelViewer.CapturesInput);
+            // The galaxy map turns with its own drag: the camera behind it does not look about meanwhile.
+            if (ShowGalaxyMap) Input.ReleaseLook();
             // The pause menu has the frame: nothing else moves, and the stick and trigger do nothing, until it closes.
             if (pauseMenu.IsOpen)
             {
@@ -711,6 +716,7 @@ namespace SolarSystem
             if (i.ToggleBounties) ShowBounties = !ShowBounties;
             if (i.ToggleContracts) ShowContracts = !ShowContracts;
             if (i.ToggleFleet) ShowFleet = !ShowFleet;
+            if (i.ToggleGalaxyMap) ShowGalaxyMap = !ShowGalaxyMap;
             // At the helm X rolls the hull (Z/X): the news feed would free the cursor and take the stick and guns.
             if (i.ToggleNews && !IsPiloting) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
@@ -746,7 +752,7 @@ namespace SolarSystem
             switch (EscapeKey.Route(ClickPanelOpen, IsPiloting, SpaceCamera.Mode != SpaceCamera.CameraMode.Free, !Selected.IsNone))
             {
                 case EscapeAction.ClosePanels:
-                    ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = false;
+                    ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = ShowGalaxyMap = false;
                     break;
                 case EscapeAction.LeaveFocus:
                     SpaceCamera.ExitFocus();

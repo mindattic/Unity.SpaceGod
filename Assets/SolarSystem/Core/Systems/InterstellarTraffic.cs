@@ -81,6 +81,24 @@ namespace SolarSystem.Core
         public bool Homeward => Destination == Home;
     }
 
+    /// <summary>
+    /// One group's trip through a gate, kept for the galaxy map's trade flows (U.SPC-T103): which link, which way, when,
+    /// what for, under whose colours, how many hulls and how many tonnes of cargo.
+    /// </summary>
+    public sealed class GateCrossing
+    {
+        public GateLink Link;
+
+        /// <summary>The system it left by this link.</summary>
+        public StarSystem From;
+
+        public double Jd;
+        public VoyagePurpose Purpose;
+        public Faction Faction;
+        public int Ships;
+        public double Tonnes;
+    }
+
     /// <summary>A ship (and its escorts) inside a gate, between leaving one system and coming out in the next.</summary>
     public sealed class Passage
     {
@@ -141,6 +159,22 @@ namespace SolarSystem.Core
 
         /// <summary>Voyages that have reached their far end so far, by purpose (homecomings not counted).</summary>
         public readonly Dictionary<VoyagePurpose, int> Arrivals = new Dictionary<VoyagePurpose, int>();
+
+        /// <summary>The crossings of the last <see cref="CrossingLogDays"/> days, oldest first (U.SPC-T103): what the gates' owners
+        /// log of the traffic through them, and the galaxy map draws as trade flows.</summary>
+        public IReadOnlyList<GateCrossing> CrossingLog => crossingLog;
+        readonly List<GateCrossing> crossingLog = new List<GateCrossing>();
+
+        /// <summary>How long the crossing log is kept, days.</summary>
+        public const double CrossingLogDays = 180;
+
+        /// <summary>Logs a crossing (kept in date order): every group that goes into a gate is logged as it goes in.</summary>
+        public void LogCrossing(GateCrossing c)
+        {
+            int i = crossingLog.Count;
+            while (i > 0 && crossingLog[i - 1].Jd > c.Jd) i--;
+            crossingLog.Insert(i, c);
+        }
 
         /// <summary>Gate crossings so far (a group counts once), and the tolls paid on cargo, credits.</summary>
         public int Crossings { get; private set; }
@@ -339,6 +373,11 @@ namespace SolarSystem.Core
             Retire(leader);
             inGates.Add(p);
             Crossings++;
+            LogCrossing(new GateCrossing
+            {
+                Link = link, From = system, Jd = jd, Purpose = v.Purpose, Faction = leader.Faction, Ships = p.Ships.Count,
+                Tonnes = leader.HasCargo ? leader.CargoTonnes : 0,
+            });
             string group = p.Ships.Count > 1 ? $" and {p.Ships.Count - 1} more" : "";
             world.Log(jd, $"{leader.Name}{group} enter{(p.Ships.Count > 1 ? "" : "s")} the {gate.Name} for {gate.Destination.Name}", WorldEventKind.Info, system.Catalog.Root.Index);
         }
@@ -583,6 +622,10 @@ namespace SolarSystem.Core
 
         void Daily(double jd)
         {
+            int stale = 0;
+            while (stale < crossingLog.Count && crossingLog[stale].Jd < jd - CrossingLogDays) stale++;
+            if (stale > 0) crossingLog.RemoveRange(0, stale);
+
             var settled = new List<StarSystem>();
             foreach (var s in galaxy.Systems)
                 if (s.Settled) settled.Add(s);

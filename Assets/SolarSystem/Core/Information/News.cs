@@ -44,6 +44,30 @@ namespace SolarSystem.Core
         /// <summary>The source's own notable news up to <see cref="AsOfJd"/>, oldest first.</summary>
         public readonly List<WorldEvent> Headlines = new List<WorldEvent>();
 
+        /// <summary>Who held the source at <see cref="AsOfJd"/> (<see cref="Polities.HolderOf"/>); null if nobody did.</summary>
+        public Faction Holder;
+
+        /// <summary>The source's own gates as they stood: who held each and how long it was shut for (U.SPC-T103).</summary>
+        public readonly List<GateState> Gates = new List<GateState>();
+
+        /// <summary>Its ports a besieger had declared blockaded, and those under siege, as they stood (U.SPC-T103).</summary>
+        public readonly List<PortThreat> PortThreats = new List<PortThreat>();
+
+        /// <summary>Every pair of polities at war at <see cref="AsOfJd"/>, by the one table every system shares (pirates aside).</summary>
+        public readonly List<FactionPair> Wars = new List<FactionPair>();
+
+        /// <summary>Armed raider hulls about the source, and the pirate havens known there (U.SPC-T103).</summary>
+        public int PirateShips, Havens;
+
+        /// <summary>Whether the report has <paramref name="a"/> and <paramref name="b"/> at war.</summary>
+        public bool AtWar(Faction a, Faction b)
+        {
+            if (a == null || b == null || a == b) return false;
+            foreach (var w in Wars)
+                if (w.Involves(a) && w.Involves(b)) return true;
+            return false;
+        }
+
         /// <summary>How old the news is at <paramref name="jd"/>, days.</summary>
         public double AgeDays(double jd) => jd - AsOfJd;
 
@@ -61,6 +85,12 @@ namespace SolarSystem.Core
             var r = new SystemReport { Source = Source, AsOfJd = AsOfJd, ReceivedJd = receivedJd, Carrier = carrier, CarriedBy = carriedBy };
             r.Markets.AddRange(Markets);
             r.Headlines.AddRange(Headlines);
+            r.Holder = Holder;
+            r.Gates.AddRange(Gates);
+            r.PortThreats.AddRange(PortThreats);
+            r.Wars.AddRange(Wars);
+            r.PirateShips = PirateShips;
+            r.Havens = Havens;
             return r;
         }
 
@@ -82,8 +112,78 @@ namespace SolarSystem.Core
                 var e = events[i];
                 if (e.Jd <= jd && Notable(e.Kind) && !e.Text.StartsWith(ForeignPrefix, StringComparison.Ordinal)) r.Headlines.Add(e);
             }
+            TakeSituation(r, s, jd);
             return r;
         }
+
+        /// <summary>
+        /// The rest of what a report carries for the galaxy map (U.SPC-T103): who holds the system and its gates, which
+        /// gates are shut, its ports under blockade or siege, the wars of the day, and how thick the raiders are there.
+        /// </summary>
+        static void TakeSituation(SystemReport r, StarSystem s, double jd)
+        {
+            var world = s.World;
+            r.Holder = world.Holder;
+            foreach (var g in s.Gates) r.Gates.Add(new GateState { Gate = g, Owner = g.Owner, BlockadeUntilJd = g.BlockadeUntilJd });
+            foreach (var st in world.Economy.Settlements)
+            {
+                if (st.Kind == SettlementKind.Haven)
+                {
+                    if (!st.Hidden && !st.Fallen) r.Havens++;
+                    continue;
+                }
+                if (st.Hidden || st.Fallen) continue;
+                var blockader = world.Diplomacy.BlockadedBy(st);
+                var besieger = world.War?.Besieger(st);
+                if (blockader != null || besieger != null)
+                    r.PortThreats.Add(new PortThreat { Port = st.Name, Owner = st.Owner, BlockadedBy = blockader, BesiegedBy = besieger });
+            }
+            foreach (var ship in world.Fleet.Ships)
+                if (!ship.Destroyed && !ship.IsEscort && !ship.Derelict && ship.Faction != null && ship.Faction.IsPirate && ship.Combat != null && ship.Combat.Armed)
+                    r.PirateShips++;
+            var factions = world.Polities.Factions;
+            for (int i = 0; i < factions.Count; i++)
+                for (int j = i + 1; j < factions.Count; j++)
+                {
+                    var a = factions[i];
+                    var b = factions[j];
+                    if (!a.IsPirate && !b.IsPirate && world.Diplomacy.Get(a, b) == Relation.War) r.Wars.Add(new FactionPair(a, b));
+                }
+        }
+    }
+
+    /// <summary>One gate as a report saw it: who held it and until when it was shut (U.SPC-T103).</summary>
+    public struct GateState
+    {
+        public JumpGate Gate;
+        public Faction Owner;
+        public double BlockadeUntilJd;
+
+        /// <summary>Shut at <paramref name="jd"/>, as far as the report knew (a blockade lasts until its date unless lifted).</summary>
+        public bool Shut(double jd) => jd < BlockadeUntilJd;
+    }
+
+    /// <summary>A port a report saw under a declared blockade or a siege (U.SPC-T103).</summary>
+    public struct PortThreat
+    {
+        public string Port;
+        public Faction Owner, BlockadedBy, BesiegedBy;
+    }
+
+    /// <summary>Two polities, as a pair (at war, say), either way round.</summary>
+    public readonly struct FactionPair
+    {
+        public readonly Faction A, B;
+
+        public FactionPair(Faction a, Faction b)
+        {
+            A = a;
+            B = b;
+        }
+
+        public bool Involves(Faction f) => f != null && (A == f || B == f);
+
+        public bool Same(FactionPair o) => (A == o.A && B == o.B) || (A == o.B && B == o.A);
     }
 
     /// <summary>

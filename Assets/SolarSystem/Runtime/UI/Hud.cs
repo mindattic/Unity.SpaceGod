@@ -89,6 +89,10 @@ namespace SolarSystem.UI
 
         public Hud(SolarSystemApp app) => this.app = app;
 
+        /// <summary>The galaxy map screen (F11), made the first time it is opened; and whether it was up last frame.</summary>
+        GalaxyMapScreen galaxyMap;
+        bool galaxyMapOpen;
+
         public void Draw()
         {
             EnsureStyles();
@@ -96,6 +100,18 @@ namespace SolarSystem.UI
 
             // Spawn & Pilot is its own full screen, not an overlay panel -- everything else waits.
             if (app.ShowSpawn) { DrawSpawn(); return; }
+
+            // So is the galaxy map (U.SPC-T103), between the stars aside: a trip under way has the screen.
+            if (app.ShowGalaxyMap && !app.Travel.Active)
+            {
+                galaxyMap ??= new GalaxyMapScreen(app);
+                if (!galaxyMapOpen) galaxyMap.Opened();
+                galaxyMapOpen = true;
+                galaxyMap.Draw();
+                DrawToast();
+                return;
+            }
+            galaxyMapOpen = false;
 
             if (app.Travel.Active) DrawTravel();
             else DrawWorldOverlay();
@@ -1089,6 +1105,8 @@ namespace SolarSystem.UI
             GUI.contentColor = Accent;
             GUI.Label(new Rect(r.x + 12, sy, w - 24, 16), "STAR SYSTEMS", small);
             GUI.contentColor = oldColor;
+            // The whole neighbourhood at once: territory, traffic, fronts and raiders, as far as the news goes (U.SPC-T103).
+            if (GUI.Button(new Rect(r.x + w - 126, sy - 2, 116, 18), "GALAXY MAP   F11", button)) app.ShowGalaxyMap = true;
             sy += 17;
             var network = app.Galaxy.Network;
             double jd = app.Clock.Jd;
@@ -2830,6 +2848,7 @@ namespace SolarSystem.UI
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
                 "K   satellites    R   auto-reorient on/off (keep this system's plane level)",
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
+                "F11  galaxy map: every system, who holds it, gate traffic, war fronts, blockades and raiders, as far as the news goes; click a star to inspect, double-click to travel",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",

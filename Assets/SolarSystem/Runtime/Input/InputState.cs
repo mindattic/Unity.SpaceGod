@@ -72,6 +72,9 @@ namespace SolarSystem.Input
         /// <summary>The player's own fleet and property (F10; F9 is the model viewer's): owned ships, captains, standing orders, the books.</summary>
         public bool ToggleFleet;
 
+        /// <summary>F11: the galaxy map (U.SPC-T103).</summary>
+        public bool ToggleGalaxyMap;
+
         /// <summary>The news feed: the full log of what has happened, filterable (X).</summary>
         public bool ToggleNews;
 
@@ -191,6 +194,7 @@ namespace SolarSystem.Input
             ToggleBounties = kb.f4Key.wasPressedThisFrame;
             ToggleContracts = kb.f7Key.wasPressedThisFrame;
             ToggleFleet = kb.f10Key.wasPressedThisFrame;
+            ToggleGalaxyMap = kb.f11Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;
             ToggleSpawn = kb.vKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;
@@ -211,6 +215,14 @@ namespace SolarSystem.Input
                 if (kb[digits[i]].wasPressedThisFrame) NumberKey = i;
         }
 
+        /// <summary>Drops this frame's right-button look (a full screen of its own has the mouse): no look, no right-click.</summary>
+        public void ReleaseLook()
+        {
+            LookHeld = false;
+            LookDelta = Vector2.zero;
+            RightClicked = false;
+        }
+
         void Reset()
         {
             Move = Vector3.zero;
@@ -223,7 +235,7 @@ namespace SolarSystem.Input
             Boost = Slow = Fire = Cruise = FireEmp = DropMine = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleGalaxyMap = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = false;
             QuickSave = QuickLoad = ToggleSaves = false;
             NumberKey = -1;
         }
