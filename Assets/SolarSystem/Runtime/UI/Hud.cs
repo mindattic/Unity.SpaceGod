@@ -487,6 +487,44 @@ namespace SolarSystem.UI
             AddMount(line, c, SubsystemKind.EmpLauncher, "EMP", "middle mouse");
             AddMount(line, c, SubsystemKind.MineLayer, "MINES", "Ctrl");
             if (line.Count > 0) DrawLabel(string.Join("    ", line), new Vector2(x0, y + 12), Dim, true);
+            if (app.PilotControlMode == PilotControl.Helm) DrawBroadside(battle, me, x0, y + 30);
+        }
+
+        /// <summary>
+        /// At a capital ship's helm (U.SPC-T272): which battery bears where the player is looking, how many of its guns
+        /// are loaded, the volley building while the trigger is held, and the hull it will be fired at.
+        /// </summary>
+        void DrawBroadside(Battle battle, BattleUnit me, float x, float y)
+        {
+            var look = app.PilotLookDirection;
+            double yaw = me.YawDegOf(me.Pos + look);
+            string side = yaw < 45 || yaw >= 315 ? "BOW" : yaw < 135 ? "STARBOARD" : yaw < 225 ? "STERN" : "PORT";
+            int loaded = 0, bearing = 0;
+            foreach (var s in me.Combat.Subsystems)
+            {
+                var w = s.Def.Weapon;
+                if (s.Destroyed || w == null || w.Missile || w.AntiSmall || w.Supporting || !s.Def.ContainsYaw(yaw)) continue;
+                bearing++;
+                if (s.Cooldown <= 0) loaded++;
+            }
+            float built = (float)(me.VolleyCharge / Battle.VolleyBuildSeconds);
+            string text = side + " BATTERY  " + loaded + "/" + bearing + " loaded" + (me.PlayerFireHeld ? "  ·  VOLLEY " + Mathf.RoundToInt(built * 100) + "%  (let go to fire)" : "  ·  hold left mouse to build a volley");
+            DrawLabel(text, new Vector2(x, y), me.PlayerFireHeld ? LockColor : Dim, true);
+
+            // The hull the volley will go at: the locked one near the line, else the hostile nearest it.
+            BattleUnit target = null;
+            double best = Math.Cos(Battle.VolleyConeDeg * Math.PI / 180);
+            foreach (var o in battle.Units)
+            {
+                if (!battle.Hostile(me, o)) continue;
+                var to = o.Pos - me.Pos;
+                if (to.LengthSquared < 1e-12) continue;
+                double cos = DVec3.Dot(look, to.Normalized);
+                if (o == me.PlayerLockTarget && cos > Math.Cos(Battle.VolleyConeDeg * Math.PI / 180)) { target = o; break; }
+                if (cos > best) { best = cos; target = o; }
+            }
+            if (target != null && app.ToGui(app.BattleScene(battle, target.Pos), out var tp, out _))
+                DrawRing(tp, 14 + 6 * built, me.PlayerFireHeld ? LockColor : HostileColor);
         }
 
         /// <summary>A mount's rounds left and its key, or that it is still cycling.</summary>
@@ -2700,6 +2738,7 @@ namespace SolarSystem.UI
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
                 "Combat  (piloting)   left mouse: guns, down the crosshair (watch the heat)   T lock the hull under it, hold the crosshair on it to lock   right mouse: missiles",
+                "   capital ships: look at a side and hold left mouse to build a broadside, let go to fire it; the turrets fight on their own, at the locked hull first",
                 "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   an auto turret fires on its own",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",

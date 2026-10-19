@@ -146,6 +146,20 @@ namespace SolarSystem.Core
         /// battle clears it once it has tried, U.SPC-T271).</summary>
         public bool PlayerEmpHeld, PlayerMineRequested;
 
+        /// <summary>While <see cref="PlayerControlled"/>: a capital ship at the helm (U.SPC-T272). Its crews work every
+        /// mount, favouring the locked hull, and the player calls broadsides: holding the trigger has the battery
+        /// bearing on <see cref="PlayerVolleyAim"/> hold its fire and build a volley, and letting go fires it together.</summary>
+        public bool PlayerHelm;
+
+        /// <summary>At the helm: where the player is looking (unit, ecliptic axes), the side a volley is called on.</summary>
+        public DVec3 PlayerVolleyAim;
+
+        /// <summary>At the helm: the trigger let go this frame, firing the volley (cleared once the battle has fired it).</summary>
+        public bool PlayerVolleyRelease;
+
+        /// <summary>At the helm: seconds the volley has been building, up to <see cref="Battle.VolleyBuildSeconds"/>.</summary>
+        public double VolleyCharge;
+
         /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north).</summary>
         public void Basis(out DVec3 right, out DVec3 up)
         {
@@ -546,8 +560,14 @@ namespace SolarSystem.Core
                 if (!u.Present) continue;
                 if (u.PlayerControlled) StepPlayerWeapons(u, dt);
                 Fire(u, dt);
-                // A mine or turret asked for is laid now or not at all, not saved up for when the mount is ready.
-                if (u.PlayerControlled) u.PlayerMineRequested = false;
+                // A mine asked for is laid now or not at all, not saved up for when the mount is ready; a volley
+                // called is fired now, and the next one builds from nothing.
+                if (u.PlayerControlled)
+                {
+                    u.PlayerMineRequested = false;
+                    if (u.PlayerVolleyRelease) u.VolleyCharge = 0;
+                    u.PlayerVolleyRelease = false;
+                }
             }
             StepMissiles(dt);
             StepRounds(dt);
@@ -958,7 +978,9 @@ namespace SolarSystem.Core
                 }
 
                 BattleUnit target;
-                if (u.PlayerControlled && IsPlayerAimable(s.Def))
+                bool helm = u.PlayerControlled && u.PlayerHelm;
+                if (helm && HelmVolley(u, s, origin, w, accuracyScale)) continue;
+                if (u.PlayerControlled && !helm && IsPlayerAimable(s.Def))
                 {
                     // The player's own nose guns: no AI target selection, no autofire. Side/aft
                     // batteries (a broadside hull's real firepower) fall through to the branch below
@@ -976,6 +998,8 @@ namespace SolarSystem.Core
                 else
                 {
                     target = ChooseWeaponTarget(u, origin, w);
+                    // At a capital ship's helm the crews go for the hull the player has locked, wherever it is in their arc and reach.
+                    if (helm && LockedFor(u, s, origin, w) is BattleUnit locked) target = locked;
                     // Hold fire on a prize our own people are boarding or closing on.
                     if (target != null && IsPrize(u, target)) target = null;
                 }
@@ -1172,16 +1196,17 @@ namespace SolarSystem.Core
         /// first hostile hull it meets within range, a round flies off to hit whatever it meets on the way
         /// (<see cref="StepAimedRound"/>). Either hits the hardpoint nearest where it struck.
         /// </summary>
-        void ResolveShot(BattleUnit u, Subsystem s, DVec3 origin, DVec3 dir, WeaponSpec w)
+        void ResolveShot(BattleUnit u, Subsystem s, DVec3 origin, DVec3 dir, WeaponSpec w, double damageScale = 1)
         {
             bool beam = w.MuzzleSpeedKmS <= 0;
+            double damage = w.Damage * damageScale;
             if (!beam)
             {
                 bool slug = s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun;
                 Emit(slug ? FxKind.Railgun : FxKind.Guns, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
                 Rounds.Add(new KineticRound
                 {
-                    Pos = origin, Vel = u.Vel + dir * w.MuzzleSpeedKmS, Damage = w.Damage, Life = w.RangeKm / w.MuzzleSpeedKmS,
+                    Pos = origin, Vel = u.Vel + dir * w.MuzzleSpeedKmS, Damage = damage, Life = w.RangeKm / w.MuzzleSpeedKmS,
                     Side = u.Side, Railgun = slug, Aimed = true,
                 });
                 return;
@@ -1194,8 +1219,8 @@ namespace SolarSystem.Core
             }
             var at = origin + dir * t;
             var sub = SubsystemNear(hit, at);
-            Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.Beam, origin, at, w.Damage, u.Side, hit, sub?.Index ?? -1);
-            ApplyDamage(hit, sub, w.Damage, at);
+            Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.Beam, origin, at, damage, u.Side, hit, sub?.Index ?? -1);
+            ApplyDamage(hit, sub, damage, at);
         }
 
         /// <summary>An aimed round flies on, and hits the first hostile hull its path crosses this step.</summary>
@@ -1256,6 +1281,77 @@ namespace SolarSystem.Core
                 }
             }
             return best;
+        }
+
+        // ---------------------------------------------------------------- broadsides at the helm (U.SPC-T272)
+
+        /// <summary>Seconds a volley takes to build to full, the extra damage a full one does (as a share of each
+        /// gun's own), and how much surer its gunners' aim is than their aim at will.</summary>
+        public const double VolleyBuildSeconds = 1.5, VolleyDamageBonus = 0.5, VolleyAccuracyBonus = 0.25;
+
+        /// <summary>How far off the line the player is looking a volley will take a target, deg.</summary>
+        public const double VolleyConeDeg = 25;
+
+        /// <summary>
+        /// A mount at a capital ship's helm that bears on the side the player is looking: held, its gun waits on the
+        /// volley; let go, every such gun that is loaded fires together at the hostile nearest that line (the locked one
+        /// if it is near it), harder and surer the longer the volley was built. True if the mount was the volley's.
+        /// </summary>
+        bool HelmVolley(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w, double accuracyScale)
+        {
+            if (w.Missile || w.AntiSmall || w.Supporting || u.PlayerVolleyAim.LengthSquared < 1e-12) return false;
+            var look = u.PlayerVolleyAim.Normalized;
+            if (!s.Def.ContainsYaw(u.YawDegOf(u.Pos + look))) return false;
+            if (u.PlayerVolleyRelease)
+            {
+                var target = VolleyTarget(u, look, w.RangeKm);
+                if (target == null) return false;
+                double built = Math.Min(1, u.VolleyCharge / VolleyBuildSeconds);
+                var sub = PickSubsystem(target);
+                var aimPoint = sub != null ? target.PointOf(sub.Def) : target.Pos;
+                var dir = AimAt(u, origin, target, aimPoint, w, accuracyScale * (1 + VolleyAccuracyBonus * built));
+                s.Aim = dir;
+                s.Cooldown = w.Cooldown;
+                ResolveShot(u, s, origin, dir, w, 1 + VolleyDamageBonus * built);
+                return true;
+            }
+            if (!u.PlayerFireHeld) return false;
+            s.Aim = look;
+            return true;
+        }
+
+        /// <summary>What a volley called along <paramref name="look"/> is fired at: the locked hull if it lies near that
+        /// line, else the hostile nearest it within <see cref="VolleyConeDeg"/> and <paramref name="rangeKm"/>.</summary>
+        BattleUnit VolleyTarget(BattleUnit u, DVec3 look, double rangeKm)
+        {
+            double cone = Math.Cos(VolleyConeDeg * Astro.Deg2Rad);
+            BattleUnit best = null;
+            double bestCos = cone;
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || o.Surrendering || o.Captured) continue;
+                var to = o.Pos - u.Pos;
+                double d = to.Length;
+                if (d < 1e-6 || d - o.Radius > rangeKm) continue;
+                double cos = DVec3.Dot(look, to / d);
+                if (o == u.PlayerLockTarget && cos > cone) return o;
+                if (cos > bestCos)
+                {
+                    bestCos = cos;
+                    best = o;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>The player's locked hull, if this mount can reach it and it lies in the mount's arc.</summary>
+        BattleUnit LockedFor(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w)
+        {
+            var t = u.PlayerLockTarget;
+            if (t == null || !Hostile(u, t) || t.Surrendering || t.Captured) return null;
+            if ((t.Pos - origin).Length - t.Radius > w.RangeKm) return null;
+            if (w.AntiSmall && t.Kind != UnitKind.Fighter) return null;
+            return s.Def.ArcWidthDeg >= 360 || s.Def.ContainsYaw(u.YawDegOf(t.Pos)) ? t : null;
         }
 
         // ---------------------------------------------------------------- the dogfight arsenal (U.SPC-T271)
@@ -1381,6 +1477,7 @@ namespace SolarSystem.Core
         void StepPlayerWeapons(BattleUnit u, double dt)
         {
             u.Heat = Math.Max(0, u.Heat - Gunnery.HeatCoolPerS * dt);
+            if (u.PlayerHelm && u.PlayerFireHeld) u.VolleyCharge = Math.Min(VolleyBuildSeconds, u.VolleyCharge + dt);
             if (u.Overheated && u.Heat < Gunnery.HeatRecoverBelow) u.Overheated = false;
 
             var t = u.PlayerLockTarget;

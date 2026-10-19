@@ -1452,6 +1452,13 @@ namespace SolarSystem
             // The right button launches missiles once the lock is made (U.SPC-T270); the guns fire down the crosshair.
             unit.PlayerSecondaryHeld = Input.LookHeld && armed;
             unit.PlayerAim = pilotAim;
+            // At a capital ship's helm the trigger calls broadsides (U.SPC-T272): held, the battery bearing where the
+            // player looks builds a volley; let go, it fires.
+            bool helm = PilotControlMode == PilotControl.Helm;
+            unit.PlayerHelm = helm;
+            unit.PlayerVolleyAim = helm ? PilotLookDirection : DVec3.Zero;
+            if (helm && helmTriggerWas && !unit.PlayerFireHeld) unit.PlayerVolleyRelease = true;
+            helmTriggerWas = helm && unit.PlayerFireHeld;
             // The rest of the arsenal (U.SPC-T271): the EMP on the middle button, a mine on Ctrl; an auto turret needs no hand.
             unit.PlayerEmpHeld = Input.FireEmp && armed;
             if (Input.DropMine && armed) unit.PlayerMineRequested = true;
@@ -1745,6 +1752,20 @@ namespace SolarSystem
             if (u == null) return;
             if (u.Ship != null) pilotLockTarget = Target.OfShip(u.Ship);
             else pilotLockUnit = u;
+        }
+
+        /// <summary>Whether the helm's trigger was held last frame, so letting go of it fires the volley.</summary>
+        bool helmTriggerWas;
+
+        /// <summary>Where the player is looking (ecliptic, unit): around a capital ship at its helm, else down the crosshair.</summary>
+        public DVec3 PilotLookDirection
+        {
+            get
+            {
+                if (PilotControlMode != PilotControl.Helm) return pilotAim;
+                var v = (ToRotation(pilot.Forward, pilot.Up) * Quaternion.Euler(helmLookPitch, helmLookYaw, 0)) * Vector3.forward;
+                return new DVec3(v.x, v.y, v.z).SwapYZ.Normalized;
+            }
         }
 
         /// <summary>A fighter locked in the flown hull's fight (a ship is held in <see cref="pilotLockTarget"/>).</summary>
