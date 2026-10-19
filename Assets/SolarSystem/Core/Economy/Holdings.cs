@@ -761,11 +761,12 @@ namespace SolarSystem.Core
             Book(jd, $"Wages on the {o.Name}", -wage);
         }
 
-        /// <summary>A damaged ship in port at a yard that will serve the house is mended a share a day, at the house's expense.</summary>
+        /// <summary>A damaged ship in port at a yard that will serve the house is mended a share a day, at the house's expense:
+        /// in orbit, or landed through one of the world's rings (a merchant goes down to the surface, and waits there).</summary>
         void RepairInPort(OwnedShip o, double jd)
         {
             var s = o.Ship;
-            if (s.Combat == null || s.Combat.Damage <= 0.001 || s.Battle != null || s == world.PilotedShip || s.Phase != ShipPhase.Parked) return;
+            if (s.Combat == null || s.Combat.Damage <= 0.001 || s.Battle != null || s == world.PilotedShip || (s.Phase != ShipPhase.Parked && s.Phase != ShipPhase.Landed)) return;
             var yard = YardAt(s.Orbit.Body);
             if (yard == null) return;
             double share = Math.Min(RepairPerDay, s.Combat.Damage);

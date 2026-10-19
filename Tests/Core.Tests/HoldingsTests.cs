@@ -187,6 +187,32 @@ namespace SolarSystem.Core.Tests
         }
 
         [Test]
+        public void ABadlyHurtMerchantLandedAtARingedYardWorldIsMendedThere()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            int earth = Body(w, "Earth"), mars = Body(w, "Mars");
+            var owned = h.Buy(Port(w, "Earth Orbital"), ShipClass.Freighter, "Hard Luck", StartJd);
+            h.Hire(owned, StartJd, 1);
+            Assert.That(h.Order(owned, StandingOrder.TradeRoute(earth, mars)), Is.True);
+            var ship = owned.Ship;
+            // A merchant comes down through one of Earth's rings and lies landed there.
+            var ring = w.Infrastructure.Rings.First(r => r.Body == earth);
+            ship.Ring = ring;
+            ship.Orbit = ring.RingPoint;
+            ship.Phase = ShipPhase.Landed;
+            ship.Combat.Hull = ship.Combat.Spec.Hull * 0.3;
+            double hurt = ship.Combat.Damage;
+            Assert.That(hurt, Is.GreaterThan(Holdings.RepairDamage));
+            // Badly hurt at a yard that serves the house, it waits there to be mended ...
+            Assert.That(h.ChooseNext(ship, earth, StartJd), Is.EqualTo(earth));
+            // ... and is, landed or not.
+            w.Holdings.Update(StartJd + 3);
+            Assert.That(ship.Combat.Damage, Is.LessThan(hurt));
+            Assert.That(owned.Repairs, Is.GreaterThan(0));
+        }
+
+        [Test]
         public void AnEscortShadowsItsChargeAndStandsDownWhenItIsLost()
         {
             var w = CreateWorld();
