@@ -204,9 +204,13 @@ namespace UnitySpace.Core
             {
                 var g = Groups[i];
                 g.Ships.RemoveAll(s => s.Destroyed || s.Battle != null);
-                if (g.Ships.Count == 0 || g.Leader.Destroyed)
+                // The leader lost or pulled into another fight (U.SPC-T314): the chase is over, and whoever is left of
+                // the group is pinned where the chase had flown it rather than snapping back to a stale schedule spot.
+                if (g.Ships.Count == 0 || g.Leader.Destroyed || g.Leader.Battle != null)
                 {
-                    Groups.RemoveAt(i);
+                    bool anyLeft = g.Ships.Count > 0;
+                    Release(g, jd);
+                    if (anyLeft && !g.Leader.Destroyed) events.Add((g, PursuitEvent.GaveUp));
                     continue;
                 }
                 g.Seconds += dt;

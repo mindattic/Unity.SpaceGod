@@ -169,5 +169,31 @@ namespace UnitySpace.Core.Tests
             w.Pursuit.Consider(pilot, Earth(w), new DVec3(60000, 0, 0), DVec3.Zero, StartJd + 1);
             Assert.That(LastChased(w.Pursuit).ContainsKey(raider), Is.False, "a destroyed raider's rechase cooldown was never dropped");
         }
+
+        [Test]
+        public void AChaseWhoseLeaderIsPulledIntoAnotherFightEndsAndItsEscortsArePinnedWhereTheChaseLeftThem()
+        {
+            var w = CreateWorld();
+            var at = new DVec3(4e6, 0, 0);
+            var pilot = Pilot(w, at);
+            var raider = Raider(w);
+            var escort = w.Fleet.AddShip("Gutter Pick", ShipClass.Destroyer, w.Pirates, ShipRole.Patrol);
+            w.Fleet.Station(escort, Earth(w), StartJd);
+            escort.Leader = raider;
+            var g = w.Pursuit.Begin(raider, at + new DVec3(Pursuit.ContactKm, 0, 0), DVec3.Zero, StartJd);
+            w.Pursuit.Body = Earth(w);
+            Assert.That(g.Ships, Does.Contain(escort));
+            w.Pursuit.Step(pilot, at, DVec3.Zero, 1, StartJd);
+            var escortAt = Pursuit.OffsetOf(g, escort);
+
+            // Another fight takes the leader in; the escort stays out of it.
+            raider.Battle = new Battle(1, Earth(w), "Battle", DVec3.Zero, StartJd, 1);
+            var events = w.Pursuit.Step(pilot, at, DVec3.Zero, 1, StartJd);
+            Assert.That(w.Pursuit.Active, Is.False, "the chase went on with its leader fighting elsewhere");
+            Assert.That(events.Any(e => e.what == PursuitEvent.GaveUp), Is.True);
+            Assert.That(w.Pursuit.Of(escort), Is.Null);
+            Assert.That(escort.Orbit.Fixed && escort.Orbit.Body == Earth(w), Is.True, "the escort was not pinned");
+            Assert.That((escort.Orbit.Center - escortAt).Length, Is.LessThan(1e-6), "the escort snapped back from where the chase had flown it");
+        }
     }
 }
