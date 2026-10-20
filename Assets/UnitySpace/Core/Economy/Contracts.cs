@@ -826,7 +826,8 @@ namespace UnitySpace.Core
                     if (c.IsActive && TakerAt(c, body, jd)) Close(c, ContractState.Completed, jd, "the " + ship.Name + " is in safe");
                     continue;
                 }
-                if (!c.IsActive || c.ByPlayer || (c.Taker != ship && c.Taker != ship.Controller)) continue;
+                // Bound for a place since abandoned: nothing to deliver to (the day's review calls it off).
+                if (!c.IsActive || c.ByPlayer || (c.Taker != ship && c.Taker != ship.Controller) || DestinationGone(c)) continue;
                 switch (c.Kind)
                 {
                     case ContractKind.Freight:
@@ -893,7 +894,7 @@ namespace UnitySpace.Core
             Visited[body] = jd;
             foreach (var c in new List<Contract>(All))
             {
-                if (!c.IsActive || !c.ByPlayer || c.Body != body) continue;
+                if (!c.IsActive || !c.ByPlayer || c.Body != body || DestinationGone(c)) continue;
                 switch (c.Kind)
                 {
                     case ContractKind.Survey:
@@ -921,7 +922,7 @@ namespace UnitySpace.Core
         /// <summary>Hands over the crates of a freight contract's good (not stolen ones) from the player's hold at its destination.</summary>
         public double HandOver(Contract c, Ship ship, double jd)
         {
-            if (c == null || !c.IsActive || c.Kind != ContractKind.Freight || ship == null) return 0;
+            if (c == null || !c.IsActive || c.Kind != ContractKind.Freight || ship == null || DestinationGone(c)) return 0;
             double handed = 0;
             var hold = ship.PersonalHold;
             foreach (var item in new List<CargoItem>(hold.Items))
@@ -981,6 +982,18 @@ namespace UnitySpace.Core
                 if (lost)
                 {
                     Close(c, ContractState.Failed, jd, t != null && t.Destroyed ? "the " + t.Name + " was lost" : "the taker is gone");
+                    continue;
+                }
+                // Its destination was abandoned to ruin after it was taken: nobody is left there to take the goods or
+                // the people. Called off, the taker not to blame; a merchant's lot goes back to the open market.
+                if (DestinationGone(c))
+                {
+                    if (!c.ByPlayer && c.Kind == ContractKind.Freight && CarriesLot(c))
+                    {
+                        Economy.Release(t);
+                        t.CargoDestination = null;
+                    }
+                    Close(c, ContractState.Failed, jd, c.Destination.Name + " is no more", blame: false);
                     continue;
                 }
                 switch (c.Kind)
@@ -1118,7 +1131,12 @@ namespace UnitySpace.Core
         /// with it rises. Failed or abandoned: no pay, standing falls, people still aboard go ashore where they boarded
         /// (or die with a lost hull), and NPC contract freight is the taker's to sell.
         /// </summary>
-        void Close(Contract c, ContractState state, double jd, string why, bool pay = true)
+        /// <summary>A freight or passage contract whose destination has fallen (abandoned, a ruin): it cannot be delivered.</summary>
+        static bool DestinationGone(Contract c) =>
+            (c.Kind == ContractKind.Freight || c.Kind == ContractKind.Passengers || c.Kind == ContractKind.Colonists) &&
+            c.Destination != null && c.Destination.Fallen;
+
+        void Close(Contract c, ContractState state, double jd, string why, bool pay = true, bool blame = true)
         {
             var was = c.State;
             c.State = state;
@@ -1161,8 +1179,14 @@ namespace UnitySpace.Core
                 if (lostWithHull) world.Log(jd, $"{c.People:N0} {(c.Kind == ContractKind.Colonists ? "colonists" : "passengers")} bound for {c.Destination.Name} are lost with the {c.Taker?.Name}", WorldEventKind.Loss, -1);
             }
             if (!c.ByPlayer && c.Taker != null && (c.Kind == ContractKind.Passengers || c.Kind == ContractKind.Colonists)) c.Taker.Cargo = null;
-            Standing(rec, c.Patron, -(state == ContractState.Abandoned ? AbandonStanding : FailStanding));
             string what = state == ContractState.Abandoned ? "abandoned" : "failed";
+            if (!blame)
+            {
+                world.Log(jd, $"Contract called off: {c.Title} by {who} ({why})", WorldEventKind.Info, c.Body);
+                if (c.ByPlayer) Law?.Notice($"Contract called off: {c.Title} ({why})");
+                return;
+            }
+            Standing(rec, c.Patron, -(state == ContractState.Abandoned ? AbandonStanding : FailStanding));
             world.Log(jd, $"Contract {what}: {c.Title} by {who} ({why}); {c.Patron.Name} will remember it", WorldEventKind.Info, c.Body);
             if (c.ByPlayer) Law?.Notice($"Contract {what}: {c.Title} ({why}). Standing with {c.Patron.Name} falls");
         }
