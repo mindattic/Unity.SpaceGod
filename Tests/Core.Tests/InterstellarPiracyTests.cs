@@ -329,6 +329,32 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void AnExpeditionSentAfterOneClanLeavesAnotherClansHoldAlone()
+        {
+            // U.SPC-T309: the quarry filter let any pirate's haven through, so a navy sent after one clan went for whichever hold it knew.
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var ee = g.Find("Epsilon Eridani");
+            var barnard = g.Find("Barnard's Star");
+            var daughters = ee.World.Pirates;
+            var drift = barnard.World.Pirates;
+            Assert.That(drift, Is.Not.SameAs(daughters));
+            var wavecrest = Named(ee.World, "Wavecrest");
+            Assert.That(wavecrest.Owner, Is.SameAs(daughters));
+            Assert.That(ee.World.PortBodies(), Does.Not.Contain(wavecrest.Body), "no port shares the hold's body");
+
+            var ship = ee.World.Fleet.Ships.First(s => !s.Destroyed && s.Faction == ee.World.Sol && s.Spec.IsMilitary);
+            wavecrest.KnownTo.Add(ship.Faction);
+            int here = ee.World.PortBodies().First(b => b != wavecrest.Body);
+            ship.GateKm = null;
+            ship.Voyage = new Voyage { Purpose = VoyagePurpose.Expedition, Home = sol, Destination = ee, Faction = ship.Faction, Quarry = drift };
+
+            Assert.That(ee.World.VoyageOrders(ship, here, StartJd), Is.Not.EqualTo(wavecrest.Body), "an expedition after the Drift made for the Daughters' hold");
+            ship.Voyage.Quarry = daughters;
+            Assert.That(ee.World.VoyageOrders(ship, here, StartJd), Is.EqualTo(wavecrest.Body), "an expedition after the Daughters passed their known hold by");
+        }
+
+        [Test]
         public void BountyHuntersGoThroughTheGatesAfterAClanWithAPriceOnIt()
         {
             var g = Galaxy.CreateDefault(StartJd);

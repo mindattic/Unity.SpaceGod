@@ -727,8 +727,9 @@ namespace UnitySpace.Core
             if (v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Hunt)
             {
                 // The quarry's haven, if it is known (to it); else wherever its raiders are; else the busiest port.
+                // Sent after one clan, it goes after that clan only, not any other pirate's hold or band (U.SPC-T309).
                 foreach (var s in economy.Settlements)
-                    if (s.Kind == SettlementKind.Haven && !s.Fallen && s.KnownBy(ship.Faction) && (v.Quarry == null || s.Owner == v.Quarry || s.Owner.IsPirate))
+                    if (s.Kind == SettlementKind.Haven && !s.Fallen && s.KnownBy(ship.Faction) && (v.Quarry == null || s.Owner == v.Quarry))
                     {
                         // A hidden hold found, its guns silenced: a navy storms it, boarding it if it has the marines (U.SPC-T94).
                         // (An open one, like Blackwater, the navies leave be.)
@@ -742,8 +743,6 @@ namespace UnitySpace.Core
                 foreach (var t in system.World.Fleet.Ships)
                     if (!t.Destroyed && !t.IsEscort && t.Faction.IsPirate && !t.Runner && (v.Quarry == null || t.Faction == v.Quarry) && t.Orbit != null && t.Phase == ShipPhase.Parked)
                         return t.Orbit.Body;
-                foreach (var t in system.World.Fleet.Ships)
-                    if (!t.Destroyed && !t.IsEscort && t.Faction.IsPirate && !t.Runner && t.Orbit != null && t.Phase == ShipPhase.Parked) return t.Orbit.Body;
                 var ports = system.World.PortBodies();
                 return ports.Length > 0 ? ports[rng.Next(ports.Length)] : here;
             }
