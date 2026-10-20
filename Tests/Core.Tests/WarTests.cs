@@ -373,6 +373,23 @@ namespace UnitySpace.Core.Tests
             Assert.That(escort.Leader, Is.SameAs(flown), "nothing is merged into the player's ship either");
         }
 
+        [Test]
+        public void APirateClansIdleSmugglerIsNeverMergedIntoARaiderBand()
+        {
+            var w = CreateWorld();
+            var clan = MakeFaction(w, "Idle Clan");
+            clan.IsPirate = true;
+            ParkWarship(w, clan, ShipClass.Destroyer, w.Catalog["Neptune"].Index); // the home guard, parked elsewhere
+            int body = w.Catalog["Pluto"].Index;
+            var raiderBand = ParkWarship(w, clan, ShipClass.Destroyer, body);
+            var smuggler = ParkWarship(w, clan, ShipClass.Freighter, body);
+            smuggler.Runner = true;
+            w.War.Update(StartJd + 1);
+            Assert.That(smuggler.IsEscort, Is.False, "an idle smuggler was handed to a raider band as its escort");
+            Assert.That(smuggler.Leader, Is.Null);
+            Assert.That(raiderBand.IsEscort, Is.False, "the raider band itself was swallowed into another group");
+        }
+
         // ---------------------------------------------------------------- SiegeNeeded
 
         [Test]

@@ -2310,7 +2310,8 @@ namespace UnitySpace.Core
                 // The player's ship is flown by the player: never handed to an AI flagship, nor one itself.
                 // Nor a group on an interstellar voyage: it keeps to its own business.
                 // Nor bounty hunters: each works its own contract.
-                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && s.Phase == ShipPhase.Parked && s.Voyage == null && !Hunter(s))
+                // Nor a pirate clan's smugglers: they carry loot, not guns, and never raid (see Ship.Runner).
+                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && !s.Runner && s.Phase == ShipPhase.Parked && s.Voyage == null && !Hunter(s))
                     groups.Add(s);
             groups.Sort((a, b) => GroupStrength(b).CompareTo(GroupStrength(a)));
             for (int i = 0; i < groups.Count; i++)
