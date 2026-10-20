@@ -139,7 +139,8 @@ namespace UnitySpace.Core
             bool transponder = Signatures.Transponder(pilot);
             foreach (var s in world.Fleet.Ships)
             {
-                if (Groups.Count + found.Count >= MaxGroups) break;
+                // Begin adds each new group to Groups as well as found: count it once.
+                if (Groups.Count >= MaxGroups) break;
                 if (!MayChase(s, pilot, jd)) continue;
                 var helio = world.Fleet.StateOf(s, jd).HelioKm;
                 var to = helio - pilotHelio;

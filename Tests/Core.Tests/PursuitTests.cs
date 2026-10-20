@@ -60,6 +60,22 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void TwoHostileGroupsCanBothTurnToChaseOnOneLook()
+        {
+            // Each look, every raider in reach rolls to chase: up to MaxGroups (two) may start at once, not just the
+            // first. The world is seeded, so a dozen raiders in reach make a double on the first look a certainty in
+            // practice (each turns about one time in three) unless a look can only ever start one.
+            var offset = new DVec3(60000, 0, 0);
+            var w = CreateWorld();
+            var pilot = Pilot(w, offset);
+            for (int i = 0; i < 12; i++) Raider(w);
+            int started = 0;
+            for (int i = 0; i < 200 && started == 0; i++)
+                started = w.Pursuit.Consider(pilot, Earth(w), offset, DVec3.Zero, StartJd).Count;
+            Assert.That(started, Is.EqualTo(Pursuit.MaxGroups), "one look started only one chase, though two groups may run the player down at once");
+        }
+
+        [Test]
         public void NobodyChasesAShipOfTheirOwnFlagOrWithNoGuns()
         {
             var w = CreateWorld();
