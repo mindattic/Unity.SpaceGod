@@ -78,7 +78,9 @@ namespace UnitySpace
             {
                 foreach (var s in Fleet.Ships)
                 {
-                    if (s == ship || s.Destroyed || s.Battle != null || s.Planetside || s.Combat == null) continue;
+                    // Not an escort: the fleet places it at its leader (its slot is only drawn), so it would be struck
+                    // as a second hull stacked on its leader's centre rather than where it is seen.
+                    if (s == ship || s.Destroyed || s.Battle != null || s.Planetside || s.Combat == null || s.IsEscort) continue;
                     bool derelict = s.Derelict && s.Orbit != null;
                     Func<double, DVec3> helioAt = derelict ? j => DerelictHelio(Ephemeris, s, j) : (Func<double, DVec3>)(j => Fleet.StateOf(s, j).HelioKm);
                     var pos = helioAt(jd) - frameHelio;
