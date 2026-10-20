@@ -317,6 +317,28 @@ namespace UnitySpace.Core.Tests
             Assert.That(director.Active, Has.Exactly(1).Items, "offered again once rested");
         }
 
+        /// <summary>The private rest book, by reflection: it is never exposed, but a source whose rest has long
+        /// passed should not still be sitting in it over a long game (U.SPC-T321).</summary>
+        static System.Collections.Generic.IDictionary<string, double> RestBook(EventDirector d) =>
+            (System.Collections.Generic.IDictionary<string, double>)typeof(EventDirector)
+                .GetField("restUntil", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(d);
+
+        [Test]
+        public void ARestedSourcesBookEntryIsDroppedOnceItsRestIsOverNotKeptForever()
+        {
+            var s = Add(ShipClass.Freighter, traders, Near);
+            s.Phase = ShipPhase.Adrift;
+            Tick(Jd);
+            Assert.That(director.Active, Has.Exactly(1).Items);
+            s.Phase = ShipPhase.Lane; // got going again on its own: the call fails and the source goes to rest
+            Tick(Jd + 0.1);
+            Assert.That(director.Active, Is.Empty);
+            Assert.That(RestBook(director).Count, Is.GreaterThan(0), "the source never went to rest");
+            Tick(Jd + 5); // well past a day's rest: another scan should drop the dead entry, not just ignore it
+            Assert.That(RestBook(director).Count, Is.EqualTo(0), "a rested source's book entry was never dropped once its rest was over");
+        }
+
         [Test]
         public void TheCapHoldsAndLivesAtStakeComeFirst()
         {

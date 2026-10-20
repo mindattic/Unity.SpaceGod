@@ -132,6 +132,7 @@ namespace UnitySpace.Core
             if (pilot == null || pilot.Destroyed || pilot.Battle != null || Groups.Count >= MaxGroups) return found;
             if (Body != body) ReleaseAll(jd);
             Body = body;
+            PruneLastChased(jd);
             var sensors = world.Sensors;
             var pilotHelio = world.Ephemeris.HelioAt(body, jd) + pilotOffset;
             double signature = Signatures.Of(pilot, sensors?.PilotBurning ?? true);
@@ -163,6 +164,17 @@ namespace UnitySpace.Core
             if (!(s.Faction.IsPirate || s.Spec.IsMilitary) || !world.Diplomacy.Hostile(s.Faction, pilot.Faction)) return false;
             if (!s.Combat.Armed || s.Combat.HullFraction < 0.5) return false;
             return !lastChased.TryGetValue(s, out double when) || jd - when >= RechaseDays;
+        }
+
+        /// <summary>Drops a ship from the rechase cooldown once its cooldown is over (<see cref="MayChase"/> would let
+        /// it chase again anyway) or it is gone for good (destroyed, or through a gate), so the book does not grow
+        /// for ever as a long game runs on (U.SPC-T321).</summary>
+        void PruneLastChased(double jd)
+        {
+            List<Ship> gone = null;
+            foreach (var kv in lastChased)
+                if (kv.Key.Destroyed || kv.Key.GateDeparted || jd - kv.Value >= RechaseDays) (gone ??= new List<Ship>()).Add(kv.Key);
+            if (gone != null) foreach (var s in gone) lastChased.Remove(s);
         }
 
         /// <summary>Puts <paramref name="leader"/>'s group on the chase at <paramref name="at"/> (km from the frame body),

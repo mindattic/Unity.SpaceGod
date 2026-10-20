@@ -1187,6 +1187,23 @@ namespace UnitySpace.Core
                 if (c == null) continue;
                 if (!h.Alive || !Huntable(c.Target) || jd > c.UntilJd) h.Contract = null;
             }
+            PruneHunters();
+        }
+
+        /// <summary>Drops hunter rows nothing can use any more: handed on to an heir (<see cref="OnSuccession"/>
+        /// already took it out of <see cref="byHunter"/>), or a flagship destroyed with no heir to carry it on.
+        /// A hunter gone through a gate keeps its row: it takes it up again when it comes home from a hunt
+        /// abroad (see <see cref="InterstellarTraffic"/>). Keeps the roster from growing for ever with retired
+        /// rows over a long game (U.SPC-T321).</summary>
+        void PruneHunters()
+        {
+            for (int i = Hunters.Count - 1; i >= 0; i--)
+            {
+                var h = Hunters[i];
+                if (!h.Retired && !h.Ship.Destroyed) continue;
+                Hunters.RemoveAt(i);
+                if (byHunter.TryGetValue(h.Ship, out var cur) && cur == h) byHunter.Remove(h.Ship);
+            }
         }
 
         bool Huntable(LawRecord r)

@@ -115,6 +115,7 @@ namespace UnitySpace.Core
 
         void Scan(double jd, EventSources src, DVec3 player, Ship playerShip)
         {
+            PruneRest(jd);
             var found = new List<(Opportunity op, double distance)>();
             bool bountyOpen = Active.Exists(o => o.Kind == OpportunityKind.Bounty);
             bool anomalyOpen = Active.Exists(o => o.Kind == OpportunityKind.Anomaly);
@@ -219,6 +220,17 @@ namespace UnitySpace.Core
         bool IsOpen(string key) => Active.Exists(o => o.SourceKey == key);
 
         bool IsResting(string key, double jd) => restUntil.TryGetValue(key, out var until) && jd < until;
+
+        /// <summary>Drops a rested source once its rest is over: <see cref="IsResting"/> would say no to it anyway,
+        /// so nothing is lost keeping the book from growing forever over a long game (U.SPC-T321). Most sources
+        /// (a wreck, a pod, an anomaly) never repeat, so without this their rest entries would simply pile up.</summary>
+        void PruneRest(double jd)
+        {
+            List<string> done = null;
+            foreach (var kv in restUntil)
+                if (jd >= kv.Value) (done ??= new List<string>()).Add(kv.Key);
+            if (done != null) foreach (var k in done) restUntil.Remove(k);
+        }
 
         /// <summary>How long a source is left alone after its opportunity ends, days.</summary>
         static double RestDays(OpportunityKind k)

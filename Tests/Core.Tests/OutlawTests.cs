@@ -392,5 +392,52 @@ namespace UnitySpace.Core.Tests
             foreach (var h in outlaws.Hunters.Where(h => h.Ship.Faction == w.Independents))
                 Assert.That(w.Law.FindRecord(h.Ship)?.Crimes.Count ?? 0, Is.EqualTo(0), $"the hunter {h.Name} broke the law: " + string.Join("; ", (w.Law.FindRecord(h.Ship)?.Crimes ?? new System.Collections.Generic.List<Crime>()).Select(c => c.Kind + " " + c.Detail + " vs " + c.Victim?.Name)));
         }
+
+        // ---------------------------------------------------------------- the roster over a long game (U.SPC-T321)
+
+        [Test]
+        public void ARetiredHunterRowIsDroppedOnceItsGroupHasAnHeir()
+        {
+            var w = CreateWorld();
+            var h = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
+            var heir = w.Fleet.Ships.First(s => s.Leader == h.Ship);
+            int before = w.Outlaws.Hunters.Count;
+            heir.Leader = null; // as War's own succession leaves the new leader (see War.Succession)
+            w.Fleet.Station(heir, h.Ship.Orbit.Body, StartJd);
+            w.Outlaws.OnSuccession(h.Ship, heir);
+            Assert.That(h.Retired, Is.True);
+            Assert.That(w.Outlaws.Hunters.Count, Is.EqualTo(before + 1), "the heir's own row joins the roster alongside the retired one");
+            w.Outlaws.Update(StartJd);
+            w.Outlaws.Update(StartJd + 1);
+            Assert.That(w.Outlaws.Hunters.Contains(h), Is.False, "a retired hunter row was never dropped from the roster");
+            Assert.That(w.Outlaws.Hunters.Count, Is.EqualTo(before), "back down to one row per hunter group actually in service");
+            Assert.That(w.Outlaws.HunterOf(heir), Is.Not.Null, "the heir still answers for the group");
+        }
+
+        [Test]
+        public void AHunterGoneThroughAGateKeepsItsRowToTakeUpWhenItComesHome()
+        {
+            var w = CreateWorld();
+            var h = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
+            h.Ship.GateDeparted = true; // off on a hunt beyond the gates
+            w.Outlaws.Update(StartJd);
+            w.Outlaws.Update(StartJd + 1);
+            Assert.That(w.Outlaws.Hunters.Contains(h), Is.True, "a hunter away through a gate lost its row before it came home");
+            var back = w.Fleet.AddShip("Homecoming", ShipClass.Cruiser, h.Ship.Faction, ShipRole.Patrol);
+            w.Outlaws.OnSuccession(h.Ship, back);
+            Assert.That(w.Outlaws.HunterOf(back), Is.Not.Null, "the hunter home again did not take up its old place");
+        }
+
+        [Test]
+        public void ADestroyedHunterWithNoHeirIsDroppedFromTheRoster()
+        {
+            var w = CreateWorld();
+            var h = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
+            foreach (var s in w.Fleet.Ships.Where(s => s.Leader == h.Ship).ToList()) s.Destroyed = true;
+            h.Ship.Destroyed = true;
+            w.Outlaws.Update(StartJd);
+            w.Outlaws.Update(StartJd + 1);
+            Assert.That(w.Outlaws.Hunters.Contains(h), Is.False, "a lost hunter's row was kept for ever");
+        }
     }
 }

@@ -146,5 +146,28 @@ namespace UnitySpace.Core.Tests
             Assert.That(w.Pursuit.Active, Is.False);
             Assert.That(w.Fleet.IsHeld(raider), Is.False, "the hunter was left off its schedule");
         }
+
+        /// <summary>The private rechase cooldown book, by reflection: it is never exposed, but a destroyed ship
+        /// can never chase again, so it should not still be sitting in it over a long game (U.SPC-T321).</summary>
+        static System.Collections.Generic.IDictionary<Ship, double> LastChased(Pursuit p) =>
+            (System.Collections.Generic.IDictionary<Ship, double>)typeof(Pursuit)
+                .GetField("lastChased", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(p);
+
+        [Test]
+        public void ADestroyedRaidersRechaseCooldownEntryIsDroppedNotKeptForever()
+        {
+            var w = CreateWorld();
+            var pilot = Pilot(w, new DVec3(60000, 0, 0));
+            var raider = Raider(w);
+            Pursuer g = null;
+            for (int i = 0; i < 100 && g == null; i++)
+                g = w.Pursuit.Consider(pilot, Earth(w), new DVec3(60000, 0, 0), DVec3.Zero, StartJd).FirstOrDefault(x => x.Leader == raider);
+            Assert.That(g, Is.Not.Null);
+            Assert.That(LastChased(w.Pursuit).ContainsKey(raider), Is.True, "beginning a chase never booked its cooldown");
+            raider.Destroyed = true;
+            w.Pursuit.Consider(pilot, Earth(w), new DVec3(60000, 0, 0), DVec3.Zero, StartJd + 1);
+            Assert.That(LastChased(w.Pursuit).ContainsKey(raider), Is.False, "a destroyed raider's rechase cooldown was never dropped");
+        }
     }
 }

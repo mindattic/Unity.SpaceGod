@@ -416,6 +416,25 @@ namespace UnitySpace.Core
             double fade = Math.Pow(0.5, dt / NotorietyHalfLifeDays);
             Fade(Player, fade, jd);
             foreach (var r in Captains.Values) Fade(r, fade, jd);
+            PruneCaptains();
+        }
+
+        /// <summary>Drops a captain's record once nothing more can come of it: no bounty outstanding, notoriety
+        /// faded to nothing, and the flagship it was opened for gone for good (destroyed, or through a gate) --
+        /// so nothing will ever look the record up by that ship again. Keeps the books from growing forever over
+        /// a long game (U.SPC-T321).</summary>
+        void PruneCaptains()
+        {
+            List<Ship> stale = null;
+            foreach (var kv in Captains)
+            {
+                var ship = kv.Key;
+                var r = kv.Value;
+                if (r.Bounty.Count > 0 || r.Notoriety > 0.01) continue;
+                if (ship != null && !ship.Destroyed && !ship.GateDeparted) continue;
+                (stale ??= new List<Ship>()).Add(ship);
+            }
+            if (stale != null) foreach (var s in stale) Captains.Remove(s);
         }
 
         static void Fade(LawRecord r, double fade, double jd)

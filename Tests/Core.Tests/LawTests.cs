@@ -636,5 +636,34 @@ namespace UnitySpace.Core.Tests
             w.Law.OnBattleEnded(b, StartJd);
             Assert.That(w.Law.Player.Crimes, Is.Empty);
         }
+
+        // ---------------------------------------------------------------- the books over a long game (U.SPC-T321)
+
+        [Test]
+        public void ACaptainsRecordWithNothingOwedIsDroppedOnceItsShipIsGoneForGood()
+        {
+            var w = CreateWorld();
+            var ship = Hull(ShipClass.Destroyer, w.Pirates, 501, "Gutter Knife");
+            w.Law.RecordOf(ship);
+            Assert.That(w.Law.Captains.ContainsKey(ship), Is.True, "opening the record never booked it");
+            ship.Destroyed = true;
+            w.Law.Update(StartJd);
+            w.Law.Update(StartJd + 1);
+            Assert.That(w.Law.Captains.ContainsKey(ship), Is.False, "a dead captain's clean record was never dropped from the books");
+        }
+
+        [Test]
+        public void AWantedCaptainsRecordStaysOnTheBooksEvenIfItsShipIsGone()
+        {
+            var w = CreateWorld();
+            int mars = Body(w, "Mars");
+            var ship = Hull(ShipClass.Destroyer, w.Pirates, 502, "Black Ledger");
+            var rec = w.Law.RecordOf(ship);
+            w.Law.Commit(rec, CrimeKind.Piracy, w.Sol, w.Belt, mars, StartJd, "Ares Prime");
+            ship.Destroyed = true;
+            w.Law.Update(StartJd);
+            w.Law.Update(StartJd + 1);
+            Assert.That(w.Law.Captains.ContainsKey(ship), Is.True, "a bounty still owed was dropped off the books with its ship");
+        }
     }
 }
