@@ -437,7 +437,8 @@ namespace UnitySpace.Core
             Contracts = new Contracts(this, seed + 17);
             Escorts = new MerchantEscorts(this, seed + 19);
             war.BattleEnded += Contracts.OnBattleEnded;
-            Holdings = new Holdings(this, seed + 19);
+            // Each subsystem its own offset: two on one seed would draw the very same "random" numbers in step.
+            Holdings = new Holdings(this, seed + 23);
             economy.DockAllowed = Law.AllowsDocking;
             economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
@@ -474,7 +475,7 @@ namespace UnitySpace.Core
             // The merchant fleet belongs to trading companies, which buy hulls from their profits: a yard lays down a
             // company's order first, then the navies take their slips. A system without companies keeps the old way:
             // the yards' owners keep the merchant fleet up to strength before the navies get theirs.
-            Companies = new Companies(this, seed + 13);
+            Companies = new Companies(this, seed + 29);
             economy.Loaded += Companies.OnLoaded;
             economy.Sold += Companies.OnSold;
             economy.RouteFactor = Companies.RouteFactor;
