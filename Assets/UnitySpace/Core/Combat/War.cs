@@ -701,7 +701,7 @@ namespace UnitySpace.Core
             inside.TakeCrew(inside.Crew);
             inside.TakeMarines(inside.Marines);
             if (ship.Faction.IsPirate) Crews.Lose(ship.Faction, people);
-            else if (captor.IsPirate) Crews.Hold(ship.Faction, captor, people, false, FirstLiveHaven(), jd, ship.Name);
+            else if (captor.IsPirate) Crews.Hold(ship.Faction, captor, people, false, LiveHavenOf(captor), jd, ship.Name);
             else Crews.Hold(ship.Faction, captor, people, true, null, jd, ship.Name);
         }
 
@@ -740,7 +740,7 @@ namespace UnitySpace.Core
             if (ship.Spec.IsMilitary)
             {
                 ship.Role = ShipRole.Patrol;
-                ship.Route = group?.Route ?? (captor.IsPirate && HavenBody() >= 0 ? new[] { HavenBody() } : OwnPorts(captor, ship.Orbit.Body));
+                ship.Route = group?.Route ?? (captor.IsPirate && HavenBody(captor) >= 0 ? new[] { HavenBody(captor) } : OwnPorts(captor, ship.Orbit.Body));
             }
             return true;
         }
@@ -1892,7 +1892,7 @@ namespace UnitySpace.Core
             return best;
         }
 
-        int HavenBody() => FirstLiveHaven()?.Body ?? -1;
+        int HavenBody(Faction clan) => LiveHavenOf(clan)?.Body ?? -1;
 
         string HavenName(Faction clan = null) => (clan != null ? LiveHavenOf(clan) : null)?.Name ?? FirstLiveHaven()?.Name ?? "a pirate haven";
 
@@ -2610,7 +2610,7 @@ namespace UnitySpace.Core
 
         void PirateRecruiting(double jd)
         {
-            if (FirstLiveHaven() == null) return;
+            if (LiveHavenOf(world.Pirates) == null) return;
             int groups = 0;
             var based = new Dictionary<Settlement, int>();
             foreach (var s in Fleet.Ships)
@@ -2629,7 +2629,7 @@ namespace UnitySpace.Core
             int fewest = int.MaxValue;
             foreach (var st in Economy.Settlements)
             {
-                if (st.Kind != SettlementKind.Haven || st.Fallen) continue;
+                if (st.Kind != SettlementKind.Haven || st.Fallen || st.Owner != world.Pirates) continue;
                 int n = based.TryGetValue(st, out int k) ? k : 0;
                 if (n < fewest)
                 {

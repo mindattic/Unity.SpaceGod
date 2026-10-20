@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using UnitySpace.Core;
 using NUnit.Framework;
 
@@ -58,6 +59,20 @@ namespace UnitySpace.Core.Tests
 
         static Ship RaiderOf(World w, Settlement haven) =>
             w.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort && s.Faction.IsPirate && w.War.HomeHaven(s) == haven);
+
+        /// <summary>A second pirate clan with its own standing haven in the same system, for U.SPC-T306: with two
+        /// clans sharing a system, recruiting, Steal and TakeCrewCaptive must each use the haven of the clan the
+        /// code is actually acting for, never just the first haven the system happens to list.</summary>
+        static (Faction clan, Settlement haven) MakeRivalClan(World w)
+        {
+            var rival = w.Fleet.AddFaction("Rival Clan", "RIV", default);
+            rival.IsPirate = true;
+            var haven = w.Economy.Add("Rival Den", w.Catalog["Mercury"].Index, SettlementKind.Haven, rival, 5000);
+            return (rival, haven);
+        }
+
+        static object CallPrivate(object target, string method, params object[] args) =>
+            target.GetType().GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(target, args);
 
         [Test]
         public void SolHasThreeHiddenHavensOnRealBeltAsteroidsBesidesBlackwater()
@@ -312,6 +327,73 @@ namespace UnitySpace.Core.Tests
                 Assert.That(ship.DestinationBody, Is.Not.EqualTo(h.Body), $"pick {k} sends it to {h.Name}");
             }
             Assert.That(picks, Is.GreaterThan(30), "it still goes elsewhere");
+        }
+
+        // ---------------------------------------------------------------- U.SPC-T306: two clans, one system
+
+        [Test]
+        public void TakeCrewCaptiveHoldsHostagesAtTheCaptorsOwnHavenNotARivalClansHaven()
+        {
+            var w = CreateWorld();
+            var (rival, rivalHaven) = MakeRivalClan(w);
+            var victim = w.Fleet.AddShip("Lawman", ShipClass.Destroyer, w.Sol, ShipRole.Patrol);
+            Assert.That(victim.Combat.Interior.Crew + victim.Combat.Interior.Marines, Is.GreaterThan(0.5));
+
+            CallPrivate(w.War, "TakeCrewCaptive", victim, rival, StartJd);
+
+            var held = w.War.Crews.Held.Single(c => c.Owners == w.Sol && c.Captors == rival);
+            Assert.That(held.Haven, Is.SameAs(rivalHaven), "hostages taken by a clan must be held at that clan's own haven");
+            Assert.That(held.Haven, Is.Not.SameAs(Haven(w, "Blackwater")), "not whichever haven the system happens to list first");
+        }
+
+        [Test]
+        public void StealRoutesAKeptPrizeToTheCaptorsOwnHavenNotARivalClansHaven()
+        {
+            var w = CreateWorld();
+            var (rival, rivalHaven) = MakeRivalClan(w);
+            int earth = w.Catalog["Earth"].Index;
+            var prize = w.Fleet.AddShip("Lawman", ShipClass.Destroyer, w.Sol, ShipRole.Patrol);
+            prize.Orbit = new ParkingOrbit { Body = earth };
+            var b = new Battle(0, earth, "Test Battle", new DVec3(20000, 0, 0), StartJd, 1);
+            b.AddShip(prize, 0, new DVec3(4, 0, 0), -DVec3.UnitX);
+
+            bool kept = (bool)CallPrivate(w.War, "Steal", prize, rival, b, StartJd);
+
+            Assert.That(kept, Is.True);
+            Assert.That(prize.Faction, Is.SameAs(rival));
+            Assert.That(prize.Route, Is.Not.Null);
+            Assert.That(prize.Route.Length, Is.EqualTo(1));
+            Assert.That(prize.Route[0], Is.EqualTo(rivalHaven.Body), "a prize must sail for its new owner's own haven, not another clan's");
+        }
+
+        [Test]
+        public void RecruitingRaisesNewBandsAtItsOwnHavenNeverARivalClansHaven()
+        {
+            var w = CreateWorld();
+            var (_, rivalHaven) = MakeRivalClan(w);
+            // Every standing haven of the Banner's own already has a band based there, so under the old bug the
+            // rival's haven (with none yet) would look like the standing haven "with the fewest" and win out.
+            foreach (var name in new[] { "Lantern Rock", "Dactyl's Rest", "Menoetius Hold" })
+            {
+                var h = Haven(w, name);
+                var filler = w.Fleet.AddShip("Filler", ShipClass.Destroyer, w.Pirates, ShipRole.Patrol);
+                filler.Route = new[] { h.Body };
+                filler.Orbit = new ParkingOrbit { Body = h.Body };
+                filler.Phase = ShipPhase.Parked;
+            }
+            w.PirateGroupCap = 10;
+            w.Pirates.Treasury = 1e12;
+            w.Pirates.Manpower = double.PositiveInfinity;
+
+            int before = w.Fleet.Ships.Count;
+            for (int i = 0; i < 500 && w.Fleet.Ships.Count == before; i++) CallPrivate(w.War, "PirateRecruiting", StartJd + i);
+            Assert.That(w.Fleet.Ships.Count, Is.GreaterThan(before), "no new raider band was ever raised");
+
+            var leader = w.Fleet.Ships.Skip(before).First(s => !s.IsEscort);
+            Assert.That(leader.Route, Is.Not.Null.And.Length.EqualTo(1));
+            Assert.That(leader.Route[0], Is.Not.EqualTo(rivalHaven.Body), "the new band must never sail from a rival clan's haven");
+            var home = w.Economy.At(leader.Route[0]).Single(s => s.Kind == SettlementKind.Haven);
+            Assert.That(home.Owner, Is.SameAs(w.Pirates));
         }
     }
 }
