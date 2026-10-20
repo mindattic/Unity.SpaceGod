@@ -269,6 +269,7 @@ namespace UnitySpace
             demandPrompted = false;
             havenPrompted = null;
             nearGate = null;
+            helmTriggerWas = false;
             SpaceCamera.ExitFocus();
         }
 

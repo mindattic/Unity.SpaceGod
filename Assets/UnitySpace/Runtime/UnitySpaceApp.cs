@@ -1098,6 +1098,8 @@ namespace UnitySpace
                 }
             }
             SpaceCamera.ExitFocus();
+            // A trigger held as the helm was let go is not still held by the next hull taken.
+            helmTriggerWas = false;
             // A hull shot to pieces under the helm ends the session as a loss, not as a release the player chose.
             ShowToast(ship != null && ship.Destroyed ? "The " + ship.Name + " has been destroyed" : "Released manual control");
         }
@@ -1514,6 +1516,8 @@ namespace UnitySpace
                 // so the next battle's demand or surrender gets its own prompt.
                 demandPrompted = false;
                 termsPrompted = null;
+                // Nor is a trigger held as the last fight ended still held: the next one would open with a volley unasked.
+                helmTriggerWas = false;
                 // A patrol's order to heave to has the number keys (1 pays the fine) even alongside or latched to a hulk.
                 bool salvaging = UpdateSalvage(ship, dt);
                 bool hailed = UpdateLawHail(ship);
