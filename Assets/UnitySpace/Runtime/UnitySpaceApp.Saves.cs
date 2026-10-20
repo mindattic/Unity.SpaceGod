@@ -250,6 +250,7 @@ namespace UnitySpace
             pilotLockTarget = Target.None;
             pilotLockUnit = null;
             pilotBoosting = false;
+            pilotEmpSeconds = 0;
             pilot = default;
             rideWarpBefore = -1;
             RideOnward.Clear();

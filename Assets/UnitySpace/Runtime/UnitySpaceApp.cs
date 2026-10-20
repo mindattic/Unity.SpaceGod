@@ -903,6 +903,8 @@ namespace UnitySpace
             var ship = t.Ship;
             Piloted = t;
             World.PilotedShip = ship;
+            // A fresh helm: no drives-down timer left over from the hull flown before (spawned or loaded in the same frame).
+            pilotEmpSeconds = 0;
             // Where it is (and which way it faces) before an escort is cut loose from the leader it shares them with.
             var (frame, offsetKm) = CurrentFrame(ship, Clock.Jd);
             var facing = Fleet.StateOf(ship, Clock.Jd).Facing;
@@ -1057,6 +1059,9 @@ namespace UnitySpace
             var ship = Piloted.Ship;
             Piloted = Target.None;
             World.PilotedShip = null;
+            // Nobody runs down a ship no one flies: the chase ends with the helm, even if another is taken this frame.
+            if (World.Pursuit != null && World.Pursuit.Active) World.Pursuit.ReleaseAll(Clock.Jd);
+            pilotEmpSeconds = 0;
             pilotLockTarget = Target.None;
             pilotLockUnit = null;
             pilotBoosting = false;
