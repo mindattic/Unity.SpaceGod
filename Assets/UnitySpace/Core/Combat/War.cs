@@ -79,7 +79,7 @@ namespace UnitySpace.Core
         readonly Dictionary<Faction, int> losses = new Dictionary<Faction, int>();
         readonly Dictionary<int, int> battleCount = new Dictionary<int, int>();
         readonly Dictionary<Ship, double> retreating = new Dictionary<Ship, double>();
-        readonly Dictionary<Ship, double> laneSeen = new Dictionary<Ship, double>();
+        readonly Dictionary<Ship, (Lane lane, double at)> laneSeen = new Dictionary<Ship, (Lane, double)>();
         readonly Dictionary<Ship, double> pulseReady = new Dictionary<Ship, double>();
         readonly Dictionary<BattleUnit, Faction> captures = new Dictionary<BattleUnit, Faction>();
         readonly Dictionary<Settlement, double> assaultDays = new Dictionary<Settlement, double>();
@@ -244,14 +244,14 @@ namespace UnitySpace.Core
         {
             var lanes = Fleet.Lanes;
             if (lanes == null) return;
-            var seen = new Dictionary<Ship, double>();
+            var seen = new Dictionary<Ship, (Lane lane, double at)>();
             foreach (var v in Fleet.Ships)
             {
                 // The player's ship is never a lurker, but riding a lane at the helm (U.SPC-T41) it is a rider like any
                 // other, and a pulse throws it out (U.SPC-T42): a piloted hull is in the lane phase only while it rides.
                 if (v.Destroyed || v.IsEscort || v.Phase != ShipPhase.Lane || v.Battle != null) continue;
                 double p = Fleet.LaneProgress(v, jd);
-                seen[v] = v.LaneLeg.From == v.LaneLeg.Lane.A ? p : 1 - p;
+                seen[v] = (v.LaneLeg.Lane, v.LaneLeg.From == v.LaneLeg.Lane.A ? p : 1 - p);
             }
             foreach (var lurker in Fleet.Ships)
             {
@@ -266,8 +266,9 @@ namespace UnitySpace.Core
                     var v = kv.Key;
                     // Already caught by another lurker's pulse this pass: it is fighting there.
                     if (v.LaneLeg.Lane != lane || v.Faction.IsPirate || v.Derelict || v.Battle != null) continue;
-                    double now = kv.Value;
-                    double before = laneSeen.TryGetValue(v, out double b) ? b : now;
+                    double now = kv.Value.at;
+                    // Last seen on another lane (it rode one out and another in since the last look): no pass of this one yet.
+                    double before = laneSeen.TryGetValue(v, out var b) && b.lane == lane ? b.at : now;
                     if ((before - station) * (now - station) <= 0 || Math.Abs(now - station) < window) victims.Add(v);
                 }
                 if (victims.Count > 0) Interdict(lurker, station, victims, jd);
