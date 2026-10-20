@@ -1414,7 +1414,8 @@ namespace UnitySpace.Core
             int chosen = ChooseNext != null ? ChooseNext(ship, here, nowJd) : -1;
             double dwell = Dwell != null ? Dwell(ship, DwellDays(ship)) : DwellDays(ship);
             // A point with no size (a binary's barycentre) has no space round it to wander out into.
-            if (ship.Role == ShipRole.Free && chosen < 0 && rng.NextDouble() < 0.55 && catalog[here].RadiusKm > 0)
+            // Nor a star: three to five of its radii out is deep inside the keep-out every trajectory steers clear of.
+            if (ship.Role == ShipRole.Free && chosen < 0 && rng.NextDouble() < 0.55 && catalog[here].RadiusKm > 0 && !catalog[here].UsesStellarMapping)
             {
                 // A free ship's whim: out to somewhere new nearby rather than to another world.
                 ship.Wander = true;
