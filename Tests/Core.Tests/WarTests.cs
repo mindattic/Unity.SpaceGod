@@ -390,6 +390,23 @@ namespace UnitySpace.Core.Tests
             Assert.That(raiderBand.IsEscort, Is.False, "the raider band itself was swallowed into another group");
         }
 
+        /// <summary>U.SPC-T307: the system root stands for every jump gate's approach, so two raider bands both
+        /// "parked at" it can still be AU apart. MergeGroups must not fold one into the other on body alone.</summary>
+        [Test]
+        public void RaiderBandsAtDifferentJumpGatesAreNotMergedAcrossTheSystem()
+        {
+            var w = CreateWorld();
+            int root = w.Catalog.Root.Index;
+            ParkWarship(w, w.Pirates, ShipClass.Destroyer, w.Catalog["Mars"].Index); // the home guard, kept out of this
+            var near = ParkWarship(w, w.Pirates, ShipClass.Destroyer, root);
+            near.Orbit.Center = new DVec3(0, 0, 0);
+            var far = ParkWarship(w, w.Pirates, ShipClass.Destroyer, root);
+            far.Orbit.Center = new DVec3(War.GateFightRangeKm * 50, 0, 0); // a different gate, AU away
+            w.War.Update(StartJd + 1.01);
+            Assert.That(near.Leader, Is.Null, "a band parked off one gate was merged away");
+            Assert.That(far.Leader, Is.Null, "a band parked off a different gate, AU away, was merged in");
+        }
+
         // ---------------------------------------------------------------- SiegeNeeded
 
         [Test]

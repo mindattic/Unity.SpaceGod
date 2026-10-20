@@ -2276,7 +2276,7 @@ namespace UnitySpace.Core
             Crews.Recruit(polities.KeptBy(world, Fleet.Factions), polities.Worlds.Count > 1 ? polities.Settlements : Economy.Settlements, 1);
             if (Fleet.Lanes != null)
                 foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.SetDanger(lane, Fleet.Lanes.Danger[lane] * 0.85);
-            MergeGroups();
+            MergeGroups(jd);
             PayUpkeep();
             Refit(jd);
             Sieges(jd);
@@ -2301,10 +2301,14 @@ namespace UnitySpace.Core
         /// <summary>
         /// Navies concentrate: groups of one faction parked at the same body (and not fighting) merge
         /// into the strongest of them, up to eight hulls, so single new warships become battle groups
-        /// instead of patrolling alone. The home guard is never absorbed into or swollen.
+        /// instead of patrolling alone. The home guard is never absorbed into or swollen. At the system
+        /// root, "the same body" covers every jump gate's approach, so two groups must also be within
+        /// <see cref="GateFightRangeKm"/> of each other there: a raider band parked off one gate is left
+        /// alone by one lurking at another, AU away (U.SPC-T307).
         /// </summary>
-        void MergeGroups()
+        void MergeGroups(double jd)
         {
+            int root = Catalog.Root.Index;
             var groups = new List<Ship>();
             foreach (var s in Fleet.Ships)
                 // The player's ship is flown by the player: never handed to an AI flagship, nor one itself.
@@ -2322,6 +2326,7 @@ namespace UnitySpace.Core
                 {
                     var small = groups[j];
                     if (small.IsEscort || small.Faction != big.Faction || small.Orbit.Body != big.Orbit.Body || IsHomeGuard(small)) continue;
+                    if (big.Orbit.Body == root && (big.Orbit.OffsetAt(jd) - small.Orbit.OffsetAt(jd)).Length > GateFightRangeKm) continue;
                     int size = 1, joining = 1;
                     foreach (var e in Fleet.Ships)
                     {
