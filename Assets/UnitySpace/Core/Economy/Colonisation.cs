@@ -606,8 +606,10 @@ namespace UnitySpace.Core
             int ruins = 0;
             foreach (var x in economy.Settlements)
                 if (x.Body == site.Body) ruins++;
-            // A habitat is called after its site ("Ross 154 Habitat"); a world's first settlement is its landing.
-            string name = ruins == 0 ? (site.Habitat ? site.Name : site.Name + " Landing") : "New " + site.Name + (ruins > 1 ? " " + (ruins + 1) : "");
+            // A habitat is called after its site ("Ross 154 Habitat"); a world's first settlement is its landing;
+            // each later re-founding is numbered by how many have stood here before it, so the second settlement
+            // on a site is "New X 2", not an unnumbered "New X" that then jumps straight to "New X 3" (U.SPC-T320).
+            string name = ruins == 0 ? (site.Habitat ? site.Name : site.Name + " Landing") : "New " + site.Name + " " + (ruins + 1);
             var s = economy.Add(name, site.Body, SettlementKind.MiningOutpost, owner, people);
             s.Stage = ColonyStage.Outpost;
             s.FoundedJd = jd;

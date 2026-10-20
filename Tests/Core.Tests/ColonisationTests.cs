@@ -355,6 +355,22 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void ReFoundedSettlement_IsNumberedWithNoGap_U_SPC_T320()
+        {
+            var t = Create(sites: Ice(5, "Pebble"));
+            var first = Colonisation.Found(t.Economy, t.Owner, t.Colonisation.Sites[0], 8000, 0);
+            Assert.That(first.Name, Is.EqualTo("Pebble Landing"), "a world's first settlement is its landing");
+            first.Stage = ColonyStage.Ruin;
+
+            var second = Colonisation.Found(t.Economy, t.Owner, t.Colonisation.Sites[0], 8000, 1);
+            Assert.That(second.Name, Is.EqualTo("New Pebble 2"), "the first re-founding is numbered, not left bare");
+            second.Stage = ColonyStage.Ruin;
+
+            var third = Colonisation.Found(t.Economy, t.Owner, t.Colonisation.Sites[0], 8000, 2);
+            Assert.That(third.Name, Is.EqualTo("New Pebble 3"), "numbering carries on with no gap at 2");
+        }
+
+        [Test]
         public void Ruin_TakesNoMigrants_AndHasNoMarket()
         {
             var t = Create(sites: Ice(5));
