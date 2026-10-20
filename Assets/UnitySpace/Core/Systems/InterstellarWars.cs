@@ -400,7 +400,9 @@ namespace UnitySpace.Core
         static bool Fit(World world, Ship ship, Faction f)
         {
             if (ship.Destroyed || ship.IsEscort || ship.Faction != f || !ship.Spec.IsMilitary || ship.Derelict || ship.Battle != null) return false;
-            if (ship == world.PilotedShip || ship.Voyage != null || ship.GateKm != null || ship.Phase != ShipPhase.Parked) return false;
+            // Nor one dry in port waiting on a tanker (InterstellarTraffic.Idle refuses to send it): it would be picked
+            // every day and every day fail to sail, holding back every other group.
+            if (ship == world.PilotedShip || ship.Voyage != null || ship.GateKm != null || ship.Phase != ShipPhase.Parked || ship.OutOfPropellant) return false;
             if (world.Holdings != null && world.Holdings.Owns(ship)) return false;
             if (ship.Combat.Damage > 0.2 || !ship.Combat.Armed || world.War.IsHomeGuard(ship)) return false;
             return GroupMarines(world, ship) > 0;
