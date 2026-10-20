@@ -2033,9 +2033,12 @@ namespace UnitySpace.Core
                     int first = CommonFrame(from, a), last = CommonFrame(b, to);
                     double days = Burn((Lanes.RampHelio(route[0].Lane, a, jd) - ephemeris.HelioAt(from, jd)).Length,
                         first, BodyEnd(first, from, ship, jd), RampEnd(a));
+                    double rideDays = 0;
                     for (int i = 0; i < route.Count; i++)
                     {
-                        days += Hyperlanes.RideDays(Lanes.LaneLengthKm(route[i].Lane, jd));
+                        double ride = Hyperlanes.RideDays(Lanes.LaneLengthKm(route[i].Lane, jd));
+                        days += ride;
+                        rideDays += ride;
                         if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5, route[i].To, RampEnd(route[i].To), RampEnd(route[i].To));
                     }
                     days += Burn((Lanes.RampHelio(route[route.Count - 1].Lane, b, jd) - ephemeris.HelioAt(to, jd)).Length,
@@ -2043,7 +2046,8 @@ namespace UnitySpace.Core
                     var viaLanes = new TripEstimate(days + 0.3 + RingOverheadDays(ship, to, jd + days), deltaV, route.Count);
                     if (!conics) return viaLanes;
                     // A slow boat may sooner wait for a window and fall across than pay the tolls.
-                    double laneCost = cost + route.Count * Economy.LaneToll(ship.MassTonnes) + (viaLanes.Days - days) * TimeValueOf(ship);
+                    // The burns are priced in cost; the time on the lanes themselves and in the rings is not, so add it here.
+                    double laneCost = cost + route.Count * Economy.LaneToll(ship.MassTonnes) + (rideDays + viaLanes.Days - days) * TimeValueOf(ship);
                     int frame = CommonFrame(from, to);
                     if (BestConic(ship, frame, BodyEnd(frame, from, ship, jd), BodyEnd(frame, to, null, jd), jd, out double straightDays, out double straightDv)
                         && LegCost(ship, straightDays, straightDv) < laneCost)
