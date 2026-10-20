@@ -123,6 +123,40 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void BomberWingmenDoNotTorpedoAHullThatHasAlreadyStruckItsColoursOrDied()
+        {
+            var b = CarrierAction(5);
+            var lead = b.Units.First(u => u.Kind == UnitKind.Fighter && u.Fighter.Bomber && u.Fighter.Lead == null);
+            var wingman = b.Units.First(u => u.Kind == UnitKind.Fighter && u.Fighter.Bomber && u.Fighter.Lead == lead);
+            var victim = b.Units.First(u => u.Kind == UnitKind.Ship && u.Side != lead.Side);
+
+            lead.Fighter.Phase = FighterPhase.AttackRun;
+            lead.Target = victim;
+            // Lined up for a shot: close, dead ahead.
+            wingman.Pos = victim.Pos - DVec3.UnitX * 1.0;
+            wingman.Forward = DVec3.UnitX;
+            wingman.Vel = DVec3.Zero;
+            int ammoBefore = wingman.Combat.Subsystems.First(s => s.Kind == SubsystemKind.Torpedo).Ammo;
+            int missilesBefore = b.Missiles.Count;
+
+            // The target struck its colours a moment ago -- resolved later in Battle.Step, after
+            // fighters fly, so nothing has cleared anyone's stale Target reference to it yet.
+            victim.Surrendering = true;
+            FighterAI.Step(b, wingman, 0.1);
+            Assert.That(wingman.Combat.Subsystems.First(s => s.Kind == SubsystemKind.Torpedo).Ammo, Is.EqualTo(ammoBefore),
+                "a wingman fired a torpedo at a hull that had already struck its colours");
+            Assert.That(b.Missiles.Count, Is.EqualTo(missilesBefore));
+
+            // Or it was already destroyed outright.
+            victim.Surrendering = false;
+            victim.Dead = true;
+            FighterAI.Step(b, wingman, 0.1);
+            Assert.That(wingman.Combat.Subsystems.First(s => s.Kind == SubsystemKind.Torpedo).Ammo, Is.EqualTo(ammoBefore),
+                "a wingman fired a torpedo at a hull that was already dead");
+            Assert.That(b.Missiles.Count, Is.EqualTo(missilesBefore));
+        }
+
+        [Test]
         public void ACraftTurningBackIntoTheBattleKeepsAUnitHeading()
         {
             var b = CarrierAction(5);

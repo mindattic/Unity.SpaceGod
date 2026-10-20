@@ -283,7 +283,12 @@ namespace UnitySpace.Core
             var f = u.Fighter;
             // Only a lead changes phase; a wingman flies (and fires on) its lead's run.
             var phase = f.Lead != null ? f.Lead.Fighter.Phase : f.Phase;
-            if (!f.Bomber || phase != FighterPhase.AttackRun || u.Target == null || u.Target.Kind == UnitKind.Fighter) return;
+            // The lead's own retarget check runs once a tick and can lag a target's death or
+            // surrender by a tick (both are resolved later in Battle.Step, after fighters fly);
+            // re-check the target's own state here so neither the lead nor a wingman copying its
+            // target gets a last torpedo off at a hull that is already struck or already gone.
+            if (!f.Bomber || phase != FighterPhase.AttackRun || u.Target == null || u.Target.Kind == UnitKind.Fighter
+                || !b.Hostile(u, u.Target) || u.Target.Surrendering || u.Target.Captured) return;
             var to = u.Target.Pos - u.Pos;
             double dist = to.Length;
             if (dist > WeaponSpec.Torpedo.RangeKm || DVec3.Dot(u.Forward, to / dist) < 0.9) return;
