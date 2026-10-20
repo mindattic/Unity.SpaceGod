@@ -735,6 +735,8 @@ namespace UnitySpace.Core
 
         void Scrap(Company c, Ship ship, double jd)
         {
+            // Its takings since the last review are its own too, same as a hull sold or merged away.
+            SettleOut(c, ship);
             c.Cash += ScrapShare * Economy.HullPrice(ship.Spec.Class);
             c.Ships.Remove(ship);
             c.HullsScrapped++;

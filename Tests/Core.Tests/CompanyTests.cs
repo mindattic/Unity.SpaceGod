@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using NUnit.Framework;
 
@@ -344,6 +345,40 @@ namespace UnitySpace.Core.Tests
             // A bankrupt company buys and trades no more.
             w.Companies.Review(jd + 400);
             Assert.That(c.OnOrder, Is.Null);
+        }
+
+        [Test]
+        public void ScrappingAHullSettlesItsUnbookedTakingsIntoTheCompanysBooksInsteadOfLosingThem()
+        {
+            var w = CreateWorld();
+            var c = Named(w, "Kraken Hydrocarbon Company");
+            double jd = StartJd + 1;
+            BreakTheRivals(w, c, jd); // books c up to jd too, and leaves every rival too broke to buy a hull
+            ParkFleet(w, c, "Titan", jd);
+            var fleet = c.Ships.ToList();
+            Assert.That(fleet, Is.Not.Empty);
+            // Every hull earned some unbooked trade profit since the last review, as live trading would book it.
+            const double delta = 2e6;
+            foreach (var s in fleet)
+            {
+                s.Credits += delta;
+                c.Flag.Treasury += delta;
+            }
+            double earned = c.Earned, taxPaid = c.TaxPaid, flag = c.Flag.Treasury;
+            // What is unbooked for these hulls right now (parking them may itself have settled some trade); the
+            // review this test forces had better not drop a single credit of it, same as SettleOut reckons it.
+            var deltas = fleet.Select(s => s.Credits - s.CompanyBookedCredits).ToList();
+            double totalDelta = deltas.Sum();
+            double totalTax = deltas.Sum(d => Math.Max(0, d)) * Companies.CorporateTax;
+            c.Cash = -400e6; // deep in debt, and no rival can buy, so every hull goes to the breakers
+            w.Companies.Bankrupt(c, jd);
+            Assert.That(c.HullsScrapped, Is.EqualTo(fleet.Count));
+            // Its takings since the last review went into the company's books, same as a hull sold or merged away,
+            // not lost along with it to the breakers.
+            Assert.That(c.Earned, Is.EqualTo(earned + totalDelta).Within(1));
+            Assert.That(c.TaxPaid, Is.EqualTo(taxPaid + totalTax).Within(1));
+            Assert.That(c.Flag.Treasury, Is.EqualTo(flag + totalTax - totalDelta).Within(1));
+            Assert.That(fleet.All(s => s.CompanyBookedCredits == s.Credits), Is.True, "nothing is left unbooked once scrapped");
         }
 
         [Test]
