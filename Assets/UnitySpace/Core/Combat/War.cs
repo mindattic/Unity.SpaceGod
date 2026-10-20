@@ -1595,12 +1595,15 @@ namespace UnitySpace.Core
         /// The player takes the helm of a group's flagship: its escorts carry on under the strongest of
         /// them (as when a flagship is lost) rather than holding station on a hull that no longer runs
         /// the group's schedule -- frozen at the spot piloting began, or left behind for good if it jumps
-        /// through the gate.
+        /// through the gate. Also used when a flagship crosses a jump gate without some of its escorts
+        /// (still fighting, or left hulks): those stay here under the strongest of them (U.SPC-T310).
+        /// <paramref name="keepHunter"/> leaves a bounty hunter's place on the boards with the old
+        /// flagship (a hunt voyage takes it up again when it comes home) rather than handing it on.
         /// </summary>
-        public void HandOverCommand(Ship leader)
+        public void HandOverCommand(Ship leader, bool keepHunter = false)
         {
             if (leader == null || leader.IsEscort) return;
-            Succession(leader);
+            Succession(leader, keepHunter);
         }
 
         /// <summary>
@@ -1616,7 +1619,7 @@ namespace UnitySpace.Core
             pulseReady.Remove(ship);
         }
 
-        void Succession(Ship dead)
+        void Succession(Ship dead, bool keepHunter = false)
         {
             if (dead.IsEscort) return;
             Ship heir = null;
@@ -1677,7 +1680,7 @@ namespace UnitySpace.Core
                 if (s.Leader == dead && s != heir) s.Leader = heir;
             if (Orders.TryGetValue(dead, out var o)) Orders[heir] = o;
             Orders.Remove(dead);
-            world.Outlaws?.OnSuccession(dead, heir);
+            if (!keepHunter) world.Outlaws?.OnSuccession(dead, heir);
         }
 
         // ---------------------------------------------------------------- orders

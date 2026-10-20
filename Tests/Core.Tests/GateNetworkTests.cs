@@ -300,6 +300,34 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void EscortsLeftBehindAtAGateAreNoLongerTiedToTheFlagshipThatCrossed()
+        {
+            var g = Create();
+            var sol = g.Find("Sol System");
+            var ac = g.Find("Alpha Centauri");
+            var raider = sol.World.Fleet.Ships.First(s => s.Faction == sol.World.Pirates && !s.IsEscort && !s.Destroyed
+                && sol.World.Fleet.Ships.Count(e => e.Leader == s && !e.Destroyed) >= 2);
+            double jd = RunUntil(g, StartJd, 30, () => raider.Phase == ShipPhase.Parked && raider.Battle == null);
+            var escorts = sol.World.Fleet.Ships.Where(s => s.Leader == raider && !s.Destroyed).ToList();
+            Assert.That(escorts.Count, Is.GreaterThanOrEqualTo(2), "the band lost its escorts before it could be sent");
+            Assert.That(g.Traffic.Send(raider, sol, ac, VoyagePurpose.Raid, jd), Is.Not.Null);
+            // Two of its escorts are still caught up in a fight of their own when it goes in: they cannot follow it through.
+            var fight = new Battle(0, sol.Catalog.Root.Index, "Test", new DVec3(50000, 0, 0), jd, 1);
+            var behind = escorts.Take(2).ToList();
+            foreach (var e in behind) e.Battle = fight;
+
+            RunUntil(g, jd, 120, () => raider.GateDeparted);
+            Assert.That(raider.GateDeparted, Is.True, "the raider never went through the gate");
+            Assert.That(behind.All(e => !e.Destroyed), Is.True, "the escorts left fighting went with it");
+            Assert.That(sol.World.Fleet.Ships.Any(s => !s.Destroyed && s.Leader == raider), Is.False,
+                "escorts left behind are still tied to a flagship that has gone through the gate");
+            // They carry on here as a group of their own, under the stronger of them.
+            var heir = behind.Single(e => e.Leader == null);
+            Assert.That(behind.Single(e => e != heir).Leader, Is.SameAs(heir));
+            Assert.That(heir.Voyage, Is.Null, "the voyage went through the gate with the flagship");
+        }
+
+        [Test]
         public void RaidersThroughAGateGetItShutBehindThemAndANavySentAfterThem()
         {
             var g = Create();

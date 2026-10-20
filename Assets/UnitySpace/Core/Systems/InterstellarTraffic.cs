@@ -435,6 +435,9 @@ namespace UnitySpace.Core
                 Retire(world, e);
             }
             Retire(world, leader);
+            // Those left behind (U.SPC-T310) are no longer its escorts: they carry on here under the strongest of them,
+            // rather than holding station for ever on a hull that has gone. A hunter's place on the boards goes with it.
+            world.War?.HandOverCommand(leader, keepHunter: v.Purpose == VoyagePurpose.Hunt);
             inGates.Add(p);
             Crossings++;
             LogCrossing(new GateCrossing
