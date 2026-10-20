@@ -380,15 +380,21 @@ namespace UnitySpace.Core
 
         /// <summary>
         /// <paramref name="clan"/> sends a band through the gates to found a haven in the nearest empty hide in a belt or disc
-        /// of a system where it has none. Returns the band, or null if there is no hide in reach or no band free to go.
+        /// of a system where it has none. Returns the band, or null if there is no hide in reach, no band free to go, a band
+        /// of its is already on its way to found one (even one riding inside a gate right now), or its treasury has fallen
+        /// under <see cref="FoundingCost"/> since it resolved to go.
         /// </summary>
         public Ship Expand(Faction clan, double jd)
         {
             var havens = Havens(clan);
-            if (havens.Count == 0 || SystemsOf(havens).Count >= MaxSystems) return null;
+            if (havens.Count == 0 || SystemsOf(havens).Count >= MaxSystems || clan.Treasury < FoundingCost) return null;
             foreach (var s in galaxy.Systems)
                 foreach (var ship in s.World.Fleet.Ships)
                     if (!ship.Destroyed && ship.Faction == clan && ship.Voyage?.Purpose == VoyagePurpose.Relocate) return null;
+            // A band already under way is retired out of every system's fleet while it rides inside the gate itself
+            // (see InterstellarTraffic.InTransit): the loop above alone would miss it there and send a second one.
+            foreach (var ship in traffic.InTransit())
+                if (ship.Faction == clan && ship.Voyage?.Purpose == VoyagePurpose.Relocate) return null;
             var held = SystemsOf(havens);
             Ship band = null;
             StarSystem from = null, to = null;

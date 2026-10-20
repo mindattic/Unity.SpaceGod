@@ -229,6 +229,74 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void ExpandNeverSendsASecondBandWhileTheFirstRidesInsideAGate()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var banner = sol.World.Pirates;
+            banner.Treasury = 5e8;
+            // Extra bands fit to sail, besides the clan's own: were the first missed while it rides inside a
+            // gate (retired out of every system's fleet there, see InterstellarTraffic.InTransit), Expand would
+            // wrongly send one of these too.
+            int deimos = sol.Catalog["Deimos"].Index;
+            sol.World.War.RaisePirateGroup(StartJd, deimos);
+            sol.World.War.RaisePirateGroup(StartJd, deimos);
+
+            Ship band = null;
+            double jd = StartJd;
+            for (; jd < StartJd + 30 && band == null; jd += 0.5)
+            {
+                g.Update(jd);
+                band = g.Traffic.Clans.Expand(banner, jd);
+            }
+            Assert.That(band, Is.Not.Null, "no band set out to found a haven");
+            int expansions = g.Traffic.Clans.Expansions;
+
+            bool InsideGate() => g.Traffic.InTransit().Any(s => s.Faction == banner && s.Voyage?.Purpose == VoyagePurpose.Relocate);
+            jd = RunUntil(g, jd, 150, _ => InsideGate());
+            Assert.That(InsideGate(), Is.True, "the band never rode inside a gate");
+
+            double treasuryBefore = banner.Treasury;
+            var second = g.Traffic.Clans.Expand(banner, jd);
+            Assert.That(second, Is.Null, "Expand sent a second band while the first was still inside a gate");
+            Assert.That(g.Traffic.Clans.Expansions, Is.EqualTo(expansions), "Expand founded a second time while one band was inside a gate");
+            Assert.That(banner.Treasury, Is.EqualTo(treasuryBefore), "Expand charged the founding cost again");
+        }
+
+        [Test]
+        public void ExpandWontFoundWithoutTheCostInTreasuryEvenWithABandAndRouteReady()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var banner = sol.World.Pirates;
+
+            Ship band = null;
+            double jd = StartJd;
+            for (; jd < StartJd + 30 && band == null; jd += 0.5)
+            {
+                g.Update(jd);
+                // Pinned short of the founding cost against whatever the day's smuggling and racketeering
+                // brought in (the clan's takings otherwise creep the treasury back over the line on their own).
+                banner.Treasury = PirateClans.FoundingCost - 1;
+                band = g.Traffic.Clans.Expand(banner, jd);
+                Assert.That(band, Is.Null, "Expand founded a haven without the cost in the treasury to pay for it");
+            }
+            Assert.That(g.Traffic.Clans.Expansions, Is.EqualTo(0));
+            Assert.That(banner.Treasury, Is.EqualTo(PirateClans.FoundingCost - 1), "Expand touched the treasury despite refusing to found");
+
+            // With the cost restored, a band and route are ready again before long: the refusals above were the
+            // treasury check at work, not a lack of anything to send (see the sibling test with treasury in hand
+            // from the start, which founds a haven inside the same 30 days).
+            for (; jd < StartJd + 60 && band == null; jd += 0.5)
+            {
+                g.Update(jd);
+                banner.Treasury = 5e8;
+                band = g.Traffic.Clans.Expand(banner, jd);
+            }
+            Assert.That(band, Is.Not.Null, "no band and route were ever ready, so the treasury check was never really exercised");
+        }
+
+        [Test]
         public void ARobbedStateSendsANavyThroughTheGatesAfterAClansFoundHaven()
         {
             var g = Galaxy.CreateDefault(StartJd);
