@@ -134,6 +134,10 @@ namespace UnitySpace.Core
         public JumpGate From, To;
         public double EnterJd, ExitJd;
 
+        /// <summary>Which of <see cref="Ships"/> were hired fighters in the system this passage left, so the
+        /// destination's own <see cref="MerchantEscorts"/> can pick their tracking back up on arrival (U.SPC-T301).</summary>
+        public readonly HashSet<Ship> Hired = new HashSet<Ship>();
+
         /// <summary>The news it carries: what the system it left knew when it went in (U.SPC-T100, <see cref="Newswire.Bundle"/>).</summary>
         public List<SystemReport> News;
 
@@ -423,6 +427,11 @@ namespace UnitySpace.Core
                 ec.Leader = copy;
                 ec.FormationSlot = e.FormationSlot;
                 p.Ships.Add(ec);
+                if (world.Escorts != null && world.Escorts.IsHired(e))
+                {
+                    p.Hired.Add(ec);
+                    world.Escorts.UnmarkHired(e);
+                }
                 Retire(e);
             }
             Retire(leader);
@@ -479,6 +488,9 @@ namespace UnitySpace.Core
                 s.DestinationBody = s.Orbit.Body;
                 s.Ports = world.FreeShipPorts();
                 fleet.Receive(s);
+                // Picks a hired fighter's tracking back up here, so it is still paid off when its merchant is gone,
+                // instead of flying on untracked once the gate it crossed left the system that hired it behind (U.SPC-T301).
+                if (p.Hired.Contains(s)) world.Escorts?.MarkHired(s);
             }
 
             if (v.Purpose == VoyagePurpose.Campaign && galaxy.Wars != null && galaxy.Wars.OnEmerged(system, leader, p.To, jd))
