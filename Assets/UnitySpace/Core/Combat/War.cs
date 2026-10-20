@@ -818,6 +818,17 @@ namespace UnitySpace.Core
             to.HoldPoint = from.HoldPoint;
         }
 
+        /// <summary>Moves whatever plunder <paramref name="from"/> is carrying onto <paramref name="to"/>'s hold
+        /// (U.SPC-T308): used when a band merges into another, or a new flagship takes its place, so a clan's loot
+        /// is not left stranded on a hull that no longer runs the group's schedule.</summary>
+        static void MovePlunder(Ship from, Ship to)
+        {
+            if (from.Plunder == null) return;
+            to.Plunder ??= new double[GoodInfo.Count];
+            for (int i = 0; i < GoodInfo.Count; i++) to.Plunder[i] += from.Plunder[i];
+            from.Plunder = null;
+        }
+
         // ---------------------------------------------------------------- meeting the enemy
 
         /// <summary>A ship has arrived at a body: fight if anyone there is hostile, or join a fight already on.</summary>
@@ -1639,6 +1650,10 @@ namespace UnitySpace.Core
             heir.LaneHold = dead.LaneHold;
             heir.LaneHoldSide = dead.LaneHoldSide;
             CopyRest(dead, heir);
+            // The old flagship's hold of plunder goes on under the new one, not stranded on a hull that no
+            // longer runs the group's schedule (U.SPC-T308). A flagship shot out from under the band takes its
+            // hold down with it.
+            if (!dead.Destroyed) MovePlunder(dead, heir);
             // An interstellar voyage goes on under the new flagship; one held at its gate goes again.
             heir.Voyage = dead.Voyage;
             heir.GateKm = dead.GateKm;
@@ -2338,6 +2353,8 @@ namespace UnitySpace.Core
                     var members = new List<Ship> { small };
                     foreach (var e in Fleet.Ships)
                         if (e.Leader == small && !e.Destroyed) members.Add(e);
+                    // The joining band's own plunder comes along into the flagship it now follows (U.SPC-T308).
+                    MovePlunder(small, big);
                     foreach (var m in members)
                     {
                         Fleet.AddEscort(big, m, Fleet.SlotFor(FreeSlot(big)));

@@ -347,11 +347,15 @@ namespace UnitySpace.Core.Tests
             var w = CreateWorld();
             var flagship = w.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort && w.Fleet.Ships.Count(e => e.Leader == s) >= 2);
             var escorts = w.Fleet.Ships.Where(e => e.Leader == flagship).ToList();
+            flagship.Plunder = new double[GoodInfo.Count];
+            flagship.Plunder[(int)Good.Electronics] = 2500;
             w.War.HandOverCommand(flagship);
             Assert.That(w.Fleet.Ships.Any(e => e.Leader == flagship), Is.False, "escorts left holding station on the player's ship");
             var heir = escorts.Single(e => !e.IsEscort);
             Assert.That(escorts.Where(e => e != heir).All(e => e.Leader == heir), Is.True);
             Assert.That(heir.Phase, Is.EqualTo(flagship.Phase));
+            Assert.That(flagship.Plunder, Is.Null, "plunder left stranded on a hull that no longer runs the group's schedule");
+            Assert.That(heir.Plunder?[(int)Good.Electronics], Is.EqualTo(2500), "the old flagship's plunder did not come along to the new one");
         }
 
         [Test]
@@ -405,6 +409,23 @@ namespace UnitySpace.Core.Tests
             w.War.Update(StartJd + 1.01);
             Assert.That(near.Leader, Is.Null, "a band parked off one gate was merged away");
             Assert.That(far.Leader, Is.Null, "a band parked off a different gate, AU away, was merged in");
+        }
+
+        [Test]
+        public void MergingABandIntoAnotherCarriesItsPlunderAlong()
+        {
+            var w = CreateWorld();
+            var navy = MakeFaction(w, "Loot Navy");
+            int body = w.Catalog["Pluto"].Index;
+            ParkWarship(w, navy, ShipClass.Destroyer, w.Catalog["Neptune"].Index); // the home guard, never merged
+            var big = ParkWarship(w, navy, ShipClass.Battleship, body);
+            var small = ParkWarship(w, navy, ShipClass.Destroyer, body);
+            small.Plunder = new double[GoodInfo.Count];
+            small.Plunder[(int)Good.Electronics] = 2500;
+            w.War.Update(StartJd + 1);
+            Assert.That(small.Leader, Is.SameAs(big), "the band was not merged as expected");
+            Assert.That(small.Plunder, Is.Null, "plunder left stranded on a hull that is now an escort");
+            Assert.That(big.Plunder?[(int)Good.Electronics], Is.EqualTo(2500), "the joining band's plunder did not come along with it");
         }
 
         // ---------------------------------------------------------------- SiegeNeeded
