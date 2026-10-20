@@ -196,6 +196,41 @@ namespace UnitySpace.Core.Tests
             Assert.That(ship.HasCargo, Is.False);
         }
 
+        /// <summary>A fight at one of a system's gates turns aside only the merchants bound for that gate, not
+        /// those bound for its other gates (U.SPC-T313).</summary>
+        [Test]
+        public void AFightAtOneGateDivertsOnlyMerchantsBoundForThatGate()
+        {
+            var g = Create();
+            var sol = g.Find("Sol System");
+            var w = sol.World;
+            int root = w.Catalog.Root.Index;
+            Assume.That(sol.Gates.Count, Is.GreaterThanOrEqualTo(2), "Sol has two gates");
+            var bound = sol.Gates[0];
+            var other = sol.Gates.First(x => (x.PositionKm - bound.PositionKm).Length > War.GateFightRangeKm * 2);
+            var ship = w.Fleet.Ships.First(s => !s.Destroyed && w.IsTrader(s) && s.Phase == ShipPhase.Parked && s.Ports != null && s.Ports.Length > 1);
+            ship.Voyage = new Voyage { Purpose = VoyagePurpose.Trade, Home = sol, Destination = bound.Destination, Faction = ship.Faction };
+            ship.GateKm = bound.PositionKm;
+            double jd = StartJd;
+            w.Fleet.ScheduleNext(ship, jd);
+            for (int i = 0; i < 400 && !(ship.Phase == ShipPhase.Transit && ship.Orbit.Body == root); i++)
+            {
+                jd += 0.01;
+                w.Ephemeris.Update(jd);
+                w.Fleet.Update(jd);
+            }
+            Assume.That(ship.Phase == ShipPhase.Transit && ship.Orbit.Body == root, Is.True, "never set out for its gate");
+            Assume.That(ship.PhaseEndJd - jd, Is.GreaterThan(0.05), "too near its gate to turn");
+
+            // Fighting at the other gate: it flies on.
+            w.DivertAround(new Battle(9001, root, "Test", other.PositionKm, jd, 1), jd);
+            Assert.That(ship.Orbit.Body, Is.EqualTo(root), "turned aside from a fight at a gate it was not bound for");
+
+            // Fighting at its own gate: it turns aside for a port.
+            w.DivertAround(new Battle(9002, root, "Test", bound.PositionKm, jd, 1), jd);
+            Assert.That(ship.Orbit.Body, Is.Not.EqualTo(root), "flew on into a fight at its own gate");
+        }
+
         [Test]
         public void TheBestCargoPaysOnlyWhenThePriceGapBeatsTheDistanceMarkup()
         {

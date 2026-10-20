@@ -1006,16 +1006,24 @@ namespace UnitySpace.Core
         /// <summary>
         /// A battle has broken out at a body: merchants still on their way there change course for the
         /// nearest other port they can reach without a hyperlane (often turning back where they came from).
+        /// A fight off the system's root (at one jump gate) turns aside only those bound for that spot, not
+        /// everyone bound for any of the system's gates (U.SPC-T313).
         /// </summary>
-        void DivertAround(Battle b, double jd)
+        public void DivertAround(Battle b, double jd)
         {
             if (b.Site != null) return;
             var lanes = Fleet.Lanes;
+            bool offRoot = b.Body == Catalog.Root.Index;
             foreach (var s in Fleet.Ships)
             {
                 if (!IsTrader(s) || s.Destroyed || s.Phase != ShipPhase.Transit || s.Orbit == null || s.Orbit.Body != b.Body) continue;
                 if (s.Journey != null && s.JourneyIndex < s.Journey.Count) continue;
                 if (s.PhaseEndJd - jd < 0.05 || s.Ports == null) continue;
+                if (offRoot)
+                {
+                    var bound = s.GateKm ?? s.Orbit.OffsetAt(s.PhaseEndJd);
+                    if ((bound - b.Anchor).Length > War.GateFightRangeKm) continue;
+                }
                 var here = Fleet.StateOf(s, jd).HelioKm;
                 int best = -1;
                 double bestKm = double.MaxValue;
