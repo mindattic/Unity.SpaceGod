@@ -816,7 +816,9 @@ namespace UnitySpace
                 if (!s.IsEscort && !s.Destroyed && s.Phase != ShipPhase.Landed) candidates.Add(s);
             if (candidates.Count == 0) return;
             int current = Selected.IsShip ? candidates.IndexOf(Selected.Ship.Controller) : -1;
-            int next = ((current + direction) % candidates.Count + candidates.Count) % candidates.Count;
+            // With nothing selected, forward starts at the first ship and backward at the last.
+            int next = current < 0 ? (direction > 0 ? 0 : candidates.Count - 1)
+                : ((current + direction) % candidates.Count + candidates.Count) % candidates.Count;
             Select(Target.OfShip(candidates[next]));
             if (SpaceCamera.Mode != SpaceCamera.CameraMode.Free) SpaceCamera.FocusOn(Selected);
         }
