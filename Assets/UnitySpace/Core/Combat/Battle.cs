@@ -2142,7 +2142,11 @@ namespace UnitySpace.Core
             // Its escorts no longer keep station on it (it fights for the other side now), nor it on its old flagship.
             u.Leader = null;
             foreach (var o in Units)
+            {
                 if (o.Leader == u) o.Leader = null;
+                // Nobody keeps steering on it as it was: its captors' side re-picks now rather than circling its own prize.
+                if (o.Target == u) o.Target = null;
+            }
             // A surrendered hull is taken without a fight aboard: mark it held so the fight stops there too.
             u.Combat.Interior.Captured = true;
             u.Combat.Interior.Settle();
