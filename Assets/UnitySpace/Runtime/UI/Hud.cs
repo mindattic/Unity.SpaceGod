@@ -1122,7 +1122,7 @@ namespace UnitySpace.UI
             float bx = r.x + 200;
             if (GUI.Button(new Rect(bx, r.y + 12, 34, 28), "<<", button)) clock.Slower();
             if (GUI.Button(new Rect(bx + 38, r.y + 12, 44, 28), clock.PauseHeld ? ">" : "||", clock.PauseHeld ? buttonActive : button)) app.TogglePause();
-            if (GUI.Button(new Rect(bx + 86, r.y + 12, 34, 28), ">>", button)) clock.Faster();
+            if (GUI.Button(new Rect(bx + 86, r.y + 12, 34, 28), ">>", button)) app.TimeFaster();
             if (GUI.Button(new Rect(bx + 124, r.y + 12, 44, 28), "Now", button)) app.ResetToNow();
 
             float sx = r.x + 390;

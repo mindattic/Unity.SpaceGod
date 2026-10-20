@@ -706,11 +706,7 @@ namespace UnitySpace
             }
             if (i.ToggleScale) ToggleScale();
             // Being run down, time stays at the pace the chase is flown (U.SPC-T273).
-            if (i.TimeFaster)
-            {
-                if (IsPiloting && World.Pursuit != null && World.Pursuit.Active) ShowToast("Being hunted: time stays at real speed until you shake them off or fight");
-                else Clock.Faster();
-            }
+            if (i.TimeFaster) TimeFaster();
             if (i.TimeSlower) Clock.Slower();
             if (i.TogglePause) TogglePause();
             if (i.ResetTime && !IsPiloting) ResetToNow();
@@ -748,6 +744,14 @@ namespace UnitySpace
             if (i.CycleShips && !IsPiloting) CycleShips(i.CycleBackward ? -1 : 1);
             if (i.NumberKey >= 0 && !IsPiloting) NumberHotkey(i.NumberKey);
             if (i.Pilot) TogglePiloting();
+        }
+
+        /// <summary>Speeds time up a step (the key and the top bar's button alike), unless the ship at the helm is being
+        /// run down: then time stays at the pace the chase is flown (U.SPC-T273).</summary>
+        public void TimeFaster()
+        {
+            if (IsPiloting && World.Pursuit != null && World.Pursuit.Active) ShowToast("Being hunted: time stays at real speed until you shake them off or fight");
+            else Clock.Faster();
         }
 
         /// <summary>
