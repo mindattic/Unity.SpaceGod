@@ -1112,7 +1112,7 @@ namespace UnitySpace.Core
                     if (Law?.FindRecord(u.Ship) != c.Target) continue;
                     bool playerOpposite = false;
                     foreach (var v in b.Units)
-                        if (v.Side == 1 - u.Side && v.PlayerFlown) playerOpposite = true;
+                        if (v.Side == 1 - u.FoughtOn && v.PlayerFlown) playerOpposite = true;
                     // A captain who got away in the pods is still at large: the contract stands.
                     var outlaw = world.Outlaws?.Of(c.Target);
                     if (playerOpposite && (outlaw == null || !outlaw.AtLarge))

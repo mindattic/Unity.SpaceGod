@@ -416,6 +416,47 @@ namespace UnitySpace.Core.Tests
             Assert.That(c.State, Is.EqualTo(ContractState.Expired), "no longer wanted: the contract comes down");
         }
 
+        /// <summary>U.SPC-T317: a captured hull flips to its captor's <see cref="BattleUnit.Side"/>, so once the
+        /// player takes a bounty target alive, the target and the player end the battle on the same <c>Side</c>;
+        /// the completion check has to read <see cref="BattleUnit.FoughtOn"/> (the side it fought on, unchanged by
+        /// capture) instead, or it never sees the player as the one who took it down.</summary>
+        [Test]
+        public void ABountyOnACaptainTakenAliveCompletesWhenThePlayerCapturesThem()
+        {
+            var w = CreateWorld();
+            int earth = Body(w, "Earth");
+            var raider = w.Fleet.Ships.First(s => s.Faction.IsPirate && !s.IsEscort && !s.Destroyed);
+            var rec = w.Law.RecordOf(raider);
+            var player = Pilot(w, earth, StartJd);
+
+            var c = new Contract
+            {
+                Kind = ContractKind.Bounty,
+                State = ContractState.Taken,
+                ByPlayer = true,
+                Target = rec,
+                Taker = player,
+                Patron = w.Sol,
+                Pay = 400000,
+            };
+            w.Contracts.All.Add(c);
+
+            var b = new Battle(0, earth, "Battle of Earth", new DVec3(20000, 0, 0), StartJd, 1);
+            b.AddShip(player, 0, new DVec3(4, 0, 0), -DVec3.UnitX).PlayerControlled = true;
+            var prize = b.AddShip(raider, 1, new DVec3(-4, 0, 0), DVec3.UnitX);
+            // Boarded and taken alive: the hull flips to the captor's (the player's) side, but it still fought on side 1.
+            prize.Captured = true;
+            prize.TakenFromSide = 1;
+            prize.Side = 0;
+
+            // The same order World wires war.BattleEnded in: the law and the Outlaws books settle first (taking the
+            // captain off "at large"), then the contracts board.
+            w.Law.OnBattleEnded(b, StartJd + 1);
+            w.Outlaws.OnBattleEnded(b, StartJd + 1);
+            w.Contracts.OnBattleEnded(b, StartJd + 1);
+            Assert.That(c.State, Is.EqualTo(ContractState.Completed), "the player took the bounty target alive");
+        }
+
         [Test]
         public void OverAMonthTheBoardsFillFromRealNeedsAndCaptainsWorkThem()
         {
