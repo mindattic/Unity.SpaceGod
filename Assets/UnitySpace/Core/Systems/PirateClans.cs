@@ -287,7 +287,10 @@ namespace UnitySpace.Core
             var clan = haven.Owner;
             route ??= traffic.Network.Route(from, to, clan, jd);
             if (route == null || route.Count == 0) return null;
-            var runner = IdleRunner(from, haven) ?? BuildRunner(from, haven, jd);
+            var runner = IdleRunner(from, haven);
+            // One back through the gates but not yet in at the haven (still crossing from the gate it came out of) is
+            // waited for, not replaced with a new hull (U.SPC-T304).
+            if (runner == null && !Returning(from, haven)) runner = BuildRunner(from, haven, jd);
             if (runner == null) return null;
             var load = new double[GoodInfo.Count];
             Plan(haven, market, runner.CapacityTonnes, load);
@@ -314,6 +317,16 @@ namespace UnitySpace.Core
             foreach (var s in system.World.Fleet.Ships)
                 if (s.Runner && s.Faction == haven.Owner && InterstellarTraffic.Idle(system.World, s) && InterstellarTraffic.PortOf(s) == haven.Body) return s;
             return null;
+        }
+
+        /// <summary>Whether a smuggler of <paramref name="haven"/>'s is home in <paramref name="system"/> but not idle there: on
+        /// its way in from the gate it came back through, or kept from port by a fight.</summary>
+        static bool Returning(StarSystem system, Settlement haven)
+        {
+            foreach (var s in system.World.Fleet.Ships)
+                if (s.Runner && !s.Destroyed && !s.Derelict && s.Faction == haven.Owner && s.Voyage == null && s.Ports != null && Array.IndexOf(s.Ports, haven.Body) >= 0)
+                    return true;
+            return false;
         }
 
         Ship BuildRunner(StarSystem system, Settlement haven, double jd)

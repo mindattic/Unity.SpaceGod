@@ -141,6 +141,49 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void AClanWaitsForItsSmugglerHomeFromTheGatesRatherThanBuyingAnotherHull()
+        {
+            // U.SPC-T304: a smuggler back through the gates is home (off its voyage) the moment it comes out, but still has to
+            // cross from the gate to the haven; the clan used to buy a fresh hull for the next run in the meantime.
+            var g = Galaxy.CreateDefault(StartJd);
+            var barnard = g.Find("Barnard's Star");
+            var w = barnard.World;
+            var drift = w.Pirates;
+            var slipstream = Named(w, "Slipstream");
+            drift.Treasury = 1e9;
+            drift.Manpower = Math.Max(drift.Manpower, 1e5);
+            var (to, market) = g.Systems.Where(s => s != barnard)
+                .SelectMany(s => s.World.Economy.Settlements.Where(st => st.Lawless && !st.Fallen).Select(st => (s, st)))
+                .First(x => g.Network.Route(barnard, x.s, drift, StartJd)?.Count > 0);
+            slipstream.Stock[(int)Good.Electronics] = 50000;
+            int Runners() => w.Fleet.Ships.Count(s => s.Runner && !s.Destroyed && s.Faction == drift);
+
+            var runner = g.Traffic.Clans.SendRunner(barnard, slipstream, to, market, null, StartJd);
+            Assert.That(runner, Is.Not.Null, "the clan sent no smuggler");
+            Assert.That(Runners(), Is.EqualTo(1));
+
+            // Home again, out of the gate and parked beside it, not yet in at the haven.
+            double jd = StartJd + 1;
+            runner.Voyage = null;
+            runner.GateKm = null;
+            runner.Plunder = null;
+            runner.Route = new[] { slipstream.Body };
+            runner.Ports = new[] { slipstream.Body };
+            int gateSide = barnard.Catalog.Root.Index;
+            Assert.That(gateSide, Is.Not.EqualTo(slipstream.Body));
+            w.Fleet.Station(runner, gateSide, jd);
+            double treasury = drift.Treasury;
+            Assert.That(g.Traffic.Clans.SendRunner(barnard, slipstream, to, market, null, jd), Is.Null, "a new hull went out while the last was still coming in");
+            Assert.That(Runners(), Is.EqualTo(1), "the clan bought a second smuggler");
+            Assert.That(drift.Treasury, Is.EqualTo(treasury), "the clan paid for a hull it did not need");
+
+            // In at the haven, the same hull takes the next run.
+            w.Fleet.Station(runner, slipstream.Body, jd);
+            Assert.That(g.Traffic.Clans.SendRunner(barnard, slipstream, to, market, null, jd), Is.SameAs(runner));
+            Assert.That(Runners(), Is.EqualTo(1));
+        }
+
+        [Test]
         public void ABlackMarketPaysItsOwnPricesAndPassesStolenGoodsOn()
         {
             var tauCeti = StarSystem.CreateSettled(NearbySystems.TauCeti(), StartJd);
