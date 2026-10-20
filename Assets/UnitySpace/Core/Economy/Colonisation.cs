@@ -767,7 +767,9 @@ namespace UnitySpace.Core
 
         /// <summary>
         /// Abandons a failed settlement: its last people leave for the owner's biggest live settlement (or any that
-        /// will have them), and what is left is a ruin with nobody in it, no market and no work.
+        /// will have them), and what is left is a ruin with nobody in it, no market and no work. A frontier outpost
+        /// that is the only settlement in its system falls back to its owner's seat of government, wherever that
+        /// stands (<see cref="Faction.Capital"/>), rather than simply losing its last settlers (U.SPC-T319).
         /// </summary>
         public void Abandon(Economy economy, Settlement s, double jd)
         {
@@ -779,6 +781,11 @@ namespace UnitySpace.Core
                 bool ok = own || economy.Diplomacy == null || !economy.Diplomacy.Hostile(x.Owner, s.Owner);
                 if (!ok) continue;
                 if (refuge == null || (own && refuge.Owner != s.Owner) || (own == (refuge.Owner == s.Owner) && x.Population > refuge.Population)) refuge = x;
+            }
+            if (refuge == null)
+            {
+                var capital = s.Owner?.Capital;
+                if (capital != null && capital != s && Lives(capital)) refuge = capital;
             }
             if (refuge != null) refuge.Population += s.Population;
             s.Population = 0;

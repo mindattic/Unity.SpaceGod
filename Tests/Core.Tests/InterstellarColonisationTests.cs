@@ -50,6 +50,33 @@ namespace UnitySpace.Core.Tests
             Assert.That(frontier.OpenToSettlement, Is.True);
         }
 
+        /// <summary>
+        /// U.SPC-T319: a frontier outpost is often the only settlement in its system, so nobody there can take in
+        /// its last people when it fails. They go home to the owner's seat of government instead of being lost.
+        /// </summary>
+        [Test]
+        public void AFailedFrontierOutpostWithNoLocalRefugeSendsItsLastSettlersToTheCapital()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var frontier = Open(g, sol, "Ross 154", StartJd + 1);
+            var site = frontier.World.Colonisation.Sites.Single(c => c.Habitat);
+            var owner = sol.World.Sol;
+            var capital = owner.Capital;
+            Assert.That(capital, Is.Not.Null, "Sol should already have a seat of government");
+            var outpost = Colonisation.Found(frontier.World.Economy, owner, site, 1000, StartJd + 2);
+            Assert.That(frontier.World.Economy.Settlements.Count(x => x != outpost && !x.Fallen), Is.EqualTo(0),
+                "the frontier outpost is the only live settlement in its own system");
+            double before = capital.Population;
+            double colonists = outpost.Population;
+
+            frontier.World.Colonisation.Abandon(frontier.World.Economy, outpost, StartJd + 3);
+
+            Assert.That(outpost.Population, Is.EqualTo(0));
+            Assert.That(capital.Population, Is.EqualTo(before + colonists).Within(1e-6),
+                "its last settlers went home to the capital instead of vanishing");
+        }
+
         [Test]
         public void EveryFrontierStarHasAHabitatSiteToSettle()
         {
