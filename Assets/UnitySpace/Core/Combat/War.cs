@@ -1603,6 +1603,19 @@ namespace UnitySpace.Core
             Succession(leader);
         }
 
+        /// <summary>
+        /// A ship gone from this system for good without a successor taking its place (retired into a jump gate, its copy
+        /// living on in another system's fleet): its orders and per-ship bookkeeping here go with it (U.SPC-T311).
+        /// </summary>
+        public void Forget(Ship ship)
+        {
+            if (ship == null) return;
+            Orders.Remove(ship);
+            retreating.Remove(ship);
+            laneSeen.Remove(ship);
+            pulseReady.Remove(ship);
+        }
+
         void Succession(Ship dead)
         {
             if (dead.IsEscort) return;

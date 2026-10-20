@@ -432,9 +432,9 @@ namespace UnitySpace.Core
                     p.Hired.Add(ec);
                     world.Escorts.UnmarkHired(e);
                 }
-                Retire(e);
+                Retire(world, e);
             }
-            Retire(leader);
+            Retire(world, leader);
             inGates.Add(p);
             Crossings++;
             LogCrossing(new GateCrossing
@@ -454,8 +454,10 @@ namespace UnitySpace.Core
             return c;
         }
 
-        static void Retire(Ship s)
+        static void Retire(World world, Ship s)
         {
+            // Its orders here are for a ship no longer here (U.SPC-T311): the copy in the gate takes up its own beyond it.
+            world.War?.Forget(s);
             s.Destroyed = true;
             s.GateDeparted = true;
             s.Voyage = null;

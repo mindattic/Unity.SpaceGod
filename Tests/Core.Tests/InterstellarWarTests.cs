@@ -121,6 +121,30 @@ namespace UnitySpace.Core.Tests
             Assert.That(campaign.Lost, Is.False);
         }
 
+        /// <summary>
+        /// U.SPC-T311: a flagship that goes through a jump gate is retired in the system it left, its copy flying on beyond;
+        /// its orders there went with it, rather than staying behind as a dead entry for every gate it ever crossed.
+        /// </summary>
+        [Test]
+        public void AFlagshipThatGoesThroughAGateLeavesNoOrdersBehind()
+        {
+            var g = Line(out var ac, out var barnard, out var luhman);
+            var accord = ac.World.Sol;
+            var authority = luhman.World.Sol;
+            ac.World.Fleet.Group(accord, StartJd, ShipClass.Battleship, "Long Reach", new[] { "Rigil Gate" },
+                (ShipClass.Cruiser, "Vanguard"), (ShipClass.Destroyer, "Spur"));
+            var war = g.Wars.Declare(accord, authority, StartJd, luhman);
+            double jd = Run(g, StartJd, 30, () => war.Campaigns.Count > 0);
+            Assert.That(war.Campaigns, Is.Not.Empty, "no campaign set out");
+            var leader = ac.World.Fleet.Ships.First(s => s.Voyage != null && s.Voyage.Purpose == VoyagePurpose.Campaign && !s.IsEscort);
+            var orders = ac.World.War.Orders;
+            orders[leader] = new GroupOrder { Kind = OrderKind.Patrol, Body = leader.Orbit.Body, SinceJd = jd };
+            Run(g, jd, 60, () => leader.GateDeparted);
+            Assert.That(leader.GateDeparted, Is.True, "the flagship never went through the gate");
+            Assert.That(orders.ContainsKey(leader), Is.False, "the departed flagship's orders stayed behind");
+            Assert.That(orders.Keys.Where(s => s.GateDeparted), Is.Empty, "a ship gone through a gate left orders behind");
+        }
+
         [TestCase(false, TestName = "AScriptedCampaignInvadesOccupiesAndEndsInATreaty(unwatched)")]
         [TestCase(true, TestName = "AScriptedCampaignInvadesOccupiesAndEndsInATreaty(watched)")]
         public void AScriptedCampaignInvadesOccupiesAndEndsInATreaty(bool watched)
