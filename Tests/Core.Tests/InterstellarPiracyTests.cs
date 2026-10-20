@@ -297,6 +297,59 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void OnlyOneBandIsSentToAHavenLeftEmptyAtATime()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var banner = sol.World.Pirates;
+            banner.Treasury = 5e8;
+            Ship founder = null;
+            double jd = StartJd;
+            for (; jd < StartJd + 30 && founder == null; jd += 0.5)
+            {
+                g.Update(jd);
+                founder = g.Traffic.Clans.Expand(banner, jd);
+            }
+            Assert.That(founder, Is.Not.Null, "no band set out to found a haven");
+            var target = founder.Voyage.Destination;
+
+            Settlement Founded() => target.World.Economy.Settlements.FirstOrDefault(s => s.Kind == SettlementKind.Haven && s.Owner == banner);
+            jd = RunUntil(g, jd, 150, _ => Founded() != null);
+            Assert.That(Founded(), Is.Not.Null, $"the band never founded its haven at {target.Name}");
+            var settled = target.World.Fleet.Ships.Single(s => s.Name == founder.Name && !s.Destroyed);
+
+            // The new haven's band is lost: it stands empty again, while the home system is kept manned.
+            settled.Destroyed = true;
+            foreach (var s in g.Systems.SelectMany(sys => sys.World.Fleet.Ships))
+                if (s.Faction == banner && s.Voyage != null && s.Voyage.Purpose == VoyagePurpose.Relocate) s.Voyage = null;
+
+            var moveBand = typeof(PirateClans).GetMethod("MoveBand", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Ship Move() => (Ship)moveBand.Invoke(g.Traffic.Clans, new object[] { banner, g.Traffic.Clans.Havens(banner), jd });
+            Ship first = null;
+            for (int i = 0; i < 40 && first == null; i++)
+            {
+                jd += 0.5;
+                g.Update(jd);
+                if (g.Traffic.Clans.Bands(banner, target).Count == 0) first = Move();
+            }
+            Assert.That(first, Is.Not.Null, "no band ever set out to refill the empty haven");
+            Assert.That(first.Voyage.Purpose, Is.EqualTo(VoyagePurpose.Relocate));
+            Assert.That(first.Voyage.Destination, Is.SameAs(target));
+            var home = first.Voyage.Home;
+
+            // The home haven still has bands to spare, one of them in port and fit to sail, so only the band already on
+            // its way can keep a second from being sent after it (U.SPC-T302: the check looked at moves from the empty
+            // haven, not to it).
+            Assert.That(g.Traffic.Clans.Bands(banner, home).Count, Is.GreaterThan(1), "the home haven has no band to spare");
+            var spare = g.Traffic.Clans.Bands(banner, home).First(s => s.Orbit != null && s.Battle == null && s.Combat.Armed && s.Combat.Damage <= 0.2);
+            spare.Phase = ShipPhase.Parked;
+            spare.GateKm = null;
+            spare.OutOfPropellant = false;
+            Assert.That(g.Traffic.Clans.Bands(banner, target), Is.Empty, "the haven was refilled before the check");
+            Assert.That(Move(), Is.Null, "a second band was sent to the haven the first is already filling");
+        }
+
+        [Test]
         public void ARobbedStateSendsANavyThroughTheGatesAfterAClansFoundHaven()
         {
             var g = Galaxy.CreateDefault(StartJd);

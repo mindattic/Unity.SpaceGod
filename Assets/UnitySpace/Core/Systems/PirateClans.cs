@@ -440,12 +440,21 @@ namespace UnitySpace.Core
             foreach (var h in havens)
             {
                 int n = Bands(clan, h.system).Count;
-                if (n == 0 && empty.haven == null && traffic.Out(h.system, VoyagePurpose.Relocate) == 0) empty = h;
                 if (n > most)
                 {
                     most = n;
                     crowded = h;
                 }
+            }
+            // An empty haven already being refilled (a band of the clan's on its way to it from another haven) is left
+            // to that band: it is the moves to it that count, not those from it (U.SPC-T302).
+            foreach (var h in havens)
+            {
+                if (empty.haven != null || Bands(clan, h.system).Count != 0) continue;
+                bool incoming = false;
+                foreach (var o in havens)
+                    if (o.system != h.system && traffic.Out(o.system, VoyagePurpose.Relocate, h.system) > 0) { incoming = true; break; }
+                if (!incoming) empty = h;
             }
             if (empty.haven == null || crowded.haven == null || empty.system == crowded.system) return null;
             var band = ReadyBand(clan, crowded.system);
