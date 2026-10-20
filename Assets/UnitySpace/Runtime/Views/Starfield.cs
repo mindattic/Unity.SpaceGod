@@ -10,7 +10,10 @@ namespace UnitySpace.Views
     /// </summary>
     public static class Starfield
     {
-        public static GameObject Create(Transform parent, int count = 9000, int seed = 7)
+        /// <summary>The menu's sky material, made once and shared: the menu scene has no teardown of its own to free one.</summary>
+        static Material sharedMaterial;
+
+        public static GameObject Create(Transform parent, int count = 9000, int seed = 7, bool shared = false)
         {
             var rng = new System.Random(seed);
             var galacticPole = BodyView.ToUnity(Astro.PoleFromRaDec(192.86, 27.13)).normalized;
@@ -49,8 +52,13 @@ namespace UnitySpace.Views
             go.transform.SetParent(parent, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
-            var material = Materials.Create(Materials.Stars, "Stars");
-            material.SetFloat("_Brightness", 1.1f);
+            var material = shared ? sharedMaterial : null;
+            if (material == null)
+            {
+                material = Materials.Create(Materials.Stars, "Stars");
+                material.SetFloat("_Brightness", 1.1f);
+                if (shared) sharedMaterial = Materials.MarkShared(material);
+            }
             mr.sharedMaterial = material;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             return go;

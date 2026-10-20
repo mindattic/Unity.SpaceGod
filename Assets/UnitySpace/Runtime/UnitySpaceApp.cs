@@ -539,6 +539,9 @@ namespace UnitySpace
             }
         }
 
+        /// <summary>The game scene is unloading (back to the main menu): its materials and view meshes go with it.</summary>
+        void OnDestroy() => Materials.DestroyAllOwned();
+
         void Update()
         {
             float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);

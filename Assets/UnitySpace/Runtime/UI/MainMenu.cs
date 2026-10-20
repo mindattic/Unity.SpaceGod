@@ -54,7 +54,7 @@ namespace UnitySpace.UI
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             skyCamera = Camera.main;
-            Starfield.Create(transform);
+            Starfield.Create(transform, shared: true);
             ReadProfile();
         }
 
