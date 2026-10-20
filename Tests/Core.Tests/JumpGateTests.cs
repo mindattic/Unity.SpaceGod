@@ -115,6 +115,24 @@ namespace UnitySpace.Core.Tests
         }
 
         [Test]
+        public void ACompanyHullPilotedThroughTheGateStaysInItsCompany()
+        {
+            var g = Create();
+            var sol = g.Systems[0];
+            var ac = g.Systems[1];
+            var ship = sol.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort && s.Company != null && s.Company.Trading);
+            var company = ship.Company;
+            bool announced = false;
+            ac.World.ShipAdded += s => announced |= s.Name == ship.Name;
+
+            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
+
+            Assert.That(announced, Is.True, "the far system was never told a ship came in");
+            Assert.That(arrived.Company, Is.SameAs(company));
+            Assert.That(company.Ships, Does.Contain(arrived), "the copy dropped out of its company");
+        }
+
+        [Test]
         public void ACargoCarriedThroughTheGateKeepsNoBookingWithTheSystemItLeft()
         {
             var g = Create();

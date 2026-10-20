@@ -58,6 +58,9 @@ namespace UnitySpace.Core
             next.PhaseStartJd = jd;
 
             destination.World.Fleet.Receive(next);
+            // Announced like any other hull coming into the system (as gate traffic is, see InterstellarTraffic), so a
+            // company hull's copy is taken back into its company's fleet rather than dropped from it.
+            destination.World.NotifyAdded(next);
             arrived = next;
             return true;
         }
