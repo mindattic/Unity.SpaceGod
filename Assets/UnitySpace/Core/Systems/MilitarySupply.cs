@@ -323,16 +323,20 @@ namespace Unity.SpaceGod.Core
             double munShare = munNeed > 0 ? Math.Min(1, stock[(int)Good.Munitions] / munNeed) : 0;
             double sparesShare = alloysNeed > 0 ? Math.Min(1, Math.Min(stock[(int)Good.Alloys] / alloysNeed, stock[(int)Good.Electronics] / Math.Max(elecNeed, 1e-9))) : 0;
 
-            double cost = 0;
+            // Worked out, and the trip judged worth sending, before anything is actually taken off the market: Take()
+            // mutates the station's stock as it goes, so finding out only afterward that there is nothing worth a
+            // convoy over would already have thrown away stock the fleet never got and nobody ever paid for.
             double prop = propNeed * propShare;
+            double mun = munNeed * munShare;
+            double spares = (alloysNeed + elecNeed) * sparesShare;
+            if (prop + mun + spares < 1) return;
+
+            double cost = 0;
             double fromWater = Math.Min(prop, stock[(int)Good.Water]);
             cost += Take(station, Good.Water, fromWater) + Take(station, Good.Hydrocarbons, prop - fromWater);
             cost += Take(station, Good.HeliumThree, prop * Propulsion.HeliumThreePerTonne);
-            double mun = munNeed * munShare;
             cost += Take(station, Good.Munitions, mun);
-            double spares = (alloysNeed + elecNeed) * sparesShare;
             cost += Take(station, Good.Alloys, alloysNeed * sparesShare) + Take(station, Good.Electronics, elecNeed * sparesShare);
-            if (prop + mun + spares < 1) return;
             f.Treasury -= cost;
 
             var convoy = new SupplyConvoy

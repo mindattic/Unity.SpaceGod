@@ -248,6 +248,39 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void DispatchNeverTakesMarketStockWithoutPayingOrSendingAConvoy()
+        {
+            var g = Line(out var ac, out var barnard, out var luhman);
+            var (war, c) = Campaign(g, ac, luhman, out double jd);
+            var accord = c.Faction;
+            var leader = ac.World.Fleet.Ships.FirstOrDefault(s => s.Name == c.Flagship);
+            Assert.That(leader, Is.Not.Null, "the flagship should still be at home when the campaign is raised");
+
+            var (station, route) = g.Wars.Logistics.LineTo(accord, ac, jd);
+            Assert.That(station, Is.Not.Null);
+            Assert.That(route, Is.Empty, "the base is in the same system as the fleet");
+
+            // A market almost stripped bare: a sliver of stock, nowhere near enough to be worth a convoy
+            // over, but (before the fix) still there for Dispatch's Take() calls to destroy regardless.
+            station.Stock[(int)Good.Water] = 0.2;
+            station.Stock[(int)Good.Hydrocarbons] = 0;
+            station.Stock[(int)Good.HeliumThree] = 0;
+            station.Stock[(int)Good.Munitions] = 0;
+            station.Stock[(int)Good.Alloys] = 0;
+            station.Stock[(int)Good.Electronics] = 0;
+            c.Supply.Propellant = 0.1;
+            c.Supply.Munitions = 1;
+            c.Supply.Spares = 1;
+            double treasuryBefore = accord.Treasury;
+
+            g.Wars.Logistics.Day(c, ac, leader, jd);
+
+            Assert.That(c.Supply.Convoy, Is.Null, "too little to be worth a convoy, so none should be sent");
+            Assert.That(station.Stock[(int)Good.Water], Is.EqualTo(0.2), "a sliver of stock was taken though nothing was bought, delivered or paid for");
+            Assert.That(accord.Treasury, Is.EqualTo(treasuryBefore));
+        }
+
+        [Test]
         public void AFleetCutOffBehindABrokenGateRunsDownAndWithdraws()
         {
             var g = Line(out var ac, out var barnard, out var luhman);
