@@ -32,6 +32,22 @@ $repoDir  = Split-Path $PSScriptRoot   # tools\ -> UnitySpace\
 $out      = 'C:\Apps\Unity.SpaceGod'
 $exeName  = 'Unity.SpaceGod.exe'
 $buildDir = Join-Path $repoDir 'Builds\Windows'
+$deployBat = Join-Path $repoDir 'deploy.bat'
+$marker    = Join-Path $out '.deploy-commit'
+
+# ── Pull latest, skip the rebuild entirely if nothing changed ──────────────
+$dirty = git -C $repoDir status --porcelain
+if ($dirty) { throw "$repoDir has uncommitted changes - not pulling. Commit/stash first." }
+git -C $repoDir pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw "git pull --ff-only failed in $repoDir (not a clean fast-forward)." }
+$head = (git -C $repoDir rev-parse HEAD).Trim()
+$upToDate = (Test-Path (Join-Path $out $exeName)) -and (Test-Path $marker) -and
+            ((Get-Content -LiteralPath $marker -Raw).Trim() -eq $head)
+if ($upToDate) {
+    Write-Host "  Already deployed at $head - skipping rebuild." -ForegroundColor Green
+    if ($Launch) { Start-Process -FilePath (Join-Path $out $exeName) -WorkingDirectory $out }
+    exit 0
+}
 
 # ── Resolve Unity editor ────────────────────────────────────────────────────
 $ver = (Select-String -Path "$repoDir/ProjectSettings/ProjectVersion.txt" -Pattern "m_EditorVersion: (.+)").Matches[0].Groups[1].Value.Trim()
@@ -98,15 +114,18 @@ if (-not (Test-Path $exe)) {
     exit 1
 }
 
+Set-Content -LiteralPath $marker -Value $head -NoNewline
+
 # ── Desktop shortcut ─────────────────────────────────────────────────────────
-# Points at the published copy, so double-clicking it (or /run) always plays the last deploy.
+# Points at deploy.bat (not the exe directly), so double-clicking it always pulls latest and
+# only rebuilds if the source actually changed, before launching.
 # GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
 $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'
 $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
-$link.TargetPath       = $exe
-$link.WorkingDirectory = $out
+$link.TargetPath       = $deployBat
+$link.WorkingDirectory = $repoDir
 $link.IconLocation     = "$exe,0"
-$link.Description      = 'Unity.SpaceGod (deployed copy in C:\Apps)'
+$link.Description      = 'Pull latest, build Release if changed, and launch Unity.SpaceGod'
 $link.Save()
 Write-Host "    Shortcut -> $shortcut" -ForegroundColor Gray
 
