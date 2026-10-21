@@ -446,7 +446,10 @@ namespace UnitySpace.Core
         {
             foreach (var s in galaxy.Systems)
                 foreach (var ship in s.World.Fleet.Ships)
-                    if (!ship.Destroyed && !ship.IsEscort && ship.Voyage != null && ship.Voyage.Campaign == c) return (s, ship);
+                    // Still its own side's and under way: a flagship taken (no heir to pass the voyage to) or left a hulk
+                    // carries the voyage on, but it is no longer the campaign.
+                    if (!ship.Destroyed && !ship.IsEscort && !ship.Derelict && ship.Faction == c.Faction && ship.Voyage != null && ship.Voyage.Campaign == c)
+                        return (s, ship);
             return (null, null);
         }
 
