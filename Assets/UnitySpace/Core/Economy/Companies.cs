@@ -310,7 +310,22 @@ namespace UnitySpace.Core
         {
             var c = ship.Company;
             if (c == null || c.Ships.Contains(ship)) return;
-            if (!c.Trading) { ship.Company = null; return; }
+            if (!c.Trading)
+            {
+                // Bought out while this hull was inside a gate (in no system's fleet, so Merge never saw it): it carries
+                // on under the buyer, as every sister hull did, and its takings follow the old books over as Merge's do.
+                var buyer = c.Fate == CompanyFate.Merged ? c.MergedInto : null;
+                while (buyer != null && buyer.Fate == CompanyFate.Merged && buyer.MergedInto != null) buyer = buyer.MergedInto;
+                if (buyer != null && buyer.Trading)
+                {
+                    Enlist(buyer, ship);
+                    buyer.Cash += c.Cash;
+                    c.Cash = 0;
+                    return;
+                }
+                ship.Company = null;
+                return;
+            }
             c.Ships.Add(ship);
         }
 
