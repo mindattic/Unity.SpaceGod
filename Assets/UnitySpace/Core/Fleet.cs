@@ -1863,7 +1863,12 @@ namespace Unity.SpaceGod.Core
 
         public void AddEscort(Ship leader, Ship escort, DVec3 slot)
         {
+            // The leader's own first muster (never reassigned since, even if it later ends up riding as
+            // somebody else's escort after a merge) names the group for as long as any of today's members
+            // are in it (see Ship.BandId, U.SPC-T363).
+            if (leader.BandId < 0) leader.BandId = leader.Id;
             escort.Leader = leader;
+            escort.BandId = leader.BandId;
             escort.FormationSlot = slot;
             escort.Role = ShipRole.Escort;
         }

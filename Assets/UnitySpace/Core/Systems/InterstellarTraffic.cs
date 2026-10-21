@@ -493,6 +493,11 @@ namespace Unity.SpaceGod.Core
                 s.DestinationBody = s.Orbit.Body;
                 s.Ports = world.FreeShipPorts();
                 fleet.Receive(s);
+                // A fresh id in this system's fleet, so a leftover id from the system it came from never
+                // happens to land on some other local group here: the arriving band keeps its own identity
+                // (see Ship.BandId), rebuilt from ids this fleet just handed out, the same way Fleet.AddEscort
+                // would (U.SPC-T363).
+                s.BandId = s.Leader == null ? s.Id : s.Leader.BandId;
                 // Picks a hired fighter's tracking back up here, so it is still paid off when its merchant is gone,
                 // instead of flying on untracked once the gate it crossed left the system that hired it behind (U.SPC-T301).
                 if (p.Hired.Contains(s)) world.Escorts?.MarkHired(s);

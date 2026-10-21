@@ -540,10 +540,50 @@ namespace Unity.SpaceGod.Core.Tests
             Tick(Jd);
             var op = Expect.Single(director.Active);
             Assert.That(op.Kind, Is.EqualTo(OpportunityKind.Bounty));
-            // The player takes over one of the captain's own escorts, flying beside the flagship.
-            var escort = new Ship { Id = 997, Name = "Escort", Spec = ShipClassSpec.Of(ShipClass.Destroyer), Faction = pirates };
+            // The player takes over one of the captain's own escorts, flying beside the flagship. Taking
+            // the helm clears an escort's Leader at once (see EnterPiloting), so it is the band id it was
+            // mustered in under -- not Leader -- that still says it was this flagship's (U.SPC-T363).
+            r.BandId = r.Id;
+            var escort = new Ship { Id = 997, Name = "Escort", Spec = ShipClassSpec.Of(ShipClass.Destroyer), Faction = pirates, BandId = r.BandId };
             Tick(Jd + 0.01, escort, new DVec3(Astro.AuKm, 0, 0));
             Assert.That(op.Engaged, Is.False);
+        }
+
+        [Test]
+        public void AHullFromAnUnrelatedBandOfTheSameClanStillCollectsTheBounty()
+        {
+            var r = Add(ShipClass.Destroyer, pirates, new DVec3(Astro.AuKm, 0, 0), ShipRole.Patrol);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            Assert.That(op.Kind, Is.EqualTo(OpportunityKind.Bounty));
+            // Flying a raider of the same clan, but from an entirely different band: not on this one, so
+            // busting it still counts (U.SPC-T363 -- the old check compared the whole clan's Faction).
+            var otherBand = new Ship { Id = 996, Name = "Other raider", Spec = ShipClassSpec.Of(ShipClass.Destroyer), Faction = pirates };
+            Tick(Jd + 0.01, otherBand, new DVec3(Astro.AuKm, 0, 0));
+            Assert.That(op.Engaged, Is.True);
+        }
+
+        [Test]
+        public void AnAmbushIsNotBrokenByOneOfItsOwnBandButIsByAnotherBandsHull()
+        {
+            director.BountyRadiusKm = 0;
+            var r = Add(ShipClass.Breacher, pirates, Near, ShipRole.Patrol);
+            r.Phase = ShipPhase.Lurk;
+            r.LaneLeg = new LaneHop(lane, 3, 4);
+            r.PhaseEndJd = Jd + 1;
+            r.BandId = r.Id;
+            laneDanger = director.AmbushDanger + 0.5;
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            Assert.That(op.Kind, Is.EqualTo(OpportunityKind.PirateAmbush));
+
+            var escort = new Ship { Id = 998, Name = "Escort", Spec = ShipClassSpec.Of(ShipClass.Breacher), Faction = pirates, BandId = r.BandId };
+            Tick(Jd + 0.01, escort, Near);
+            Assert.That(op.Engaged, Is.False, "one of this very band's own hulls doesn't count");
+
+            var otherBand = new Ship { Id = 994, Name = "Other raider", Spec = ShipClassSpec.Of(ShipClass.Breacher), Faction = pirates };
+            Tick(Jd + 0.02, otherBand, Near);
+            Assert.That(op.Engaged, Is.True, "an unrelated raider of the same clan does");
         }
 
         [Test]

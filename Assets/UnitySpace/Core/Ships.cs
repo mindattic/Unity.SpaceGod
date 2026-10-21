@@ -216,6 +216,25 @@ namespace Unity.SpaceGod.Core
         public Ship Leader;
         public DVec3 FormationSlot;
 
+        /// <summary>
+        /// The group (flagship plus escorts, see <see cref="Fleet.AddEscort"/>) this hull was raised or mustered
+        /// into -- the flagship's own id, shared by every escort added to it since, carried along through a
+        /// merge (the absorbed band's flagship becomes an escort under the surviving one's id) and a
+        /// succession (an escort already shares the dead flagship's id, so its heir keeps it). -1 until the
+        /// ship has ever been part of a formed group.
+        ///
+        /// Unlike <see cref="Leader"/>, which the pilot's entry clears the instant an escort is taken at the
+        /// helm (so the AI formation code lets go of it) and a flagship's succession clears on the ship that
+        /// steps up, this id is never reset: it is what tells a bounty or an ambush apart from a raider of the
+        /// same pirate clan who simply isn't on it (U.SPC-T363).
+        /// </summary>
+        public int BandId = -1;
+
+        /// <summary>This ship's own group identity for that purpose: <see cref="BandId"/> once it has one,
+        /// else the ship itself (so a hull that was never mustered into a group is its own, matching nothing
+        /// else).</summary>
+        public int Band => BandId >= 0 ? BandId : Id;
+
         /// <summary>Patrol waypoints (body indices), visited in order.</summary>
         public int[] Route;
         public int RouteIndex;
