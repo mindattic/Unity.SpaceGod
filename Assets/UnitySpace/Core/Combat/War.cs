@@ -1656,6 +1656,10 @@ namespace Unity.SpaceGod.Core
             foreach (var kv in Orders)
                 if (kv.Key.Destroyed || kv.Key.GateDeparted) (gone ??= new List<Ship>()).Add(kv.Key);
             if (gone != null) foreach (var s in gone) Orders.Remove(s);
+            gone = null;
+            foreach (var kv in PriorOrders)
+                if (kv.Key.Destroyed || kv.Key.GateDeparted) (gone ??= new List<Ship>()).Add(kv.Key);
+            if (gone != null) foreach (var s in gone) PriorOrders.Remove(s);
         }
 
         void Succession(Ship dead, bool keepHunter = false)
