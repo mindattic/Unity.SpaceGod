@@ -131,8 +131,14 @@ namespace Unity.SpaceGod.Core
         readonly List<Campaign> campaigns = new List<Campaign>();
         readonly List<Landing> landings = new List<Landing>();
 
-        /// <summary>Gates taken in a war still being fought, with who held them before (a treaty that does not cede their system gives them back).</summary>
-        readonly Dictionary<JumpGate, Faction> takenGates = new Dictionary<JumpGate, Faction>();
+        /// <summary>
+        /// Gates taken in a war still being fought, with who held them before and which war took them (a treaty that
+        /// does not cede their system gives them back). Kept per war, not just per gate (U.SPC-T323): two overlapping
+        /// wars can each force the same gate in turn (the second declared by hand, past the one-war-per-faction rule
+        /// a plain <see cref="Declare"/> enforces), and the first of them to make peace must leave the gate alone once
+        /// it is the other war's to answer for, rather than handing it back to a now-stale "before".
+        /// </summary>
+        readonly Dictionary<JumpGate, (Conflict War, Faction Before)> takenGates = new Dictionary<JumpGate, (Conflict War, Faction Before)>();
 
         double nextDailyJd, nextDeclareJd;
 
@@ -613,8 +619,15 @@ namespace Unity.SpaceGod.Core
         void TakeGate(Campaign c, JumpGate gate, double jd)
         {
             var old = gate.Owner;
-            if (!takenGates.ContainsKey(gate)) takenGates[gate] = old;
-            else if (takenGates[gate] == c.Faction) takenGates.Remove(gate);
+            if (takenGates.TryGetValue(gate, out var taken) && taken.War == c.War)
+            {
+                // Back to how this war found it: nothing left for its own peace to give back.
+                if (taken.Before == c.Faction) takenGates.Remove(gate);
+            }
+            else
+                // Not recorded for this war: either its first time taking the gate, or a different, still-unsettled
+                // war's claim on it that this capture supersedes (U.SPC-T323) -- either way, this war now owns its fate.
+                takenGates[gate] = (c.War, old);
             gate.Owner = c.Faction;
             gate.BlockadeUntilJd = double.NegativeInfinity;
             c.GatesTaken++;
@@ -976,11 +989,13 @@ namespace Unity.SpaceGod.Core
                     if (isCeded && g.Owner == w.Enemy(to))
                     {
                         g.Owner = to;
-                        takenGates.Remove(g);
+                        if (takenGates.TryGetValue(g, out var taken) && taken.War == w) takenGates.Remove(g);
                     }
-                    else if (takenGates.TryGetValue(g, out var before) && w.Involves(g.Owner))
+                    else if (takenGates.TryGetValue(g, out var taken) && taken.War == w)
                     {
-                        if (!isCeded) g.Owner = before;
+                        // Only this war's own capture: a different, still-unsettled war's claim on this same gate
+                        // (U.SPC-T323) is that war's to answer for when it makes its own peace, not this one's.
+                        if (!isCeded) g.Owner = taken.Before;
                         takenGates.Remove(g);
                     }
                 }

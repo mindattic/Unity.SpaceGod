@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 
 namespace Unity.SpaceGod.Core.Tests
@@ -232,6 +233,56 @@ namespace Unity.SpaceGod.Core.Tests
             Run(g, jd, 120, () => !campaign.Active);
             Assert.That(campaign.Stage, Is.EqualTo(CampaignStage.Over));
             Assert.That(campaign.Lost, Is.False);
+        }
+
+        /// <summary>
+        /// U.SPC-T323: a gate can be fought over twice, by two separate wars, if the second is declared by hand past
+        /// the one-war-per-faction rule a plain <see cref="InterstellarWars.Declare"/> call enforces (the only way two
+        /// wars reach the same gate at once). The first war, whose own back-and-forth over the gate is long settled,
+        /// must not hand it back to its own stale "before" once a second, still-unsettled war is the one actually
+        /// holding it.
+        /// </summary>
+        [Test]
+        public void APeaceDoesNotUndoAGateCaptureThatBelongsToAnotherWar()
+        {
+            var g = Line(out var ac, out var barnard, out var luhman);
+            var accord = ac.World.Sol;
+            var federation = barnard.World.Sol;
+            var authority = luhman.World.Sol;
+            var gate = luhman.GateTo(barnard);
+            Assert.That(gate.Owner, Is.SameAs(authority));
+
+            var war1 = g.Wars.Declare(accord, authority, StartJd, luhman);
+            Assert.That(war1, Is.Not.Null);
+
+            var takeGate = typeof(InterstellarWars).GetMethod("TakeGate", BindingFlags.NonPublic | BindingFlags.Instance);
+            var settle = typeof(InterstellarWars).GetMethod("Settle", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(takeGate, Is.Not.Null);
+            Assert.That(settle, Is.Not.Null);
+
+            // Accord forces the gate, then the Authority's own counter-campaign in the SAME war takes it back:
+            // ordinary back-and-forth within one war, which already worked before this fix.
+            var c1 = new Campaign { War = war1, Faction = accord, Home = ac, Goal = luhman, Stage = CampaignStage.Marching, SetOutJd = StartJd, Flagship = "Vanguard" };
+            takeGate.Invoke(g.Wars, new object[] { c1, gate, StartJd });
+            Assert.That(gate.Owner, Is.SameAs(accord));
+
+            var c1b = new Campaign { War = war1, Faction = authority, Home = luhman, Goal = ac, Stage = CampaignStage.Marching, SetOutJd = StartJd, Flagship = "Nightfall" };
+            takeGate.Invoke(g.Wars, new object[] { c1b, gate, StartJd + 1 });
+            Assert.That(gate.Owner, Is.SameAs(authority));
+
+            // A second war, declared by hand (bypassing the rule that keeps a faction out of two wars at once), puts
+            // the Accord back in the field, this time against the Federation -- and its campaign takes the very same
+            // gate back from the Authority. From here it is war 2's gate to answer for, not war 1's.
+            var war2 = new Conflict { Aggressor = accord, Defender = federation, StartJd = StartJd + 2, LastActiveJd = StartJd + 2 };
+            var c2 = new Campaign { War = war2, Faction = accord, Home = ac, Goal = luhman, Stage = CampaignStage.Marching, SetOutJd = StartJd + 2, Flagship = "Second Wind" };
+            takeGate.Invoke(g.Wars, new object[] { c2, gate, StartJd + 2 });
+            Assert.That(gate.Owner, Is.SameAs(accord), "the second war did not actually take the gate");
+
+            // War 1 makes its own peace, nothing of Luhman ceded by it: it must leave the gate alone, since war 2 --
+            // not it -- is the one holding it now.
+            settle.Invoke(g.Wars, new object[] { war1, StartJd + 3, "test" });
+
+            Assert.That(gate.Owner, Is.SameAs(accord), "war 1's peace handed the gate to the wrong owner: it belongs to war 2 now");
         }
     }
 }
