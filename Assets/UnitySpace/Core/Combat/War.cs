@@ -1668,6 +1668,11 @@ namespace UnitySpace.Core
             heir.LaneEndProgress = dead.LaneEndProgress;
             heir.LaneHold = dead.LaneHold;
             heir.LaneHoldSide = dead.LaneHoldSide;
+            // A band staked out off a gate keeps its watch under the new flagship (GateAmbushes looks only at a
+            // leader's stake-out); the old one, if it flies on, keeps none.
+            heir.StakeoutKm = dead.StakeoutKm;
+            heir.StakeoutUntilJd = dead.StakeoutUntilJd;
+            dead.StakeoutKm = null;
             CopyRest(dead, heir);
             // The old flagship's hold of plunder goes on under the new one, not stranded on a hull that no
             // longer runs the group's schedule (U.SPC-T308). A flagship shot out from under the band takes its
