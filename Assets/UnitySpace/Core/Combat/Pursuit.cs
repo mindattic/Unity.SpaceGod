@@ -141,7 +141,7 @@ namespace Unity.SpaceGod.Core
             {
                 // Begin adds each new group to Groups as well as found: count it once.
                 if (Groups.Count >= MaxGroups) break;
-                if (!MayChase(s, pilot, jd)) continue;
+                if (!MayChase(s, pilot, body, jd)) continue;
                 var helio = world.Fleet.StateOf(s, jd).HelioKm;
                 var to = helio - pilotHelio;
                 double d = to.Length;
@@ -158,12 +158,16 @@ namespace Unity.SpaceGod.Core
         /// <summary>Raiders are the keenest to run a ship down; a navy at war with its flag only somewhat less.</summary>
         static double ChaseChance(Ship s) => s.Faction.IsPirate ? 0.35 : 0.25;
 
-        bool MayChase(Ship s, Ship pilot, double jd)
+        /// <summary>Whether <paramref name="s"/> may turn to run the pilot down off <paramref name="body"/>: an armed, sound
+        /// hostile group free of other business, and commanded to fight there (U.SPC-T371, see <see cref="War.Commanded"/>):
+        /// a group passing through, or off its beat, lets a hostile hull go by.</summary>
+        bool MayChase(Ship s, Ship pilot, int body, double jd)
         {
             if (s == pilot || s.Destroyed || s.IsEscort || s.Derelict || s.Battle != null || s.Planetside || s.GateDeparted) return false;
             if (s.Voyage != null || s.Phase == ShipPhase.Lane || Of(s) != null) return false;
             if (!(s.Faction.IsPirate || s.Spec.IsMilitary) || !world.Diplomacy.Hostile(s.Faction, pilot.Faction)) return false;
             if (!s.Combat.Armed || s.Combat.HullFraction < 0.5) return false;
+            if (world.War != null && !world.War.Commanded(s, body)) return false;
             return !lastChased.TryGetValue(s, out double when) || jd - when >= RechaseDays;
         }
 

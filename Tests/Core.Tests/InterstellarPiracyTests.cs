@@ -48,6 +48,16 @@ namespace Unity.SpaceGod.Core.Tests
                 s.Phase == ShipPhase.Parked && s.Battle == null && s.Combat.Damage < 0.05 && w.War.OrderOf(s) is GroupOrder o && o.Kind != OrderKind.Repair)) != null);
             Assert.That(band, Is.Not.Null, "no raider band fit to send");
 
+            // A courier for Alpha Centauri, by the Centauri Gate: sent first, so the band lies in wait for it alone and not
+            // for weeks in which other traffic for the gate (and the fights it draws, which turn the courier aside) comes by.
+            Ship courier = null;
+            jd = RunUntil(g, jd, 20, _ => (courier = w.Fleet.Ships.FirstOrDefault(s => s.Role == ShipRole.Courier && !s.Destroyed &&
+                s.Faction == w.Independents && s.Phase == ShipPhase.Parked && s.Battle == null && s.Voyage == null && !s.OutOfPropellant)) != null);
+            Assert.That(courier, Is.Not.Null, "no courier free to send");
+            var v = g.Traffic.Send(courier, sol, ac, VoyagePurpose.Courier, jd);
+            Assert.That(v, Is.Not.Null);
+            Assert.That(v.Route.First(), Is.SameAs(gate));
+
             // The band out on the Centauri Gate's approach, lying in wait.
             w.War.StakeOut(band, gate, jd + 60);
             Assert.That((band.StakeoutKm.Value - gate.ApproachKm).Length, Is.LessThan(500));
@@ -58,15 +68,6 @@ namespace Unity.SpaceGod.Core.Tests
             var bystander = w.Fleet.Ships.First(s => s.Role == ShipRole.Free && !s.Destroyed && s.Faction == w.Independents && s.Battle == null);
             Fleet.PinAt(bystander, root, other.ApproachKm, DVec3.UnitX, jd);
             bystander.PhaseEndJd = jd + 200;
-
-            // A courier for Alpha Centauri, by the Centauri Gate.
-            Ship courier = null;
-            jd = RunUntil(g, jd, 20, _ => (courier = w.Fleet.Ships.FirstOrDefault(s => s.Role == ShipRole.Courier && !s.Destroyed &&
-                s.Faction == w.Independents && s.Phase == ShipPhase.Parked && s.Battle == null && s.Voyage == null && !s.OutOfPropellant)) != null);
-            Assert.That(courier, Is.Not.Null, "no courier free to send");
-            var v = g.Traffic.Send(courier, sol, ac, VoyagePurpose.Courier, jd);
-            Assert.That(v, Is.Not.Null);
-            Assert.That(v.Route.First(), Is.SameAs(gate));
 
             Battle Fight() => w.War.Battles.Concat(w.War.Ended).FirstOrDefault(b => b.Body == root && b.Units.Any(u => u.Ship == courier));
             jd = RunUntil(g, jd, 40, _ => Fight() != null || courier.Destroyed);

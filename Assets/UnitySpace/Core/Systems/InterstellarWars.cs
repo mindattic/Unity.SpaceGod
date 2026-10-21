@@ -405,7 +405,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>A group <paramref name="f"/> can send: a sound, armed flagship of its navy idle in port, not its home guard.</summary>
         static bool Fit(World world, Ship ship, Faction f)
         {
-            if (ship.Destroyed || ship.IsEscort || ship.Faction != f || !ship.Spec.IsMilitary || ship.Derelict || ship.Battle != null) return false;
+            // Nor a patrol wing: it keeps to its beat at home (U.SPC-T371).
+            if (ship.Destroyed || ship.IsEscort || ship.Faction != f || !ship.Spec.IsMilitary || ship.Derelict || ship.Battle != null || ship.PatrolWing) return false;
             // Nor one dry in port waiting on a tanker (InterstellarTraffic.Idle refuses to send it): it would be picked
             // every day and every day fail to sail, holding back every other group.
             if (ship == world.PilotedShip || ship.Voyage != null || ship.GateKm != null || ship.Phase != ShipPhase.Parked || ship.OutOfPropellant) return false;

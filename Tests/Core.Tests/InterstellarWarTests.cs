@@ -164,9 +164,10 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(farGate.Owner, Is.SameAs(authority));
             Assert.That(farGate.Forts, Has.Count.EqualTo(GateNetwork.GateForts), "the Authority's gate is fortified");
 
-            // A strike group for the war, besides the Accord's home guard.
+            // A strike group for the war, besides the Accord's home guard: strong enough to carry a fortified gate on any
+            // roll of the dice, since the patrolled systems it crosses (U.SPC-T371) shift the timeline it fights in.
             ac.World.Fleet.Group(accord, StartJd, ShipClass.Battleship, "Long Reach", new[] { "Rigil Gate" },
-                (ShipClass.Cruiser, "Vanguard"), (ShipClass.Destroyer, "Spur"), (ShipClass.Destroyer, "Rowel"));
+                (ShipClass.Cruiser, "Vanguard"), (ShipClass.Cruiser, "Gaff"), (ShipClass.Destroyer, "Spur"), (ShipClass.Destroyer, "Rowel"));
 
             var war = g.Wars.Declare(accord, authority, StartJd, luhman);
             Assert.That(war, Is.Not.Null);

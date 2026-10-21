@@ -173,8 +173,10 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var accord = ac.World.Sol;
             var authority = luhman.World.Sol;
+            // Strong enough to carry a fortified gate on any roll of the dice, since the patrolled systems it crosses
+            // (U.SPC-T371) shift the timeline it fights in.
             ac.World.Fleet.Group(accord, StartJd, ShipClass.Battleship, "Long Reach", new[] { "Rigil Gate" },
-                (ShipClass.Cruiser, "Vanguard"), (ShipClass.Destroyer, "Spur"), (ShipClass.Destroyer, "Rowel"));
+                (ShipClass.Cruiser, "Vanguard"), (ShipClass.Cruiser, "Gaff"), (ShipClass.Destroyer, "Spur"), (ShipClass.Destroyer, "Rowel"));
             var war = g.Wars.Declare(accord, authority, StartJd, luhman);
             jd = Run(g, StartJd, 10, () => war.Campaigns.Count > 0);
             Assert.That(war.Campaigns, Is.Not.Empty, "no campaign set out");

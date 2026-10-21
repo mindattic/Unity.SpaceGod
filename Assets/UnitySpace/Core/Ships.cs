@@ -515,6 +515,13 @@ namespace Unity.SpaceGod.Core
         /// never raiding (see <see cref="PirateClans"/>).</summary>
         public bool Runner;
 
+        /// <summary>
+        /// One of a navy's standing patrol wings (U.SPC-T371, see <see cref="PatrolWings"/>): light and heavy fighters, or a
+        /// destroyer with its fighters, flying a beat of their own ports. A wing keeps to its beat (it is never merged into a
+        /// battle group, sent through a gate or counted against the yards' warship cap) and fights only where its orders put it.
+        /// </summary>
+        public bool PatrolWing;
+
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;
 

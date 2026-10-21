@@ -402,6 +402,8 @@ namespace Unity.SpaceGod.Core
             // The Banner's second band sails from its biggest belt hideout; recruiting fills the other
             // havens first (it raises each new band at the standing haven with the fewest).
             war.RaisePirateGroup(startJd, w.Catalog[BeltHavens[0].body].Index);
+            // Each navy's standing patrol wings fly a beat of its ports (U.SPC-T371).
+            PatrolWings.Raise(w, startJd);
             w.SeatCapitals();
             w.MusterReserves();
 
@@ -648,6 +650,7 @@ namespace Unity.SpaceGod.Core
             w.AddFreeShips(startJd, new[] { "First Light", "Long Look", "Terminator Dawn" }, new[] { "Red Dust" });
             int haven = w.Catalog["Blackhollow"].Index;
             war.RaisePirateGroup(startJd, haven);
+            PatrolWings.Raise(w, startJd);
             w.SeatCapitals();
             w.MusterReserves();
 
@@ -1152,7 +1155,7 @@ namespace Unity.SpaceGod.Core
             if (f == null || !f.IsMilitary || !War.AtWar(f)) return null;
             int navy = 0;
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary) navy++;
+                if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary && !s.PatrolWing) navy++;
             return navy < NavyCap ? War.ChooseWarship(yard) : null;
         }
 

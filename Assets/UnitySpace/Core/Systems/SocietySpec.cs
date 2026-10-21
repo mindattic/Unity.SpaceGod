@@ -277,6 +277,8 @@ namespace Unity.SpaceGod.Core
             w.AddFreeShips(startJd, society.Yachts, society.Prospectors);
             if (haven != null) war.RaisePirateGroup(startJd, haven.Body);
             foreach (var site in society.HavenSites) w.HavenSites.Add(w.Catalog[site].Index);
+            // A system with a navy of its own flies its patrol wings too (U.SPC-T371).
+            if (navy > 0) PatrolWings.Raise(w, startJd);
             w.SeatCapitals();
             w.MusterReserves();
 

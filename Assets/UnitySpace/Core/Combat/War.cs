@@ -71,6 +71,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Escape pods drifting where hulls died, the hostages and prisoners taken from them, and every faction's manpower.</summary>
         public readonly Crews Crews;
         public readonly Dictionary<Ship, GroupOrder> Orders = new Dictionary<Ship, GroupOrder>();
+
+        /// <summary>
+        /// The order each group held before its current one (U.SPC-T371): the one that brought it where it lies now. A group
+        /// is handed its next order as it arrives (to leave on when its stay is up), so while it lies at its objective its
+        /// current order already points on; it is this one that still commands it to fight where it is (see <see cref="Commanded"/>).
+        /// </summary>
+        public readonly Dictionary<Ship, GroupOrder> PriorOrders = new Dictionary<Ship, GroupOrder>();
         readonly Dictionary<int, double> danger = new Dictionary<int, double>();
         readonly Dictionary<Settlement, double> siegeDays = new Dictionary<Settlement, double>();
 
@@ -866,7 +873,7 @@ namespace Unity.SpaceGod.Core
             // from a fight it has just lost (let go while it gets clear, see TryStartBattle).
             if (Withdrawing(ship.Controller, jd)) return;
             foreach (var s in PresentGroups(body, at, jd))
-                if (s.Battle == null && (s.Spec.IsMilitary || s.Faction.IsPirate) && Diplomacy.Hostile(s.Faction, ship.Faction) && Willing(s.Controller, jd) && s.Combat.Armed)
+                if (s.Battle == null && (s.Spec.IsMilitary || s.Faction.IsPirate) && Diplomacy.Hostile(s.Faction, ship.Faction) && Willing(s.Controller, jd) && s.Combat.Armed && Commanded(s, body))
                 {
                     TryStartBattle(body, s.Faction, jd, at);
                     return;
@@ -1086,7 +1093,9 @@ namespace Unity.SpaceGod.Core
             foreach (var s in present)
             {
                 bool military = (s.Spec.IsMilitary || s.Faction.IsPirate) && Willing(s.Controller, jd) && s.Combat.Armed;
-                if (s.Faction == aggressor && military) aggressorArmed = true;
+                // Only a group commanded to fight here opens the fight (U.SPC-T371); one merely passing through, or off its
+                // beat, leaves the hostiles it meets alone. The player's own fight is the player's to start.
+                if (s.Faction == aggressor && military && (byPlayer || Commanded(s, body))) aggressorArmed = true;
                 if (s.Faction == aggressor && !Withdrawing(s.Controller, jd)) aggressorFresh = true;
                 if (hostile.Contains(s.Faction) && military) defenderArmed = true;
             }
@@ -1617,6 +1626,7 @@ namespace Unity.SpaceGod.Core
         {
             if (ship == null) return;
             Orders.Remove(ship);
+            PriorOrders.Remove(ship);
             retreating.Remove(ship);
             laneSeen.Remove(ship);
             pulseReady.Remove(ship);
@@ -1658,6 +1668,7 @@ namespace Unity.SpaceGod.Core
             if (heir == null)
             {
                 Orders.Remove(dead);
+                PriorOrders.Remove(dead);
                 return;
             }
             heir.Leader = null;
@@ -1713,7 +1724,9 @@ namespace Unity.SpaceGod.Core
             foreach (var s in Fleet.Ships)
                 if (s.Leader == dead && s != heir) s.Leader = heir;
             if (Orders.TryGetValue(dead, out var o)) Orders[heir] = o;
+            if (PriorOrders.TryGetValue(dead, out var prior)) PriorOrders[heir] = prior;
             Orders.Remove(dead);
+            PriorOrders.Remove(dead);
             if (!keepHunter) world.Outlaws?.OnSuccession(dead, heir);
         }
 
@@ -1728,6 +1741,7 @@ namespace Unity.SpaceGod.Core
             var order = Decide(leader, here, jd);
             if (!Orders.TryGetValue(leader, out var current) || current.Kind != order.Kind || current.Body != order.Body)
             {
+                if (current != null) PriorOrders[leader] = current;
                 order.SinceJd = jd;
                 Orders[leader] = order;
             }
@@ -1755,6 +1769,7 @@ namespace Unity.SpaceGod.Core
             var f = leader.Faction;
             bool withdrawing = retreating.TryGetValue(leader, out double until) && jd < until;
             if (f.IsPirate) return DecidePirate(leader, here, jd, withdrawing);
+            if (leader.PatrolWing) return DecideWing(leader, here, jd, withdrawing);
 
             if (withdrawing || GroupDamage(leader) > 0.22 || MissilesLow(leader) || !leader.Combat.Armed || HangarsLow(leader) || MarinesLow(leader))
             {
@@ -1822,6 +1837,73 @@ namespace Unity.SpaceGod.Core
 
             return new GroupOrder { Kind = OrderKind.Patrol, Body = NextPatrol(leader, here) };
         }
+
+        /// <summary>
+        /// A patrol wing's orders (U.SPC-T371, see <see cref="PatrolWings"/>): to a yard when it is hurt or out of missiles;
+        /// to defend the port on its beat nearest to it that has enemies at it; to hunt raiders seen working a port on its
+        /// beat; otherwise on round its beat. Never to strike at an enemy port: that is the battle groups' business.
+        /// </summary>
+        GroupOrder DecideWing(Ship leader, int here, double jd, bool withdrawing)
+        {
+            var f = leader.Faction;
+            if (withdrawing || GroupDamage(leader) > 0.22 || MissilesLow(leader) || !leader.Combat.Armed)
+            {
+                int yard = NearestYard(f, here, jd);
+                if (yard >= 0) return new GroupOrder { Kind = OrderKind.Repair, Body = yard };
+            }
+            var beat = leader.Route ?? new int[0];
+            int threatened = -1;
+            double bestDays = double.MaxValue;
+            foreach (int body in beat)
+            {
+                if (!EnemiesAt(body, f)) continue;
+                double days = body == here ? 0 : Fleet.EstimateTravelDays(leader, here, body, jd);
+                if (days < bestDays)
+                {
+                    bestDays = days;
+                    threatened = body;
+                }
+            }
+            if (threatened >= 0) return new GroupOrder { Kind = OrderKind.Defend, Body = threatened };
+            var at = world.Sensors?.HelioOf(leader, jd) ?? default;
+            foreach (int body in beat)
+                if (body != here && PiratesSeenAt(body, f, at, jd))
+                    return new GroupOrder { Kind = OrderKind.Hunt, Body = body };
+            return new GroupOrder { Kind = OrderKind.Patrol, Body = PatrolWings.NextOnBeat(leader, here) };
+        }
+
+        /// <summary>
+        /// Whether the group <paramref name="ship"/> flies with is commanded to fight at <paramref name="body"/>
+        /// (U.SPC-T371): combat is ordered, not picked with whatever hostile happens to be in reach. A group may open a
+        /// fight (or turn to run the player down) only where its orders put it: at its own ports, which it always defends;
+        /// on its patrol beat; or at the objective of the order it holds (the port it attacks, defends, besieges, assaults
+        /// or hunts raiders at, the hunting ground it raids, the gate it watches). A group holding no orders yet (and a
+        /// bounty hunter, which follows its contract) keeps the old rule and fights wherever it meets a hostile; a patrol
+        /// wing never does, keeping to its beat. Defending is never ordered away: a group set upon is still swept into the
+        /// fight, and platforms still open on a hostile come into range.
+        /// </summary>
+        public bool Commanded(Ship ship, int body)
+        {
+            if (ship == null) return false;
+            var leader = ship.Controller;
+            if (Hunter(leader)) return true;
+            // A band staked out off a gate is there to fall on what comes through (see GateAmbushes).
+            if (leader.StakeoutKm != null && body == Catalog.Root.Index) return true;
+            foreach (var st in Economy.At(body))
+                if (st.Owner == leader.Faction && !st.Fallen) return true;
+            bool ordered = Orders.TryGetValue(leader, out var o);
+            PriorOrders.TryGetValue(leader, out var prior);
+            // Never ordered anywhere yet: the old rule, for all but a wing.
+            if (!ordered) return !leader.PatrolWing || PatrolWings.OnBeat(leader, body);
+            if (Objective(o, body) || Objective(prior, body)) return true;
+            // On its beat a group patrols, and fights for it, unless it was sent away on other business (a wing always).
+            return PatrolWings.OnBeat(leader, body) && (leader.PatrolWing || o.Kind == OrderKind.Patrol || prior == null || prior.Kind == OrderKind.Patrol);
+        }
+
+        /// <summary>Whether <paramref name="o"/> sends its group to fight at <paramref name="body"/>: any order but a patrol
+        /// or a run to the yard, aimed there.</summary>
+        static bool Objective(GroupOrder o, int body) =>
+            o != null && o.Body == body && o.Kind != OrderKind.Patrol && o.Kind != OrderKind.Repair;
 
         GroupOrder DecidePirate(Ship leader, int here, double jd, bool withdrawing)
         {
@@ -1922,9 +2004,10 @@ namespace Unity.SpaceGod.Core
         public bool IsHomeGuard(Ship leader)
         {
             // Each navy keeps its oldest surviving group at home: one it still commands (not the hull the player
-            // is flying, nor a derelict), or every other group would be free to leave.
+            // is flying, nor a derelict), or every other group would be free to leave. A patrol wing is never it: it keeps
+            // its beat whatever (U.SPC-T371).
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && !s.IsEscort && !s.Derelict && s != world.PilotedShip && s.Faction == leader.Faction && s.Spec.IsMilitary)
+                if (!s.Destroyed && !s.IsEscort && !s.Derelict && !s.PatrolWing && s != world.PilotedShip && s.Faction == leader.Faction && s.Spec.IsMilitary)
                     return s == leader;
             return false;
         }
@@ -2381,7 +2464,8 @@ namespace Unity.SpaceGod.Core
                 // Nor a group on an interstellar voyage: it keeps to its own business.
                 // Nor bounty hunters: each works its own contract.
                 // Nor a pirate clan's smugglers: they carry loot, not guns, and never raid (see Ship.Runner).
-                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && !s.Runner && s.Phase == ShipPhase.Parked && s.Voyage == null && !Hunter(s))
+                // Nor a patrol wing: it keeps to its own beat (U.SPC-T371).
+                if (!s.Destroyed && !s.IsEscort && s.Battle == null && s != world.PilotedShip && (s.Spec.IsMilitary || s.Faction.IsPirate) && !s.Runner && !s.PatrolWing && s.Phase == ShipPhase.Parked && s.Voyage == null && !Hunter(s))
                     groups.Add(s);
             groups.Sort((a, b) => GroupStrength(b).CompareTo(GroupStrength(a)));
             for (int i = 0; i < groups.Count; i++)
@@ -2412,6 +2496,7 @@ namespace Unity.SpaceGod.Core
                         size++;
                     }
                     Orders.Remove(small);
+                    PriorOrders.Remove(small);
                     retreating.Remove(small);
                 }
             }
@@ -2803,9 +2888,10 @@ namespace Unity.SpaceGod.Core
         {
             var f = yard.Owner;
             if (!f.IsMilitary) return null;
+            // The patrol wings are a standing force of their own, not counted against the battle fleet's cap (U.SPC-T371).
             int count = 0;
             foreach (var s in Fleet.Ships)
-                if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary) count++;
+                if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary && !s.PatrolWing) count++;
             int cap = AtWar(f) ? world.NavyCapAtWar : world.NavyCap;
             if (count >= cap) return null;
             return WarshipCycle[(builtWarships + yard.Id) % WarshipCycle.Length];
@@ -2826,7 +2912,7 @@ namespace Unity.SpaceGod.Core
             foreach (var s in Fleet.Ships)
             {
                 // Never the player's ship: escorts would follow a schedule the player isn't flying.
-                if (s.Destroyed || s.IsEscort || s.Faction != yard.Owner || !s.Spec.IsMilitary || s.Battle != null || s == world.PilotedShip) continue;
+                if (s.Destroyed || s.IsEscort || s.Faction != yard.Owner || !s.Spec.IsMilitary || s.Battle != null || s == world.PilotedShip || s.PatrolWing) continue;
                 if (s.Phase != ShipPhase.Parked || s.Orbit.Body != yard.Body) continue;
                 int escorts = 0;
                 foreach (var e in Fleet.Ships)
