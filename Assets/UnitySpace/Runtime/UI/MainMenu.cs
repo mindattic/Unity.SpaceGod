@@ -45,6 +45,7 @@ namespace Unity.SpaceGod.UI
 
         bool stylesReady;
         GUIStyle panel, heading, title, text, small, button, buttonActive, row, field;
+        Texture2D panelTexture, buttonTexture, buttonActiveTexture, rowTexture, fieldTexture;
 
         void Awake()
         {
@@ -69,6 +70,20 @@ namespace Unity.SpaceGod.UI
                 return;
             }
             if (escape && page != Page.Main) Open(Page.Main);
+        }
+
+        /// <summary>The main menu scene is unloading (a game was picked, or the app is quitting): its own styles'
+        /// DontSave textures, and the Settings page's, outlive the scene otherwise, so every trip back through the
+        /// main menu would leave a round's worth behind (U.SPC-T366).</summary>
+        void OnDestroy()
+        {
+            if (panelTexture != null) Object.Destroy(panelTexture);
+            if (buttonTexture != null) Object.Destroy(buttonTexture);
+            if (buttonActiveTexture != null) Object.Destroy(buttonActiveTexture);
+            if (rowTexture != null) Object.Destroy(rowTexture);
+            if (fieldTexture != null) Object.Destroy(fieldTexture);
+            panelTexture = buttonTexture = buttonActiveTexture = rowTexture = fieldTexture = null;
+            settings.DestroyOwnedTextures();
         }
 
         /// <summary>The profile in use and its saves, read again (after a switch, a delete, or coming back to the menu).</summary>
@@ -273,11 +288,11 @@ namespace Unity.SpaceGod.UI
             if (stylesReady) return;
             stylesReady = true;
             // The pause menu's look (and so the HUD's), over the sky.
-            var panelTexture = Hud.Solid(new Color(0.03f, 0.05f, 0.08f, 0.88f), new Color(0.3f, 0.6f, 0.75f, 0.6f));
-            var buttonTexture = Hud.Solid(new Color(0.12f, 0.18f, 0.24f, 0.95f), new Color(0.3f, 0.5f, 0.6f, 0.6f));
-            var buttonActiveTexture = Hud.Solid(new Color(0.1f, 0.3f, 0.42f, 0.95f), new Color(0.45f, 0.85f, 1f, 0.8f));
-            var rowTexture = Hud.Solid(new Color(0.08f, 0.12f, 0.16f, 0.7f), Color.clear);
-            var fieldTexture = Hud.Solid(new Color(0.02f, 0.03f, 0.05f, 0.95f), new Color(0.45f, 0.85f, 1f, 0.8f));
+            panelTexture = Hud.Solid(new Color(0.03f, 0.05f, 0.08f, 0.88f), new Color(0.3f, 0.6f, 0.75f, 0.6f));
+            buttonTexture = Hud.Solid(new Color(0.12f, 0.18f, 0.24f, 0.95f), new Color(0.3f, 0.5f, 0.6f, 0.6f));
+            buttonActiveTexture = Hud.Solid(new Color(0.1f, 0.3f, 0.42f, 0.95f), new Color(0.45f, 0.85f, 1f, 0.8f));
+            rowTexture = Hud.Solid(new Color(0.08f, 0.12f, 0.16f, 0.7f), Color.clear);
+            fieldTexture = Hud.Solid(new Color(0.02f, 0.03f, 0.05f, 0.95f), new Color(0.45f, 0.85f, 1f, 0.8f));
 
             panel = new GUIStyle { normal = { background = panelTexture }, border = new RectOffset(2, 2, 2, 2) };
             heading = new GUIStyle { fontSize = 40, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };

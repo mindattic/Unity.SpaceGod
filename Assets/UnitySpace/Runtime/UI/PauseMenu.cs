@@ -345,5 +345,19 @@ namespace Unity.SpaceGod.UI
             };
             rowSelected = new GUIStyle(row) { normal = { background = rowSelectedTexture, textColor = Color.white }, fontStyle = FontStyle.Bold };
         }
+
+        /// <summary>The menu's own styles are going with whatever owns it -- the game session or the main menu
+        /// (U.SPC-T366): DontSave outlives the scene otherwise, so every session (or trip through the main menu)
+        /// that opened Settings would leave its textures behind.</summary>
+        public void DestroyOwnedTextures()
+        {
+            if (panelTexture != null) Object.Destroy(panelTexture);
+            if (shadeTexture != null) Object.Destroy(shadeTexture);
+            if (buttonTexture != null) Object.Destroy(buttonTexture);
+            if (buttonActiveTexture != null) Object.Destroy(buttonActiveTexture);
+            if (rowHoverTexture != null) Object.Destroy(rowHoverTexture);
+            if (rowSelectedTexture != null) Object.Destroy(rowSelectedTexture);
+            panelTexture = shadeTexture = buttonTexture = buttonActiveTexture = rowHoverTexture = rowSelectedTexture = null;
+        }
     }
 }

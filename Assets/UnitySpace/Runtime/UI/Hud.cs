@@ -3126,5 +3126,18 @@ namespace Unity.SpaceGod.UI
             t.Apply();
             return t;
         }
+
+        /// <summary>The HUD's own styles are going with the app that owns it (U.SPC-T366): DontSave outlives the scene
+        /// otherwise, so each game session (and every galaxy map it opened) would leave its textures behind.</summary>
+        public void DestroyOwnedTextures()
+        {
+            if (panelTexture != null) UnityEngine.Object.Destroy(panelTexture);
+            if (rowHoverTexture != null) UnityEngine.Object.Destroy(rowHoverTexture);
+            if (rowSelectedTexture != null) UnityEngine.Object.Destroy(rowSelectedTexture);
+            if (buttonTexture != null) UnityEngine.Object.Destroy(buttonTexture);
+            if (buttonActiveTexture != null) UnityEngine.Object.Destroy(buttonActiveTexture);
+            panelTexture = rowHoverTexture = rowSelectedTexture = buttonTexture = buttonActiveTexture = null;
+            galaxyMap?.DestroyOwnedTextures();
+        }
     }
 }

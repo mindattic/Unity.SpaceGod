@@ -686,5 +686,16 @@ namespace Unity.SpaceGod.UI
             t.Apply();
             return t;
         }
+
+        /// <summary>The map's own styles are going with the HUD that owns it (U.SPC-T366): DontSave outlives the scene
+        /// otherwise, so every game session that opened the map would leave its textures behind.</summary>
+        public void DestroyOwnedTextures()
+        {
+            if (panelTex != null) UnityEngine.Object.Destroy(panelTex);
+            if (buttonTex != null) UnityEngine.Object.Destroy(buttonTex);
+            if (buttonOnTex != null) UnityEngine.Object.Destroy(buttonOnTex);
+            if (glow != null) UnityEngine.Object.Destroy(glow);
+            panelTex = buttonTex = buttonOnTex = glow = null;
+        }
     }
 }

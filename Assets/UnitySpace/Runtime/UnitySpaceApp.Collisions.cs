@@ -19,7 +19,11 @@ namespace Unity.SpaceGod
         /// <summary>Real seconds a contact's toast stays quiet for before the same thing can toast again.</summary>
         const float ContactToastIntervalS = 1.5f;
 
+        /// <summary>A contact not struck again inside this many suppression windows is long past mattering to it.</summary>
+        const float ContactToastStaleS = ContactToastIntervalS * 20;
+
         readonly Dictionary<object, float> contactToastAt = new Dictionary<object, float>();
+        readonly List<object> staleContactToasts = new List<object>();
 
         /// <summary>The belt is scanned a slice a frame, over this many frames, for rocks near the hull.</summary>
         const int BeltScanFrames = 30;
@@ -42,6 +46,7 @@ namespace Unity.SpaceGod
         {
             // Riding a hulk on the clamps is not flying into it.
             if (Salvage != null) return true;
+            PruneContactToasts(Time.unscaledTime);
             double jd = Clock.Jd;
             var frameHelio = Ephemeris.HelioAt(pilotFrameBody, jd);
             var frameVel = FrameVelocityKmS(pilotFrameBody, jd);
@@ -270,6 +275,19 @@ namespace Unity.SpaceGod
             (beltCandidates, beltScanning) = (beltScanning, beltCandidates);
             beltScanning.Clear();
             beltCursor = 0;
+        }
+
+        /// <summary>Drops a contact's last-toast time once it is old enough that the suppression window no longer
+        /// cares about it, so <see cref="contactToastAt"/> cannot grow without bound over a long session and never
+        /// has to be wiped wholesale (U.SPC-T366, the same treatment BattleFx.PruneSeen gives its own
+        /// seen-dictionary).</summary>
+        void PruneContactToasts(float now)
+        {
+            if (contactToastAt.Count <= 64) return;
+            staleContactToasts.Clear();
+            foreach (var kv in contactToastAt)
+                if (now - kv.Value > ContactToastStaleS) staleContactToasts.Add(kv.Key);
+            foreach (var k in staleContactToasts) contactToastAt.Remove(k);
         }
 
         /// <summary>A body's own velocity, heliocentric km/s.</summary>

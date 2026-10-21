@@ -539,8 +539,15 @@ namespace Unity.SpaceGod
             }
         }
 
-        /// <summary>The game scene is unloading (back to the main menu): its materials and view meshes go with it.</summary>
-        void OnDestroy() => Materials.DestroyAllOwned();
+        /// <summary>The game scene is unloading (back to the main menu): its materials and view meshes go with it,
+        /// and so do the HUD's and the pause menu's own DontSave textures (U.SPC-T366) -- otherwise every session
+        /// (and every galaxy map one opened) would leave its textures behind past this scene.</summary>
+        void OnDestroy()
+        {
+            Materials.DestroyAllOwned();
+            hud?.DestroyOwnedTextures();
+            pauseMenu.DestroyOwnedTextures();
+        }
 
         void Update()
         {
