@@ -1169,7 +1169,9 @@ namespace UnitySpace.Core
             if (state == ContractState.Expired) return;
             if (c.Aboard)
             {
-                bool lostWithHull = c.Taker == null || c.Taker.Destroyed;
+                // A hull gone through a gate or sent to the breakers is marked destroyed too, but nobody died with it:
+                // its people go back ashore where they boarded rather than vanishing.
+                bool lostWithHull = c.Taker == null || (c.Taker.Destroyed && !c.Taker.GateDeparted && !c.Taker.Scrapped);
                 if (!lostWithHull)
                 {
                     c.Board.Population += c.People;
