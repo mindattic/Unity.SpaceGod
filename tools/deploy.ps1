@@ -36,7 +36,9 @@ $deployBat = Join-Path $repoDir 'deploy.bat'
 $marker    = Join-Path $out '.deploy-commit'
 
 # ── Pull latest, skip the rebuild entirely if nothing changed ──────────────
-$dirty = git -C $repoDir status --porcelain
+# Untracked files (e.g. .prose/ session state) don't block a pull; only real changes to tracked
+# files (staged or not) do.
+$dirty = git -C $repoDir status --porcelain | Where-Object { $_ -notmatch '^\?\? ' }
 if ($dirty) { throw "$repoDir has uncommitted changes - not pulling. Commit/stash first." }
 git -C $repoDir pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw "git pull --ff-only failed in $repoDir (not a clean fast-forward)." }
