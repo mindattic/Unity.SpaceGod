@@ -260,7 +260,9 @@ namespace Unity.SpaceGod.Core.Tests
         public void TheGalaxyHoldsEveryNearbySystemAtItsRealDistance()
         {
             var g = Galaxy.CreateDefault(StartJd);
-            Assert.That(g.Systems.Select(s => s.Name), Is.EqualTo(new[]
+            // The real stars keep this order; any Void Base a gap too wide for one gate needed is appended after them.
+            var realSystems = g.Systems.Where(s => !s.IsVoidBase).ToList();
+            Assert.That(realSystems.Select(s => s.Name), Is.EqualTo(new[]
             {
                 "Sol System", "Alpha Centauri", "Barnard's Star", "Luhman 16", "Wolf 359", "Lalande 21185", "Sirius", "Epsilon Eridani",
                 "Ross 128", "Epsilon Indi", "Tau Ceti", "GJ 1061", "Luyten's Star", "Teegarden's Star",
@@ -280,9 +282,10 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(g.NearbyStars.Select(n => n.Name), Does.Contain("Procyon"));
             Assert.That(g.NearbyStars.Count + 10, Is.EqualTo(Galaxy.Neighbours().Count()));
 
-            // Every system is on the gate lattice, and settled (U.SPC-T90: see NearbySocietiesTests).
+            // Every system is on the gate lattice (a Void Base's relay included), and every real one is settled (U.SPC-T90:
+            // see NearbySocietiesTests; a Void Base never is, see VoidBaseTests).
             Assert.That(g.Systems.Where(s => s.Gates.Count == 0).Select(s => s.Name), Is.Empty);
-            foreach (var s in g.Systems.Skip(2))
+            foreach (var s in realSystems.Skip(2))
             {
                 Assert.That(s.Settled, Is.True, s.Name);
                 Assert.That(s.World.Fleet.Ships, Is.Not.Empty, s.Name);

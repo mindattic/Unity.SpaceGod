@@ -71,7 +71,27 @@ namespace Unity.SpaceGod.Views
                 renderer.sharedMaterial = material;
                 return;
             }
-            if (body.IsStar)
+            if (body.IsStar && body.Singularity)
+            {
+                // A Void Base's generator (U.SPC-T372): dark and light-swallowing, not lit like an ordinary star --
+                // its own Color stands as-is, skipping the usual blackbody tint, and a tight violet glow stands in
+                // for an event horizon instead of a corona that would otherwise balloon with distance (see Apply).
+                material = Materials.Create(Materials.Sun, body.Name);
+                material.SetColor("_Color", new Color(body.Color.R, body.Color.G, body.Color.B));
+
+                var horizonGo = new GameObject("Event Horizon");
+                horizonGo.transform.SetParent(parent, false);
+                horizonGo.AddComponent<MeshFilter>().sharedMesh = quadMesh;
+                var horizonRenderer = horizonGo.AddComponent<MeshRenderer>();
+                glowMaterial = Materials.Create(Materials.Glow, "Event Horizon");
+                glowMaterial.SetColor("_Color", new Color(0.55f, 0.15f, 0.85f));
+                glowMaterial.SetFloat("_Intensity", 0.7f);
+                glowMaterial.SetFloat("_Falloff", 4.5f);
+                horizonRenderer.sharedMaterial = glowMaterial;
+                horizonRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                glow = horizonGo.transform;
+            }
+            else if (body.IsStar)
             {
                 // Tinted by photosphere temperature relative to the Sun's, so the Sun keeps its look.
                 var light = UnitySpaceApp.LightColor(body, 1);
@@ -191,7 +211,17 @@ namespace Unity.SpaceGod.Views
             }
             if (!Body.IsStar) material.SetFloat("_Highlight", highlighted ? 1f : 0f);
 
-            if (glow != null)
+            if (glow != null && Body.Singularity)
+            {
+                // Hugs the sphere instead of ballooning with distance like a real corona: an event horizon is
+                // part of the body, not something that reads as a star from across a whole system.
+                float distance = relative.magnitude;
+                var toCamera = distance > 0 ? -relative / distance : -cameraForward;
+                glow.localPosition = relative + toCamera * Mathf.Min(radius * 1.05f, distance * 0.5f);
+                glow.localRotation = Quaternion.LookRotation(-toCamera, Vector3.up);
+                glow.localScale = Vector3.one * (radius * 2.4f);
+            }
+            else if (glow != null)
             {
                 float distance = relative.magnitude;
                 // Corona: at least ~4% of the view so the Sun reads as a star from anywhere in the system;

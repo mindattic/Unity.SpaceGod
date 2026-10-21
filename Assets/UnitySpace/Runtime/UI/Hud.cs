@@ -406,7 +406,10 @@ namespace Unity.SpaceGod.UI
                 if (!app.RelativeToGui(dir, out var p)) continue;
                 if (p.x < 0 || p.y < 0 || p.x > Screen.width || p.y > Screen.height) continue;
                 var c = new Color(1f, 0.95f, 0.8f, 0.9f);
-                DrawIcon(Icons.ForBody(other.Catalog.Root.IsStar ? other.Catalog.Root : other.Catalog[1]), p, 14, c);
+                // A binary's root is the invisible barycentre, so its first star stands for it; a Void Base has no
+                // star at all (U.SPC-T372), just its one body.
+                var mark = other.Catalog.Root.IsStar || other.Catalog.Count < 2 ? other.Catalog.Root : other.Catalog[1];
+                DrawIcon(Icons.ForBody(mark), p, 14, c);
                 string name = other.Catalog.Root.Name == "Sun" ? "Sun  (Sol System)" : other.Name;
                 double ly = Galaxy.DistanceLy(app.ActiveSystem, other);
                 DrawLabel(name + "  " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly", p + new Vector2(10, -8), c, true);

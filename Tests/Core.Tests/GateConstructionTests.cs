@@ -206,8 +206,10 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(jd - p.StartJd, Is.GreaterThan(2 * Year), p.ToString());
                 Assert.That(p.Ly, Is.LessThanOrEqualTo(GateConstruction.MaxLinkLy));
                 Assert.That(g.Network.Between(p.From, p.To), Is.Not.Null);
-                // Built from a system its builder holds, by a state.
-                Assert.That(p.From.Holder, Is.SameAs(p.Builder), p.ToString());
+                // Built from a system its builder holds, by a state -- or, per BasesOf, an empty one (a freshly
+                // opened frontier star awaiting its first colonists, or a Void Base that will never have one) it
+                // reached itself, which still counts as its own base to build on from.
+                Assert.That(p.From.Holder == p.Builder || p.From.Gates.Any(x => x.Owner == p.Builder), Is.True, p.ToString());
                 Assert.That(p.Builder.Kind, Is.EqualTo(PolityKind.State));
             }
             Assert.That(growth.First().links, Is.EqualTo(linksBefore));

@@ -128,8 +128,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>The goods a gate is built of.</summary>
         public static readonly Good[] Materials = { Good.Alloys, Good.Electronics, Good.Machinery };
 
-        /// <summary>The farthest a new gate reaches, light-years.</summary>
-        public const double MaxLinkLy = 8;
+        /// <summary>The farthest a new gate reaches, light-years; <see cref="GateNetwork.MaxLinkLy"/> is the same number, for the lattice it starts from.</summary>
+        public const double MaxLinkLy = 7;
 
         /// <summary>Constructor ships sent to each site; fewer working means slower work.</summary>
         public const int ConstructorsPerProject = 2;

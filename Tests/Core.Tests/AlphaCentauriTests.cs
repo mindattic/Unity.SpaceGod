@@ -186,7 +186,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void BothSystemsRunTogetherOnOneClock()
         {
             var g = Galaxy.CreateDefault(StartJd);
-            Assert.That(g.Systems.Count, Is.EqualTo(14));
+            Assert.That(g.Systems.Count(s => !s.IsVoidBase), Is.EqualTo(14));
             Assert.That(Galaxy.DistanceLy(g.Systems[0], g.Systems[1]), Is.InRange(4.3439, 4.3441));
             for (double jd = StartJd; jd < StartJd + 10; jd += 0.1) g.Update(jd);
             Expect.All(g.Systems, s => Assert.That(s.Ephemeris.Jd, Is.EqualTo(StartJd + 9.9).Within(1e-6)));

@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde, blip, lost;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde, blip, lost, singularity;
 
         public static Texture2D White => white ??= Solid();
 
@@ -55,6 +55,8 @@ namespace Unity.SpaceGod.UI
 
         public static Texture2D ForBody(BodyDefinition body)
         {
+            // A Void Base's generator (U.SPC-T372): a dark core with a halo round it, not the ordinary star sparkle.
+            if (body.Singularity) return singularity ??= Draw(SingularitySdf);
             switch (body.Kind)
             {
                 case BodyKind.Star: return star ??= Draw(StarSdf);
@@ -174,6 +176,9 @@ namespace Unity.SpaceGod.UI
             float rays = Mathf.Min(Box(p, new Vector2(0.92f, 0.05f)), Box(p, new Vector2(0.05f, 0.92f)));
             return Mathf.Min(core, rays);
         }
+
+        /// <summary>A dark core with a halo round it, standing well clear: the opposite of <see cref="StarSdf"/>'s sparkle.</summary>
+        static float SingularitySdf(Vector2 p) => Mathf.Min(Ring(p, 0.78f, 0.14f), p.magnitude - 0.24f);
 
         static float CarrierSdf(Vector2 p)
         {

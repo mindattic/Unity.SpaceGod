@@ -30,15 +30,21 @@ namespace Unity.SpaceGod.Core.Tests
             var g = Create();
             var net = g.Network;
             int n = g.Systems.Count;
-            Assert.That(n, Is.EqualTo(14));
+            // The 14 real stars, plus whatever Void Bases it took to bridge a gap wider than one gate reaches
+            // (see VoidBaseTests for that bridging itself).
+            Assert.That(g.Systems.Count(s => !s.IsVoidBase), Is.EqualTo(14));
             // Sparse: far fewer links than every pair, and nobody is a hub to everyone.
             Assert.That(net.Links.Count, Is.LessThan(n * (n - 1) / 2 / 3));
             Assert.That(net.Links.Count, Is.GreaterThanOrEqualTo(n - 1));
+            // No link is longer than one gate's reach: anything farther goes by a Void Base relay instead.
+            foreach (var link in net.Links) Assert.That(link.Ly, Is.LessThanOrEqualTo(GateNetwork.MaxLinkLy).Within(1e-6), link.ToString());
             foreach (var s in g.Systems)
             {
                 Assert.That(s.Gates.Count, Is.InRange(1, 6), s.Name);
-                // Each system's two nearest are a gate away.
-                var nearest = g.Systems.Where(o => o != s).OrderBy(o => Galaxy.DistanceLy(s, o)).Take(GateNetwork.Neighbours);
+                if (s.IsVoidBase) continue;
+                // Each system's two nearest within a gate's reach are a gate away.
+                var nearest = g.Systems.Where(o => o != s && !o.IsVoidBase && Galaxy.DistanceLy(s, o) <= GateNetwork.MaxLinkLy)
+                    .OrderBy(o => Galaxy.DistanceLy(s, o)).Take(GateNetwork.Neighbours);
                 foreach (var o in nearest) Assert.That(s.GateTo(o), Is.Not.Null, s.Name + " to " + o.Name);
             }
             // Connected: every system can reach every other.

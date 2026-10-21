@@ -12,7 +12,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>The empty centre of mass a multiple star orbits (Alpha Centauri A and B): invisible, the system's root.</summary>
         Barycentre,
 
-        /// <summary>A large artificial station on its own orbit about a star (game layer): a port and a lane stop.</summary>
+        /// <summary>
+        /// A large artificial station on its own orbit about a star (game layer): a port and a lane stop. A Void
+        /// Base's lone body (<see cref="VoidBaseBuilder"/>) is this kind too: there it is the gravity generator
+        /// itself, with no star to orbit at all.
+        /// </summary>
         Station,
 
         /// <summary>A minor body smaller than a dwarf planet: the main belt's Psyche, Lutetia and Ida, Jupiter's Trojans Hektor, Patroclus and Eurybates.</summary>
@@ -176,6 +180,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Stars: photosphere temperature (K) and luminosity (solar), for colour and lighting.</summary>
         public double TeffK = 5772;
         public double LuminositySolar = 1;
+
+        /// <summary>
+        /// Game layer: a star body drawn dark and light-swallowing instead of lit (U.SPC-T372) -- a Void Base's
+        /// generator, a "black hole in a bottle": its <see cref="Color"/> is used as-is instead of the usual
+        /// blackbody tint, with a tight violet glow standing in for an event horizon instead of a corona.
+        /// </summary>
+        public bool Singularity;
 
         // Resolved by BodyCatalog.
         public int Index { get; internal set; } = -1;

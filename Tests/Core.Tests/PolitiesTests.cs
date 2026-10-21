@@ -58,11 +58,12 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(p.CapitalOf(federation).Name, Is.EqualTo("Earth Orbital"));
             Assert.That(p.CapitalSystemOf(federation), Is.SameAs(sol.World));
 
-            // Alpha Centauri has its own government; every other frontier system its own state; the raiders are clans.
+            // Alpha Centauri has its own government; every other frontier system its own state; the raiders are
+            // clans; a Void Base is the one exception, held by nobody (U.SPC-T372).
             var ac = g.Find("Alpha Centauri");
             Assert.That(ac.Holder.Name, Is.EqualTo("Centauri Accord"));
             Assert.That(ac.Holder.Kind, Is.EqualTo(PolityKind.State));
-            var frontier = g.Systems.Where(s => s != sol && s != barnard && s != ac).ToList();
+            var frontier = g.Systems.Where(s => s != sol && s != barnard && s != ac && !s.IsVoidBase).ToList();
             Assert.That(frontier, Is.Not.Empty);
             foreach (var s in frontier)
             {

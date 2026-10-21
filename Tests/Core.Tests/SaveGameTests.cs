@@ -143,7 +143,7 @@ namespace Unity.SpaceGod.Core.Tests
                 var lw = loaded.Galaxy.Systems[0].World;
                 Assert.That(loaded.Clock.Jd, Is.EqualTo(clock.Jd));
                 Assert.That(loaded.Clock.WarpIndex, Is.EqualTo(2));
-                Assert.That(loaded.Galaxy.Systems.Count, Is.EqualTo(14));
+                Assert.That(loaded.Galaxy.Systems.Count, Is.EqualTo(g.Systems.Count), "every system round-trips, Void Bases included");
                 Assert.That(lw.PilotedShip, Is.SameAs(loaded.Session.Piloted), "the session's ship is the world's piloted ship");
                 Assert.That(lw.PilotedShip.Credits, Is.EqualTo(4321.5));
                 Assert.That(lw.PilotedShip.Faction.Treasury, Is.EqualTo(player.Faction.Treasury));

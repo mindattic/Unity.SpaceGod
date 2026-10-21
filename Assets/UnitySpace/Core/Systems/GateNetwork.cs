@@ -54,12 +54,15 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// The jump gates between the simulated systems: a sparse lattice, not all-pairs. Each system is
-    /// linked to its <see cref="Neighbours"/> nearest systems (and they to it), and any islands that
-    /// leaves are joined by their shortest links (a minimum spanning tree over the distances), so every
-    /// system can reach every other, often only by way of others. Each link is a pair of
-    /// <see cref="JumpGate"/>s, one at each end, set at that system's edge facing the other star.
-    /// Routes are planned over the graph by crossing time (<see cref="Route"/>), skipping gates that
-    /// will not open for the traveller (an enemy's, or one under blockade).
+    /// linked to its <see cref="Neighbours"/> nearest systems within <see cref="MaxLinkLy"/> (and they to
+    /// it), and any islands that leaves are joined by their shortest links (a minimum spanning tree over
+    /// the distances), so every system can reach every other, often only by way of others. A bridge
+    /// longer than <see cref="MaxLinkLy"/> is never built direct: one or more Void Bases
+    /// (<see cref="StarSystem.CreateVoidBase"/>) are laid along the way instead, purely to relay it
+    /// (U.SPC-T372). Each link is a pair of <see cref="JumpGate"/>s, one at each end, set at that
+    /// system's edge facing the other star. Routes are planned over the graph by crossing time
+    /// (<see cref="Route"/>), skipping gates that will not open for the traveller (an enemy's, or one
+    /// under blockade).
     /// </summary>
     public sealed class GateNetwork
     {
@@ -71,6 +74,15 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>How many nearest neighbours each system is linked to.</summary>
         public const int Neighbours = 2;
+
+        /// <summary>
+        /// The farthest a single gate link reaches (U.SPC-T372): the same limit a state's own new gates are built
+        /// within once the game is under way (<see cref="GateConstruction.MaxLinkLy"/>), kept in the one place so the
+        /// initial lattice and everything grown onto it later share the same reach. Past it, two systems are only
+        /// ever joined by a chain of hops through others' gates, or, where no real star sits near enough along the
+        /// way, through Void Bases built in open space purely to relay it.
+        /// </summary>
+        public const double MaxLinkLy = GateConstruction.MaxLinkLy;
 
         /// <summary>Forts a state with a navy keeps at each gate it holds (U.SPC-T92).</summary>
         public const int GateForts = 2;
@@ -85,8 +97,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Allowance for the flight from one gate to the next inside a system a route passes through (days).</summary>
         public const double CrossingDays = 0.5;
 
-        /// <summary>Builds the lattice over <paramref name="systems"/> and gives each system its gates (see <see cref="StarSystem.Gates"/>).</summary>
-        public static GateNetwork Build(IReadOnlyList<StarSystem> systems, int neighbours = Neighbours)
+        /// <summary>
+        /// Builds the lattice over <paramref name="systems"/> (<paramref name="jd"/> and <paramref name="polities"/>
+        /// for any Void Base a gap wider than <paramref name="maxLinkLy"/> needs) and gives each system its gates
+        /// (see <see cref="StarSystem.Gates"/>). Any Void Base built is appended to <paramref name="systems"/> itself,
+        /// so the caller's own list picks it up.
+        /// </summary>
+        public static GateNetwork Build(List<StarSystem> systems, double jd, Polities polities, int neighbours = Neighbours, double maxLinkLy = MaxLinkLy)
         {
             var net = new GateNetwork();
             net.systems.AddRange(systems);
@@ -99,7 +116,7 @@ namespace Unity.SpaceGod.Core
                 net.Link(systems[key.Item1], systems[key.Item2]);
             }
 
-            // Each system's nearest few (by distance, ties by list order so the lattice is the same every run).
+            // Each system's nearest few within reach (by distance, ties by list order so the lattice is the same every run).
             for (int i = 0; i < n; i++)
             {
                 var order = new List<int>();
@@ -110,10 +127,18 @@ namespace Unity.SpaceGod.Core
                     int c = Galaxy.DistanceLy(systems[me], systems[a]).CompareTo(Galaxy.DistanceLy(systems[me], systems[b]));
                     return c != 0 ? c : a.CompareTo(b);
                 });
-                for (int k = 0; k < Math.Min(neighbours, order.Count); k++) Join(i, order[k]);
+                int joined = 0;
+                for (int k = 0; k < order.Count && joined < neighbours; k++)
+                {
+                    // Sorted ascending: the first one out of reach means every one after it is too.
+                    if (Galaxy.DistanceLy(systems[i], systems[order[k]]) > maxLinkLy) break;
+                    Join(i, order[k]);
+                    joined++;
+                }
             }
 
-            // Join any islands by their shortest links (Kruskal over all pairs, keeping only those that bridge two pieces).
+            // Join any islands by their shortest links (Kruskal over all pairs, keeping only those that bridge two pieces);
+            // one too wide for a direct gate is bridged by Void Bases instead (U.SPC-T372).
             var parent = new int[n];
             for (int i = 0; i < n; i++) parent[i] = i;
             int Find(int x)
@@ -127,14 +152,50 @@ namespace Unity.SpaceGod.Core
                 for (int j = i + 1; j < n; j++)
                     pairs.Add((Galaxy.DistanceLy(systems[i], systems[j]), i, j));
             pairs.Sort((a, b) => a.ly != b.ly ? a.ly.CompareTo(b.ly) : a.i != b.i ? a.i.CompareTo(b.i) : a.j.CompareTo(b.j));
-            foreach (var (_, i, j) in pairs)
+            int nextVoidBase = 1;
+            foreach (var s in systems) if (s.IsVoidBase) nextVoidBase++;
+            foreach (var (ly, i, j) in pairs)
             {
                 if (Find(i) == Find(j)) continue;
                 parent[Find(i)] = Find(j);
-                Join(i, j);
+                if (ly <= maxLinkLy) Join(i, j);
+                else BridgeWithRelays(net, systems, systems[i], systems[j], jd, polities, maxLinkLy, ref nextVoidBase);
             }
             net.AssignOwners();
             return net;
+        }
+
+        /// <summary>
+        /// Joins <paramref name="a"/> and <paramref name="b"/>, too far apart for one gate, by a chain of Void Bases
+        /// (U.SPC-T372) laid along the straight line between them, each hop within <paramref name="maxLinkLy"/>; the
+        /// new systems are appended to <paramref name="systems"/> (the caller's own list) as they are built.
+        /// </summary>
+        static void BridgeWithRelays(GateNetwork net, List<StarSystem> systems, StarSystem a, StarSystem b, double jd, Polities polities,
+            double maxLinkLy, ref int nextVoidBase)
+        {
+            var prev = a;
+            foreach (var positionLy in RelayPositions(a.PositionLy, b.PositionLy, maxLinkLy))
+            {
+                var relay = StarSystem.CreateVoidBase("Void Base " + nextVoidBase++, positionLy, jd, polities);
+                systems.Add(relay);
+                net.Link(prev, relay);
+                prev = relay;
+            }
+            net.Link(prev, b);
+        }
+
+        /// <summary>
+        /// Light-year positions for a chain of Void Bases along the straight line from <paramref name="aLy"/> to
+        /// <paramref name="bLy"/> (U.SPC-T372), as evenly spaced as the gap needs so no hop is longer than
+        /// <paramref name="maxLy"/>; empty when the two already are.
+        /// </summary>
+        public static List<DVec3> RelayPositions(DVec3 aLy, DVec3 bLy, double maxLy)
+        {
+            var list = new List<DVec3>();
+            double total = (bLy - aLy).Length;
+            int hops = Math.Max(1, (int)Math.Ceiling(total / maxLy - 1e-9));
+            for (int k = 1; k < hops; k++) list.Add(aLy + (bLy - aLy) * ((double)k / hops));
+            return list;
         }
 
         /// <summary>Pairs a new gate in each of the two systems, each at its own edge facing the other.</summary>

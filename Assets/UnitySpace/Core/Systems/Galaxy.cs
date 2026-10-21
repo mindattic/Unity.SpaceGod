@@ -58,18 +58,29 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// Nobody has settled it yet, but a working gate leads in (U.SPC-T97): the first gate into an empty system opens it
-        /// to settlement, and stays its way in while it holds (see <see cref="GateConstruction"/>).
+        /// to settlement, and stays its way in while it holds (see <see cref="GateConstruction"/>). A Void Base is never
+        /// open to settlement (U.SPC-T372): there is no planet here for colonists to found anything on, only the relay
+        /// itself, which is the one thing that keeps the stretch it sits in the galaxy's single lawless territory --
+        /// no state ever comes to hold it.
         /// </summary>
         public bool OpenToSettlement
         {
             get
             {
-                if (Settled) return false;
+                if (IsVoidBase || Settled) return false;
                 foreach (var g in gates)
                     if (g.Link != null && g.Link.Working) return true;
                 return false;
             }
         }
+
+        /// <summary>
+        /// Built purely to relay a gate network gap too wide for one link (U.SPC-T372, see <see cref="CreateVoidBase"/>):
+        /// no star, no planet, just the artificial gravity/sun generator that gives its station an orbit to sit on. It
+        /// belongs to no system-holding polity (see <see cref="OpenToSettlement"/>) and no navy's law reaches it, so a
+        /// raider can lie up here in plain sight with no world nearby to notice.
+        /// </summary>
+        public bool IsVoidBase { get; }
 
         /// <summary>When its first gate was finished and it was opened to settlement (see <see cref="OpenToSettlement"/>); NaN for one
         /// that was on the network from the start, or is not yet.</summary>
@@ -99,7 +110,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>The farthest any member or disc reaches from the root (km), when the system was built.</summary>
         public double ExtentKm { get; }
 
-        StarSystem(string name, DVec3 positionLy, Ephemeris ephemeris, World world, SystemSpec spec, List<DebrisDisc> discs, double overviewSpanKm)
+        StarSystem(string name, DVec3 positionLy, Ephemeris ephemeris, World world, SystemSpec spec, List<DebrisDisc> discs, double overviewSpanKm,
+            bool isVoidBase = false)
         {
             Name = name;
             PositionLy = positionLy;
@@ -109,6 +121,7 @@ namespace Unity.SpaceGod.Core
             Spec = spec;
             Discs = discs;
             OverviewSpanKm = overviewSpanKm;
+            IsVoidBase = isVoidBase;
             double extent = 0;
             for (int i = 0; i < Catalog.Count; i++) extent = Math.Max(extent, ephemeris.Helio(i).Length);
             foreach (var d in discs) extent = Math.Max(extent, ephemeris.Helio(d.HostIndex).Length + d.OuterKm);
@@ -129,6 +142,22 @@ namespace Unity.SpaceGod.Core
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
             eph.Update(jd);
             return new StarSystem("Sol System", DVec3.Zero, eph, World.CreateDefault(eph, jd, polities: polities), null, new List<DebrisDisc>(), 2.2 * Astro.AuKm);
+        }
+
+        /// <summary>
+        /// A relay built in open space to bridge a gate-network gap wider than <see cref="GateNetwork.MaxLinkLy"/>
+        /// (U.SPC-T372, see <see cref="GateNetwork.Build"/>): one body, the artificial gravity/sun generator at its
+        /// centre (<see cref="VoidBaseBuilder"/>), no star and no planet anywhere near it to settle. Its world is
+        /// unsettled the same way an empty real system's is (<see cref="World.CreateUnsettled"/>), so it never gains
+        /// a state to hold it or a navy to watch its gates (see <see cref="IsVoidBase"/>).
+        /// </summary>
+        public static StarSystem CreateVoidBase(string name, DVec3 positionLy, double jd, Polities polities = null)
+        {
+            var catalog = VoidBaseBuilder.Build(name);
+            var eph = new Ephemeris(catalog);
+            eph.Update(jd);
+            var world = World.CreateUnsettled(eph, jd, SeedOf(name), polities);
+            return new StarSystem(name, positionLy, eph, world, null, new List<DebrisDisc>(), VoidBaseBuilder.OverviewSpanKm, isVoidBase: true);
         }
 
         public static StarSystem CreateAlphaCentauri(double jd, Polities polities = null) =>
@@ -380,7 +409,7 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public void Connect(double jd, GateNetwork network = null)
         {
-            Network = network ?? GateNetwork.Build(Systems);
+            Network = network ?? GateNetwork.Build(Systems, jd, Polities);
             Network.Fortify();
             Traffic = new InterstellarTraffic(this, jd);
             Polities.InTransit = Traffic.InTransit;
