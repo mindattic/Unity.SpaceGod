@@ -192,15 +192,26 @@ namespace UnitySpace.Core
         }
 
         /// <summary>
-        /// Every chasing group closes on the pilot (at <paramref name="pilotOffset"/>, moving at <paramref name="pilotVel"/>)
-        /// for <paramref name="dt"/> real seconds: matching its velocity and closing as fast as it can, slowing to come up
-        /// alongside rather than overshoot, charging its EMP in reach and setting it off, and engaging close in. The events,
-        /// in order.
+        /// Every chasing group closes on the pilot (in <paramref name="body"/>'s frame, at <paramref name="pilotOffset"/>,
+        /// moving at <paramref name="pilotVel"/>) for <paramref name="dt"/> real seconds: matching its velocity and closing
+        /// as fast as it can, slowing to come up alongside rather than overshoot, charging its EMP in reach and setting it
+        /// off, and engaging close in. The events, in order.
+        /// <para>Run every frame (far more often than <see cref="Consider"/>'s periodic look), so it must notice for
+        /// itself when the pilot has moved into another body's frame since the chase began: a stale <see cref="Pursuer.Pos"/>
+        /// reckoned from the old frame is meaningless against an offset now reckoned from the new one, so rather than
+        /// steer and judge distance on that nonsense, the chase is simply given up, the same as <see cref="Consider"/>
+        /// already does when it notices <see cref="Body"/> has changed.</para>
         /// </summary>
-        public List<(Pursuer group, PursuitEvent what)> Step(Ship pilot, DVec3 pilotOffset, DVec3 pilotVel, double dt, double jd)
+        public List<(Pursuer group, PursuitEvent what)> Step(Ship pilot, int body, DVec3 pilotOffset, DVec3 pilotVel, double dt, double jd)
         {
             var events = new List<(Pursuer, PursuitEvent)>();
             if (dt <= 0) return events;
+            if (Body != body)
+            {
+                ReleaseAll(jd);
+                Body = body;
+                return events;
+            }
             for (int i = Groups.Count - 1; i >= 0; i--)
             {
                 var g = Groups[i];

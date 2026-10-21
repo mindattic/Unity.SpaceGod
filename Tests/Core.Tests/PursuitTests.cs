@@ -99,7 +99,7 @@ namespace UnitySpace.Core.Tests
             bool charging = false, hit = false, engage = false;
             double t = 0;
             for (; t < 300 && !engage; t += 0.1)
-                foreach (var (_, what) in w.Pursuit.Step(pilot, at, DVec3.Zero, 0.1, StartJd))
+                foreach (var (_, what) in w.Pursuit.Step(pilot, Earth(w), at, DVec3.Zero, 0.1, StartJd))
                 {
                     charging |= what == PursuitEvent.EmpCharging;
                     hit |= what == PursuitEvent.EmpHit;
@@ -128,12 +128,12 @@ namespace UnitySpace.Core.Tests
             var pilot = Pilot(w, at);
             var g = w.Pursuit.Begin(Raider(w), at + new DVec3(Pursuit.EmpRangeKm - 2, 0, 0), DVec3.Zero, StartJd);
             w.Pursuit.Body = Earth(w);
-            var first = w.Pursuit.Step(pilot, at, DVec3.Zero, 0.1, StartJd);
+            var first = w.Pursuit.Step(pilot, Earth(w), at, DVec3.Zero, 0.1, StartJd);
             Assert.That(first.Any(e => e.what == PursuitEvent.EmpCharging), Is.True);
             var away = at - new DVec3(Pursuit.EmpRangeKm * 3, 0, 0);
             bool missed = false, hit = false;
             for (double t = 0; t < Pursuit.EmpChargeSeconds + 0.5; t += 0.1)
-                foreach (var (_, what) in w.Pursuit.Step(pilot, away, DVec3.Zero, 0.1, StartJd))
+                foreach (var (_, what) in w.Pursuit.Step(pilot, Earth(w), away, DVec3.Zero, 0.1, StartJd))
                 {
                     missed |= what == PursuitEvent.EmpMissed;
                     hit |= what == PursuitEvent.EmpHit;
@@ -156,7 +156,7 @@ namespace UnitySpace.Core.Tests
             for (double t = 0; t < Pursuit.MaxChaseSeconds + 5 && !gaveUp; t += 0.5)
             {
                 at += vel * 0.5;
-                gaveUp = w.Pursuit.Step(pilot, at, vel, 0.5, StartJd).Any(e => e.what == PursuitEvent.GaveUp);
+                gaveUp = w.Pursuit.Step(pilot, Earth(w), at, vel, 0.5, StartJd).Any(e => e.what == PursuitEvent.GaveUp);
             }
             Assert.That(gaveUp, Is.True, "a chase that could never close was never given up");
             Assert.That(w.Pursuit.Active, Is.False);
@@ -199,17 +199,36 @@ namespace UnitySpace.Core.Tests
             var g = w.Pursuit.Begin(raider, at + new DVec3(Pursuit.ContactKm, 0, 0), DVec3.Zero, StartJd);
             w.Pursuit.Body = Earth(w);
             Assert.That(g.Ships, Does.Contain(escort));
-            w.Pursuit.Step(pilot, at, DVec3.Zero, 1, StartJd);
+            w.Pursuit.Step(pilot, Earth(w), at, DVec3.Zero, 1, StartJd);
             var escortAt = Pursuit.OffsetOf(g, escort);
 
             // Another fight takes the leader in; the escort stays out of it.
             raider.Battle = new Battle(1, Earth(w), "Battle", DVec3.Zero, StartJd, 1);
-            var events = w.Pursuit.Step(pilot, at, DVec3.Zero, 1, StartJd);
+            var events = w.Pursuit.Step(pilot, Earth(w), at, DVec3.Zero, 1, StartJd);
             Assert.That(w.Pursuit.Active, Is.False, "the chase went on with its leader fighting elsewhere");
             Assert.That(events.Any(e => e.what == PursuitEvent.GaveUp), Is.True);
             Assert.That(w.Pursuit.Of(escort), Is.Null);
             Assert.That(escort.Orbit.Fixed && escort.Orbit.Body == Earth(w), Is.True, "the escort was not pinned");
             Assert.That((escort.Orbit.Center - escortAt).Length, Is.LessThan(1e-6), "the escort snapped back from where the chase had flown it");
+        }
+
+        [Test]
+        public void StepGivesUpAChaseWhenThePilotHasMovedIntoAnotherBodysFrame()
+        {
+            var w = CreateWorld();
+            var at = new DVec3(4e6, 0, 0);
+            var pilot = Pilot(w, at);
+            var raider = Raider(w);
+            w.Pursuit.Begin(raider, at + new DVec3(Pursuit.ContactKm, 0, 0), DVec3.Zero, StartJd);
+            w.Pursuit.Body = Earth(w);
+            int mars = w.Catalog["Mars"].Index;
+            // The pilot's offset is still read in the new frame, but the chase's own position is stale, reckoned
+            // from Earth: Step must notice the frame no longer matches rather than steer and judge distance on it.
+            var events = w.Pursuit.Step(pilot, mars, at, DVec3.Zero, 0.1, StartJd);
+            Assert.That(events, Is.Empty, "a frame change produced events instead of simply dropping the stale chase");
+            Assert.That(w.Pursuit.Active, Is.False, "the chase stayed active across a frame it no longer matches");
+            Assert.That(w.Pursuit.Body, Is.EqualTo(mars), "Step never adopted the pilot's new frame");
+            Assert.That(w.Fleet.IsHeld(raider), Is.False, "the hunter was left off its schedule once the frame changed under it");
         }
     }
 }

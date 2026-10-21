@@ -1349,7 +1349,7 @@ namespace UnitySpace
                 }
             }
             if (!pursuit.Active) return;
-            foreach (var (g, what) in pursuit.Step(ship, pilotOffsetKm, pilotVelKmS, dt, jd))
+            foreach (var (g, what) in pursuit.Step(ship, pilotFrameBody, pilotOffsetKm, pilotVelKmS, dt, jd))
             {
                 switch (what)
                 {
