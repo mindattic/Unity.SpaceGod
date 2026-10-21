@@ -406,10 +406,26 @@ namespace Unity.SpaceGod.Cameras
             double dist = Math.Exp(Math.Log(startDist) + (Math.Log(endDist) - Math.Log(startDist)) * e);
 
             var startDir = (travelStartOffset / startDist);
-            var dir = Vector3.Slerp(ToVector(startDir), ToVector(travelEndDirection), e).normalized;
+            Vector3 dir;
+            Quaternion lookAt;
+            if (PilotLocked)
+            {
+                // Settles in behind the hull's own facing from the start (U.SPC-T370), not round whatever side
+                // the camera already happened to be on: a chase has no "approach from the side we're on", only
+                // the hull's own forward, which the player may already be turning under their own input while
+                // this plays out. Read live (not just at the moment the chase began) so a turn mid-transition
+                // is followed rather than fought.
+                var shipRotation = world.TargetRotation(FocusTarget);
+                var endDirV = shipRotation * Vector3.back;
+                dir = Vector3.Slerp(ToVector(startDir), endDirV, e).normalized;
+                lookAt = shipRotation;
+            }
+            else
+            {
+                dir = Vector3.Slerp(ToVector(startDir), ToVector(travelEndDirection), e).normalized;
+                lookAt = Quaternion.LookRotation(-dir, Up);
+            }
             ScenePosition = target + new DVec3(dir.x, dir.y, dir.z) * dist;
-
-            var lookAt = Quaternion.LookRotation(-dir, Up);
             Rotation = Quaternion.Slerp(travelStartRotation, lookAt, SmootherStep(Mathf.Min(1f, travelT * 1.8f)));
 
             if (travelT >= 1f)
