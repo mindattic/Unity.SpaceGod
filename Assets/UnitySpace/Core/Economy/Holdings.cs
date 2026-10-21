@@ -797,14 +797,18 @@ namespace UnitySpace.Core
         bool Seized(Property p, double jd)
         {
             var owner = p.Settlement?.Owner;
-            if (owner != null && !owner.IsPirate) return false;
+            // A port abandoned to ruin is gone for good too (nothing re-opens a ruin): no more rent on a store nobody
+            // can sell from, nor a share of trade that will never come.
+            bool abandoned = p.Settlement != null && p.Settlement.Fallen && owner != null && !owner.IsPirate;
+            if (owner != null && !owner.IsPirate && !abandoned) return false;
             p.Lost = true;
             p.LostJd = jd;
             double value = p.PricePaid;
             if (p.Kind == PropertyKind.Warehouse)
                 for (int g = 0; g < GoodInfo.Count; g++) value += p.Stock[g] * GoodInfo.Of((Good)g).BasePrice;
-            Book(jd, "The " + p.Name + " is seized", -value, cash: false);
-            world.Log(jd, "Your " + p.Name + " is seized", WorldEventKind.Loss, p.Body);
+            string what = abandoned ? " is lost with the abandoned " + p.Settlement.Name : " is seized";
+            Book(jd, "The " + p.Name + what, -value, cash: false);
+            world.Log(jd, "Your " + p.Name + what, WorldEventKind.Loss, p.Body);
             return true;
         }
 
