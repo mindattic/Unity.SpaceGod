@@ -364,7 +364,7 @@ namespace UnitySpace.Core
         // ---------------------------------------------------------------- flying
 
         /// <summary>Flies toward a point: the nose turns at the craft's rate and the craft goes where it points.</summary>
-        static void Steer(Battle b, BattleUnit u, DVec3 goal, double speed, double dt, DVec3 match = default, bool homing = false)
+        static void Steer(Battle b, BattleUnit u, DVec3 goal, double speed, double dt, DVec3? match = null, bool homing = false)
         {
             var spec = u.Combat.Spec;
             var to = goal - u.Pos;
@@ -379,7 +379,8 @@ namespace UnitySpace.Core
             u.Forward = angle <= turn ? desiredDir : DVec3.TurnStep(u.Forward, desiredDir, turn / angle);
             // Throttle back when closing on a slot so wingmen do not overshoot.
             double want = speed;
-            if (match.LengthSquared > 0) want = Math.Min(speed, match.Length + dist * 1.2);
+            // Given a velocity to match (a carrier's, a lead's), even a standing one: an unmoving carrier is still closed on gently.
+            if (match is DVec3 m) want = Math.Min(speed, m.Length + dist * 1.2);
             var desiredVel = u.Forward * want;
             var dv = desiredVel - u.Vel;
             double step = spec.Accel * dt;
