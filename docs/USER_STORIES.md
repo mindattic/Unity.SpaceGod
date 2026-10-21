@@ -1,6 +1,6 @@
 ---
 codex: 1
-project: UnitySpace
+project: Unity.SpaceGod
 code: U.SPC
 layer: stories
 status: living
@@ -8,7 +8,7 @@ updated: 2026-10-12
 ---
 <!-- GENERATED from MindAttic.Tickets/data/Tickets.db by `tickets db render`. Do not edit: this file is rewritten from the database; change stories and tickets with the tickets CLI. -->
 
-# UnitySpace — User Stories
+# Unity.SpaceGod — User Stories
 > ✅ done (shipped & tested) · 🟡 partial · ⬜ planned. Every ✅ cites the test.
 
 ## Priority backlog
@@ -334,15 +334,15 @@ updated: 2026-10-12
 | U.SPC-T312 | 2026-10-19 | fix | closed | GateTransit never raises the ship-added event, so a company hull the player flies through a gate drops out of its company | JumpGateTests.ACompanyHullPilotedThroughTheGateStaysInItsCompany |
 | U.SPC-T313 | 2026-10-19 | fix | closed | World.DivertAround diverts traders bound for any jump gate when a fight breaks out at one gate | GateNetworkTests.AFightAtOneGateDivertsOnlyMerchantsBoundForThatGate (1cee9d5) |
 | U.SPC-T314 | 2026-10-19 | fix | closed | Pursuit.Step keeps chasing after the leader is pulled into another battle, and then drops the group without pinning its escorts | PursuitTests.AChaseWhoseLeaderIsPulledIntoAnotherFightEndsAndItsEscortsArePinnedWhereTheChaseLeftThem (9a4f729) |
-| U.SPC-T315 | 2026-10-19 | fix | open | Pursuit.Step never notices the pilot moving into another body's frame | — |
+| U.SPC-T315 | 2026-10-19 | fix | closed | Pursuit.Step never notices the pilot moving into another body's frame | e341d03 |
 | U.SPC-T316 | 2026-10-19 | fix | closed | A bomber's wingmen can fire torpedoes at a target that is already dead or has surrendered | b3d1940 |
-| U.SPC-T317 | 2026-10-19 | fix | open | A bounty contract on a captain the player takes alive never completes (Contracts.cs:1102 checks u.Side where it should check u.FoughtOn) | — |
-| U.SPC-T318 | 2026-10-19 | fix | open | Companies.Scrap does not call SettleOut, so a scrapped hull's takings since the last review are lost from the company's books | — |
-| U.SPC-T319 | 2026-10-19 | fix | open | Colonisation.Abandon deletes the last settlers of a failed frontier outpost when the system has no other settlement to take them | — |
+| U.SPC-T317 | 2026-10-19 | fix | closed | A bounty contract on a captain the player takes alive never completes (Contracts.cs:1102 checks u.Side where it should check u.FoughtOn) | d7b8361 |
+| U.SPC-T318 | 2026-10-19 | fix | closed | Companies.Scrap does not call SettleOut, so a scrapped hull's takings since the last review are lost from the company's books | ec94d68f7a0b4287cf4e11ef863d135cafe808c1 |
+| U.SPC-T319 | 2026-10-19 | fix | closed | Colonisation.Abandon deletes the last settlers of a failed frontier outpost when the system has no other settlement to take them | aeade62 |
 | U.SPC-T320 | 2026-10-19 | fix | closed | A re-founded settlement's name skips the number 2 | 16e172a |
 | U.SPC-T321 | 2026-10-19 | fix | closed | Law.Captains, EventDirector.restUntil, retired rows in Outlaws.Hunters and Pursuit.lastChased grow for ever over a long game | 3e2bd44 |
 | U.SPC-T322 | 2026-10-19 | fix | closed | InterstellarWars.RebuildForts can add a fort to a gate during the two-day hold after the gate battle was won | RebuildFortsLeavesAGateAloneWhileAWarFleetHoldsItWon |
-| U.SPC-T323 | 2026-10-19 | fix | open | Two overlapping interstellar wars can hand a captured gate back to the wrong owner when the second was declared by hand | — |
+| U.SPC-T323 | 2026-10-19 | fix | closed | Two overlapping interstellar wars can hand a captured gate back to the wrong owner when the second was declared by hand | ff5bbb7 |
 | U.SPC-T324 | 2026-10-19 | chore | closed | Back up the Ultimate Spaceships Creator Evaluation Claude artifact into artifacts/ per HOUSE-LAW-12 | UnitySpace (31c304c) |
 | U.SPC-T325 | 2026-10-19 | feature | open | Move UnitySpace's player profiles onto the shared MindAttic.Unity package and format (owner 2026-10-19; requires MAU-T2): reference com.mindattic.unity via file:../../MindAttic.Unity, replace Core/Persistence/Profiles.cs ProfileStore/PlayerProfile with the package's API, and migrate each profile's Settings/<setting>.txt files (display, auto-reorient, ...) into the single Profiles/<Name>/settings.json (common keys + UnitySpace's own under game), keeping current.txt and Saves/. Old .txt files kept aside after migration. Leave it proposed until the in-progress uncommitted profile work in UnitySpace is committed. | — |
 | U.SPC-T326 | 2026-10-19 | fix | closed | The rename to UnitySpace missed the editor menu (still Solar System > Rebuild Main Scene / Build Windows Player) and the app's root object name, so both now say UnitySpace | Assets/UnitySpace/Editor/ProjectSetup.cs |
@@ -380,3 +380,4 @@ updated: 2026-10-12
 | U.SPC-T358 | 2026-10-20 | fix | closed | A warehouse or station share at a settlement abandoned to ruin was never written off, so its rent was charged for ever on stock that could never be sold | d15f3e1 |
 | U.SPC-T359 | 2026-10-20 | fix | closed | A company hull inside a jump gate when its company was bought out came out with no company under the old flag, since Merge never saw it, instead of joining the buyer as its sister hulls did | 4a5f7d0 |
 | U.SPC-T360 | 2026-10-20 | fix | closed | InterstellarWars.Locate took a campaign flagship that had been captured or left a hulk (with no heir to pass the voyage to) as the campaign still, so the campaign never ended and its side never sent another fleet | 8da4ed7 |
+| U.SPC-T361 | 2026-10-20 | chore | closed | Rename UnitySpace to Unity.SpaceGod: part of the Unity-fleet naming pass (all Unity game repos get a Unity. prefix). Covers GitHub repo, local folder, git remote URL, ticket DB key (tickets repos rename), C# namespaces/asmdefs/class comments referencing the old name throughout Assets/, README/AGENTS/CLAUDE docs, build scripts and logs' repo-name strings, and any other repo that references UnitySpace by name (grep workspace-wide). Owner-approved 2026-10-20 as part of the Unity Fleet Rename effort; run crossrepo from a General (workspace-root) window so the folder move is included. | 6c61cb4 |
