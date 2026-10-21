@@ -939,7 +939,9 @@ namespace UnitySpace.Core
             // Only a ship holding orbit here (parked, or waiting on a docking ring): one in flight keeps its own schedule.
             if (leader.Destroyed || leader.Derelict || leader.Battle != null || leader == world.PilotedShip || !Fleet.IsAt(leader, body)) return null;
 
-            var present = PresentGroups(body);
+            // Out at the root (a jump gate) only those near the fight join it, not the target's ships at every gate
+            // (as TryStartBattle, U.SPC-T94).
+            var present = PresentGroups(body, body == Catalog.Root.Index ? offsetFromBodyKm : (DVec3?)null, jd);
             var b = NewBattle(body, jd, present, offsetFromBodyKm);
             var unit = b.AddShip(ship, 0, DVec3.Zero, forward);
             unit.PlayerControlled = true;
