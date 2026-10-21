@@ -1622,6 +1622,32 @@ namespace Unity.SpaceGod.Core
             pulseReady.Remove(ship);
         }
 
+        /// <summary>
+        /// Drops a ship from the retreat and lane-ambush cooldowns once its cooldown is over or it is gone for good
+        /// (destroyed, or through a gate without <see cref="Forget"/> being called for it: a ship lost to the derelict
+        /// decay in <see cref="Daily"/>, a scuttling, a prize's disposal, and every other way a hull leaves the fleet
+        /// never visits <see cref="Forget"/>), so the books do not grow for ever as a long game runs on (U.SPC-T321's
+        /// fix for <see cref="Pursuit"/>'s own lastChased, never applied here).
+        /// </summary>
+        void PruneTracking(double jd)
+        {
+            List<Ship> gone = null;
+            foreach (var kv in retreating)
+                if (kv.Key.Destroyed || kv.Key.GateDeparted || jd >= kv.Value) (gone ??= new List<Ship>()).Add(kv.Key);
+            if (gone != null) foreach (var s in gone) retreating.Remove(s);
+            gone = null;
+            foreach (var kv in pulseReady)
+                if (kv.Key.Destroyed || kv.Key.GateDeparted || jd >= kv.Value) (gone ??= new List<Ship>()).Add(kv.Key);
+            if (gone != null) foreach (var s in gone) pulseReady.Remove(s);
+            // Orders has its own cleanup on a leader's death in battle (Succession), but a ship that retires through a
+            // gate while it still holds one (GateTransit's instant crossing of the player's own flown ship never calls
+            // Forget, unlike InterstellarTraffic's AI crossing) would otherwise sit in this book forever too.
+            gone = null;
+            foreach (var kv in Orders)
+                if (kv.Key.Destroyed || kv.Key.GateDeparted) (gone ??= new List<Ship>()).Add(kv.Key);
+            if (gone != null) foreach (var s in gone) Orders.Remove(s);
+        }
+
         void Succession(Ship dead, bool keepHunter = false)
         {
             if (dead.IsEscort) return;
@@ -2305,6 +2331,7 @@ namespace Unity.SpaceGod.Core
         {
             foreach (var key in new List<int>(danger.Keys)) danger[key] *= Math.Exp(-1.0 / 20);
             foreach (var s in Economy.Settlements) Array.Clear(s.ExtraDemand, 0, s.ExtraDemand.Length);
+            PruneTracking(jd);
 
             foreach (var s in Fleet.Ships)
                 if (s.Derelict && !s.Destroyed && jd - s.DerelictSinceJd > 25) s.Destroyed = true;

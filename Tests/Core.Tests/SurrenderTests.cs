@@ -202,6 +202,17 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void AnEmpBurstDoesNotStunAHullThatHasStruckItsColours()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(30);
+            b.Surrender(merchant);
+            double shields = merchant.Combat.Subsystems.Sum(s => s.Shield);
+            b.EmpBurst(merchant.Pos, pirate.Side, 8, 5);
+            Assert.That(merchant.Stunned, Is.EqualTo(0), "a hull that has struck its colours was stunned by an EMP burst");
+            Assert.That(merchant.Combat.Subsystems.Sum(s => s.Shield), Is.EqualTo(shields), "a hull that has struck its colours had its shields halved by an EMP burst");
+        }
+
+        [Test]
         public void PodsAreNotFiredAtAHullWaitingOnTerms()
         {
             var (b, merchant, pirate) = BatteredMerchant(25, playerPirate: true);

@@ -1600,7 +1600,7 @@ namespace Unity.SpaceGod.Core
             Emit(FxKind.EmpBurst, at, at, radiusKm, side, null, -1);
             foreach (var o in Units)
             {
-                if (o.Side == side || !o.Present) continue;
+                if (o.Side == side || !o.Present || o.Surrendering) continue;
                 if ((o.Pos - at).Length > radiusKm + Gunnery.HitRadius(o)) continue;
                 o.Stunned = Math.Max(o.Stunned, EmpStunSeconds(seconds, o.LengthKm));
                 foreach (var g in o.Combat.Subsystems)

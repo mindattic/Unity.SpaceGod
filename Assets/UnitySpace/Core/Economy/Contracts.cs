@@ -669,7 +669,7 @@ namespace Unity.SpaceGod.Core
                     {
                         if (!At(ship, c.Board.Body)) return TakeOutcome.NotHere;
                         if (ship.HasCargo || !Economy.Carries(ship.Spec.Class, c.Good) || ship.CapacityTonnes < c.Tonnes) return TakeOutcome.NoRoom;
-                        if (c.Board.Available(c.Good) < c.Tonnes || ship.Faction.Treasury < c.Board.PurchaseCost(c.Good, c.Tonnes)) return TakeOutcome.NoGoods;
+                        if (c.Board.Available(c.Good) < c.Tonnes || ship.Faction.Treasury < c.Board.PurchaseCost(c.Good, c.Tonnes) * (1 + Economy.PortTax)) return TakeOutcome.NoGoods;
                     }
                     break;
                 case ContractKind.Escort:

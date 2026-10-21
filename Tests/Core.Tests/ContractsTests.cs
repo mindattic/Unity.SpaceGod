@@ -190,6 +190,28 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(w.Law.Player.StandingWith(c.Patron), Is.EqualTo(before - Contracts.FailStanding).Within(1e-9));
         }
 
+        // ---------------------------------------------------------------- taking
+
+        [Test]
+        public void AnNpcCannotTakeAFreightContractItCanOnlyAffordBeforeThePortTax()
+        {
+            var w = CreateWorld();
+            var mars = Port(w, "Ares Prime");
+            Starve(mars, Good.Food);
+            w.Contracts.Post(StartJd);
+            var c = FreightTo(w, mars, Good.Food);
+            var ship = Merchant(w, c.Board.Body);
+            double preTax = c.Board.PurchaseCost(c.Good, c.Tonnes);
+            // Just enough for the goods themselves, not the port's 4% tax on top: the actual charge (Economy.Load)
+            // is preTax * (1 + PortTax), so a check against the bare preTax figure would let this through only to
+            // leave the faction's treasury short once it actually bought the lot.
+            ship.Faction.Treasury = preTax;
+            Assert.That(w.Contracts.CanTake(c, ship, false, StartJd), Is.EqualTo(Contracts.TakeOutcome.NoGoods),
+                "a faction that cannot cover the port tax on top of the goods was let onto a contract it could not actually afford");
+            ship.Faction.Treasury = preTax * (1 + Economy.PortTax) + 1;
+            Assert.That(w.Contracts.CanTake(c, ship, false, StartJd), Is.EqualTo(Contracts.TakeOutcome.Ok));
+        }
+
         // ---------------------------------------------------------------- pay
 
         [Test]

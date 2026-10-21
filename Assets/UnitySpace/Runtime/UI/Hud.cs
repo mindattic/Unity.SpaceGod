@@ -321,6 +321,17 @@ namespace Unity.SpaceGod.UI
                 lastSeenScene.Clear();
                 lastSeenFleet = app.Fleet;
             }
+            // A destroyed ship is skipped below before it ever reaches ContactScene again, so its last-seen
+            // entry would otherwise sit here for the rest of a long piloting session in this system, never
+            // cleared by the whole-dictionary resets above: dropped here instead (same shape as the
+            // contactToastAt leak fixed in UnitySpaceApp.Collisions.cs).
+            if (lastSeenScene.Count > 0)
+            {
+                List<Ship> gone = null;
+                foreach (var kv in lastSeenScene)
+                    if (kv.Key.Destroyed) (gone ??= new List<Ship>()).Add(kv.Key);
+                if (gone != null) foreach (var s in gone) lastSeenScene.Remove(s);
+            }
             for (int i = 0; i < ships.Count; i++)
             {
                 var ship = ships[i];

@@ -805,5 +805,52 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(eighth, Is.EqualTo(seen[0])); // the cycle repeats every 7 hulls laid down
             Assert.That(seen.Distinct().Count() > 1, Is.True, "ChooseWarship returned the same class every time -- the cycle was never actually exercised");
         }
+
+        // ---------------------------------------------------------------- the books over a long game (U.SPC-T321)
+
+        /// <summary>The private retreat-cooldown book, by reflection: it is never exposed, but a destroyed ship
+        /// can never withdraw again, so it should not still be sitting in it over a long game (U.SPC-T321).</summary>
+        static System.Collections.Generic.IDictionary<Ship, double> Retreating(War war) =>
+            (System.Collections.Generic.IDictionary<Ship, double>)typeof(War)
+                .GetField("retreating", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(war);
+
+        /// <summary>The private lane-ambush-pulse cooldown book, by reflection (same reasoning as <see cref="Retreating"/>).</summary>
+        static System.Collections.Generic.IDictionary<Ship, double> PulseReady(War war) =>
+            (System.Collections.Generic.IDictionary<Ship, double>)typeof(War)
+                .GetField("pulseReady", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(war);
+
+        [Test]
+        public void ADestroyedShipsRetreatAndPulseCooldownEntriesAreDroppedNotKeptForever()
+        {
+            var w = CreateWorld();
+            var f = MakeFaction(w, "Fading Navy");
+            var ship = ParkWarship(w, f, ShipClass.Destroyer, w.Catalog["Pluto"].Index);
+            Retreating(w.War)[ship] = StartJd + 6;
+            PulseReady(w.War)[ship] = StartJd + 1;
+            w.War.Orders[ship] = new GroupOrder { Kind = OrderKind.Patrol, Body = ship.Orbit.Body };
+            ship.Destroyed = true;
+            w.War.Update(StartJd + 1.01); // one daily sweep
+            Assert.That(Retreating(w.War).ContainsKey(ship), Is.False, "a destroyed ship's retreat cooldown was never dropped");
+            Assert.That(PulseReady(w.War).ContainsKey(ship), Is.False, "a destroyed ship's lane-ambush cooldown was never dropped");
+            Assert.That(w.War.Orders.ContainsKey(ship), Is.False, "a destroyed ship's standing order was never dropped");
+        }
+
+        [Test]
+        public void AGateDepartedShipsStandingOrderIsDroppedNotKeptForever()
+        {
+            // GateTransit's instant crossing of the player's own flown ship sets Destroyed and GateDeparted directly,
+            // without calling War.Forget the way InterstellarTraffic's AI gate crossing does (U.SPC-T311): any order
+            // or cooldown book still naming that ship must still be cleared some other way, or it never is.
+            var w = CreateWorld();
+            var f = MakeFaction(w, "Departed Navy");
+            var ship = ParkWarship(w, f, ShipClass.Destroyer, w.Catalog["Pluto"].Index);
+            w.War.Orders[ship] = new GroupOrder { Kind = OrderKind.Patrol, Body = ship.Orbit.Body };
+            ship.Destroyed = true;
+            ship.GateDeparted = true;
+            w.War.Update(StartJd + 1.01);
+            Assert.That(w.War.Orders.ContainsKey(ship), Is.False, "a gate-departed ship's standing order was never dropped");
+        }
     }
 }
