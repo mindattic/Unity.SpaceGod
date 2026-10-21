@@ -469,6 +469,9 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(port.Owner, Is.EqualTo(besieger));
             Assert.That(port.DaysSinceCapture, Is.EqualTo(0).Within(1e-9));
             Assert.That(w.War.SiegeDays(port), Is.EqualTo(0).Within(1e-9));
+            // U.SPC-T362: starved into surrender, not stormed by a campaign's marines, but occupied all the same --
+            // a war's peace reads this to decide whether the port's system was ceded.
+            Assert.That(port.OccupiedFrom, Is.EqualTo(owner));
         }
 
         /// <summary>

@@ -2557,7 +2557,11 @@ namespace Unity.SpaceGod.Core
                     var old = st.Owner;
                     Economy.Capture(st, besieger);
                     // Taken back by the power it was occupied from: liberated, no longer occupied (U.SPC-T297).
+                    // Taken from anyone else: occupied from them, the same bookkeeping a campaign's marines leave
+                    // (see InterstellarWars.Occupy) -- without it the war's peace never counts this port's system
+                    // as ceded, and its people never rise to retake it (U.SPC-T362).
                     if (st.OccupiedFrom == besieger) st.OccupiedFrom = null;
+                    else st.OccupiedFrom ??= old;
                     siegeDays.Remove(st);
                     besiegers.Remove(st);
                     RevokeBookings();
