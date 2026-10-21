@@ -738,6 +738,8 @@ namespace UnitySpace.Core
             ship.LaneStar = Lanes.KeepOutStar(a, b, jd);
             ship.LaneShape = Lanes.ShapeOf(hop.Lane, a, b, ship.LaneStar, jd);
             ship.LaneHoldSide = DVec3.Zero;
+            // A fresh ride: no point left part-way on an earlier lane to get back in at (CanRejoin).
+            ship.LaneHold = 0;
             ship.LaneLengthKm = Lanes.CurveLengthKm(hop.Lane, a, b, jd, ship.LaneStar, ship.LaneShape);
             ship.DepartureOrbit = ship.Orbit;
             ship.OriginBody = hop.From;
@@ -799,6 +801,8 @@ namespace UnitySpace.Core
                 ship.LurkLane = null;
                 return;
             }
+            // Ridden to its end: nothing left part-way to rejoin.
+            ship.LaneHold = 0;
             ship.Orbit = FixedPoint(hop.To, ship.LaneToOffset);
             ship.JourneyIndex++;
             if (ship.JourneyIndex < ship.Journey.Count)
@@ -858,6 +862,8 @@ namespace UnitySpace.Core
                 StartLane(ship, jd);
                 return;
             }
+            // Brought off at the far ramp: the ride is done, nothing left part-way to rejoin.
+            ship.LaneHold = 0;
             PinAt(ship, hop.To, ship.LaneToOffset, facing, jd);
         }
 
