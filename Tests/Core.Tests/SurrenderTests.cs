@@ -180,6 +180,28 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ARoundInFlightSparesAHullThatStruckItsColoursWhileItWasOnItsWay()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(28);
+            double hull = merchant.Combat.Hull;
+            b.Rounds.Add(new KineticRound { Pos = pirate.Pos, Vel = DVec3.UnitX, Target = merchant, Damage = 500, ArriveIn = 0.5, Life = 5, Side = pirate.Side, Hit = true });
+            b.Surrender(merchant); // struck its colours while the round was on its way
+            b.Advance(1);
+            Assert.That(merchant.Combat.Hull, Is.EqualTo(hull).Within(1e-9));
+        }
+
+        [Test]
+        public void AMineDoesNotBlowAHullThatHasStruckItsColours()
+        {
+            var (b, merchant, pirate) = BatteredMerchant(29);
+            b.Surrender(merchant);
+            double hull = merchant.Combat.Hull;
+            b.Mines.Add(new Mine { Pos = merchant.Pos, Vel = DVec3.Zero, Side = pirate.Side, Damage = 500, BlastKm = 5, ArmIn = 0, Life = 10 });
+            b.Advance(1);
+            Assert.That(merchant.Combat.Hull, Is.EqualTo(hull).Within(1e-9));
+        }
+
+        [Test]
         public void PodsAreNotFiredAtAHullWaitingOnTerms()
         {
             var (b, merchant, pirate) = BatteredMerchant(25, playerPirate: true);

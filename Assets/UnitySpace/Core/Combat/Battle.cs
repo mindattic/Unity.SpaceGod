@@ -1298,8 +1298,10 @@ namespace Unity.SpaceGod.Core
                 if (r.Hit && r.ArriveIn <= 0)
                 {
                     r.Gone = true;
-                    // Not into a hull that has since come over to the firer's own side (taken as a prize).
-                    if (r.Target.Present && r.Target.Side != r.Side)
+                    // Not into a hull that has since come over to the firer's own side (taken as a prize),
+                    // nor one that struck its colours while the round was in flight (the same race StepMissiles
+                    // spares a target for with its own "spared" check).
+                    if (r.Target.Present && r.Target.Side != r.Side && !r.Target.Surrendering)
                     {
                         var sub = r.TargetSub != null && !r.TargetSub.Destroyed ? r.TargetSub : null;
                         ApplyDamage(r.Target, sub, r.Damage, r.Pos);
@@ -1417,14 +1419,16 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>How far down a line of fire the first hull hostile to <paramref name="side"/> lies, within
-        /// <paramref name="maxKm"/>; -1 (and no <paramref name="hit"/>) if the line is clear.</summary>
+        /// <paramref name="maxKm"/>; -1 (and no <paramref name="hit"/>) if the line is clear. A hull that has
+        /// struck its colours is never what a shot resolves onto: it is no longer shot at while it waits on
+        /// its captor's terms (see <see cref="Surrender"/>), the same as target selection already honours.</summary>
         double FirstHostileAlong(int side, DVec3 origin, DVec3 dir, double maxKm, out BattleUnit hit)
         {
             hit = null;
             double best = -1;
             foreach (var o in Units)
             {
-                if (o.Side == side || !o.Present) continue;
+                if (o.Side == side || !o.Present || o.Surrendering) continue;
                 double t = Gunnery.RaySphere(origin, dir, maxKm, o.Pos, Gunnery.HitRadius(o));
                 if (t >= 0 && (best < 0 || t < best))
                 {
@@ -1633,7 +1637,7 @@ namespace Unity.SpaceGod.Core
                 for (int i = 0; i < Units.Count; i++)
                 {
                     var o = Units[i];
-                    if (o.Side == m.Side || !o.Present) continue;
+                    if (o.Side == m.Side || !o.Present || o.Surrendering) continue;
                     double d = Math.Max(0, (o.Pos - m.Pos).Length - Gunnery.HitRadius(o));
                     if (d > m.BlastKm) continue;
                     ApplyDamage(o, null, m.Damage * (1 - d / m.BlastKm), m.Pos);

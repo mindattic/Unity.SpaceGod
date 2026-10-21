@@ -160,6 +160,22 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(player.Overheated, Is.False, "the guns never cooled");
         }
 
+        [Test]
+        public void ThePlayersBeamDoesNotHitAHullThatHasStruckItsColours()
+        {
+            // Same setup as ThePlayersBeamHitsWhatTheCrosshairIsOnEvenOffTheNose, except the enemy has
+            // already hailed: FirstHostileAlong's raycast must honour that the same way target selection does.
+            var enemyPos = PilotFlight.RotateAbout(DVec3.UnitX, DVec3.UnitZ, 8 * Astro.Deg2Rad) * 8;
+            var (b, player, enemy) = Duel(ShipClass.Battleship, ShipClass.Battleship, enemyPos);
+            player.PlayerAim = enemyPos.Normalized;
+            player.PlayerFireHeld = true;
+            b.Surrender(enemy);
+            double before = enemy.Combat.Hull + enemy.Combat.Subsystems.Sum(s => s.Hp + s.Shield);
+            for (int i = 0; i < 60; i++) b.Advance(0.1);
+            double after = enemy.Combat.Hull + enemy.Combat.Subsystems.Sum(s => s.Hp + s.Shield);
+            Assert.That(after, Is.EqualTo(before), "a hull that struck its colours was still hit down the crosshair");
+        }
+
         // ------------------------------------------------------------ missiles
 
         [Test]
