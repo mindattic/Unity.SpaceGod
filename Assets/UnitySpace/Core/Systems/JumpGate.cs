@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// A fixed structure at a system's outer edge, paired one-for-one with a gate in a neighbouring

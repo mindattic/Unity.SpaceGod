@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T34: <see cref="ShipCombat"/>'s shield bookkeeping, status thresholds, repair and

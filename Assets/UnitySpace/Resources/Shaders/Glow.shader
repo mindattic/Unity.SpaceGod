@@ -1,5 +1,5 @@
 // Additive radial glow on a camera-facing quad (the Sun's corona, engine plumes).
-Shader "UnitySpace/Glow"
+Shader "Unity.SpaceGod/Glow"
 {
     Properties
     {

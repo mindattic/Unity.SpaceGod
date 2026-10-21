@@ -1,9 +1,9 @@
 using System;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>
     /// Draws the ~111,000 real asteroids of <see cref="AsteroidField"/> in one procedural draw call.
@@ -33,7 +33,7 @@ namespace UnitySpace.Views
             var asset = Resources.Load<TextAsset>("Data/asteroids");
             if (asset == null)
             {
-                Debug.LogError("[UnitySpace] Missing Resources/Data/asteroids.bytes");
+                Debug.LogError("[Unity.SpaceGod] Missing Resources/Data/asteroids.bytes");
                 return null;
             }
             var belt = app.gameObject.AddComponent<AsteroidBelt>();

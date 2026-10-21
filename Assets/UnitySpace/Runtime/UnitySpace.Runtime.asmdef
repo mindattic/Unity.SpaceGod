@@ -1,8 +1,8 @@
 {
-    "name": "UnitySpace.Runtime",
-    "rootNamespace": "UnitySpace",
+    "name": "Unity.SpaceGod.Runtime",
+    "rootNamespace": "Unity.SpaceGod",
     "references": [
-        "UnitySpace.Core",
+        "Unity.SpaceGod.Core",
         "Unity.InputSystem",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime",

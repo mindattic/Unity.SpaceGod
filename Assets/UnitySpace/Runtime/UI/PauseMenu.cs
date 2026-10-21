@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.UI
+namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// The pause menu (U.SPC-T276), opened by Esc once there is nothing left for it to back out of (or at the

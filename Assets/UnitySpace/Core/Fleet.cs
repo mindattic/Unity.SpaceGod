@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Every ship in the system and its schedule. Ships alternate between parking in a circular

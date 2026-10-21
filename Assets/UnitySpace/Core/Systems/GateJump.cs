@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// The camera's way from one star system to another through the jump gates (the STAR SYSTEMS trip,

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// The Alpha Centauri system, the Sun's nearest neighbour: the binary Alpha Centauri A and B

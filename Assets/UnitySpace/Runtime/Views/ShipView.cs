@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
-using Subsystem = UnitySpace.Core.Subsystem;
+using Subsystem = Unity.SpaceGod.Core.Subsystem;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>
     /// The 3D model of one ship. Warships carry their hardpoints as separate parts: turrets traverse

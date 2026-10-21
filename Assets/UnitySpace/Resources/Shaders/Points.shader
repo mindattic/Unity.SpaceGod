@@ -1,6 +1,6 @@
 // Pixel-sized points at real positions (satellite constellations): depth-tested against the
 // planets so a world hides the satellites behind it, added over whatever is behind them.
-Shader "UnitySpace/Points"
+Shader "Unity.SpaceGod/Points"
 {
     Properties
     {

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// What a war fleet on campaign has left of the three things it burns through (U.SPC-T93), each a share of a full

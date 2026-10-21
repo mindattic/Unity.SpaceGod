@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// The stars past the gate network's edge (U.SPC-T97): real neighbours that <see cref="Galaxy.Neighbours"/> shows but

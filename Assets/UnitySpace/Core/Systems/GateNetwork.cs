@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>One jump-gate link: a gate in each of two systems, paired, and the light-years between them.</summary>
     public sealed class GateLink

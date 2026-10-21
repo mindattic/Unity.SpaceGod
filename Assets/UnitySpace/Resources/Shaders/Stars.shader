@@ -1,6 +1,6 @@
 // Background starfield: a point cloud on a unit sphere around the camera, pushed to the far
 // plane in the vertex shader so it never clips and sits behind everything at any scale.
-Shader "UnitySpace/Stars"
+Shader "Unity.SpaceGod/Stars"
 {
     Properties
     {

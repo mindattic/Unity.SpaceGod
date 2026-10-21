@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// Collisions for the piloted hull (U.SPC-T60): every frame it flies, its volume is tested against the

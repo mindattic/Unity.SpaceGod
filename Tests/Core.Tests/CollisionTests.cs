@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>Collisions and ramming (U.SPC-T60): volumes, momentum exchange, and damage by kinetic energy to the struck side.</summary>
     [TestFixture]

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// A collision volume (U.SPC-T60): a capsule, a segment of half-length <see cref="HalfLengthKm"/> along

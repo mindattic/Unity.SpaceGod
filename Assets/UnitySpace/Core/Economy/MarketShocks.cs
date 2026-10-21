@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     public enum ShockKind
     {

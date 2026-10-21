@@ -1,9 +1,9 @@
 using System;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>The visible sphere (plus rings or corona) for one body. Positioned camera-relative every frame.</summary>
     public sealed class BodyView

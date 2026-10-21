@@ -2,13 +2,13 @@ using System.Collections;
 using MindAttic.Capture.Unity;
 using UnityEngine;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// Started by <c>-demo</c> (see <see cref="Bootstrap"/>): runs the <see cref="SceneTour"/>
     /// once, then quits. Used to verify a build visually and to produce the README images. Add
     /// <c>-capture screen</c> (or <c>video</c>, or both) to save a screenshot at each stop through
-    /// MindAttic.Capture — shots go to R:\MindAttic\Capture\UnitySpace\UnitySpace_{timestamp}.png,
+    /// MindAttic.Capture — shots go to R:\MindAttic\Capture\Unity.SpaceGod\Unity.SpaceGod_{timestamp}.png,
     /// each sidecar tagged with its stop. Without <c>-capture</c> the tour still plays, just with no screenshots.
     /// </summary>
     public sealed class CaptureRunner : MonoBehaviour
@@ -26,7 +26,7 @@ namespace UnitySpace
                     yield return null;
                 }
                 capturing = CaptureUnity.Engine.Enabled;
-                if (!capturing) Debug.LogError("[UnitySpace] MindAttic.Capture did not start; the tour will not be captured.");
+                if (!capturing) Debug.LogError("[Unity.SpaceGod] MindAttic.Capture did not start; the tour will not be captured.");
             }
 
             // A time reset rebuilds the galaxy under the tour (its ships, bodies and battles are gone):
@@ -42,10 +42,10 @@ namespace UnitySpace
                 StopCoroutine(tour);
                 // A stop cut off mid-way never lets go of the camera itself (a dogfight's chase lock on a hull nobody flies).
                 if (!app.IsPiloting) app.SpaceCamera.ExitFocus();
-                Debug.LogWarning("[UnitySpace] The galaxy was rebuilt mid-tour; the tour stops here.");
+                Debug.LogWarning("[Unity.SpaceGod] The galaxy was rebuilt mid-tour; the tour stops here.");
             }
 
-            if (capturing) Debug.Log("[UnitySpace] Tour captured to " + CaptureUnity.Engine.SessionFolder);
+            if (capturing) Debug.Log("[Unity.SpaceGod] Tour captured to " + CaptureUnity.Engine.SessionFolder);
             Application.Quit();
         }
 
@@ -65,8 +65,8 @@ namespace UnitySpace
             var shot = CaptureUnity.Engine.ScreenshotAsync(name);
             while (!shot.IsCompleted) yield return null;
             var result = shot.Result;
-            if (result.Succeeded) Debug.Log("[UnitySpace] Captured " + result.PrimaryFile);
-            else Debug.LogError("[UnitySpace] Screenshot " + name + " failed: " + result.Error);
+            if (result.Succeeded) Debug.Log("[Unity.SpaceGod] Captured " + result.PrimaryFile);
+            else Debug.LogError("[Unity.SpaceGod] Screenshot " + name + " failed: " + result.Error);
         }
     }
 }

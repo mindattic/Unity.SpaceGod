@@ -1,4 +1,4 @@
-# UnitySpace
+# Unity.SpaceGod
 
 The real solar system and Alpha Centauri in Unity 6, on live orbital mechanics, with an economy and a war you can watch or join at the helm of any ship, at playable or true scale.
 
@@ -190,7 +190,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - Body panels show each settlement's exports, shortages and defences; ship panels show cargo and trade profit, or hull, shields, lost hardpoints, fighters aboard and orders. **M** opens a market board, **B** jumps to the biggest battle and drops to battle time (real time), a ticker reports battles, captures, surrenders, launches, ceasefires, economic shocks and price spikes, and **X** opens the full news feed.
 - The market board, cargo hold and controls panel collapse to their title bar with their [-] button.
 - **Main menu and profiles.** The game opens on a main menu: Continue (the latest save), New Game, Load Game, Profiles, Settings and Quit. Each profile keeps its own saves and settings; Profiles switches to another or makes a new one, and the Esc menu's Main Menu goes back (with an autosave). `-demo`, `-capture` and `-continue` skip the menu.
-- **Save and load.** The whole simulation saves to a file and resumes exactly where it was: the clock and warp, every system's world (ships and their cargo, holds, tanks and loadouts, battles in progress, markets, factions and treasuries, wars and sieges, wrecks, escape pods and prisoners, the law's records and bounties, adventures and reputation), the gates and the traffic between the stars, and the ship you were flying, moving as it was. F5 quicksaves and F8 loads the quicksave; F6 (or Save / Load in the Esc menu) opens the saves: New Save makes another of your own, as many as you like, and each save, the quicksave and the three autosaves show where and when they were saved, who was flying and their purse, with Save to overwrite, Load and Delete. An autosave is taken every five minutes and when the app closes, the oldest of the three making way; `-continue` resumes the latest save. Each player profile is a folder in `%USERPROFILE%\AppData\LocalLow\MindAttic\UnitySpace\Profiles` (the one in use is named in `current.txt`, `Default` until another is chosen): its saves are in `Saves`, and each setting it remembers (the display, auto-reorient) is a file of its own in `Settings`.
+- **Save and load.** The whole simulation saves to a file and resumes exactly where it was: the clock and warp, every system's world (ships and their cargo, holds, tanks and loadouts, battles in progress, markets, factions and treasuries, wars and sieges, wrecks, escape pods and prisoners, the law's records and bounties, adventures and reputation), the gates and the traffic between the stars, and the ship you were flying, moving as it was. F5 quicksaves and F8 loads the quicksave; F6 (or Save / Load in the Esc menu) opens the saves: New Save makes another of your own, as many as you like, and each save, the quicksave and the three autosaves show where and when they were saved, who was flying and their purse, with Save to overwrite, Load and Delete. An autosave is taken every five minutes and when the app closes, the oldest of the three making way; `-continue` resumes the latest save. Each player profile is a folder in `%USERPROFILE%\AppData\LocalLow\MindAttic\Unity.SpaceGod\Profiles` (the one in use is named in `current.txt`, `Default` until another is chosen): its saves are in `Saves`, and each setting it remembers (the display, auto-reorient) is a file of its own in `Settings`.
 
 | Carrier group in formation | Freighter mid-burn | Saturn |
 | --- | --- | --- |
@@ -205,32 +205,32 @@ Prerequisites:
 - Optionally the .NET 10 SDK, to run the core tests.
 
 ```bash
-git clone https://github.com/mindattic/UnitySpace.git
+git clone https://github.com/mindattic/Unity.SpaceGod.git
 git clone https://github.com/mindattic/MindAttic.Capture.git
 ```
 
-1. Open the `UnitySpace` folder in Unity Hub. The first import takes a few minutes. The editor opens `Assets/Scenes/UnitySpace.unity` automatically (or use **UnitySpace > Rebuild Main Scene**).
+1. Open the `Unity.SpaceGod` folder in Unity Hub. The first import takes a few minutes. The editor opens `Assets/Scenes/UnitySpace.unity` automatically (or use **Unity.SpaceGod > Rebuild Main Scene**).
 2. Press Play. You start in free swim beside Earth, with Earth selected, gameplay scale on and the clock at the current date. The controls panel is open; H hides it.
 
 Any scene works, because `Bootstrap` creates the app if the scene does not have one.
 
 ## Building and deployment
 
-In the editor, **UnitySpace > Build Windows Player** builds `Builds/Windows/UnitySpace.exe`. Headless, with the editor closed:
+In the editor, **Unity.SpaceGod > Build Windows Player** builds `Builds/Windows/Unity.SpaceGod.exe`. Headless, with the editor closed:
 
 ```bash
-Unity.exe -batchmode -quit -projectPath . -executeMethod UnitySpace.EditorTools.ProjectSetup.SetupAndBuild
+Unity.exe -batchmode -quit -projectPath . -executeMethod Unity.SpaceGod.EditorTools.ProjectSetup.SetupAndBuild
 ```
 
-Building never rewrites `Assets/Scenes/UnitySpace.unity`: it is generated by `ProjectSetup.CreateScene` only when it is missing, because Unity gives every regenerated object a fresh file ID and a rebuild would leave a no-op diff in git. If you change what `CreateScene` puts in the scene, run **UnitySpace > Rebuild Main Scene** and commit the scene with the code change, or the player keeps the old one.
+Building never rewrites `Assets/Scenes/UnitySpace.unity`: it is generated by `ProjectSetup.CreateScene` only when it is missing, because Unity gives every regenerated object a fresh file ID and a rebuild would leave a no-op diff in git. If you change what `CreateScene` puts in the scene, run **Unity.SpaceGod > Rebuild Main Scene** and commit the scene with the code change, or the player keeps the old one.
 
-`tools/deploy.ps1` does a clean build and publishes it: it stops any running copy, deletes `Builds\Windows` (never `Library\`), builds in batch mode with the Unity version from `ProjectSettings/ProjectVersion.txt`, and copies the player to `C:\Apps\UnitySpace\`. Add `-Launch` to start it afterwards.
+`tools/deploy.ps1` does a clean build and publishes it: it stops any running copy, deletes `Builds\Windows` (never `Library\`), builds in batch mode with the Unity version from `ProjectSettings/ProjectVersion.txt`, and copies the player to `C:\Apps\Unity.SpaceGod\`. Add `-Launch` to start it afterwards.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 ```
 
-`deploy.bat` at the repo root runs the same script and also refreshes a **UnitySpace** shortcut on the Desktop that starts the published copy. In Claude Code, `/deploy` starts `deploy.bat` in its own window and `/run` starts the published game. A prompt hook (`.claude/hooks/instant-commands.ps1`) handles both before any model turn, so the orchestrator's pace holds never apply to them.
+`deploy.bat` at the repo root runs the same script and also refreshes a **Unity.SpaceGod** shortcut on the Desktop that starts the published copy. In Claude Code, `/deploy` starts `deploy.bat` in its own window and `/run` starts the published game. A prompt hook (`.claude/hooks/instant-commands.ps1`) handles both before any model turn, so the orchestrator's pace holds never apply to them.
 
 `tools\launch.bat` (or `tools\launch.ps1`) always redeploys first, then offers Normal Play, Demo + Capture (`-demo -capture video screen 5`) or Quit.
 
@@ -243,16 +243,16 @@ powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 | `-continue` | resumes the latest save (quicksave, slot or autosave) instead of starting at today's date |
 | `-capture ...` | records the session through MindAttic.Capture (below); independent of `-demo` |
 
-Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Capture is compiled into capture-enabled players only: build one with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/UnitySpace.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`). Capture is off unless `-capture` is on the command line.
+Screenshots and video come from [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) (needs ffmpeg on PATH). Capture is compiled into capture-enabled players only: build one with **MindAttic > Capture > Build Windows Player (Capture Enabled)** (`Builds/Capture/Unity.SpaceGod.exe`, or headless with `-executeMethod MindAttic.Capture.Unity.Editor.CaptureBuild.BuildWindows`). Capture is off unless `-capture` is on the command line.
 
 | Command | Result |
 | --- | --- |
-| `UnitySpace.exe -demo -capture screen` | runs the tour once, saves a PNG at each stop and quits (how the images above were made) |
-| `UnitySpace.exe -demo -capture video screen 5` | the tour, filmed, with a PNG every 5 seconds as well as at each stop |
-| `UnitySpace.exe -capture video` | films the session from start to exit at native resolution |
-| `UnitySpace.exe -capture screen 5` | a PNG every 5 seconds until exit |
+| `Unity.SpaceGod.exe -demo -capture screen` | runs the tour once, saves a PNG at each stop and quits (how the images above were made) |
+| `Unity.SpaceGod.exe -demo -capture video screen 5` | the tour, filmed, with a PNG every 5 seconds as well as at each stop |
+| `Unity.SpaceGod.exe -capture video` | films the session from start to exit at native resolution |
+| `Unity.SpaceGod.exe -capture screen 5` | a PNG every 5 seconds until exit |
 
-Everything goes to `R:\MindAttic\Capture\UnitySpace\`; each tour screenshot's `.json` sidecar names the stop it shows (`"tag": "03-carrier-group"`). In the editor, the **MindAttic > Capture** menu records video or screenshots in Play Mode, and F12 takes a screenshot.
+Everything goes to `R:\MindAttic\Capture\Unity.SpaceGod\`; each tour screenshot's `.json` sidecar names the stop it shows (`"tag": "03-carrier-group"`). In the editor, the **MindAttic > Capture** menu records video or screenshots in Play Mode, and F12 takes a screenshot.
 
 ## Controls
 

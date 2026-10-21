@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering.Universal;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// A standalone screen for inspecting any loadable model (currently: everything under

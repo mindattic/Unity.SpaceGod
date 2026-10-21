@@ -1,9 +1,9 @@
 {
-    "name": "UnitySpace.Editor",
-    "rootNamespace": "UnitySpace.EditorTools",
+    "name": "Unity.SpaceGod.Editor",
+    "rootNamespace": "Unity.SpaceGod.EditorTools",
     "references": [
-        "UnitySpace.Core",
-        "UnitySpace.Runtime"
+        "Unity.SpaceGod.Core",
+        "Unity.SpaceGod.Runtime"
     ],
     "includePlatforms": [
         "Editor"

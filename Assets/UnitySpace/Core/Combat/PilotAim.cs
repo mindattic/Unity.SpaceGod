@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Turns the stick into where the hull should point, one way per <see cref="PilotControl"/>

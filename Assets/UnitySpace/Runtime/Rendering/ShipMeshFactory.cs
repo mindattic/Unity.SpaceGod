@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.Rendering
+namespace Unity.SpaceGod.Rendering
 {
     /// <summary>
     /// Kit-bashed hulls built from boxes, frustums and cylinders. Every design is one unit long on +Z

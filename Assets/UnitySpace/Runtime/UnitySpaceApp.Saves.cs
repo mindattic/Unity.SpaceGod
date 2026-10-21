@@ -1,10 +1,10 @@
 using System;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
-using UnitySpace.Views;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
+using Unity.SpaceGod.Views;
 using UnityEngine;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// Save and load (U.SPC-T67): the whole simulation (the clock, every system's world and the traffic
@@ -126,7 +126,7 @@ namespace UnitySpace
             }
             catch (Exception e)
             {
-                Debug.LogError("[UnitySpace] Autosave failed: " + e);
+                Debug.LogError("[Unity.SpaceGod] Autosave failed: " + e);
                 if (!quiet) ShowToast("Autosave failed: " + e.Message);
             }
         }
@@ -148,7 +148,7 @@ namespace UnitySpace
             }
             catch (Exception e)
             {
-                Debug.LogError("[UnitySpace] Save to " + slot + " failed: " + e);
+                Debug.LogError("[Unity.SpaceGod] Save to " + slot + " failed: " + e);
                 ShowToast("Save failed: " + e.Message);
                 return false;
             }
@@ -172,7 +172,7 @@ namespace UnitySpace
             }
             catch (Exception e)
             {
-                Debug.LogError("[UnitySpace] Loading " + slot + " failed: " + e);
+                Debug.LogError("[Unity.SpaceGod] Loading " + slot + " failed: " + e);
                 ShowToast("Could not load " + SlotName(slot) + ": " + e.Message);
                 return false;
             }

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>One hostile group running the player's ship down (see <see cref="Pursuit"/>).</summary>
     public sealed class Pursuer

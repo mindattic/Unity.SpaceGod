@@ -1,8 +1,8 @@
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>
     /// A 1-pixel line strip mesh. Pixel lines stay legible at every scale, where a LineRenderer's

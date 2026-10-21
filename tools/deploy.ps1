@@ -1,23 +1,23 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Shuts down any running UnitySpace, clears the build output, rebuilds the Windows player
+    Shuts down any running Unity.SpaceGod, clears the build output, rebuilds the Windows player
     from scratch (ProjectSetup.BuildWindows — this project has no separate dev/release split; its
     one build already uses BuildOptions.None), and publishes a standalone copy to
-    C:\Apps\UnitySpace\ — same process UnityEve/Automata/KdpPublish/IdiotProof use to always
+    C:\Apps\Unity.SpaceGod\ — same process UnityEve/Automata/KdpPublish/IdiotProof use to always
     have a fresh, independent deployed copy instead of a possibly-stale one.
 
 .DESCRIPTION
-    1. Stops any running UnitySpace.exe process (dev copy or deployed copy).
+    1. Stops any running Unity.SpaceGod.exe process (dev copy or deployed copy).
     2. Removes Builds\Windows — the build OUTPUT only, never Library\ (Unity's asset
        import / script-compile cache, which survives exactly as it does for a normal
        Editor rebuild) — so the player build below is never a stale incremental copy.
-    3. Runs Unity in batch mode (-executeMethod UnitySpace.EditorTools.ProjectSetup.SetupAndBuild,
-       requires the Editor closed) -> Builds\Windows\UnitySpace.exe.
-    4. Copies Builds\Windows\* -> C:\Apps\UnitySpace\.
+    3. Runs Unity in batch mode (-executeMethod Unity.SpaceGod.EditorTools.ProjectSetup.SetupAndBuild,
+       requires the Editor closed) -> Builds\Windows\Unity.SpaceGod.exe.
+    4. Copies Builds\Windows\* -> C:\Apps\Unity.SpaceGod\.
 
 .PARAMETER Launch
-    After publishing, immediately run the deployed UnitySpace.exe.
+    After publishing, immediately run the deployed Unity.SpaceGod.exe.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
@@ -29,8 +29,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoDir  = Split-Path $PSScriptRoot   # tools\ -> UnitySpace\
-$out      = 'C:\Apps\UnitySpace'
-$exeName  = 'UnitySpace.exe'
+$out      = 'C:\Apps\Unity.SpaceGod'
+$exeName  = 'Unity.SpaceGod.exe'
 $buildDir = Join-Path $repoDir 'Builds\Windows'
 
 # ── Resolve Unity editor ────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ if (Get-Process -Name Unity -ErrorAction SilentlyContinue | Where-Object { $_.Ma
 # ── Stop running instance ──────────────────────────────────────────────────
 Write-Host ''
 Write-Host '  Stopping running instance...' -ForegroundColor Yellow
-$procs = Get-Process 'UnitySpace' -ErrorAction SilentlyContinue
+$procs = Get-Process 'Unity.SpaceGod' -ErrorAction SilentlyContinue
 if ($procs) {
     $procs | Stop-Process -Force
     Write-Host "    Stopped ($(@($procs).Count) process(es))" -ForegroundColor DarkYellow
@@ -68,7 +68,7 @@ Write-Host '  Building Windows player (Unity batch mode)...' -ForegroundColor Cy
 New-Item -ItemType Directory -Force "$repoDir/Logs" | Out-Null
 $logFile = "$repoDir/Logs/deploy-build.log"
 # Start-Process joins these with bare spaces, so paths are quoted here or a space in one would split it.
-$uargs = @("-batchmode", "-quit", "-projectPath", "`"$repoDir`"", "-executeMethod", "UnitySpace.EditorTools.ProjectSetup.SetupAndBuild", "-logFile", "`"$logFile`"")
+$uargs = @("-batchmode", "-quit", "-projectPath", "`"$repoDir`"", "-executeMethod", "Unity.SpaceGod.EditorTools.ProjectSetup.SetupAndBuild", "-logFile", "`"$logFile`"")
 $p = Start-Process -FilePath $unity -ArgumentList $uargs -Wait -PassThru -NoNewWindow
 $errors = Select-String -Path $logFile -Pattern "error CS\d+" -ErrorAction SilentlyContinue | Select-Object -First 40
 if ($errors) { $errors | ForEach-Object { Write-Host $_.Line -ForegroundColor Red } }
@@ -101,12 +101,12 @@ if (-not (Test-Path $exe)) {
 # ── Desktop shortcut ─────────────────────────────────────────────────────────
 # Points at the published copy, so double-clicking it (or /run) always plays the last deploy.
 # GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
-$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'UnitySpace.lnk'
+$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'
 $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
 $link.TargetPath       = $exe
 $link.WorkingDirectory = $out
 $link.IconLocation     = "$exe,0"
-$link.Description      = 'UnitySpace (deployed copy in C:\Apps)'
+$link.Description      = 'Unity.SpaceGod (deployed copy in C:\Apps)'
 $link.Save()
 Write-Host "    Shortcut -> $shortcut" -ForegroundColor Gray
 

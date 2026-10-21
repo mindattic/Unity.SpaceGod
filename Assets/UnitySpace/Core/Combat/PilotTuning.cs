@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// How a hull handles under a human's hands, independent of <see cref="CombatSpec"/>'s AI-battle

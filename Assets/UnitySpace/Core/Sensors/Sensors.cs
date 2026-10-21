@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>How much an observer knows about a contact (U.SPC-T66).</summary>
     public enum ContactLevel

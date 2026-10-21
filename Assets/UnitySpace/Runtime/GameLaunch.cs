@@ -1,6 +1,6 @@
 using UnityEngine.SceneManagement;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// The way between the main menu scene and the game scene: the menu starts a new game or names the save to

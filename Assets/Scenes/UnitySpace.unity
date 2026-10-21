@@ -130,7 +130,7 @@ GameObject:
   - component: {fileID: 587283090}
   - component: {fileID: 587283089}
   m_Layer: 0
-  m_Name: UnitySpace
+  m_Name: Unity.SpaceGod
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -147,7 +147,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3fe3f9c55de750940893c0a16d10fd7e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: UnitySpace.Runtime::UnitySpace.UnitySpaceApp
+  m_EditorClassIdentifier: Unity.SpaceGod.Runtime::Unity.SpaceGod.UnitySpaceApp
 --- !u!4 &587283090
 Transform:
   m_ObjectHideFlags: 0

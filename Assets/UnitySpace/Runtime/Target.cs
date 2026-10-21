@@ -1,7 +1,7 @@
 using System;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>Something the player can select and focus: a body, a ship, a structure in orbit or a docking ring.</summary>
     public readonly struct Target : IEquatable<Target>

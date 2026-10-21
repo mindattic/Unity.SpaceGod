@@ -2,7 +2,7 @@
 // tracers (soft-edged ribbons), explosions and missile glows (radial), shield flashes (rings) and shield
 // bubble segments (a hex lattice with a ripple from the impact).
 // TEXCOORD0.xy is the quad UV, TEXCOORD0.z picks the shape, the vertex colour carries tint and fade.
-Shader "UnitySpace/Fx"
+Shader "Unity.SpaceGod/Fx"
 {
     Properties { }
     SubShader

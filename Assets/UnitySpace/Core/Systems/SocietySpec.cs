@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Which of a settled system's powers a settlement or ship belongs to.</summary>
     public enum SocietyRole

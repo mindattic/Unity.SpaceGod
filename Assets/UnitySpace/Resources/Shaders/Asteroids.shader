@@ -3,7 +3,7 @@
 // AsteroidField.PackGpu (AsteroidField.GpuPosition is the C# mirror the tests check), then maps
 // the heliocentric distance through ScaleModel's Sun mapping (AsteroidField.SunMapping), so the
 // belt sits correctly at gameplay and realistic scale and while blending between them.
-Shader "UnitySpace/Asteroids"
+Shader "Unity.SpaceGod/Asteroids"
 {
     Properties
     {

@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// Makes any scene playable: if no <see cref="UnitySpaceApp"/> exists after load, one is
@@ -37,7 +37,7 @@ namespace UnitySpace
         static void Equip()
         {
             var app = UnityEngine.Object.FindAnyObjectByType<UnitySpaceApp>();
-            if (app == null) app = new GameObject("UnitySpace").AddComponent<UnitySpaceApp>();
+            if (app == null) app = new GameObject("Unity.SpaceGod").AddComponent<UnitySpaceApp>();
 
             if (HasCommandLineFlag("-demo") && app.GetComponent<CaptureRunner>() == null)
             {

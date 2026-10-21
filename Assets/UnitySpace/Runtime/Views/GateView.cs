@@ -1,13 +1,13 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>
-    /// Draws the active system's jump gates (see <see cref="UnitySpace.Core.JumpGate"/>), one for each
+    /// Draws the active system's jump gates (see <see cref="Unity.SpaceGod.Core.JumpGate"/>), one for each
     /// link of the gate network: the same docking-ring mesh a world's docking rings use
     /// (<see cref="StructureViews"/>), reused rather than modelling a new structure, fixed at each
     /// gate's position with its axis along the line to the system it leads to so a ship flies straight

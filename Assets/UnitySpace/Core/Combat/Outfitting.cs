@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>What a yard can fit into a hull (U.SPC-T65).</summary>
     public enum ModuleKind

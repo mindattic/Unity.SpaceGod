@@ -1,7 +1,7 @@
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T29: <see cref="Diplomacy"/>'s relation bookkeeping and the two gates

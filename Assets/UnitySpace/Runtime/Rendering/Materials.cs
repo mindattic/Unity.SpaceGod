@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace UnitySpace.Rendering
+namespace Unity.SpaceGod.Rendering
 {
     /// <summary>Loads the project's shaders from Resources (which also guarantees they ship in builds).</summary>
     public static class Materials
@@ -22,7 +22,7 @@ namespace UnitySpace.Rendering
             var shader = Resources.Load<Shader>("Shaders/" + name);
             if (shader == null)
             {
-                Debug.LogError($"[UnitySpace] Missing shader Resources/Shaders/{name}");
+                Debug.LogError($"[Unity.SpaceGod] Missing shader Resources/Shaders/{name}");
                 shader = Shader.Find("Hidden/InternalErrorShader");
             }
             return shader;

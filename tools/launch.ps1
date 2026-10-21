@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Deploys the current build to C:\Apps\UnitySpace, then offers Normal Play, Demo +
+  Deploys the current build to C:\Apps\Unity.SpaceGod, then offers Normal Play, Demo +
   Capture, or Quit.
 .NOTES
   Always redeploys from source first (tools\deploy.ps1), so this never runs a stale build.
@@ -15,14 +15,14 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-$exe = "C:\Apps\UnitySpace\UnitySpace.exe"
+$exe = "C:\Apps\Unity.SpaceGod\Unity.SpaceGod.exe"
 if (-not (Test-Path $exe)) {
     Write-Host "Deploy reported success but $exe is missing." -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
-Write-Host "  UnitySpace" -ForegroundColor Cyan
+Write-Host "  Unity.SpaceGod" -ForegroundColor Cyan
 Write-Host "  [1] Normal Play"
 Write-Host "  [2] Demo + Capture"
 Write-Host "  [3] Quit"

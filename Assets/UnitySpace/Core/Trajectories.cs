@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// What a hull's drive is good for when it plans a trip (U.SPC-T95). A torch (warships, couriers,

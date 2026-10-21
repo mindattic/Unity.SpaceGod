@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// The Moon's geocentric position from the principal terms of the ELP-2000/82 lunar theory, as

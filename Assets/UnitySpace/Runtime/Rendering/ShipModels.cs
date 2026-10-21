@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.Rendering
+namespace Unity.SpaceGod.Rendering
 {
     /// <summary>
     /// Builds the model under a ship's root: a Kenney Space Kit craft (CC0) for small civilian

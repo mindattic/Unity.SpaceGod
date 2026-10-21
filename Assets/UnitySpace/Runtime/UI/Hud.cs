@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
-using UnitySpace.Cameras;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Cameras;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
 
-namespace UnitySpace.UI
+namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// Immediate-mode HUD. World overlay: billboard icons for anything below a few pixels, labels,

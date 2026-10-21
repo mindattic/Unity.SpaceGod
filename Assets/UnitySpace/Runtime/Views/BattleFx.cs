@@ -1,12 +1,12 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Math = System.Math;
-using Subsystem = UnitySpace.Core.Subsystem;
+using Subsystem = Unity.SpaceGod.Core.Subsystem;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>
     /// Draws every battle's weapons fire as one dynamic mesh of camera-facing quads: laser beams and

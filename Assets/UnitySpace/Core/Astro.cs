@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Physical constants and time conversions shared by the whole simulation.</summary>
     public static class Astro

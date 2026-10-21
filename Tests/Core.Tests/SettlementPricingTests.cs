@@ -1,8 +1,8 @@
 using System;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>Unit tests for the pricing and market-sizing math on <see cref="Settlement"/>, isolated
     /// from the rest of the simulation by setting Demand/Supply/Stock/Inbound directly.</summary>

@@ -1,9 +1,9 @@
 using System;
-using UnitySpace.Core;
-using UnitySpace.Input;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Input;
 using UnityEngine;
 
-namespace UnitySpace.Cameras
+namespace Unity.SpaceGod.Cameras
 {
     /// <summary>What the camera needs to know about the world.</summary>
     public interface ICameraWorld

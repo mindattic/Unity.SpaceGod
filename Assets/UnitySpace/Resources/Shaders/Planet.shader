@@ -2,7 +2,7 @@
 // ambient so night sides read, an optional relief normal map derived from real elevation data,
 // procedural surface variation for bodies with no colour map, an opaque haze or cloud layer
 // (Titan, Venus), and an atmosphere rim on the day side.
-Shader "UnitySpace/Planet"
+Shader "Unity.SpaceGod/Planet"
 {
     Properties
     {

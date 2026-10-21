@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Body-fixed frames, so colour maps face the right way: the map's north pole and the direction

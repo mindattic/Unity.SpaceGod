@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
-namespace UnitySpace.Rendering
+namespace Unity.SpaceGod.Rendering
 {
     /// <summary>
     /// Renders a small offscreen snapshot of each <see cref="ShipClass"/>'s hull -- the same model a

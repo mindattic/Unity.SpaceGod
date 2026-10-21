@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// The chase (U.SPC-T273): hostiles that make the piloted ship out on their scanners turn to run it down, show up a

@@ -1,5 +1,5 @@
 // One-pixel line strips (orbits, flight paths): vertex colour times tint, depth-tested but not written.
-Shader "UnitySpace/Line"
+Shader "Unity.SpaceGod/Line"
 {
     Properties
     {

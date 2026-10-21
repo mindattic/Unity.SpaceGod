@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// A capital ship at the helm (U.SPC-T272): its crews work every mount on their own, going for the hull the player

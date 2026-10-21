@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Grid size of the player's personal cargo hold, per hull class. Separate from

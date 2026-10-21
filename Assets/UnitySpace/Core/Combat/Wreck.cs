@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>One good and how many tonnes of it a wreck's hold still carries for whoever salvages it.</summary>
     public readonly struct SalvageStack

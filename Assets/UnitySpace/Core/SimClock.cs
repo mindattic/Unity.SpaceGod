@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Simulation time as a Julian date, advanced by real time multiplied by a warp level.</summary>
     public sealed class SimClock

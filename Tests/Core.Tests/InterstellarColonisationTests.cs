@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// Colony ships through the gates (U.SPC-T293): a frontier star a new gate opens is settled by a faction with people

@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Aimed fire (U.SPC-T270): the geometry that decides whether a shot actually lands, for the guns the

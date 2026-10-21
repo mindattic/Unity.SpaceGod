@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Instantaneous classical elements: angles in radians, a in km, mean motion in rad/day.</summary>
     public readonly struct KeplerState

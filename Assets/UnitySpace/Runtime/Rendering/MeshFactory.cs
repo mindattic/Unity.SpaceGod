@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace UnitySpace.Rendering
+namespace Unity.SpaceGod.Rendering
 {
     /// <summary>Procedural meshes: a lat-long sphere matching equirectangular maps, a ring annulus and a quad.</summary>
     public static class MeshFactory

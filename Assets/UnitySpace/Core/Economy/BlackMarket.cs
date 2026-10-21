@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// The black markets (U.SPC-T94): where stolen goods are sold, at prices of their own rather than the open board's.

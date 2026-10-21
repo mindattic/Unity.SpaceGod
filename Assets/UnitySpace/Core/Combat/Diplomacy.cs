@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     public enum Relation
     {

@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Double-precision 3-vector. All simulation state lives in doubles: a float cannot hold a

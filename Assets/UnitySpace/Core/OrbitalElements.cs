@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Keplerian elements with linear secular rates, in the layout of JPL's "Keplerian Elements

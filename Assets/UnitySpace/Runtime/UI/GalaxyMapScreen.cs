@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.UI
+namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// The galaxy map (U.SPC-T103, F11 or the navigator's GALAXY MAP): every simulated star system at its real position,

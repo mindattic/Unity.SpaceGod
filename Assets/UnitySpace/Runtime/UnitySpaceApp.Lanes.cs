@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// The player riding the hyperlanes (U.SPC-T41). Flying the hull in through an on-ramp's ring gate

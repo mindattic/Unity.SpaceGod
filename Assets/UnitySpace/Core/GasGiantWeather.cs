@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Zonal wind profiles of the giant planets, and the Great Red Spot's position, so the gas giant

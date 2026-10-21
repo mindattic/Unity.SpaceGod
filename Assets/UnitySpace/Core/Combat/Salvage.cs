@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>How the piloted ship stands toward a hulk it wants to latch on to.</summary>
     public enum LatchState

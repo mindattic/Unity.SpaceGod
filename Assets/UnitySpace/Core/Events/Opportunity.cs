@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>What kind of adventure an <see cref="Opportunity"/> is.</summary>
     public enum OpportunityKind

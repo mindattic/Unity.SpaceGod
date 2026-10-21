@@ -5,21 +5,21 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnitySpace.UI;
+using Unity.SpaceGod.UI;
 
-namespace UnitySpace.EditorTools
+namespace Unity.SpaceGod.EditorTools
 {
     /// <summary>
     /// Builds the main scene and the Windows player. The scene is generated rather than hand-made
     /// so it stays trivially reproducible: it only holds a camera and the UnitySpaceApp object,
     /// and everything else is constructed at runtime from data.
     ///
-    /// Batch: Unity -batchmode -quit -projectPath . -executeMethod UnitySpace.EditorTools.ProjectSetup.SetupAndBuild
+    /// Batch: Unity -batchmode -quit -projectPath . -executeMethod Unity.SpaceGod.EditorTools.ProjectSetup.SetupAndBuild
     ///
     /// The scene is committed and is only written when it is missing (U.SPC-T262): Unity gives every
     /// object a fresh random file ID, so regenerating it on each build left a no-op diff in git after
     /// every deploy. A change to <see cref="CreateScene"/> therefore reaches the player only once the
-    /// scene is rebuilt (UnitySpace > Rebuild Main Scene, or -executeMethod ...ProjectSetup.CreateScene)
+    /// scene is rebuilt (Unity.SpaceGod > Rebuild Main Scene, or -executeMethod ...ProjectSetup.CreateScene)
     /// and committed together with the code change.
     /// </summary>
     [InitializeOnLoad]
@@ -27,7 +27,7 @@ namespace UnitySpace.EditorTools
     {
         public const string ScenePath = "Assets/Scenes/UnitySpace.unity";
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
-        public const string PlayerPath = "Builds/Windows/UnitySpace.exe";
+        public const string PlayerPath = "Builds/Windows/Unity.SpaceGod.exe";
 
         static ProjectSetup()
         {
@@ -42,7 +42,7 @@ namespace UnitySpace.EditorTools
             };
         }
 
-        [MenuItem("UnitySpace/Rebuild Main Scene")]
+        [MenuItem("Unity.SpaceGod/Rebuild Main Scene")]
         public static void CreateScene()
         {
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
@@ -56,15 +56,15 @@ namespace UnitySpace.EditorTools
             camera.farClipPlane = 5e8f;
             cameraGo.AddComponent<AudioListener>();
 
-            new GameObject("UnitySpace").AddComponent<UnitySpaceApp>();
+            new GameObject("Unity.SpaceGod").AddComponent<UnitySpaceApp>();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             SetBuildScenes();
-            Debug.Log("[UnitySpace] Scene written to " + ScenePath);
+            Debug.Log("[Unity.SpaceGod] Scene written to " + ScenePath);
         }
 
         /// <summary>The main menu scene the player opens on: a camera on the sky and the <see cref="MainMenu"/>.</summary>
-        [MenuItem("UnitySpace/Rebuild Main Menu Scene")]
+        [MenuItem("Unity.SpaceGod/Rebuild Main Menu Scene")]
         public static void CreateMainMenuScene()
         {
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
@@ -82,7 +82,7 @@ namespace UnitySpace.EditorTools
 
             EditorSceneManager.SaveScene(scene, MenuScenePath);
             SetBuildScenes();
-            Debug.Log("[UnitySpace] Scene written to " + MenuScenePath);
+            Debug.Log("[Unity.SpaceGod] Scene written to " + MenuScenePath);
         }
 
         /// <summary>The main menu first (the player opens on it), then the game.</summary>
@@ -92,7 +92,7 @@ namespace UnitySpace.EditorTools
             AssetDatabase.SaveAssets();
         }
 
-        [MenuItem("UnitySpace/Build Windows Player")]
+        [MenuItem("Unity.SpaceGod/Build Windows Player")]
         public static void BuildWindows()
         {
             if (!File.Exists(ScenePath)) CreateScene();
@@ -106,8 +106,8 @@ namespace UnitySpace.EditorTools
             };
             var report = BuildPipeline.BuildPlayer(options);
             if (report.summary.result != BuildResult.Succeeded)
-                throw new Exception("[UnitySpace] Build failed: " + report.summary.result + " (" + report.summary.totalErrors + " errors)");
-            Debug.Log("[UnitySpace] Player built: " + PlayerPath + " (" + report.summary.totalSize / (1024 * 1024) + " MB)");
+                throw new Exception("[Unity.SpaceGod] Build failed: " + report.summary.result + " (" + report.summary.totalErrors + " errors)");
+            Debug.Log("[Unity.SpaceGod] Player built: " + PlayerPath + " (" + report.summary.totalSize / (1024 * 1024) + " MB)");
         }
 
         /// <summary>Batch-mode entry point: build, writing the scene first only if it is missing. Exits non-zero on failure.</summary>

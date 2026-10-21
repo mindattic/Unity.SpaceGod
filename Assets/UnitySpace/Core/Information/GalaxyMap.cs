@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>How thick the raiders are about a system, as far as the news has it.</summary>
     public enum PirateActivity

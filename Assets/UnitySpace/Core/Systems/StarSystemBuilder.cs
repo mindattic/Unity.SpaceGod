@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>A debris belt or disc about one star, in the system's own (J2000 ecliptic) axes.</summary>
     public sealed class DebrisDisc

@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>The player riding the hyperlanes at the helm (U.SPC-T41): in through a ring gate, along the lane, off at the far ramp.</summary>
     [TestFixture]

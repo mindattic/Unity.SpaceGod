@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
-using UnitySpace.Rendering;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>
     /// Draws the hyperlane network: each lane a glowing ribbon along its curve between its two ramps,

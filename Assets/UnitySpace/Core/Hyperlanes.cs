@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>A hyperlane between two planetary systems (each named by its planet, the body orbiting the Sun).</summary>
     public sealed class Lane

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.Views
+namespace Unity.SpaceGod.Views
 {
     /// <summary>
     /// Draws a system's debris belts and discs (<see cref="StarSystem.Discs"/>: Epsilon Eridani's

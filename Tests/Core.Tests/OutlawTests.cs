@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// U.SPC-T62: named outlaws and the bounty board. Every raider captain is on the books with a name, a flagship

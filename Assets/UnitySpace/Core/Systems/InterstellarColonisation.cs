@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Colony ships through the gates (U.SPC-T293). A system a new gate opens (<see cref="Galaxy.SystemOpened"/>,

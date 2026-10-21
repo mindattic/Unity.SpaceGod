@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>The crimes a faction's law knows (see <see cref="Law"/>).</summary>
     public enum CrimeKind

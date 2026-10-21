@@ -1,9 +1,9 @@
 using System.IO;
-using UnitySpace.Core;
-using UnitySpace.UI;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.UI;
 using UnityEngine;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// The player profile this run uses, from <c>Profiles</c> in the player's data folder: its saves and each of

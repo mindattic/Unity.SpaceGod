@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
-using UnitySpace.Cameras;
-using UnitySpace.Core;
-using UnitySpace.Input;
-using UnitySpace.Rendering;
-using UnitySpace.UI;
-using UnitySpace.Views;
+using Unity.SpaceGod.Cameras;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Input;
+using Unity.SpaceGod.Rendering;
+using Unity.SpaceGod.UI;
+using Unity.SpaceGod.Views;
 using UnityEngine;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// Owns the simulation and drives every frame:
@@ -1981,7 +1981,7 @@ namespace UnitySpace
         {
             AutoReorient = !AutoReorient;
             try { ActiveProfile.Current.SetFlag(AutoReorientSetting, AutoReorient); }
-            catch (Exception e) { Debug.LogError("[UnitySpace] Saving the auto-reorient setting failed: " + e); }
+            catch (Exception e) { Debug.LogError("[Unity.SpaceGod] Saving the auto-reorient setting failed: " + e); }
             ShowToast(AutoReorient ? "AUTO-REORIENT ON: keeping " + SystemPlaneName + " level" : "AUTO-REORIENT OFF: the view stays as you leave it");
         }
 

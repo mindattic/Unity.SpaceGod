@@ -1,4 +1,4 @@
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>What one press of Esc does in the game (outside the pause menu, which handles its own).</summary>
     public enum EscapeAction

@@ -1,6 +1,6 @@
 {
-    "name": "UnitySpace.Core",
-    "rootNamespace": "UnitySpace.Core",
+    "name": "Unity.SpaceGod.Core",
+    "rootNamespace": "Unity.SpaceGod.Core",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],

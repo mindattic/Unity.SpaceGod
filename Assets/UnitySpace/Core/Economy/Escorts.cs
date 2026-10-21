@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Fighter escorts for the merchant fleet (U.SPC-T275). A freighter in port takes on a wing to see it out, sized by

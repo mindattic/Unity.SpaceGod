@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// Ship outfitting at yards (U.SPC-T65): a hull's slots come from its design (weapon hardpoints, shield and

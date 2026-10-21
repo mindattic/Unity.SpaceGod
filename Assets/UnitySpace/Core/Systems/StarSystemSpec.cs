@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Where a planet sits against its star's habitable zone (Kopparapu et al. 2013), see <see cref="HabitableZones"/>.</summary>
     public enum HabitableZone

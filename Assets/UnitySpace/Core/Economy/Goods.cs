@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Every traded commodity. Quantities are tonnes; prices are credits per tonne.</summary>
     public enum Good

@@ -1,5 +1,5 @@
 // Emissive photosphere with limb darkening and slowly churning granulation.
-Shader "UnitySpace/Sun"
+Shader "Unity.SpaceGod/Sun"
 {
     Properties
     {

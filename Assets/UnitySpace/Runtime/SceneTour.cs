@@ -1,10 +1,10 @@
 using System;
 using System.Collections;
 using System.Linq;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace
+namespace Unity.SpaceGod
 {
     /// <summary>
     /// The scripted camera tour through the system: inner planets, a carrier group, a battleship,

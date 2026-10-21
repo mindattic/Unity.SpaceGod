@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace UnitySpace.Input
+namespace Unity.SpaceGod.Input
 {
     /// <summary>
     /// One frame of player input, polled from the Input System devices. Keeping all key reads in
@@ -22,7 +22,7 @@ namespace UnitySpace.Input
         public bool Slow;
 
         /// <summary>Held while piloting: engages the cruise drive (Elite-style) for fast open-space
-        /// travel. See <see cref="UnitySpace.Core.PilotCruiseState"/>.</summary>
+        /// travel. See <see cref="Unity.SpaceGod.Core.PilotCruiseState"/>.</summary>
         public bool Cruise;
 
         /// <summary>While piloting: roll, -1 (Z, anticlockwise) .. 1 (X, clockwise), seen from behind.</summary>
@@ -60,7 +60,7 @@ namespace UnitySpace.Input
         public bool ToggleCargo;
         public bool ToggleOutfit;
 
-        /// <summary>While piloting: switches silent running on or off (F3; see <see cref="UnitySpace.Core.Ship.SilentRunning"/>).</summary>
+        /// <summary>While piloting: switches silent running on or off (F3; see <see cref="Unity.SpaceGod.Core.Ship.SilentRunning"/>).</summary>
         public bool ToggleSilent;
 
         /// <summary>The bounty board of the port in view (F4): who is wanted there, for how much, and where last seen.</summary>

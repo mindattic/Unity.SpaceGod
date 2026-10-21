@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using UnitySpace.Core;
-using UnitySpace.Views;
+using Unity.SpaceGod.Core;
+using Unity.SpaceGod.Views;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace UnitySpace.UI
+namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// The main menu, the scene the game opens on: Continue (the profile's latest save), New Game, Load Game,

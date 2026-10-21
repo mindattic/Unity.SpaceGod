@@ -12,7 +12,7 @@
 // (an anticyclone in the southern hemisphere) along elliptical streamlines, fastest in the collar,
 // once per _GrsShape.z days. Everything runs on the simulation clock; the C# side fades the flow
 // (_Flow.w) when time warp would make a loop shorter than a couple of real seconds.
-Shader "UnitySpace/GasGiant"
+Shader "Unity.SpaceGod/GasGiant"
 {
     Properties
     {

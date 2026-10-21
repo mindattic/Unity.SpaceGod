@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Interstellar piracy (U.SPC-T94): the pirate clans as powers that reach across the gates, run once a day by the

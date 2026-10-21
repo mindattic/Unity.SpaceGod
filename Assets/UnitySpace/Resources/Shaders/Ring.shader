@@ -1,7 +1,7 @@
 // Saturn's rings: radial opacity profile of the C ring, B ring, Cassini Division and A ring
 // (with the Encke Gap), lit from either face, and shadowed by the planet with an analytic
 // ray-sphere test toward the Sun.
-Shader "UnitySpace/Ring"
+Shader "Unity.SpaceGod/Ring"
 {
     Properties
     {

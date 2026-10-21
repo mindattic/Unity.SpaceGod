@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>What a hired captain does with an owned ship while the player is not flying it.</summary>
     public enum StandingOrderKind

@@ -1,8 +1,8 @@
 using System;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.Cameras
+namespace Unity.SpaceGod.Cameras
 {
     /// <summary>
     /// The camera's trip from one star system to another. Where the system left has a jump gate on the way, the

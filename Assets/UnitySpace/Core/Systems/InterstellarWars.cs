@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Where a war fleet's campaign stands (see <see cref="Campaign"/>).</summary>
     public enum CampaignStage

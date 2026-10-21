@@ -1,9 +1,9 @@
 using System.Linq;
 using System.Collections.Generic;
 using NUnit.Framework;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     [TestFixture]
     public class DisplaySettingsTests

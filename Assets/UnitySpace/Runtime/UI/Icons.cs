@@ -1,8 +1,8 @@
 using System;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.UI
+namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// Procedurally drawn white icon sprites (tinted at draw time) that stand in for anything too

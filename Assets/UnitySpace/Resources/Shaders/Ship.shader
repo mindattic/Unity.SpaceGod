@@ -3,7 +3,7 @@
 // panels (engine bells, hangar mouths), scaled by _EngineGlow. Every hull is plated with a seamless
 // sci-fi panel texture (ambientCG MetalPlates015A, CC0), projected triplanar in object space since
 // the procedural meshes have no UVs: R is the greyscale albedo detail, G/B the normal map's Y/X.
-Shader "UnitySpace/Ship"
+Shader "Unity.SpaceGod/Ship"
 {
     Properties
     {

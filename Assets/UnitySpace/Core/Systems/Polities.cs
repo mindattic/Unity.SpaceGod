@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>What sort of power a faction is (game layer), for the ownership the HUD shows.</summary>
     public enum PolityKind

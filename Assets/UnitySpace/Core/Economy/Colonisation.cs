@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>Where a settlement stands in its life (U.SPC-T98).</summary>
     public enum ColonyStage

@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
-namespace UnitySpace.UI
+namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// Puts <see cref="DisplaySettings"/> on the screen and remembers them between runs (U.SPC-T276): the size,
@@ -53,7 +53,7 @@ namespace UnitySpace.UI
         public static void Save()
         {
             try { ActiveProfile.Current.SetSetting(Setting, Current.Format()); }
-            catch (System.Exception e) { Debug.LogError("[UnitySpace] Saving the display settings failed: " + e); }
+            catch (System.Exception e) { Debug.LogError("[Unity.SpaceGod] Saving the display settings failed: " + e); }
         }
 
         /// <summary>The sizes the screen offers, once each at its best refresh rate, and the usual widescreen and ultrawide

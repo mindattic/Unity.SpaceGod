@@ -1,8 +1,8 @@
 using System;
-using UnitySpace.Core;
+using Unity.SpaceGod.Core;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T31: the production tick in <see cref="Economy.AdvanceTo"/> / Produce, plus the

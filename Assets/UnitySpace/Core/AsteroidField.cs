@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// The main asteroid belt and Jupiter's Trojans as real objects: osculating heliocentric

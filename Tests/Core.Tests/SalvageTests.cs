@@ -1,7 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 
-namespace UnitySpace.Core.Tests
+namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// Player salvage and boarding of derelicts (U.SPC-T45): the piloted ship matches velocity with a

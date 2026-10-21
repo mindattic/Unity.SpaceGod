@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// Light speed, the fastest anything is known inside a system (U.SPC-T100). A scanner sees a ship where it was

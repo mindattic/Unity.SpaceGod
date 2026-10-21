@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>A hardpoint's live state: health, reload, what it is shooting at and where it points.</summary>
     public sealed class Subsystem

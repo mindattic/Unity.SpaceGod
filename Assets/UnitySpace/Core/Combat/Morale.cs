@@ -1,6 +1,6 @@
 using System;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>What a captor decides to do with a hull that has struck its colours.</summary>
     public enum SurrenderTerms

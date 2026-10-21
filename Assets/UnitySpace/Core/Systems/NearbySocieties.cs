@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>
     /// The societies of the twelve nearby systems (U.SPC-T90), all game-layer fiction placed on the real

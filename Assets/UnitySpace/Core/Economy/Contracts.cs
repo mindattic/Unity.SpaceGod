@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace UnitySpace.Core
+namespace Unity.SpaceGod.Core
 {
     /// <summary>The jobs a station's contracts board posts (see <see cref="Contracts"/>).</summary>
     public enum ContractKind
