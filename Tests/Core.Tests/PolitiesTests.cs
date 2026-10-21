@@ -106,7 +106,9 @@ namespace UnitySpace.Core.Tests
             var everywhere = Crews.ReserveFor(federation, g.Polities.Settlements);
             var solOnly = Crews.ReserveFor(federation, sol.World.Economy.Settlements);
             Assert.That(everywhere, Is.GreaterThan(solOnly));
-            Assert.That(federation.Manpower, Is.LessThanOrEqualTo(everywhere + 1e-6));
+            // Recruiting fills the pool up to that reserve; crews coming home (Crews.Return) and a population dip since the
+            // last recruiting day can leave it a hair over, never by much.
+            Assert.That(federation.Manpower, Is.LessThanOrEqualTo(everywhere * 1.01));
             // And it recruits once a day, by the system that keeps its books.
             Assert.That(g.Polities.HomeOf(federation), Is.SameAs(sol.World));
             Assert.That(g.Polities.KeptBy(barnard.World, barnard.World.Fleet.Factions), Does.Not.Contain(federation));

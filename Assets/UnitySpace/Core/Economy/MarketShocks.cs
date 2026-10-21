@@ -461,17 +461,17 @@ namespace UnitySpace.Core
             }
             foreach (var e in new List<Embargo>(Diplomacy.Embargoes))
             {
+                // Every system shares the one diplomacy table, but each keeps its own book of who ran war goods: only
+                // the system that declared an embargo can judge when it is over, or the others would lift it the next day.
+                var shock = Active.Find(x => x.Embargo == e);
+                if (shock == null) continue;
                 var key = (e.By, e.Against);
                 bool warOver = !contrabandFor.TryGetValue(key, out var enemy) || Diplomacy.Get(e.By, enemy) != Relation.War;
                 if (jd < e.UntilJd && !warOver) continue;
                 Diplomacy.LiftEmbargo(e);
                 contraband.Remove(key);
-                var shock = Active.Find(x => x.Embargo == e);
-                if (shock != null)
-                {
-                    shock.EndJd = jd;
-                    End(shock, jd, $"The {e.By.Name} lifts its embargo on {MerchantsOf(e.Against)}" + (warOver ? ": the war it was for has stopped" : ""));
-                }
+                shock.EndJd = jd;
+                End(shock, jd, $"The {e.By.Name} lifts its embargo on {MerchantsOf(e.Against)}" + (warOver ? ": the war it was for has stopped" : ""));
                 changed = true;
             }
             if (changed) world.War.RevokeBookings();
