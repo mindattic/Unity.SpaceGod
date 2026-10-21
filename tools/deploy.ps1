@@ -36,17 +36,45 @@ $deployBat = Join-Path $repoDir 'deploy.bat'
 $marker    = Join-Path $out '.deploy-commit'
 
 # ── Pull latest, skip the rebuild entirely if nothing changed ──────────────
-# Untracked files (e.g. .prose/ session state) don't block a pull; only real changes to tracked
-# files (staged or not) do.
+# Untracked files (e.g. .prose/ session state) don't block a pull; changes to tracked files (staged
+# or not) skip it, as does a pull that fails: the desktop shortcut runs this, and the ticket tools
+# keep docs/USER_STORIES.md modified, so throwing here left the game unopenable (U.SPC-T368). It then
+# deploys the commit already checked out.
 $dirty = git -C $repoDir status --porcelain | Where-Object { $_ -notmatch '^\?\? ' }
-if ($dirty) { throw "$repoDir has uncommitted changes - not pulling. Commit/stash first." }
-git -C $repoDir pull --ff-only
-if ($LASTEXITCODE -ne 0) { throw "git pull --ff-only failed in $repoDir (not a clean fast-forward)." }
+if ($dirty) {
+    Write-Host "  $repoDir has uncommitted changes - not pulling; deploying the current commit." -ForegroundColor DarkYellow
+} else {
+    git -C $repoDir pull --ff-only
+    if ($LASTEXITCODE -ne 0) { Write-Host "  git pull --ff-only failed in $repoDir - deploying the current commit." -ForegroundColor DarkYellow }
+}
 $head = (git -C $repoDir rev-parse HEAD).Trim()
-$upToDate = (Test-Path (Join-Path $out $exeName)) -and (Test-Path $marker) -and
-            ((Get-Content -LiteralPath $marker -Raw).Trim() -eq $head)
+
+# Points at deploy.bat (not the exe directly), so double-clicking it always pulls latest and
+# only rebuilds if the source actually changed, before launching.
+# GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
+function Set-Shortcut([string]$exe) {
+    $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+    $link.TargetPath       = $deployBat
+    $link.WorkingDirectory = $repoDir
+    $link.IconLocation     = "$exe,0"
+    $link.Description      = 'Pull latest, build Release if changed, and launch Unity.SpaceGod'
+    $link.Save()
+    Write-Host "    Shortcut -> $shortcut" -ForegroundColor Gray
+}
+
+# Up to date when nothing the player is built from (Assets, Packages, ProjectSettings) differs between
+# the deployed commit and HEAD: a docs- or tickets-only commit doesn't rebuild the game.
+$upToDate = $false
+if ((Test-Path (Join-Path $out $exeName)) -and (Test-Path $marker)) {
+    $deployed = (Get-Content -LiteralPath $marker -Raw).Trim()
+    git -C $repoDir diff --quiet $deployed $head -- Assets Packages ProjectSettings 2>$null
+    $upToDate = $LASTEXITCODE -eq 0
+    if ($upToDate -and $deployed -ne $head) { Set-Content -LiteralPath $marker -Value $head -NoNewline }
+}
 if ($upToDate) {
-    Write-Host "  Already deployed at $head - skipping rebuild." -ForegroundColor Green
+    Write-Host "  Already deployed at $head (no player source changed) - skipping rebuild." -ForegroundColor Green
+    if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'))) { Set-Shortcut (Join-Path $out $exeName) }
     if ($Launch) { Start-Process -FilePath (Join-Path $out $exeName) -WorkingDirectory $out }
     exit 0
 }
@@ -119,17 +147,7 @@ if (-not (Test-Path $exe)) {
 Set-Content -LiteralPath $marker -Value $head -NoNewline
 
 # ── Desktop shortcut ─────────────────────────────────────────────────────────
-# Points at deploy.bat (not the exe directly), so double-clicking it always pulls latest and
-# only rebuilds if the source actually changed, before launching.
-# GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
-$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'
-$link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
-$link.TargetPath       = $deployBat
-$link.WorkingDirectory = $repoDir
-$link.IconLocation     = "$exe,0"
-$link.Description      = 'Pull latest, build Release if changed, and launch Unity.SpaceGod'
-$link.Save()
-Write-Host "    Shortcut -> $shortcut" -ForegroundColor Gray
+Set-Shortcut $exe
 
 # ── Summary ────────────────────────────────────────────────────────────────
 Write-Host ''
