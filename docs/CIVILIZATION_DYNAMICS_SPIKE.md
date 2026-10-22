@@ -18,7 +18,7 @@ The cases differ, but the same few drivers recur, nearly always in combination. 
 | Spanish and British empires | Overseas empires lost their colonies | Distance and slow communication gave colonial elites autonomy; fiscal strain from wars and debt (Spanish bankruptcies, British post-1763 taxation); the metropole distracted or occupied (Napoleon in Spain, 1808); local identity hardened; gold inflation and the cost of defending sea lanes | Spanish Americas lost 1808-1826 (about 20 years once triggered); British 1776 and 1945-1970 |
 | Soviet breakup | USSR dissolved in 1991 | Imperial overreach (Afghanistan, arms race); economic stagnation and shortages; ideological collapse (glasnost let the belief dissolve before the state); nationalism in the peripheral republics; a failed coup showing the centre could not enforce; an oil-price shock | Six years from reform to breakup; the end itself took months |
 | Great Schism and Reformation | Christendom split in 1054 and again from 1517 | A shared belief fractures along distance and political lines (East/West; German princes); a new doctrine gives distant rulers a legitimate reason to defy the centre and keep tax revenue; printing as a fast information channel; followed by holy war (Thirty Years' War killed an estimated 20% of Germany) | Decades to split; a century of war |
-| Black Death | 1347-1351, about a third of Europe dead | Spread along trade routes, ports first (Caffa to Messina to everywhere in about 4 years); quarantine invented (Ragusa 1377, 40 days); labour scarcity raised wages and loosened feudalism (a long-run benefit); persecution of scapegoats; recurrent waves for 300 years with fading mortality as immunity built | Peak in 4 years; population recovery took about 150-200 years |
+| Black Death | 1347-1351, about a third of Europe dead | Spread along trade routes, ports first (Caffa to Messina to everywhere in about 4 years); isolation invented (Ragusa 1377, 30 days, later extended to 40); labour scarcity raised wages and loosened feudalism (a long-run benefit); persecution of scapegoats; recurrent waves for 300 years with fading mortality as immunity built | Peak in 4 years; population recovery took about 150-200 years |
 
 ### Cross-cutting lessons
 
@@ -67,7 +67,7 @@ Four layers, each a scalar in a defined range unless noted. Every variable is st
 | `Reserve` | days | Stockpile cover: days of essentials at current population | Stockpiling, local surplus | Consumption exceeding input |
 | `Contact` | 0-1 (and `DaysSinceContact`) | Whether a working, open route exists to the capital (graph reachability over `GateLink.Open`, plus any ship flying through) | Open route, traffic | Gates broken, embargo, quarantine |
 | `Loyalty` | 0-1 | Allegiance to the holding polity | Contact, protection (garrison, navy presence), investment, prosperity, shared belief | Distance, `DaysSinceContact`, hunger, taxation above tolerance, unpaid garrison, ideological difference, recent conquest |
-| `Order` | 0-1 | Internal stability (the existing `Settlement.Unrest` inverted; mirrored, not replaced) | Garrison, supply, loyalty | Hunger, plague, low loyalty |
+| `Order` | 0-1 | Internal stability: a read-only view of `1 - Settlement.Unrest`. Dynamics change it only by writing `Unrest` through its normal member, so there is one source of truth | Garrison, supply, loyalty | Hunger, plague, low loyalty |
 | `Belief` | a small vector of weights over defined creeds (see 3.2) | The mix of ideologies held | Missionary traffic, state sponsorship, isolation (drift to a local variant) | Contact with rival belief, schism |
 | `Disease` | per disease: prevalence 0-1 and immunity 0-1 | Epidemic burden | Contact with infected systems, crowding, poor medicine | Quarantine, medicine, time and immunity |
 | `Tech` | 0-1 industry/maintenance level | What it can build and maintain (gates, hulls) | Contact, investment | Dark age, lost specialists |
@@ -79,7 +79,7 @@ Four layers, each a scalar in a defined range unless noted. Every variable is st
 | --- | --- | --- |
 | `Cohesion` | 0-1 | Weighted mean of its systems' `Loyalty`, weighted by population, penalised by overextension (section 5.7). The headline number the UI and the transitions read |
 | `Legitimacy` | 0-1 | The ruler's right to rule: rises with victories, prosperity and orderly succession; falls with defeats, hunger, scandal, debasement, contested succession. Distinct from loyalty (a system can be loyal to the polity but not its ruler) |
-| `Solvency` | -inf..1 | Treasury against recurring costs (pay, maintenance, garrisons), in days of runway. Built on `Faction.Treasury` |
+| `Solvency` | days, unbounded (negative when in debt) | Treasury divided by daily recurring costs (pay, maintenance, garrisons): days of runway. Built on `Faction.Treasury`. `Solvency < 0` means in debt |
 | `Reach` | systems | The count and span of what it can administer (a polity-level capacity; see overextension) |
 | `Succession` | state | Heir clarity: Clear, Contested, Civil war (see transitions) |
 | `Creed` | creed id | The state belief, against which each system's `Belief` is compared |
@@ -99,7 +99,7 @@ Each transition has a trigger (a condition on the state) and a roll or threshold
 | Shortage | `Supply < 0.98` (existing line) | Existing `FaminePerDay` shrinks population; the new part raises `Order` risk and lowers `Loyalty` | Weeks |
 | Famine crisis | `Supply < 0.6` for 60 days | Mass death and emigration; `Loyalty` falls fast; neighbours who relied on it as a hub are short next | 2-6 months |
 | Unrest | `Order < 0.5` | Output falls (existing disruption factor), garrison pulled in, conditions for revolt | Months |
-| Severance | `Contact == 0` | Starts `DaysSinceContact`; the system keeps simulating and may rebuild gates | Immediate; consequences over years |
+| Severance | `GateSevered` (no open gate route to the capital) | Starts `DaysSinceContact`; the system keeps simulating and may rebuild gates | Immediate; consequences over years |
 | Drift | `Loyalty` falls steadily when `DaysSinceContact` grows | `Loyalty` decays at a rate set by distance and neglect | Years (target 5 to 30 sim years to secede, matching the Spanish Americas' 20 years) |
 | Revolt | `Loyalty < revolt threshold` and `Order` low | Garrison and local fleet fight or defect; war-like local battle; may be crushed | Weeks to months |
 | Secession | `Loyalty < secession threshold` for a sustained time, with no garrison able to crush it | A new polity (U.SPC-T438) holds the system, with its own name and colours, hostile or neutral to its parent | One event |
@@ -140,7 +140,7 @@ Proposed: **U.SPC-T437 (new)**.
 public interface ICivDynamic
 {
     string Id { get; }                       // "logistics", "disease", ...
-    int Order { get; }                       // run order within the step
+    int RunOrder { get; }                    // run order within the step (not the Order state variable)
     void Declare(CivSettings s);             // declares tunables (T431 registry): default, range, group
     void Step(CivContext ctx, double dtDays);// one dynamics tick
 }
@@ -167,7 +167,9 @@ Rules:
 3. **Cross-mechanic effects go through a modifier list,** not direct calls: a dynamic publishes named modifiers (`loyalty.delta`, `supply.multiplier`, `gate.maintenance`) and other dynamics or the core read the aggregate. That lets the disease and logistics dynamics both lower `Supply` without knowing about each other.
 4. **Events as data.** A `CivEvent` (kind, subject, day, text, severity) feeds `News`, the galaxy map and a history log (U.SPC-T409).
 5. **All rates are settings.** `Declare` registers each constant (e.g. `civ.loyalty.driftPerDay`, `civ.disease.spreadPerContact`) with default, min, max and group "Civilization", so the T431 menu picks it up. Until T431 lands, `CivSettings` is a plain dictionary with defaults in code, so the mechanics are tunable and testable.
-6. **Persistence.** The registry serialises through the existing `ObjectGraph` and `SaveGame`.
+6. **Neutral defaults.** Every registry variable declares a neutral value used when its owning dynamic is absent or disabled (`Legitimacy = 1`, belief distance 0, `Tech = 1`, `Solvency` solvent, `Contact` as the gate graph says). Terms read from a missing dynamic then contribute nothing, so T401 can ship before T403/T406 and T400 before T405/T408. The tax-tolerance term in the loyalty equation is owned by T405 and is zero until it exists.
+6a. **Determinism and stepping.** `CivDynamics` owns its own seeded RNG, saved in the registry and advanced only by `Step`, so a save replays identically whatever else draws random numbers. The host runs fixed 1-day substeps, catching up `floor(jd - lastDay)` days with a per-frame cap that carries the remainder, so dynamics always see `dtDays == 1` at 1x or at a year per second; hazards are day-counted (`1 - (1-p)^dt` if a coarse step is ever used for unobserved systems) and hysteresis counts days. The harness (T439) checks the same outcome at 1x and max speed.
+6b. **Persistence.** The registry serialises through the existing `ObjectGraph` and `SaveGame`.
 7. **Ability to be switched off.** A master setting and a per-dynamic enabled flag so a game can run with only the mechanics under test, and the existing 1199 core tests keep their behaviour with the host empty.
 8. **Performance (principle 3).** The step runs once a day over per-system state (a few dozen systems), not per ship, and unobserved systems are simulated coarsely (state updates, no entities), which is the "render only what can be seen" idea applied to simulation.
 
@@ -197,7 +199,7 @@ For each: mechanism, triggers and feedback, timescale, mapping to Core, owning t
 
 - **Mechanism.** A system is cut off when no working, open route reaches the capital. It simulates in isolation, must rebuild gates and fleets, and its time out of contact is tracked.
 - **Maps to.** `GateNetwork` graph, `GateLink.Working`/`Open`, `GateConstruction`/`GateProject` (rebuild); Void Bases (a single destroyed relay severs everything beyond it, an excellent hub failure); `Polities.CapitalOf`.
-- **Build.** State `Contact`, `DaysSinceContact`. Dynamic `contact`: once a day, a flood fill over open links from each polity's capital system, marking unreachable systems; recompute only when a gate's `Working` flips (an event) instead of every day. Under principle 2, "cut off" means cut off from the gate network; a ship can still fly there under its own power, which counts as limited contact (a slow, low-weight route). A severed system gets a rebuild goal for `GateConstruction`, gated on `Tech` and `Solvency`.
+- **Build.** State `Contact`, `DaysSinceContact`. Dynamic `contact`: once a day, a flood fill over open links from each polity's capital system, marking unreachable systems; recompute only when a gate's `Working` flips (an event) instead of every day. Under principle 2, "cut off" means cut off from the gate network; a ship can still fly there under its own power, which counts as partial contact: `Contact` stays a 0-1 weight and an arriving ship from the capital reduces `DaysSinceContact` by its weight, while severance itself is the boolean `GateSevered`, so isolation still fires in a flyable universe. A severed system gets a rebuild goal for `GateConstruction`, gated on `Tech` and `Solvency`.
 
 ### 5.4 Loyalty and cohesion drift (U.SPC-T401)
 
@@ -297,6 +299,6 @@ Each step is independently testable and leaves the game playable.
 - **Runaway collapse.** The biggest risk is that the default galaxy collapses into nothing in 50 sim years. Mitigation: hysteresis, floors (`MinShare`), a protected "core" polity setting, and the harness asserting at least N polities survive in 100 years for default settings.
 - **Stagnation** is the opposite risk (no event for centuries). The harness reports events per decade.
 - **Player and AI agency.** Every spiral has a counter the player or AI can apply (relief convoys, rebuilding a gate, paying the fleet, a diplomatic fix). A mechanic that cannot be answered is not shipped.
-- **Determinism.** All rolls use the world's seeded `rng`, so a save replays the same collapse.
+- **Determinism.** All rolls use the framework's own seeded RNG (rule 6a), so a save replays the same collapse.
 - **Existing tests.** The framework must be a no-op unless dynamics are registered, and each dynamic is off in tests that predate it.
 - **New tickets filed.** U.SPC-T437, T438 and T439 (linked part-of U.SPC-T396, requires this spike); T398-T408 and T409 now also require T437, and T402, T403, T406, T408 require T438. T402 requires T401 and T401 requires T400, giving the order above. No duplicates of T398-T409 were filed.
