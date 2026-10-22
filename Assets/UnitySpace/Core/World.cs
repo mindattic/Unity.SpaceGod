@@ -161,6 +161,7 @@ namespace Unity.SpaceGod.Core
             Contracts.Update(jd);
             Escorts?.Update(jd);
             Holdings.Update(jd);
+            Mining?.Update(jd);
             if (jd >= nextRecountJd)
             {
                 Economy.RecountInbound(Fleet.Ships);
@@ -404,6 +405,8 @@ namespace Unity.SpaceGod.Core
             war.RaisePirateGroup(startJd, w.Catalog[BeltHavens[0].body].Index);
             // Each navy's standing patrol wings fly a beat of its ports (U.SPC-T371).
             PatrolWings.Raise(w, startJd);
+            // Its belt works and the builds they feed (U.SPC-T330).
+            w.SeedSolMining(jd);
             w.SeatCapitals();
             w.MusterReserves();
 
@@ -441,6 +444,7 @@ namespace Unity.SpaceGod.Core
             war.BattleEnded += Contracts.OnBattleEnded;
             // Each subsystem its own offset: two on one seed would draw the very same "random" numbers in step.
             Holdings = new Holdings(this, seed + 23);
+            WireMining(seed + 31);
             economy.DockAllowed = Law.AllowsDocking;
             economy.PriceFactor = Law.PriceFactorFor;
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
