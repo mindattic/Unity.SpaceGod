@@ -230,6 +230,7 @@ namespace Unity.SpaceGod
                 // Its motion as it was, not the spot its schedule was pinned at when the helm was first taken.
                 pilotFrameBody = session.PilotFrameBody;
                 pilot = session.Pilot;
+                pilotViewUp = pilot.Up; // the view's roof follows the hull as saved, not as freshly seeded (U.SPC-T386)
                 pilotAim = session.PilotAim;
                 pilotFlightAssistOff = session.FlightAssistOff;
                 // A ride under way goes on from where it was (EnterPiloting has taken it up again).
