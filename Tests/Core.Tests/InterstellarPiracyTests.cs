@@ -57,6 +57,12 @@ namespace Unity.SpaceGod.Core.Tests
             var v = g.Traffic.Send(courier, sol, ac, VoyagePurpose.Courier, jd);
             Assert.That(v, Is.Not.Null);
             Assert.That(v.Route.First(), Is.SameAs(gate));
+            // Held off the gate already, within the band's reach: left to fly the weeks out, the courier is met there
+            // by whatever else the seeded galaxy has bound for the gate, and the band (and the lone battle the root allows
+            // at a time) is taken up with that trader first.
+            Fleet.PinAt(courier, root, gate.ApproachKm + new DVec3(0, 0, 100), DVec3.UnitX, jd);
+            courier.GateKm = gate.PositionKm;
+            courier.PhaseEndJd = jd + 40;
 
             // The band out on the Centauri Gate's approach, lying in wait.
             w.War.StakeOut(band, gate, jd + 60);
@@ -314,6 +320,11 @@ namespace Unity.SpaceGod.Core.Tests
             var sol = g.Find("Sol System");
             var banner = sol.World.Pirates;
 
+            // Each day, at the same state of the world, the clan is first held a credit short of the founding cost
+            // (it must refuse, and leave the treasury alone), then given the cost: the day a band and route are
+            // ready is the day the refusal above was the treasury check at work, not a lack of anything to send.
+            // (Checked on the one day rather than in two windows, so how the seeded galaxy happens to run -- when
+            // a band sits in port, whether the clan's own daily roll founded something first -- cannot starve it.)
             Ship band = null;
             double jd = StartJd;
             for (; jd < StartJd + 30 && band == null; jd += 0.5)
@@ -322,20 +333,12 @@ namespace Unity.SpaceGod.Core.Tests
                 // Pinned short of the founding cost against whatever the day's smuggling and racketeering
                 // brought in (the clan's takings otherwise creep the treasury back over the line on their own).
                 banner.Treasury = PirateClans.FoundingCost - 1;
-                band = g.Traffic.Clans.Expand(banner, jd);
-                Assert.That(band, Is.Null, "Expand founded a haven without the cost in the treasury to pay for it");
-            }
-            Assert.That(g.Traffic.Clans.Expansions, Is.EqualTo(0));
-            Assert.That(banner.Treasury, Is.EqualTo(PirateClans.FoundingCost - 1), "Expand touched the treasury despite refusing to found");
-
-            // With the cost restored, a band and route are ready again before long: the refusals above were the
-            // treasury check at work, not a lack of anything to send (see the sibling test with treasury in hand
-            // from the start, which founds a haven inside the same 30 days).
-            for (; jd < StartJd + 60 && band == null; jd += 0.5)
-            {
-                g.Update(jd);
+                Assert.That(g.Traffic.Clans.Expand(banner, jd), Is.Null, "Expand founded a haven without the cost in the treasury to pay for it");
+                Assert.That(g.Traffic.Clans.Expansions, Is.EqualTo(0));
+                Assert.That(banner.Treasury, Is.EqualTo(PirateClans.FoundingCost - 1), "Expand touched the treasury despite refusing to found");
                 banner.Treasury = 5e8;
                 band = g.Traffic.Clans.Expand(banner, jd);
+                if (band == null) banner.Treasury = PirateClans.FoundingCost - 1;
             }
             Assert.That(band, Is.Not.Null, "no band and route were ever ready, so the treasury check was never really exercised");
         }
@@ -370,11 +373,15 @@ namespace Unity.SpaceGod.Core.Tests
             var moveBand = typeof(PirateClans).GetMethod("MoveBand", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             Ship Move() => (Ship)moveBand.Invoke(g.Traffic.Clans, new object[] { banner, g.Traffic.Clans.Havens(banner), jd });
             Ship first = null;
-            for (int i = 0; i < 40 && first == null; i++)
+            // Only once a haven has a band to send and two to spare (one moved, one left to be the spare below): how
+            // many bands a haven holds on any day depends on how the seeded galaxy's fights happened to go.
+            for (int i = 0; i < 300 && first == null; i++)
             {
                 jd += 0.5;
                 g.Update(jd);
-                if (g.Traffic.Clans.Bands(banner, target).Count == 0) first = Move();
+                if (g.Traffic.Clans.Bands(banner, target).Count == 0 &&
+                    g.Traffic.Clans.Havens(banner).Any(h => h.system != target && g.Traffic.Clans.Bands(banner, h.system).Count >= 3))
+                    first = Move();
             }
             Assert.That(first, Is.Not.Null, "no band ever set out to refill the empty haven");
             Assert.That(first.Voyage.Purpose, Is.EqualTo(VoyagePurpose.Relocate));
@@ -385,6 +392,7 @@ namespace Unity.SpaceGod.Core.Tests
             // its way can keep a second from being sent after it (U.SPC-T302: the check looked at moves from the empty
             // haven, not to it).
             Assert.That(g.Traffic.Clans.Bands(banner, home).Count, Is.GreaterThan(1), "the home haven has no band to spare");
+            Assert.That(g.Traffic.Clans.Bands(banner, home).Count(s => s.Orbit != null && s.Battle == null && s.Combat.Armed && s.Combat.Damage <= 0.2), Is.GreaterThan(0), "the home haven has no band fit to be the spare");
             var spare = g.Traffic.Clans.Bands(banner, home).First(s => s.Orbit != null && s.Battle == null && s.Combat.Armed && s.Combat.Damage <= 0.2);
             spare.Phase = ShipPhase.Parked;
             spare.GateKm = null;
