@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Unity.SpaceGod.Core
@@ -264,10 +264,12 @@ namespace Unity.SpaceGod.Core
         // ---------------------------------------------------------------- the fight
 
         /// <summary>Marines come aboard at a compartment (a pod, a breacher's drill, or an airlock after docking).</summary>
-        public void Board(Faction boarder, double quality, double marines, Compartment at, bool breach, double seconds, Random rng)
+        /// <summary>Returns false when nobody was landed (the ship is already taken, or another faction is boarding it),
+        /// so the caller can take its marines back rather than lose them.</summary>
+        public bool Board(Faction boarder, double quality, double marines, Compartment at, bool breach, double seconds, Random rng)
         {
-            if (Captured) return;
-            if (Boarder != null && Boarder != boarder) return;
+            if (Captured) return false;
+            if (Boarder != null && Boarder != boarder) return false;
             // Defenders are roused once per boarding: more boarders landing later don't stand them down again.
             bool fresh = Boarder == null;
             Boarder = boarder;
@@ -283,6 +285,7 @@ namespace Unity.SpaceGod.Core
             double react = 15 + rng.NextDouble() * 30;
             if (fresh) reactIn = react;
             Note(seconds, at.Index, $"{marines:0} {boarder.Name} marines board at {at.Name}" + (breach ? ", hull breached" : ""));
+            return true;
         }
 
         /// <summary>Advances the fight aboard by <paramref name="dt"/> seconds. Returns true the moment the ship falls.</summary>

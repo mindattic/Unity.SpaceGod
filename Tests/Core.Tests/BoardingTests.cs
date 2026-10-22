@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Unity.SpaceGod.Core;
 using NUnit.Framework;
@@ -22,6 +22,19 @@ namespace Unity.SpaceGod.Core.Tests
             Launch = FighterAI.Launch,
             FighterStep = FighterAI.Step,
         };
+
+        [Test]
+        public void ASquadFromAnotherFactionCannotLandWhileARivalIsBoardingAndIsToldSo()
+        {
+            var freighter = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
+            var interior = freighter.Interior;
+            var rng = new Random(1);
+            var hold = interior.Of(CompartmentKind.Hold);
+            Assert.That(interior.Board(Red, 1.1, 10, hold, true, 0, rng), Is.True);
+            Assert.That(interior.Board(Blue, 1.2, 10, hold, true, 1, rng), Is.False);
+            Assert.That(interior.Boarders, Is.EqualTo(10).Within(1e-9));
+            Assert.That(interior.Boarder, Is.EqualTo(Red));
+        }
 
         [Test]
         public void BoardersFightThroughToTheBridgeAndEngineeringAndTakeTheShip()

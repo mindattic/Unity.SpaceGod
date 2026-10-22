@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Unity.SpaceGod.Core
@@ -280,6 +280,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>A pod's squad: who they fight for and how good they are.</summary>
         public Faction Owner;
         public double Marines;
+
+        /// <summary>The ship that fired a pod, so a squad that cannot land can go home.</summary>
+        public BattleUnit Source;
 
         /// <summary>An EMP round's stun and reach (see <see cref="WeaponSpec.EmpSeconds"/>).</summary>
         public double EmpSeconds, EmpRadiusKm;
@@ -1937,7 +1940,7 @@ namespace Unity.SpaceGod.Core
                 {
                     Pos = origin, Vel = ((target.Pos - origin).Normalized + spread).Normalized * 0.3 + u.Vel, Target = target, TargetSub = PickSubsystem(target),
                     Damage = s.Def.Weapon.Damage, Speed = s.Def.Weapon.MissileSpeedKmS, Hp = 40, Life = 60, Side = u.Side, Kind = MissileKind.Pod,
-                    Owner = u.Faction, Marines = WeaponSpec.PodMarines,
+                    Owner = u.Faction, Marines = WeaponSpec.PodMarines, Source = u,
                 });
             }
             Emit(FxKind.MissileLaunch, origin, origin + u.Forward, 0, u.Side, u, s.Index);
@@ -1958,7 +1961,12 @@ namespace Unity.SpaceGod.Core
             Embed(t, at, m.Vel, m.Side, false);
             var local = t.ToLocal(at);
             var space = c.Interior.Nearest(local.Z, local.Y);
-            c.Interior.Board(m.Owner, m.Owner.MarineQuality, m.Marines, space, true, Seconds, rng);
+            // Another faction on the same side may have started boarding (or taken) this hull while the pod was in
+            // flight, when the squad cannot land: it returns to the ship that fired it, if that is still there.
+            if (!c.Interior.Board(m.Owner, m.Owner.MarineQuality, m.Marines, space, true, Seconds, rng))
+            {
+                if (m.Source != null && m.Source.Present && !m.Source.Captured) m.Source.Combat.Interior.Embark(0, m.Marines);
+            }
             Emit(FxKind.Breach, at, at - m.Vel.Normalized * 0.05, t.LengthKm * 0.1, m.Side, t, space.Index);
         }
 
