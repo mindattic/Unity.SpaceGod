@@ -229,6 +229,9 @@ namespace Unity.SpaceGod
         /// <summary>GUI-space rects drawn by the HUD last frame; clicks inside them do not reach the world.</summary>
         public readonly List<Rect> UiRects = new List<Rect>();
 
+        /// <summary>Where the HUD drew each ship's name last repaint (U.SPC-T376): clicking a name picks its ship, like its icon.</summary>
+        public readonly List<(Rect rect, Ship ship)> ShipNameRects = new List<(Rect, Ship)>();
+
         DVec3[] bodyScene;
         double[] bodyRadius;
         BodyView[] bodyViews;
@@ -2438,9 +2441,9 @@ namespace Unity.SpaceGod
                 }
                 float heat = shipStates[i].Heat;
                 if (heat > 0.01f) PlaceEntryGlow(glowIndex++, i, rel, heat, pixelsPerUnit);
-                double px = shipLength[i] / Math.Max(rel.magnitude, 1e-9) * pixelsPerUnit;
-                // Too small to read: hide the model, the HUD draws a billboard icon instead.
-                bool visible = px >= 5;
+                double px = ShipLod.ApparentPx(shipLength[i], rel.magnitude, pixelsPerUnit);
+                // Too small to read: hide the model, the HUD draws its named faction icon instead (U.SPC-T376).
+                bool visible = ShipLod.DrawsModel(px);
                 shipViews[i].SetVisible(visible);
                 if (!visible) continue;
                 if (ship.Derelict)
@@ -2746,8 +2749,8 @@ namespace Unity.SpaceGod
             {
                 if (ships[i].Destroyed || ships[i].Controller.Phase == ShipPhase.Landed) continue;
                 if (!ToGui(shipScene[i], out var p, out var depth)) continue;
-                double px = shipLength[i] / depth * ppu;
-                if (picture != null && ships[i] != Piloted.Ship && px < 5 && picture.Of(ships[i]) == null) continue;
+                double px = ShipLod.ApparentPx(shipLength[i], depth, ppu);
+                if (picture != null && ships[i] != Piloted.Ship && !ShipLod.DrawsModel(px) && picture.Of(ships[i]) == null) continue;
                 double pickRadius = Math.Max(px * 0.5, Icons.PixelSize(ships[i].Spec.Class) * 0.5 + 4);
                 double d = (p - gui).magnitude;
                 if (d > pickRadius) continue;
@@ -2758,6 +2761,18 @@ namespace Unity.SpaceGod
                 {
                     bestScore = score;
                     best = Target.OfShip(ships[i]);
+                }
+            }
+
+            // A ship's name beside its icon is as good as the icon itself.
+            foreach (var (rect, ship) in ShipNameRects)
+            {
+                if (ship.Destroyed || !rect.Contains(gui)) continue;
+                const double nameScore = 0.15;
+                if (nameScore < bestScore)
+                {
+                    bestScore = nameScore;
+                    best = Target.OfShip(ship);
                 }
             }
 

@@ -46,6 +46,10 @@ namespace Unity.SpaceGod.UI
         int outfitSlot = -1;
         Vector2 outfitScroll;
 
+        /// <summary>How far the selection card's lines are scrolled when they are too many for the screen, and for which target.</summary>
+        Vector2 selectionScroll;
+        Target selectionScrollFor = Target.None;
+
         internal static readonly Color Accent = new Color(0.45f, 0.85f, 1f);
         internal static readonly Color Dim = new Color(0.62f, 0.7f, 0.78f);
 
@@ -96,7 +100,11 @@ namespace Unity.SpaceGod.UI
         public void Draw()
         {
             EnsureStyles();
-            if (Event.current.type == EventType.Layout) app.UiRects.Clear();
+            if (Event.current.type == EventType.Layout)
+            {
+                app.UiRects.Clear();
+                app.ShipNameRects.Clear();
+            }
 
             // Spawn & Pilot is its own full screen, not an overlay panel -- everything else waits.
             if (app.ShowSpawn) { DrawSpawn(); return; }
@@ -348,8 +356,8 @@ namespace Unity.SpaceGod.UI
                     DrawIcon(Icons.Lost, p, 14, LostColor(contact));
                     continue;
                 }
-                float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
-                if (px >= 5) continue;
+                float px = (float)ShipLod.ApparentPx(app.ShipDisplayLength(ship), depth, ppu);
+                if (ShipLod.DrawsModel(px)) continue;
                 if (app.Occluded(scene)) continue;
                 if (ship.IsEscort && app.ToGui(app.ShipScene(ship.Leader), out var lp, out _) && (lp - p).magnitude < 7f) continue;
                 var c = ship.Faction.Color;
@@ -371,8 +379,13 @@ namespace Unity.SpaceGod.UI
             DrawTargetMarker(app.Selected, true);
             DrawOpportunityMarkers();
 
+            app.ShipNameRects.Clear();
             if (app.ShowLabels)
             {
+                // Names that must show (hovered, selected, followed, a flagship on sight) go down first; a far-off ship's
+                // icon name (U.SPC-T376) only where it does not run into one already drawn, so a crowded port stays legible.
+                shipLabelRects.Clear();
+                iconNamed.Clear();
                 foreach (var ship in ships)
                 {
                     if (ship.Destroyed) continue;
@@ -380,28 +393,69 @@ namespace Unity.SpaceGod.UI
                     if (picture != null && ship != app.Piloted.Ship && contact == null) continue;
                     var t = Target.OfShip(ship);
                     bool named = t == app.Hovered || t == app.Selected || app.SpaceCamera.FocusTarget == t;
+                    bool identified = contact == null || contact.Level == ContactLevel.Identified;
                     // A flagship is named on sight only once the scanners have identified it.
-                    if (!named && !ship.IsEscort && ship.Spec.IsMilitary && (contact == null || contact.Level == ContactLevel.Identified))
+                    if (!named && !ship.IsEscort && ship.Spec.IsMilitary && identified)
                     {
                         // Name fleet flagships once they are big enough on screen to be a thing, not a dot.
                         if (app.ToGui(app.ShipScene(ship), out _, out var d))
                             named = app.ShipDisplayLength(ship) / d * ppu > 12;
                     }
-                    if (!named) continue;
-                    if (!ContactScene(ship, contact, out var at) || !app.ToGui(at, out var p, out var depth) || app.Occluded(at)) continue;
-                    float px = (float)(app.ShipDisplayLength(ship) / depth * ppu);
-                    var c = ship.Faction.Color;
-                    if (contact == null)
+                    if (!named)
                     {
-                        DrawLabel(ship.Name, p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), new Color(c.R, c.G, c.B), false);
+                        // Drawn as its icon: named beside it if the settings say so and the scanners know whose it is.
+                        if (identified && (contact == null || !contact.Cold) && ShipLod.NamesIcon(ship.Spec.IsMilitary, ship.IsEscort)) iconNamed.Add((ship, contact));
                         continue;
                     }
-                    // A contact is named by what the scanners make of it: unknown, its class, or its name.
-                    var tint = contact.Level == ContactLevel.Identified ? new Color(c.R, c.G, c.B) : ContactGrey;
-                    if (contact.Cold) tint.a = 0.5f;
-                    DrawLabel(contact.Label + (contact.Cold ? "  (contact lost)" : contact.LagSeconds >= 0.1 ? "  (" + LightSpeed.Describe(contact.LagSeconds / Astro.SecondsPerDay) + " ago, light lag)" : ""), p + new Vector2(Mathf.Max(px * 0.5f, 10) + 4, -8), tint, contact.Level != ContactLevel.Identified);
+                    DrawShipName(ship, contact, ppu, false);
                 }
+                foreach (var (ship, contact) in iconNamed)
+                    DrawShipName(ship, contact, ppu, true);
             }
+        }
+
+        /// <summary>Ship name labels drawn this repaint, so an icon's name can stay clear of them.</summary>
+        readonly List<Rect> shipLabelRects = new List<Rect>();
+
+        /// <summary>Ships drawn as icons whose names are wanted this repaint, drawn after the names that must show.</summary>
+        readonly List<(Ship ship, Contact contact)> iconNamed = new List<(Ship, Contact)>();
+
+        /// <summary>
+        /// A ship's name beside it. <paramref name="iconName"/>: an icon's name (U.SPC-T376), drawn only while the ship is
+        /// an icon and only where it overlaps no name already drawn. Every name is clickable, like the icon.
+        /// </summary>
+        void DrawShipName(Ship ship, Contact contact, double ppu, bool iconName)
+        {
+            if (!ContactScene(ship, contact, out var at) || !app.ToGui(at, out var p, out var depth) || app.Occluded(at)) return;
+            float px = (float)ShipLod.ApparentPx(app.ShipDisplayLength(ship), depth, ppu);
+            if (iconName && ShipLod.DrawsModel(px)) return;
+            var c = ship.Faction.Color;
+            var at2 = p + new Vector2(Mathf.Max(px * 0.5f, iconName ? Icons.PixelSize(ship.Spec.Class) * 0.5f : 10) + 4, -8);
+            string text;
+            Color tint;
+            bool minor;
+            if (contact == null)
+            {
+                text = ship.Name;
+                tint = new Color(c.R, c.G, c.B);
+                minor = iconName;
+            }
+            else
+            {
+                // A contact is named by what the scanners make of it: unknown, its class, or its name.
+                text = contact.Label + (contact.Cold ? "  (contact lost)" : contact.LagSeconds >= 0.1 ? "  (" + LightSpeed.Describe(contact.LagSeconds / Astro.SecondsPerDay) + " ago, light lag)" : "");
+                tint = contact.Level == ContactLevel.Identified ? new Color(c.R, c.G, c.B) : ContactGrey;
+                if (contact.Cold) tint.a = 0.5f;
+                minor = contact.Level != ContactLevel.Identified;
+            }
+            var size = (minor ? minorLabel : label).CalcSize(new GUIContent(text));
+            var r = new Rect(at2.x, at2.y, size.x, size.y);
+            if (iconName)
+                foreach (var other in shipLabelRects)
+                    if (other.Overlaps(r)) return;
+            shipLabelRects.Add(r);
+            app.ShipNameRects.Add((r, ship));
+            DrawLabel(text, at2, tint, minor);
         }
 
         /// <summary>Unconfirmed worlds are marked as such wherever they are named.</summary>
@@ -1636,6 +1690,7 @@ namespace Unity.SpaceGod.UI
                 if (c.Role == ShipRole.Free) lines.Add(("Pilot", "Independent: goes where it pleases" + (c.Wander ? " (a hop out to open space)" : "")));
                 var combat = ship.Combat;
                 lines.Add(("Hull", Percent(combat.HullFraction) + "   Shields " + Percent(combat.Spec.Shield > 0 ? combat.Shield / combat.Spec.Shield : 0)));
+                lines.Add(("Armament", ShipLod.Armament(combat.Subsystems)));
                 int lost = 0;
                 foreach (var hp in combat.Subsystems) if (hp.Destroyed) lost++;
                 if (lost > 0) lines.Add(("Damage", lost + " of " + combat.Subsystems.Count + " hardpoints destroyed"));
@@ -1684,7 +1739,12 @@ namespace Unity.SpaceGod.UI
             }
 
             float w = 410;
-            float h = 64 + lines.Count * 19 + 30;
+            float linesH = lines.Count * 19;
+            // A long card (a boarded hull lists every compartment) never runs off the top of the screen: its lines scroll.
+            float maxLinesH = Mathf.Max(19 * 4, Screen.height - 140 - (64 + 30));
+            bool scrolls = linesH > maxLinesH;
+            float shownH = scrolls ? maxLinesH : linesH;
+            float h = 64 + shownH + 30;
             var r = Panel(new Rect(SafeRight - w - 10, Screen.height - h - 10, w, h));
             var old = GUI.contentColor;
             GUI.contentColor = headingColor;
@@ -1693,21 +1753,34 @@ namespace Unity.SpaceGod.UI
             GUI.Label(new Rect(r.x + 14, r.y + 30, w - 28, 18), sub, small);
             GUI.contentColor = old;
 
-            float y = r.y + 54;
+            if (selectionScrollFor != t)
+            {
+                selectionScrollFor = t;
+                selectionScroll = Vector2.zero;
+            }
+            float x0 = r.x, y = r.y + 54, valueW = w - 146;
+            if (scrolls)
+            {
+                selectionScroll = GUI.BeginScrollView(new Rect(r.x, y, w - 4, shownH), selectionScroll, new Rect(0, 0, w - 20, linesH));
+                x0 = 0;
+                y = 0;
+                valueW = w - 162;
+            }
             foreach (var (key, value) in lines)
             {
                 if (key.Length == 0)
                 {
-                    GUI.Label(new Rect(r.x + 14, y, w - 28, 36), value, small);
+                    GUI.Label(new Rect(x0 + 14, y, w - 28, 36), value, small);
                     y += 19;
                     continue;
                 }
                 GUI.contentColor = Dim;
-                GUI.Label(new Rect(r.x + 14, y, 120, 19), key, small);
+                GUI.Label(new Rect(x0 + 14, y, 120, 19), key, small);
                 GUI.contentColor = Color.white;
-                GUI.Label(new Rect(r.x + 132, y, w - 146, 19), value, text);
+                GUI.Label(new Rect(x0 + 132, y, valueW, 19), value, text);
                 y += 19;
             }
+            if (scrolls) GUI.EndScrollView();
             GUI.contentColor = old;
 
             bool focused = app.SpaceCamera.FocusTarget == t && app.SpaceCamera.Mode != SpaceCamera.CameraMode.Free;
