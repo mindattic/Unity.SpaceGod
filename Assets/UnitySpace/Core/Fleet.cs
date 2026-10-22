@@ -886,8 +886,13 @@ namespace Unity.SpaceGod.Core
             double span = Math.Max(ship.PhaseEndJd - ship.PhaseStartJd, 1e-9);
             double u = Math.Max(0, Math.Min(1, (jd - ship.PhaseStartJd) / span));
             double surged = span / SurgeFactor;
+            // A hull still easing back in from beside the lane times that from PhaseStartJd too: what is left of its sideways
+            // offset is rescaled so moving the start does not pop it outward (U.SPC-T388).
+            double eased = LaneRejoin(ship, jd);
             ship.PhaseStartJd = jd - u * surged;
             ship.PhaseEndJd = ship.PhaseStartJd + surged;
+            double easedNow = LaneRejoin(ship, jd);
+            if (easedNow > 0) ship.LaneHoldSide *= eased / easedNow;
             ship.LaneSurged = true;
             return true;
         }

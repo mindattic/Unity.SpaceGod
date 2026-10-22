@@ -177,6 +177,22 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void SurgingWhileEasingBackInFromBesideTheLaneDoesNotPopTheHullSideways()
+        {
+            var t = Create();
+            var (seenJd, threat) = RideToWarning(t);
+            t.W.Fleet.DropOut(t.Pilot, seenJd, DVec3.UnitX);
+            double past = seenJd + (threat.SecondsToPulse + 120) * Second;
+            var near = t.W.Fleet.RejoinPoint(t.Pilot, past) + new DVec3(0, 80000, 0);
+            Assert.That(t.W.Fleet.RejoinLane(t.Pilot, near, past), Is.True);
+            double jd = past + 0.03; // about an hour into the ease back in
+            var before = t.W.Fleet.StateOf(t.Pilot, jd);
+            Assert.That(Fleet.SurgeRide(t.Pilot, jd), Is.True);
+            var after = t.W.Fleet.StateOf(t.Pilot, jd);
+            Assert.That((after.HelioKm - before.HelioKm).Length, Is.LessThan(1000), "the remaining sideways offset jumped when the ride was sped up");
+        }
+
+        [Test]
         public void ASurgingHullCanBeThroughBeforeThePulseClosesOrStillBeCaught()
         {
             var t = Create();
