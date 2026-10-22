@@ -74,6 +74,14 @@ namespace Unity.SpaceGod.Views
             mr.sharedMaterial = Materials.Create(Materials.Fx, "BattleFx");
             mr.shadowCastingMode = ShadowCastingMode.Off;
             mr.receiveShadows = false;
+            // Whatever the battles already hold is history (a fight kept in War.Ended holds hundreds of events for good):
+            // drawing it now would replay old fire at old sites as if it were new (U.SPC-T385).
+            var war = app.World?.War;
+            if (war != null)
+            {
+                foreach (var b in war.Battles) seen[b] = b.FxSeq;
+                foreach (var b in war.Ended) seen[b] = b.FxSeq;
+            }
         }
 
         public void Update()
