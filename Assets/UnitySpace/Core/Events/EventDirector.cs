@@ -641,7 +641,10 @@ namespace Unity.SpaceGod.Core
             var owners = session.Owners;
             if (session.SurvivorsRescued >= 0.5 && owners != null && !owners.IsPirate && owners != player.Faction)
             {
-                op.Reward.Credits += RoundThousand(session.SurvivorsRescued * SurvivorRescueCredits);
+                double thanks = RoundThousand(session.SurvivorsRescued * SurvivorRescueCredits);
+                op.Reward.Credits += thanks;
+                // Only their owners' thanks come out of the owners' treasury; the registry's award is new money.
+                op.Reward.PatronShare = thanks;
                 op.Reward.ReputationWith = owners;
                 op.Reward.Reputation += SurvivorRescueReputation;
             }
@@ -682,9 +685,10 @@ namespace Unity.SpaceGod.Core
             var patron = r.ReputationWith;
             if (patron != null && patron != purse && r.Credits > 0)
             {
-                double paid = Math.Max(0, Math.Min(r.Credits, patron.Treasury));
+                double owed = Math.Min(r.Credits, r.PatronShare ?? r.Credits);
+                double paid = Math.Max(0, Math.Min(owed, patron.Treasury));
                 patron.Treasury -= paid;
-                r.Credits = op.Reward.Credits = paid;
+                r.Credits = op.Reward.Credits = r.Credits - owed + paid;
             }
             if (purse != null) purse.Treasury += r.Credits;
             // Cargo into the hold of the ship that came, while it still exists and is still theirs; else

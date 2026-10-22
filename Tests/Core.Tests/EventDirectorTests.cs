@@ -481,6 +481,29 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void OnlyTheSurvivorsThanksComeOutOfTheirOwnersTreasuryNotTheRegistrysAward()
+        {
+            var s = Add(ShipClass.Freighter, traders, Near);
+            s.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
+            s.Derelict = true;
+            s.DerelictSinceJd = Jd;
+            s.Combat.Interior.Abandon(6, 0, 1);
+            player.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            double plain = op.Reward.Credits;
+            traders.Treasury = 20000;
+            double navyBefore = navy.Treasury;
+
+            var session = SalvageSession.Latch(player, s);
+            session.CastOff();
+            director.HulkWorked(session, Jd + 0.1);
+            Assert.That(traders.Treasury, Is.Zero, "the owners pay what they hold of the thanks");
+            Assert.That(op.Reward.Credits, Is.EqualTo(plain + 20000), "the registry's award is paid in full whatever the owners hold");
+            Assert.That(navy.Treasury - navyBefore, Is.EqualTo(plain + 20000));
+        }
+
+        [Test]
         public void LatchingOnAndLeavingEmptyHandedSeesNothingThrough()
         {
             var s = Add(ShipClass.Freighter, traders, Near);

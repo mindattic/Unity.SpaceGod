@@ -56,6 +56,9 @@ namespace Unity.SpaceGod.Core
         public Faction ReputationWith;
         public double Reputation;
 
+        /// <summary>How much of <see cref="Credits"/> the <see cref="ReputationWith"/> faction itself pays (null: all of it).</summary>
+        public double? PatronShare;
+
         public bool IsEmpty => Credits <= 0 && CargoCrates <= 0 && (ReputationWith == null || Reputation == 0);
 
         public override string ToString()
