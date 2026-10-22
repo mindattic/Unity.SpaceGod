@@ -11,4 +11,8 @@
   <ItemGroup>
     <Compile Include="../../Assets/UnitySpace/Core/**/*.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The Unity.Shared package's engine-free core (player profiles), as the Core asmdef references it. -->
+    <ProjectReference Include="../Unity.Shared.Core/Unity.Shared.Core.csproj" />
+  </ItemGroup>
 </Project>

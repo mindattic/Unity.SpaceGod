@@ -11,8 +11,6 @@ namespace Unity.SpaceGod.UI
     /// </summary>
     public static class DisplayOptions
     {
-        const string Setting = "display";
-
         /// <summary>What is on the screen now, as last applied: <see cref="Screen.width"/> and the mode only catch up
         /// with <see cref="Screen.SetResolution(int, int, FullScreenMode)"/> at the end of the frame.</summary>
         public static DisplaySettings Current { get; private set; }
@@ -25,7 +23,7 @@ namespace Unity.SpaceGod.UI
         public static void ApplySaved()
         {
             Current = FromScreen().WithVSync(true);
-            if (DisplaySettings.TryParse(ActiveProfile.Current.Setting(Setting) ?? "", out var saved))
+            if (DisplaySettings.TryParse(ActiveProfile.Current.Setting(GameSettings.Display) ?? "", out var saved))
             {
                 if (ScreenFixedByCommandLine()) Current = Current.WithVSync(saved.VSync);
                 else
@@ -52,7 +50,7 @@ namespace Unity.SpaceGod.UI
         /// <summary>Remembers <see cref="Current"/> in the player's profile for the next run (the player kept it).</summary>
         public static void Save()
         {
-            try { ActiveProfile.Current.SetSetting(Setting, Current.Format()); }
+            try { ActiveProfile.Current.SetSetting(GameSettings.Display, Current.Format()); }
             catch (System.Exception e) { Debug.LogError("[Unity.SpaceGod] Saving the display settings failed: " + e); }
         }
 

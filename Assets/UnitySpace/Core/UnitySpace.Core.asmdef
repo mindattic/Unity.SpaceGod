@@ -1,7 +1,9 @@
 {
     "name": "Unity.SpaceGod.Core",
     "rootNamespace": "Unity.SpaceGod.Core",
-    "references": [],
+    "references": [
+        "Unity.Shared.Core"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

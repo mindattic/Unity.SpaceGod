@@ -8,6 +8,12 @@
         "com.unity.nuget.newtonsoft-json": "3.2.1"
       }
     },
+    "com.mindattic.unity.shared": {
+      "version": "file:../../Unity.Shared/unity/com.mindattic.unity.shared",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
     "com.unity.burst": {
       "version": "1.8.30",
       "depth": 1,

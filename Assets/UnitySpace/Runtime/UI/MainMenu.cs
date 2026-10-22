@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using Unity.Shared.Core;
 using Unity.SpaceGod.Core;
 using Unity.SpaceGod.Views;
 using UnityEngine;
@@ -102,7 +103,7 @@ namespace Unity.SpaceGod.UI
                 saveHeaders.Add(h);
             }
             latest = slots.Latest();
-            profiles = ActiveProfile.Store.Names();
+            profiles = new List<string>(ActiveProfile.Store.List());
         }
 
         void Open(Page p)

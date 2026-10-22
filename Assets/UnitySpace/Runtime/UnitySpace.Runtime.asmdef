@@ -3,6 +3,7 @@
     "rootNamespace": "Unity.SpaceGod",
     "references": [
         "Unity.SpaceGod.Core",
+        "Unity.Shared.Core",
         "Unity.InputSystem",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime",

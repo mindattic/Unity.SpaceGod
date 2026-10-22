@@ -204,7 +204,7 @@ The orbits are real; everything below is fiction, placed on worlds that plausibl
 - Body panels show each settlement's exports, shortages and defences; ship panels show cargo and trade profit, or hull, shields, lost hardpoints, fighters aboard and orders. **M** opens a market board, **B** jumps to the biggest battle and drops to battle time (real time), a ticker reports battles, captures, surrenders, launches, ceasefires, economic shocks and price spikes, and **X** opens the full news feed.
 - The market board, cargo hold and controls panel collapse to their title bar with their [-] button.
 - **Main menu and profiles.** The game opens on a main menu: Continue (the latest save), New Game, Load Game, Profiles, Settings and Quit. Each profile keeps its own saves and settings; Profiles switches to another or makes a new one, and the Esc menu's Main Menu goes back (with an autosave). `-demo`, `-capture` and `-continue` skip the menu.
-- **Save and load.** The whole simulation saves to a file and resumes exactly where it was: the clock and warp, every system's world (ships and their cargo, holds, tanks and loadouts, battles in progress, markets, factions and treasuries, wars and sieges, wrecks, escape pods and prisoners, the law's records and bounties, adventures and reputation), the gates and the traffic between the stars, and the ship you were flying, moving as it was. F5 quicksaves and F8 loads the quicksave; F6 (or Save / Load in the Esc menu) opens the saves: New Save makes another of your own, as many as you like, and each save, the quicksave and the three autosaves show where and when they were saved, who was flying and their purse, with Save to overwrite, Load and Delete. An autosave is taken every five minutes and when the app closes, the oldest of the three making way; `-continue` resumes the latest save. Each player profile is a folder in `%USERPROFILE%\AppData\LocalLow\MindAttic\Unity.SpaceGod\Profiles` (the one in use is named in `current.txt`, `Default` until another is chosen): its saves are in `Saves`, and each setting it remembers (the display, auto-reorient) is a file of its own in `Settings`.
+- **Save and load.** The whole simulation saves to a file and resumes exactly where it was: the clock and warp, every system's world (ships and their cargo, holds, tanks and loadouts, battles in progress, markets, factions and treasuries, wars and sieges, wrecks, escape pods and prisoners, the law's records and bounties, adventures and reputation), the gates and the traffic between the stars, and the ship you were flying, moving as it was. F5 quicksaves and F8 loads the quicksave; F6 (or Save / Load in the Esc menu) opens the saves: New Save makes another of your own, as many as you like, and each save, the quicksave and the three autosaves show where and when they were saved, who was flying and their purse, with Save to overwrite, Load and Delete. An autosave is taken every five minutes and when the app closes, the oldest of the three making way; `-continue` resumes the latest save. Each player profile is a folder in `%USERPROFILE%\AppData\LocalLow\MindAttic\Unity.SpaceGod\Profiles` (the one in use is named in `current.txt`, `Default` until another is chosen): its saves are in `Saves`, and its settings are one `settings.json` in the shared MindAttic format from [Unity.Shared](https://github.com/mindattic/Unity.Shared) (the common block every MindAttic game shares, and the game's own, the display and auto-reorient, under `game`). A profile from before that, with a file per setting in `Settings`, is moved into `settings.json` on the first run and the old folder kept as `Settings.old`.
 
 | Carrier group in formation | Freighter mid-burn | Saturn |
 | --- | --- | --- |
@@ -216,11 +216,13 @@ Prerequisites:
 
 - Windows and Unity **6000.4.3f1** (via Unity Hub).
 - [MindAttic.Capture](https://github.com/mindattic/MindAttic.Capture) cloned next to this repo: `Packages/manifest.json` loads its Unity package from `../MindAttic.Capture/unity/com.mindattic.capture`.
+- [Unity.Shared](https://github.com/mindattic/Unity.Shared) cloned next to this repo too, for the player profiles: `Packages/manifest.json` loads it from `../Unity.Shared/unity/com.mindattic.unity.shared`, and the core tests compile its engine-free core from there (set `UnitySharedDir` to build them from a checkout elsewhere).
 - Optionally the .NET 10 SDK, to run the core tests.
 
 ```bash
 git clone https://github.com/mindattic/Unity.SpaceGod.git
 git clone https://github.com/mindattic/MindAttic.Capture.git
+git clone https://github.com/mindattic/Unity.Shared.git
 ```
 
 1. Open the `Unity.SpaceGod` folder in Unity Hub. The first import takes a few minutes. The editor opens `Assets/Scenes/UnitySpace.unity` automatically (or use **Unity.SpaceGod > Rebuild Main Scene**).
@@ -368,6 +370,7 @@ Assets/UnitySpace/
   Editor/ProjectSetup.cs  scene generation and player build
 Tests/
   UnitySpace.Core/       builds Core as a plain .NET library
+  Unity.Shared.Core/      builds the Unity.Shared package's engine-free core (profiles) for it
   Core.Tests/             NUnit tests over Core (dotnet test)
 tools/                  deploy.ps1, launch.ps1, launch.bat
 docs/                   USER_STORIES.md and the README images

@@ -330,7 +330,7 @@ namespace Unity.SpaceGod
         {
             Application.targetFrameRate = 144;
             DisplayOptions.ApplySaved(); // the resolution, window mode and VSync last kept (VSync on until then)
-            AutoReorient = ActiveProfile.Current.Flag(AutoReorientSetting, true);
+            AutoReorient = ActiveProfile.Current.Flag(GameSettings.AutoReorient, true);
             pauseMenu.ShowSaves = () => ShowSaves = true;
             pauseMenu.ToMainMenu = () => pendingMainMenu = true;
 
@@ -1961,12 +1961,10 @@ namespace Unity.SpaceGod
         /// <summary>Whether the view keeps the active system's plane level by itself (R or the on-screen toggle; remembered between sessions).</summary>
         public bool AutoReorient { get; private set; }
 
-        const string AutoReorientSetting = "auto-reorient";
-
         public void ToggleAutoReorient()
         {
             AutoReorient = !AutoReorient;
-            try { ActiveProfile.Current.SetFlag(AutoReorientSetting, AutoReorient); }
+            try { ActiveProfile.Current.SetFlag(GameSettings.AutoReorient, AutoReorient); }
             catch (Exception e) { Debug.LogError("[Unity.SpaceGod] Saving the auto-reorient setting failed: " + e); }
             ShowToast(AutoReorient ? "AUTO-REORIENT ON: keeping " + SystemPlaneName + " level" : "AUTO-REORIENT OFF: the view stays as you leave it");
         }

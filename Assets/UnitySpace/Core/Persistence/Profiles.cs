@@ -1,129 +1,131 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
-using System.Linq;
+using System.Text;
+using Unity.Shared.Core;
 
 namespace Unity.SpaceGod.Core
 {
     /// <summary>
-    /// The player profiles in the player's data folder: one folder each under <see cref="Root"/>, holding that
-    /// player's saves and settings, and a <c>current.txt</c> naming the one in use. Plain files, so they are the
-    /// same on every platform and can be read, copied or edited by hand.
+    /// Unity.SpaceGod's own settings, kept in the <c>game</c> block of the profile's one <c>settings.json</c>
+    /// (the shared mindattic.settings v1 format from the Unity.Shared package, U.SPC-T325). The profiles
+    /// themselves (current.txt, one folder each, Saves/) are the package's <see cref="ProfileStore"/>.
     /// </summary>
-    public sealed class ProfileStore
+    public static class GameSettings
     {
-        public const string DefaultName = "Default";
+        /// <summary>The window size, mode and VSync, as <c>DisplaySettings.Format()</c> writes them.</summary>
+        public const string Display = "display";
 
-        public readonly string Root;
+        /// <summary>Whether the view swings level with each system's plane.</summary>
+        public const string AutoReorient = "autoReorient";
 
-        public ProfileStore(string root) => Root = root;
+        /// <summary>The text of <paramref name="key"/>, or null when it was never set or is not text.</summary>
+        public static string Setting(this Profile profile, string key) => profile.Settings.Game.GetString(key);
 
-        string CurrentFile => Path.Combine(Root, "current.txt");
-
-        /// <summary>The profile in use (the one last selected, else <see cref="DefaultName"/>), its folder made if it is new.</summary>
-        public PlayerProfile Current()
+        /// <summary>Sets <paramref name="key"/> and writes settings.json (throws when the disk refuses; the old file is then intact).</summary>
+        public static void SetSetting(this Profile profile, string key, string value)
         {
-            string name = null;
-            try
-            {
-                if (File.Exists(CurrentFile)) name = File.ReadAllText(CurrentFile).Trim();
-            }
-            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
-            {
-            }
-            return Open(IsValidName(name) ? name : DefaultName);
+            profile.Settings.Game.Set(key, value ?? "");
+            profile.SaveSettings();
         }
 
-        /// <summary>Makes <paramref name="name"/> the profile in use, from this run on.</summary>
-        public PlayerProfile Select(string name)
+        /// <summary>An on/off setting, or <paramref name="fallback"/> when it was never set or is not one.</summary>
+        public static bool Flag(this Profile profile, string key, bool fallback) => profile.Settings.Game.GetBool(key, fallback);
+
+        /// <summary>Sets an on/off setting and writes settings.json.</summary>
+        public static void SetFlag(this Profile profile, string key, bool on)
         {
-            var profile = Open(name);
-            Directory.CreateDirectory(Root);
-            File.WriteAllText(CurrentFile, profile.Name);
-            return profile;
-        }
-
-        /// <summary>The profile called <paramref name="name"/>, its folder made if it is new.</summary>
-        public PlayerProfile Open(string name)
-        {
-            if (!IsValidName(name)) throw new ArgumentException("Not a profile name: " + name, nameof(name));
-            var profile = new PlayerProfile(name, Path.Combine(Root, name));
-            Directory.CreateDirectory(profile.Folder);
-            return profile;
-        }
-
-        /// <summary>Every profile there is, by name.</summary>
-        public List<string> Names() =>
-            Directory.Exists(Root)
-                ? Directory.GetDirectories(Root).Select(Path.GetFileName).Where(IsValidName).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
-                : new List<string>();
-
-        /// <summary>Whether a profile called <paramref name="name"/> is there already (two that differ only in case would share a folder on Windows).</summary>
-        public bool Exists(string name) => Names().Contains(name, StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>A name that makes one folder on every platform: not empty, not a path, nothing a file system refuses.</summary>
-        public static bool IsValidName(string name) =>
-            !string.IsNullOrWhiteSpace(name) && name.Length <= 64 && name == name.Trim() && name != "." && name != ".."
-            && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && name.IndexOfAny(new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' }) < 0
-            // Windows drops a trailing dot ("Ryan." is the folder "Ryan", which Exists would not see) and refuses a device's name as a folder.
-            && !name.EndsWith(".", StringComparison.Ordinal) && !IsDeviceName(name);
-
-        static readonly string[] DeviceNames =
-        {
-            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-        };
-
-        /// <summary>A reserved Windows device name, with or without an extension ("NUL", "con.txt").</summary>
-        static bool IsDeviceName(string name)
-        {
-            int dot = name.IndexOf('.');
-            string stem = dot < 0 ? name : name.Substring(0, dot);
-            return Array.Exists(DeviceNames, d => string.Equals(d, stem, StringComparison.OrdinalIgnoreCase));
+            profile.Settings.Game.Set(key, on);
+            profile.SaveSettings();
         }
     }
 
     /// <summary>
-    /// One player's folder: <c>Saves</c> for the save slots and <c>Settings</c> with each setting in a file of
-    /// its own (<c>display.txt</c>, <c>auto-reorient.txt</c>...), so one that is damaged or deleted costs only itself.
+    /// Moves profiles written before U.SPC-T325, which kept each setting in a file of its own
+    /// (<c>Profiles/&lt;Name&gt;/Settings/display.txt</c>, <c>auto-reorient.txt</c>...), onto the single
+    /// <c>Profiles/&lt;Name&gt;/settings.json</c>: every <c>&lt;setting&gt;.txt</c> goes into the <c>game</c> block under
+    /// its camelCase name (<c>true</c>/<c>false</c> as a JSON bool, anything else as text), a value already in
+    /// settings.json wins, and the old <c>Settings</c> folder is then kept aside as <c>Settings.old</c>, never erased.
+    /// current.txt and Saves/ are not touched.
     /// </summary>
-    public sealed class PlayerProfile
+    public static class LegacyProfileSettings
     {
-        public readonly string Name;
-        public readonly string Folder;
+        /// <summary>The per-setting folder profiles had before settings.json.</summary>
+        public const string FolderName = "Settings";
 
-        public PlayerProfile(string name, string folder)
+        /// <summary>What the old folder is renamed to once its settings are in settings.json.</summary>
+        public const string KeptAsideName = "Settings.old";
+
+        /// <summary>Migrates every profile in <paramref name="store"/> that still has a Settings folder; returns the names of those migrated.</summary>
+        public static List<string> MigrateAll(ProfileStore store)
         {
-            Name = name;
-            Folder = folder;
+            var migrated = new List<string>();
+            foreach (var name in store.List())
+            {
+                var profile = store.Get(name);
+                if (profile != null && Migrate(profile)) migrated.Add(profile.Name);
+            }
+            return migrated;
         }
 
-        public string SavesFolder => Path.Combine(Folder, "Saves");
-
-        public string SettingsFolder => Path.Combine(Folder, "Settings");
-
-        public string SettingPath(string setting) => Path.Combine(SettingsFolder, setting + ".txt");
-
-        /// <summary>The text of <paramref name="setting"/>, or null when it was never set or cannot be read.</summary>
-        public string Setting(string setting)
+        /// <summary>
+        /// Migrates one profile. Returns true when it had a Settings folder and it was moved into settings.json and
+        /// kept aside; false when there was nothing to do or the disk refused (the old files are then left as they
+        /// were, to be tried again next run).
+        /// </summary>
+        public static bool Migrate(Profile profile)
         {
-            string path = SettingPath(setting);
+            string folder = Path.Combine(profile.Folder, FolderName);
+            if (!Directory.Exists(folder)) return false;
             try
             {
-                return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
+                var game = profile.Settings.Game;
+                foreach (var file in Directory.GetFiles(folder, "*.txt"))
+                {
+                    string key = KeyFor(Path.GetFileNameWithoutExtension(file));
+                    if (key.Length == 0 || game.ContainsKey(key)) continue;
+                    string text = File.ReadAllText(file, Encoding.UTF8).Trim();
+                    if (bool.TryParse(text, out bool on)) game.Set(key, on);
+                    else game.Set(key, text);
+                }
+                profile.SaveSettings();
+                Directory.Move(folder, KeptAsidePath(profile.Folder));
+                return true;
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                return null;
+                return false;
             }
         }
 
-        public void SetSetting(string setting, string value) =>
-            SaveGame.WriteFile(SettingPath(setting), System.Text.Encoding.UTF8.GetBytes(value ?? ""));
+        /// <summary>A setting file's name as a settings.json key: "auto-reorient" is "autoReorient".</summary>
+        public static string KeyFor(string fileName)
+        {
+            var key = new StringBuilder();
+            bool upper = false;
+            foreach (char c in fileName.Trim())
+            {
+                if (c == '-' || c == '_' || c == ' ')
+                {
+                    upper = key.Length > 0;
+                    continue;
+                }
+                key.Append(upper ? char.ToUpperInvariant(c) : c);
+                upper = false;
+            }
+            return key.ToString();
+        }
 
-        /// <summary>An on/off setting, or <paramref name="fallback"/> when it was never set or is not one.</summary>
-        public bool Flag(string setting, bool fallback) => bool.TryParse(Setting(setting), out bool on) ? on : fallback;
-
-        public void SetFlag(string setting, bool on) => SetSetting(setting, on ? "true" : "false");
+        static string KeptAsidePath(string profileFolder)
+        {
+            string target = Path.Combine(profileFolder, KeptAsideName);
+            if (!Directory.Exists(target) && !File.Exists(target)) return target;
+            string stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+            target = Path.Combine(profileFolder, KeptAsideName + "-" + stamp);
+            for (int i = 2; Directory.Exists(target) || File.Exists(target); i++)
+                target = Path.Combine(profileFolder, KeptAsideName + "-" + stamp + "-" + i);
+            return target;
+        }
     }
 }
