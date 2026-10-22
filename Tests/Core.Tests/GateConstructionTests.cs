@@ -207,8 +207,9 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(p.Ly, Is.LessThanOrEqualTo(GateConstruction.MaxLinkLy));
                 Assert.That(g.Network.Between(p.From, p.To), Is.Not.Null);
                 // Built from a system its builder holds, by a state -- or, per BasesOf, an empty one (a freshly
-                // opened frontier star awaiting its first colonists, or a Void Base that will never have one) it
-                // reached itself, which still counts as its own base to build on from.
+                // opened frontier star awaiting its first colonists) it reached itself, which still counts as its own base
+                // to build on from -- never a Void Base, a relay no state holds or builds out from (U.SPC-T393).
+                Assert.That(p.From.IsVoidBase, Is.False, p.ToString());
                 Assert.That(p.From.Holder == p.Builder || p.From.Gates.Any(x => x.Owner == p.Builder), Is.True, p.ToString());
                 Assert.That(p.Builder.Kind, Is.EqualTo(PolityKind.State));
             }
@@ -394,6 +395,27 @@ namespace Unity.SpaceGod.Core.Tests
                     for (int i = 0; i < st.Length; i++) s.Stock[(int)GateConstruction.Materials[i]] = Math.Max(s.Stock[(int)GateConstruction.Materials[i]], st[i]);
             }
             Assert.That(front.All(x => x.Integrity == 1), Is.True);
+        }
+
+        /// <summary>A Void Base (U.SPC-T372) is a relay for the network's gaps, not a place a state grows its reach to or builds out from.</summary>
+        [Test]
+        public void NoStatePlansAGateToAVoidBaseOrBuildsOutFromOne()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var works = new GateConstruction(g, StartJd);
+            foreach (var f in g.Polities.Factions)
+            {
+                if (f.Kind != PolityKind.State || f.IsPirate) continue;
+                foreach (var b in works.BasesOf(f)) Assert.That(b.IsVoidBase, Is.False, f.Name + " builds out from " + b.Name);
+                if (works.BestProject(f, out var from, out var to, out var frontier, out _))
+                    Assert.That(to == null || !to.IsVoidBase, Is.True, f.Name + " plans a gate from " + from.Name + " to " + to?.Name);
+            }
+            // Even with a relay sitting well within reach of a state's own system, unlinked to it.
+            var sol = g.Find("Sol System");
+            var relay = StarSystem.CreateVoidBase("Void Base Test", sol.PositionLy + new DVec3(2, 0, 0), StartJd, g.Polities);
+            g.AddSystem(relay, StartJd);
+            Assert.That(g.Network.Between(sol, relay), Is.Null);
+            Assert.That(works.BestProject(sol.World.Sol, out _, out var target, out _, out _) && target == relay, Is.False, "a gate into a relay");
         }
 
         /// <summary>The whole galaxy running (fleets, markets, traffic): the planners start real work and the constructors hold at their sites.</summary>

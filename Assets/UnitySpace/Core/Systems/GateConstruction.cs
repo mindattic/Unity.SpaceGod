@@ -571,7 +571,9 @@ namespace Unity.SpaceGod.Core
             {
                 foreach (var t in galaxy.Systems)
                 {
-                    if (t == s || galaxy.Network.Between(s, t) != null || Targeted(s, t.Name)) continue;
+                    // A Void Base is a relay for the network's gaps (U.SPC-T372), no place for a state to reach out to: nothing there to
+                    // open or hold, and a gate it built in would hand the lawless relay to the builder.
+                    if (t == s || t.IsVoidBase || galaxy.Network.Between(s, t) != null || Targeted(s, t.Name)) continue;
                     double d = Galaxy.DistanceLy(s, t);
                     if (d > MaxLinkLy || !SiteClear(s, t.PositionLy) || !SiteClear(t, s.PositionLy)) continue;
                     var round = galaxy.Network.Route(s, t);
@@ -643,7 +645,7 @@ namespace Unity.SpaceGod.Core
             }
             foreach (var s in galaxy.Systems)
             {
-                if (s.Settled || bases.Contains(s)) continue;
+                if (s.Settled || s.IsVoidBase || bases.Contains(s)) continue;
                 foreach (var gate in s.Gates)
                     if (gate.Owner == f && gate.Working)
                     {
