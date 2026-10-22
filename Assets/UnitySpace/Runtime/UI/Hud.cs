@@ -149,6 +149,7 @@ namespace Unity.SpaceGod.UI
         // ---------------------------------------------------------------- save and load (U.SPC-T67)
 
         string[] saveNames;
+        string nextManualSlot;
         SaveHeader[] saveHeaders;
         float savesReadAt = -10f;
         Vector2 savesScroll;
@@ -171,6 +172,7 @@ namespace Unity.SpaceGod.UI
                 saveNames = new System.Collections.Generic.List<string>(slots.AllSlots()).ToArray();
                 saveHeaders = new SaveHeader[saveNames.Length];
                 for (int i = 0; i < saveNames.Length; i++) saveHeaders[i] = slots.Header(saveNames[i]);
+                nextManualSlot = slots.NewManual();
                 savesReadAt = Time.unscaledTime;
             }
             const float w = 760, rowH = 24;
@@ -188,7 +190,7 @@ namespace Unity.SpaceGod.UI
 
             bool enabled = GUI.enabled;
             GUI.enabled = enabled && blocked == null;
-            string next = slots.NewManual();
+            string next = nextManualSlot;
             if (GUI.Button(new Rect(r.x + 8, r.y + 54, 160, 26), "New Save", buttonActive))
             {
                 app.RequestSave(next, UnitySpaceApp.SlotName(next));
