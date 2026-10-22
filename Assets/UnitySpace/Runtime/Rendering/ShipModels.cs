@@ -87,6 +87,16 @@ namespace Unity.SpaceGod.Rendering
 
         static string KenneyModelFor(Ship ship)
         {
+            // Local traffic (U.SPC-T375): a boxy bus, nippy taxis and skiffs, and a roomier six-seat tourer, each drawn
+            // at its own design's length.
+            switch (ship.Civil)
+            {
+                case CivilCraft.Bus: return "craft_cargoB";
+                case CivilCraft.Taxi: return "craft_speederA";
+                case CivilCraft.Skiff: return "craft_racer";
+                case CivilCraft.Runabout: return "craft_speederA";
+                case CivilCraft.Tourer: return "craft_cargoA";
+            }
             switch (ship.Spec.Class)
             {
                 case ShipClass.Freighter: return ship.Id % 2 == 0 ? "craft_cargoA" : "craft_cargoB";

@@ -36,6 +36,13 @@ namespace Unity.SpaceGod.Core
         /// open space near a world to drift a while, over to a neighbouring world, now and then further.
         /// </summary>
         Free,
+
+        /// <summary>
+        /// Ordinary local traffic (U.SPC-T375, see <see cref="LocalTraffic"/>): an orbital bus on its line, a taxi on
+        /// its fares, or someone's own small craft, flying short hops between the worlds and stations of one planet's
+        /// neighbourhood. Not a trader, not a combatant, and never sent through a gate.
+        /// </summary>
+        Commuter,
     }
 
     public enum ShipPhase
@@ -521,6 +528,18 @@ namespace Unity.SpaceGod.Core
         /// battle group, sent through a gate or counted against the yards' warship cap) and fights only where its orders put it.
         /// </summary>
         public bool PatrolWing;
+
+        /// <summary>
+        /// A navy supply convoy (U.SPC-T375, see <see cref="PatrolWings"/>): one of its own freighters carrying naval
+        /// stores round a run of its ports under a fighter escort. Flies as a <see cref="PatrolWing"/> (never merged,
+        /// sent away or counted as a warship) but never turns aside to defend or hunt: it goes on round its run, and to a
+        /// yard when hurt.
+        /// </summary>
+        public bool Convoy;
+
+        /// <summary>What sort of local craft this is when it is <see cref="ShipRole.Commuter"/> traffic (U.SPC-T375), or
+        /// <see cref="CivilCraft.None"/>.</summary>
+        public CivilCraft Civil;
 
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;

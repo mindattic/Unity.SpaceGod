@@ -252,7 +252,7 @@ namespace Unity.SpaceGod.Core
         /// hard by the star is a direct crossing of the whole system, far past any tank, flown on the gate network's
         /// own approach (it pays the gates' tolls instead) until fuel for it is modelled too.
         /// </summary>
-        public bool BurnsPropellant(Ship s) => !s.IsEscort && !s.Spec.IsMilitary && s.Voyage == null;
+        public bool BurnsPropellant(Ship s) => !s.IsEscort && !s.Spec.IsMilitary && s.Voyage == null && !s.PatrolWing && s.Role != ShipRole.Commuter;
 
         /// <summary>
         /// A ship joins a hyperlane: civilian traffic pays the ride's toll (<see cref="Economy.LaneToll"/>, by its
@@ -261,7 +261,7 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         void PayToll(Ship ship, LaneHop hop, double jd)
         {
-            if (ship.Spec.IsMilitary || ship.Faction.IsPirate || ship == PilotedShip) return;
+            if (ship.Spec.IsMilitary || ship.PatrolWing || ship.Faction.IsPirate || ship == PilotedShip) return;
             double toll = Economy.LaneToll(ship.MassTonnes);
             ship.Faction.Treasury -= toll;
             ship.Credits -= toll;
@@ -405,6 +405,8 @@ namespace Unity.SpaceGod.Core
             war.RaisePirateGroup(startJd, w.Catalog[BeltHavens[0].body].Index);
             // Each navy's standing patrol wings fly a beat of its ports (U.SPC-T371).
             PatrolWings.Raise(w, startJd);
+            // And its ports' ordinary traffic: buses, taxis and people's own craft (U.SPC-T375).
+            LocalTraffic.Raise(w, startJd);
             // Its belt works and the builds they feed (U.SPC-T330).
             w.SeedSolMining(jd);
             w.SeatCapitals();
@@ -521,6 +523,8 @@ namespace Unity.SpaceGod.Core
             // would fire on it every time it came back (U.SPC-T291).
             fleet.Shuns = (ship, body) =>
             {
+                // Local traffic keeps clear of a fight (U.SPC-T375).
+                if (ship.Role == ShipRole.Commuter && War.BattleAt(body) != null) return true;
                 foreach (var s in economy.At(body))
                     if ((s.Kind == SettlementKind.Haven || s.Platforms.Count > 0) && Diplomacy.Hostile(ship.Faction, s.Owner)) return true;
                 return false;
@@ -538,6 +542,8 @@ namespace Unity.SpaceGod.Core
                 if (ship.Runner) return ship.Route != null && ship.Route.Length > 0 ? ship.Route[0] : here;
                 // The player's own ships go where their captains' standing orders take them.
                 if (Holdings.Owns(ship)) return Holdings.ChooseNext(ship, here, when);
+                // Local traffic (U.SPC-T375) keeps to its line or its whims, the fleet's own choice.
+                if (ship.Role == ShipRole.Commuter) return -1;
                 // A merchant, courier or free ship on a contract goes where it takes it; an idle one may take one here.
                 if (IsTrader(ship) || ship.Role == ShipRole.Free)
                 {
@@ -655,6 +661,8 @@ namespace Unity.SpaceGod.Core
             int haven = w.Catalog["Blackhollow"].Index;
             war.RaisePirateGroup(startJd, haven);
             PatrolWings.Raise(w, startJd);
+            // And its ports' ordinary traffic: buses, taxis and people's own craft (U.SPC-T375).
+            LocalTraffic.Raise(w, startJd);
             w.SeatCapitals();
             w.MusterReserves();
 
@@ -1024,7 +1032,7 @@ namespace Unity.SpaceGod.Core
             bool offRoot = b.Body == Catalog.Root.Index;
             foreach (var s in Fleet.Ships)
             {
-                if (!IsTrader(s) || s.Destroyed || s.Phase != ShipPhase.Transit || s.Orbit == null || s.Orbit.Body != b.Body) continue;
+                if ((!IsTrader(s) && s.Role != ShipRole.Commuter) || s.Destroyed || s.Phase != ShipPhase.Transit || s.Orbit == null || s.Orbit.Body != b.Body) continue;
                 if (s.Journey != null && s.JourneyIndex < s.Journey.Count) continue;
                 if (s.PhaseEndJd - jd < 0.05 || s.Ports == null) continue;
                 if (offRoot)

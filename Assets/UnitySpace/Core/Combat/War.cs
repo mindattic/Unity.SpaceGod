@@ -846,6 +846,8 @@ namespace Unity.SpaceGod.Core
         {
             // On the ground (or on the way down or up) a ship is out of the fight.
             if (ship.Destroyed || ship.Battle != null || ship.Planetside) return;
+            // Local traffic neither joins a fight nor draws one (U.SPC-T375).
+            if (ship.Controller.Role == ShipRole.Commuter) return;
             int body = ship.Orbit.Body;
             // Raiders home with plunder put it in the haven's stores (U.SPC-T94).
             if (ship.Faction.IsPirate) UnloadPlunder(ship.Controller, body);
@@ -1227,6 +1229,8 @@ namespace Unity.SpaceGod.Core
                 var c = s.Controller;
                 // A stripped, abandoned hulk is not a fighting group.
                 if (c.Destroyed || s.Derelict || c.Derelict || !Fleet.IsAt(c, body)) continue;
+                // Buses, taxis and people's own craft are no combatants (U.SPC-T375): they stand clear of a fight.
+                if (c.Role == ShipRole.Commuter) continue;
                 if (near is DVec3 at && (c.Orbit.OffsetAt(jd) - at).Length > GateFightRangeKm) continue;
                 list.Add(s);
             }
@@ -1743,7 +1747,8 @@ namespace Unity.SpaceGod.Core
         {
             // Bounty hunters go where their contracts take them (U.SPC-T62).
             if (Hunter(leader)) return world.Outlaws.ChooseNext(leader, here, jd);
-            if (!leader.Spec.IsMilitary && !leader.Faction.IsPirate) return -1;
+            // A navy's supply convoy is led by a freighter but takes its orders from the navy (U.SPC-T375).
+            if (!leader.Spec.IsMilitary && !leader.Faction.IsPirate && !leader.Convoy) return -1;
             var order = Decide(leader, here, jd);
             if (!Orders.TryGetValue(leader, out var current) || current.Kind != order.Kind || current.Body != order.Body)
             {
@@ -1852,6 +1857,16 @@ namespace Unity.SpaceGod.Core
         GroupOrder DecideWing(Ship leader, int here, double jd, bool withdrawing)
         {
             var f = leader.Faction;
+            // A supply convoy (U.SPC-T375) goes on round its run, to a yard when hurt: its stores, not the fighting, are its business.
+            if (leader.Convoy)
+            {
+                if (withdrawing || GroupDamage(leader) > 0.22)
+                {
+                    int dock = NearestYard(f, here, jd);
+                    if (dock >= 0) return new GroupOrder { Kind = OrderKind.Repair, Body = dock };
+                }
+                return new GroupOrder { Kind = OrderKind.Patrol, Body = PatrolWings.NextOnBeat(leader, here) };
+            }
             if (withdrawing || GroupDamage(leader) > 0.22 || MissilesLow(leader) || !leader.Combat.Armed)
             {
                 int yard = NearestYard(f, here, jd);

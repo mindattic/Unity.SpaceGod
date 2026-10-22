@@ -1450,7 +1450,8 @@ namespace Unity.SpaceGod.Core
             double dwell = Dwell != null ? Dwell(ship, DwellDays(ship)) : DwellDays(ship);
             // A point with no size (a binary's barycentre) has no space round it to wander out into.
             // Nor a star: three to five of its radii out is deep inside the keep-out every trajectory steers clear of.
-            if (ship.Role == ShipRole.Free && chosen < 0 && rng.NextDouble() < 0.55 && catalog[here].RadiusKm > 0 && !catalog[here].UsesStellarMapping)
+            // Someone's own little craft (U.SPC-T375) goes out sightseeing the same way.
+            if ((ship.Role == ShipRole.Free || (ship.Role == ShipRole.Commuter && LocalTraffic.IsPersonal(ship.Civil))) && chosen < 0 && rng.NextDouble() < 0.55 && catalog[here].RadiusKm > 0 && !catalog[here].UsesStellarMapping)
             {
                 // A free ship's whim: out to somewhere new nearby rather than to another world.
                 ship.Wander = true;
@@ -1564,27 +1565,20 @@ namespace Unity.SpaceGod.Core
                     return ship.Ports.Length > 1 ? ship.Ports[1 + rng.Next(ship.Ports.Length - 1)] : here;
 
                 case ShipRole.Free:
+                    return Whim(ship, here, jd);
+
+                case ShipRole.Commuter:
                 {
-                    // Somewhere it fancies, mostly close: weight 1 / (0.05 AU + distance)², so neighbouring
-                    // moons and planets come up far more often than the far side of the system.
-                    var herePos = ephemeris.HelioAt(here, jd);
-                    double total = 0;
-                    var weights = new double[ship.Ports.Length];
-                    for (int i = 0; i < ship.Ports.Length; i++)
+                    // A bus keeps to its line, passing over a stop it should not call at (U.SPC-T375); a taxi or
+                    // someone's own craft goes where it fancies about its neighbourhood, as a free ship does.
+                    if (ship.Route == null || ship.Route.Length == 0) return Whim(ship, here, jd);
+                    for (int k = 0; k < ship.Route.Length; k++)
                     {
-                        if (ship.Ports[i] == here || (Shuns != null && Shuns(ship, ship.Ports[i]))) continue;
-                        double au = (ephemeris.HelioAt(ship.Ports[i], jd) - herePos).Length / Astro.AuKm;
-                        weights[i] = 1.0 / ((0.05 + au) * (0.05 + au));
-                        total += weights[i];
+                        ship.RouteIndex = (ship.RouteIndex + 1) % ship.Route.Length;
+                        int stop = ship.Route[ship.RouteIndex];
+                        if (stop != here && (Shuns == null || !Shuns(ship, stop))) return stop;
                     }
-                    double pick = rng.NextDouble() * total;
-                    for (int i = 0; i < weights.Length; i++)
-                    {
-                        pick -= weights[i];
-                        if (weights[i] > 0 && pick <= 0) return ship.Ports[i];
-                    }
-                    // Nowhere it would go but places it shuns: it stays put.
-                    return total > 0 ? ship.Ports[Array.FindLastIndex(weights, x => x > 0)] : here;
+                    return here;
                 }
 
                 default:
@@ -1611,10 +1605,40 @@ namespace Unity.SpaceGod.Core
             }
         }
 
+        /// <summary>Somewhere a free ship (or a taxi, or someone's own craft) fancies, mostly close: weight
+        /// 1 / (0.05 AU + distance)², so neighbouring moons and planets come up far more often than the far side of the
+        /// system. Never a place it shuns; with nowhere else, it stays put.</summary>
+        int Whim(Ship ship, int here, double jd)
+        {
+            var herePos = ephemeris.HelioAt(here, jd);
+            double total = 0;
+            var weights = new double[ship.Ports.Length];
+            for (int i = 0; i < ship.Ports.Length; i++)
+            {
+                if (ship.Ports[i] == here || (Shuns != null && Shuns(ship, ship.Ports[i]))) continue;
+                double au = (ephemeris.HelioAt(ship.Ports[i], jd) - herePos).Length / Astro.AuKm;
+                weights[i] = 1.0 / ((0.05 + au) * (0.05 + au));
+                total += weights[i];
+            }
+            double pick = rng.NextDouble() * total;
+            for (int i = 0; i < weights.Length; i++)
+            {
+                pick -= weights[i];
+                if (weights[i] > 0 && pick <= 0) return ship.Ports[i];
+            }
+            // Nowhere it would go but places it shuns: it stays put.
+            return total > 0 ? ship.Ports[Array.FindLastIndex(weights, x => x > 0)] : here;
+        }
+
         double DwellDays(Ship ship)
         {
             switch (ship.Role)
             {
+                // A bus keeps a timetable of a few hours; a taxi waits for a fare; a private flight lingers longer.
+                case ShipRole.Commuter:
+                    return ship.Civil == CivilCraft.Bus ? 0.05 + rng.NextDouble() * 0.1
+                        : ship.Civil == CivilCraft.Taxi ? 0.05 + rng.NextDouble() * 0.3
+                        : 0.2 + rng.NextDouble() * 1.0;
                 case ShipRole.Patrol: return 1.0 + rng.NextDouble() * 3.0;
                 case ShipRole.Courier: return 0.1 + rng.NextDouble() * 0.4;
                 case ShipRole.Free: return 0.1 + rng.NextDouble() * 0.6;

@@ -14,6 +14,9 @@ namespace Unity.SpaceGod.Core
     /// its beat when an enemy turns up there, hunts raiders seen working them, and puts in at a yard to repair, but it never
     /// strikes out at an enemy port, is never merged into a battle group, sent through a gate on a campaign, or counted
     /// against the yards' warship cap (<see cref="Ship.PatrolWing"/>).</para>
+    /// <para>Beside its wings a navy runs supply convoys (U.SPC-T375): one of its own freighters carrying naval stores
+    /// round a run of its ports under two fighters, flown as a wing is but never turning aside to defend or hunt
+    /// (<see cref="Ship.Convoy"/>).</para>
     /// </summary>
     public static class PatrolWings
     {
@@ -40,6 +43,32 @@ namespace Unity.SpaceGod.Core
 
         static readonly string[] Wingmen = { "Two", "Three", "Four", "Five" };
 
+        /// <summary>The most supply convoys one navy runs in one system (U.SPC-T375).</summary>
+        public const int MaxConvoysPerFaction = 3;
+
+        /// <summary>The most ports on one convoy's run.</summary>
+        public const int RunLength = 4;
+
+        /// <summary>A convoy's escort: two light fighters, or for every other one a heavy fighter and a light one.</summary>
+        static readonly ShipClass[][] ConvoyEscorts =
+        {
+            new[] { ShipClass.Fighter, ShipClass.Fighter },
+            new[] { ShipClass.Breacher, ShipClass.Fighter },
+        };
+
+        static readonly string[] ConvoyNames =
+        {
+            "Provender", "Quartermaster", "Victualler", "Commissary", "Replenisher", "Sutler", "Purveyor", "Storekeeper",
+            "Bounty", "Larder", "Forager", "Steward",
+        };
+
+        /// <summary>How many supply convoys a navy holding <paramref name="ports"/> ports here runs (U.SPC-T375): one for
+        /// every two ports, up to <see cref="MaxConvoysPerFaction"/>; none with fewer than two, with nowhere to run to.</summary>
+        public static int ConvoysFor(int ports) => ports < 2 ? 0 : Math.Min(MaxConvoysPerFaction, ports / 2);
+
+        /// <summary>The escort classes of the <paramref name="index"/>th convoy a navy runs.</summary>
+        public static ShipClass[] ConvoyEscort(int index) => ConvoyEscorts[index % ConvoyEscorts.Length];
+
         /// <summary>How many wings a navy holding <paramref name="ports"/> ports here flies: one, plus one for every two
         /// ports, up to <see cref="MaxWingsPerFaction"/>; none with fewer than two, since a beat runs between ports and a
         /// navy's one port is its battle group's to hold.</summary>
@@ -64,10 +93,16 @@ namespace Unity.SpaceGod.Core
         /// <summary>The beat of the <paramref name="index"/>th of <paramref name="wings"/> wings over <paramref name="ports"/>:
         /// up to <see cref="BeatLength"/> ports in a row, each wing's beat starting further round, so the wings between them
         /// cover them all.</summary>
-        public static int[] Beat(List<int> ports, int index, int wings)
+        public static int[] Beat(List<int> ports, int index, int wings) => Run(ports, index, wings, BeatLength);
+
+        /// <summary>The run of the <paramref name="index"/>th of <paramref name="convoys"/> supply convoys over
+        /// <paramref name="ports"/>: up to <see cref="RunLength"/> ports in a row, each convoy's starting further round.</summary>
+        public static int[] ConvoyRun(List<int> ports, int index, int convoys) => Run(ports, index, convoys, RunLength);
+
+        static int[] Run(List<int> ports, int index, int wings, int maxLength)
         {
             int n = ports.Count;
-            int length = Math.Min(BeatLength, n);
+            int length = Math.Min(maxLength, n);
             int start = (int)((long)index * n / Math.Max(1, wings)) % n;
             var beat = new int[length];
             for (int j = 0; j < length; j++) beat[j] = ports[(start + j) % n];
@@ -89,7 +124,7 @@ namespace Unity.SpaceGod.Core
                 // Call signs run on across every system the navy holds, so no two of its wings share one.
                 int sign = 0;
                 foreach (var s in w.Polities.Navy(f))
-                    if (s.PatrolWing && !s.IsEscort) sign++;
+                    if (s.PatrolWing && !s.IsEscort && !s.Convoy) sign++;
                 for (int i = 0; i < wings; i++)
                 {
                     var classes = Composition(i);
@@ -104,6 +139,31 @@ namespace Unity.SpaceGod.Core
                         var e = w.Fleet.AddShip(call + " " + Wingmen[(k - 1) % Wingmen.Length], classes[k], f, ShipRole.Escort);
                         e.PatrolWing = true;
                         w.Fleet.AddEscort(leader, e, Fleet.SlotFor(k - 1));
+                    }
+                    w.Fleet.Station(leader, leader.Route[0], jd);
+                    leaders.Add(leader);
+                }
+                // Its supply convoys: one of its freighters with naval stores round a run of its ports, under escort (U.SPC-T375).
+                int convoys = ConvoysFor(ports.Count);
+                int named = 0;
+                foreach (var s in w.Polities.Navy(f))
+                    if (s.Convoy && !s.IsEscort) named++;
+                for (int i = 0; i < convoys; i++)
+                {
+                    string call = ConvoyNames[named % ConvoyNames.Length] + (named >= ConvoyNames.Length ? " " + (named / ConvoyNames.Length + 1) : "");
+                    named++;
+                    var leader = w.Fleet.AddShip(call, ShipClass.Freighter, f, ShipRole.Patrol);
+                    leader.PatrolWing = true;
+                    leader.Convoy = true;
+                    leader.Route = ConvoyRun(ports, i, convoys);
+                    leader.RouteIndex = 0;
+                    leader.Cargo = "Naval stores";
+                    var escort = ConvoyEscort(i);
+                    for (int k = 0; k < escort.Length; k++)
+                    {
+                        var e = w.Fleet.AddShip(call + " " + Wingmen[k % Wingmen.Length], escort[k], f, ShipRole.Escort);
+                        e.PatrolWing = true;
+                        w.Fleet.AddEscort(leader, e, Fleet.SlotFor(k));
                     }
                     w.Fleet.Station(leader, leader.Route[0], jd);
                     leaders.Add(leader);

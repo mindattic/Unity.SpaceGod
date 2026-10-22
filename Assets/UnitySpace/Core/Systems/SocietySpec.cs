@@ -279,6 +279,8 @@ namespace Unity.SpaceGod.Core
             foreach (var site in society.HavenSites) w.HavenSites.Add(w.Catalog[site].Index);
             // A system with a navy of its own flies its patrol wings too (U.SPC-T371).
             if (navy > 0) PatrolWings.Raise(w, startJd);
+            // And its ports' ordinary traffic: buses, taxis and people's own craft (U.SPC-T375).
+            LocalTraffic.Raise(w, startJd);
             w.SeatCapitals();
             w.MusterReserves();
 
