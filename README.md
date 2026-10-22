@@ -19,12 +19,15 @@ A ground-up rebuild of [ExperimentSolarSystem](https://github.com/mindattic/Expe
 
 ## Design principles
 
+What the game is for, and where it is going, is in [docs/VISION.md](docs/VISION.md): a fully alive, galaxy-spanning simulation that is at once a strategy, dogfighting, capital-ship broadside, trading and diplomacy game, which you can step into and steer anywhere or leave to play out on its own.
+
 Every change is held to these. Where the game falls short of one today, new work moves toward it and never further away.
 
 1. **Expandable and extensible first.** New mechanics, ship classes, factions, star systems and polity behaviours plug in through clear extension points and data: a new spec, table entry or registered handler, not edits threaded through the core loops of `Fleet`, `War` or `UnitySpaceApp`. If adding the second of something means touching the code that runs the first, add the extension point first.
 2. **The universe is fully flyable.** Given long enough, a pilot can fly from one end of the galaxy to the other in continuous space, the way I-War 2 lets you point at a place, engage and eventually arrive. Jump gates and hyperlanes are shortcuts that carry most traffic, never the only way, and capital ships and deep-space explorers can cross between stars under their own power. Today a gate crossing is a timed hop and the trip between stars is a camera glide; those are stand-ins to be replaced, so build nothing that assumes a ship can only leave a system by a gate, or that space between systems is empty or unsimulated. Coordinates must hold their precision at galactic distances.
 3. **Render only what can be seen.** In a 3D world the size of the universe, a full-detail model for something too far or too small to see is waste. Everything degrades by apparent size: full model, simpler model, icon or impostor, then one marker for a fleet or a system, and nothing at all below a pixel. The floating origin and the billboard icons are the start of this; new renderable things join the same scheme instead of always drawing in full.
 4. **No loading screens.** Systems, ships and assets stream in and out in the background without stalling a frame. The only cover allowed is visual trickery at a jump gate (a transit effect long enough to finish loading what lies on the far side); arriving anywhere by plain flight never pauses to load.
+5. **Reachable and adjustable in game.** As much as possible can be seen and changed from the in-game settings menu: graphics and render quality, controls, simulation speed and scale, difficulty, and the tuning of the simulation itself. A value only a developer can change by editing code is a missed setting. New settings register in one place so the menu picks them up without being edited by hand, and each is remembered per profile like the display settings are today.
 
 ## Gameplay vs realistic
 
