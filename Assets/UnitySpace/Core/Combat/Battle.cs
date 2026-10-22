@@ -406,6 +406,10 @@ namespace Unity.SpaceGod.Core
         public readonly List<Mine> Mines = new List<Mine>();
         public readonly List<Embedded> Embedded = new List<Embedded>();
 
+        /// <summary>Gun mounts the player has taken (U.SPC-T18, see <see cref="MountedTurret"/>): each is laid and fired by
+        /// <see cref="FireManned"/> instead of its crew. Kept on the battle, so nothing stays manned past the fight.</summary>
+        public readonly Dictionary<Subsystem, MountControl> Manned = new Dictionary<Subsystem, MountControl>();
+
         /// <summary>Set for an ambush beside a hyperlane; null for a battle at a body.</summary>
         public LaneSite Site;
 
@@ -1118,6 +1122,12 @@ namespace Unity.SpaceGod.Core
                 if (w == null || s.Destroyed) continue;
                 // A fleet out of supply reloads slower: short of rounds, of spares for its mounts, of power to spare (U.SPC-T93).
                 s.Cooldown -= dt * c.Readiness;
+                // A mount the player has taken is theirs to lay and fire, reloading or not (U.SPC-T18).
+                if (Manned.Count > 0 && Manned.TryGetValue(s, out var manned))
+                {
+                    FireManned(u, s, manned, w, dt, accuracyScale);
+                    continue;
+                }
                 if (s.Cooldown > 0 || s.Kind == SubsystemKind.Torpedo) continue;
                 if (s.Kind == SubsystemKind.BoardingPods)
                 {
@@ -1348,6 +1358,23 @@ namespace Unity.SpaceGod.Core
                 u.Overheated = true;
             }
             ResolveShot(u, s, origin, dir, w);
+        }
+
+        /// <summary>
+        /// A gun mount the player has taken (U.SPC-T18, <see cref="MountedTurret"/>): it traverses toward their aim
+        /// at its own rate, never past its arc (a spinal railgun never past its gimbal), and on the trigger fires
+        /// down its barrel at its own rhythm, an aimed shot that hits only what it meets (<see cref="ResolveShot"/>).
+        /// </summary>
+        void FireManned(BattleUnit u, Subsystem s, MountControl m, WeaponSpec w, double dt, double accuracyScale)
+        {
+            var current = s.Aim.LengthSquared > 1e-12 ? s.Aim.Normalized : MountedTurret.RestAim(u, s.Def);
+            var want = m.Aim.LengthSquared > 1e-12 ? MountedTurret.Bound(u, s.Def, m.Aim.Normalized) : current;
+            s.Aim = PilotFlight.ClampAim(want, current, MountedTurret.TraverseDegS(s.Kind) * Astro.Deg2Rad * dt);
+            if (!m.Trigger || s.Cooldown > 0) return;
+            s.Cooldown = w.Cooldown;
+            bool slug = s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun;
+            double scatter = (w.MuzzleSpeedKmS > 0 && !slug ? Gunnery.AutocannonScatterDeg : Gunnery.BeamScatterDeg) / Math.Max(accuracyScale, 0.1);
+            ResolveShot(u, s, u.PointOf(s.Def), Gunnery.Scatter(s.Aim, scatter * Astro.Deg2Rad, rng), w);
         }
 
         /// <summary>

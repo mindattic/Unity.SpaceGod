@@ -863,10 +863,8 @@ namespace Unity.SpaceGod
                 ShowToast("Select a ship to pilot it");
                 return;
             }
-            var ship = t.Ship;
-            // Nor a prize already taken in a fight still on: it is its captors' to dispose of when it ends.
-            bool taken = ship.Battle?.UnitOf(ship)?.Captured ?? false;
-            if (ship.Destroyed || ship.Derelict || taken)
+            // Only a wreck, a derelict or a prize already taken in a fight still on is out of reach (U.SPC-T18).
+            if (!Embodiables.HelmOf(World, t.Ship).CanEmbody)
             {
                 ShowToast("Can't take the helm of that ship right now");
                 return;
@@ -887,17 +885,7 @@ namespace Unity.SpaceGod
         /// there in true km -- the same per-phase placement <see cref="UpdateShips"/> computes for
         /// drawing, used instead to seed piloting from wherever a ship actually is (mid-lane,
         /// mid-burn, queued, landed...), not only a parked orbit.</summary>
-        (int body, DVec3 offsetKm) CurrentFrame(Ship ship, double jd)
-        {
-            // An escort has no schedule of its own (no orbit, no phase): it is wherever its leader is.
-            var c = ship.Controller;
-            var st = Fleet.StateOf(c, jd);
-            if (c.Phase == ShipPhase.Parked)
-                return (c.Orbit.Body, c.Orbit.OffsetAt(jd));
-            if ((c.Phase == ShipPhase.Queued || c.Planetside) && c.Ring != null)
-                return (c.Ring.Body, st.HelioKm - Ephemeris.Helio(c.Ring.Body));
-            return (c.FrameBody, st.HelioKm - Ephemeris.Helio(c.FrameBody));
-        }
+        (int body, DVec3 offsetKm) CurrentFrame(Ship ship, double jd) => ShipHelm.FrameOf(World, ship, jd);
 
         /// <summary>
         /// Takes direct control of any flyable hull, wherever it is -- parked, mid-transit, riding or
@@ -911,7 +899,6 @@ namespace Unity.SpaceGod
         {
             var ship = t.Ship;
             Piloted = t;
-            World.PilotedShip = ship;
             // A fresh helm: no drives-down timer left over from the hull flown before (spawned or loaded in the same frame).
             pilotEmpSeconds = 0;
             // Where it is (and which way it faces) before an escort is cut loose from the leader it shares them with.
@@ -926,16 +913,14 @@ namespace Unity.SpaceGod
                 frame = ship.LaneLeg.From;
                 offsetKm = Fleet.StateOf(ship, Clock.Jd).HelioKm - Ephemeris.Helio(frame);
             }
-            if (ship.IsEscort) ship.Leader = null;
-            else World.War.HandOverCommand(ship);
+            // The helm is the player's (U.SPC-T18): the fleet lets go, an escort is cut loose from its formation (the war's
+            // command handed over otherwise), and a hull already fighting has its own battle unit handed over.
+            Embodiables.HelmOf(World, ship).TakeCharge();
             if (ship.Battle != null)
             {
                 var unit = ship.Battle.UnitOf(ship);
                 if (unit != null)
                 {
-                    unit.PlayerControlled = true;
-                    unit.PlayerFireHeld = false;
-                    unit.PlayerLockTarget = null;
                     // Mid-fight, the hull is where the battle has it, not where its schedule would put it:
                     // the pilot loop writes this pose back every frame (pilotOffsetKm - Anchor), so seed it from there.
                     frame = ship.Battle.Body;
@@ -1067,6 +1052,9 @@ namespace Unity.SpaceGod
             propellantWarning = 0;
             var ship = Piloted.Ship;
             Piloted = Target.None;
+            // The crew takes the helm back (U.SPC-T18): a hull still fighting has its battle unit handed back to its own AI,
+            // which picks up right where manual control left off, same facing and velocity.
+            if (ship != null) Embodiables.HelmOf(World, ship).HandBack();
             World.PilotedShip = null;
             // Nobody runs down a ship no one flies: the chase ends with the helm, even if another is taken this frame.
             if (World.Pursuit != null && World.Pursuit.Active) World.Pursuit.ReleaseAll(Clock.Jd);
@@ -1083,17 +1071,7 @@ namespace Unity.SpaceGod
             {
                 if (ship.Battle != null)
                 {
-                    // Hand the fight back to the crew rather than leaving the hull idle mid-battle:
-                    // its own autonomous AI (broadsides, point defence, missiles) picks up right where
-                    // manual control left off, same facing and velocity.
-                    var unit = ship.Battle.UnitOf(ship);
-                    if (unit != null)
-                    {
-                        unit.PlayerControlled = false;
-                        unit.PlayerFireHeld = false;
-                        unit.PlayerLockTarget = null;
-                    }
-                    // And its schedule picks up from here when the fight is over, not from wherever
+                    // Its crew has the fight back (above); its schedule picks up from here when the fight is over, not from wherever
                     // the helm was taken (the battle's own pose doesn't move the ship's orbit).
                     PinWherePiloted(ship);
                 }
