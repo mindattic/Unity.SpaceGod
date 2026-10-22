@@ -1793,11 +1793,13 @@ namespace Unity.SpaceGod.Core
         /// Shields soak damage first; armour blunts each hit (small guns most); what gets through is
         /// split between the struck hardpoint and the hull. A lost reactor takes the ship with it.
         /// </summary>
-        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at)
+        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at, DVec3? shieldAt = null)
         {
             if (!target.Present) return;
             var c = target.Combat;
-            var generator = c.GeneratorFor(target.YawDegOf(at));
+            // Guided munitions are judged against the arc on the side they came in from, not the hardpoint's (U.SPC-T380).
+            var shieldPoint = shieldAt ?? at;
+            var generator = c.GeneratorFor(target.YawDegOf(shieldPoint));
             if (generator != null)
             {
                 generator.LastHitSeconds = Seconds;
@@ -1807,7 +1809,7 @@ namespace Unity.SpaceGod.Core
                     generator.Shield -= soaked;
                     damage -= soaked;
                     // Sub names the generator whose arc took it, so the bubble it raises is that arc's (U.SPC-T40).
-                    Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, generator.Index);
+                    Emit(FxKind.ShieldHit, shieldPoint, target.Pos, target.LengthKm, target.Side, target, generator.Index);
                     if (damage <= 0) return;
                 }
             }
@@ -1893,9 +1895,13 @@ namespace Unity.SpaceGod.Core
                 if (SegmentPointDistance(start, m.Pos, aim) < t.Radius * 0.6 + 0.05)
                 {
                     m.Gone = true;
-                    if (m.Kind == MissileKind.Pod) PodHit(m, t, aim);
+                    // Where the warhead crossed the hull toward where it came from: the arc it has to get through.
+                    var from = start - t.Pos;
+                    if (from.LengthSquared < 1e-12) from = m.Vel * -1;
+                    var entry = t.Pos + from.Normalized * t.Radius;
+                    if (m.Kind == MissileKind.Pod) PodHit(m, t, aim, entry);
                     else if (m.Kind == MissileKind.Emp) EmpBurst(m.Pos, m.Side, m.EmpSeconds, m.EmpRadiusKm);
-                    else ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t), m.Damage, aim);
+                    else ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t), m.Damage, aim, entry);
                 }
             }
             Missiles.RemoveAll(m => m.Gone);
@@ -1946,17 +1952,17 @@ namespace Unity.SpaceGod.Core
             Emit(FxKind.MissileLaunch, origin, origin + u.Forward, 0, u.Side, u, s.Index);
         }
 
-        void PodHit(Missile m, BattleUnit t, DVec3 at)
+        void PodHit(Missile m, BattleUnit t, DVec3 at, DVec3? shieldAt = null)
         {
             var c = t.Combat;
-            var generator = c.GeneratorFor(t.YawDegOf(at));
+            var generator = c.GeneratorFor(t.YawDegOf(shieldAt ?? at));
             if (generator != null && generator.Shield > 0)
             {
                 Emit(FxKind.PodBounce, at, at, t.LengthKm, t.Side, t, -1);
                 return;
             }
             // The drill tip punches in; the squad goes through the hole it made.
-            ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : null, m.Damage, at);
+            ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : null, m.Damage, at, shieldAt);
             if (!t.Present) return;
             Embed(t, at, m.Vel, m.Side, false);
             var local = t.ToLocal(at);

@@ -268,5 +268,29 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(me.Combat.Subsystems.Sum(s => s.Ammo), Is.EqualTo(ammo), "ammunition was spent on a hull that had surrendered");
             Assert.That(them.Stunned, Is.EqualTo(0), "an EMP was spent on a hull that had surrendered");
         }
+
+        // ------------------------------------------------------------ missiles judged against the arc they came in by (U.SPC-T380)
+
+        [Test]
+        public void AHullTargetedMissileFromAstern_DrainsTheSternArcNotTheBow()
+        {
+            var (b, _, them) = Duel(ShipClass.Fighter, ShipClass.Battleship, new DVec3(3000, 0, 0), player: false);
+            them.Forward = -DVec3.UnitX;
+            var bow = them.Combat.GeneratorFor(0);
+            var stern = them.Combat.GeneratorFor(180);
+            Assert.That(bow, Is.Not.Null.And.Not.SameAs(stern));
+            double bowBefore = bow.Shield, sternBefore = stern.Shield;
+            Assert.That(sternBefore, Is.GreaterThan(0));
+            // Just astern of the hull (the target faces -X, so +X is its stern), homing on the hull centre.
+            var pos = them.Pos + new DVec3(them.Radius * 0.62, 0, 0);
+            b.Missiles.Add(new Missile
+            {
+                Pos = pos, Vel = new DVec3(-0.3, 0, 0), Target = them, TargetSub = null, Damage = 50, Speed = 0.3, Hp = 10, Life = 60,
+                Side = 0, Kind = MissileKind.Missile,
+            });
+            b.Advance(0.1);
+            Assert.That(stern.Shield, Is.LessThan(sternBefore), "the arc the missile came in through took no damage");
+            Assert.That(bow.Shield, Is.EqualTo(bowBefore), "a hull-targeted missile hit the bow arc regardless of its approach");
+        }
     }
 }
