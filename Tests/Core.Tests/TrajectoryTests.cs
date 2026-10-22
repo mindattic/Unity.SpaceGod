@@ -336,6 +336,21 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ADirectPlanWhoseConicFailsAtDepartureTakesTheLanesNotTheFlipAndBurn()
+        {
+            var r = Shuttle(ShipClass.Freighter, "Earth", "Mars");
+            r.Fleet.Lanes = Hyperlanes.CreateDefault(r.Eph);
+            var ship = r.Ship;
+            // Planned direct, but the planner's own window now says the burn is the better buy: the conic is refused at departure.
+            ship.PlannedDirect = true;
+            ship.PlannedConicDays = -1;
+            ship.PlannedConicDepartJd = ship.PhaseEndJd;
+            StepUntil(r, () => ship.Phase == ShipPhase.Transit, 900, 0.5);
+            Assert.That(ship.Journey, Is.Not.Null, "it re-routed by hyperlane instead of flying straight across");
+            Assert.That(ship.PlannedDirect, Is.False);
+        }
+
+        [Test]
         public void CheapFreightToMarsFallsAcrossOnAPatchedConicRatherThanBurningHard()
         {
             var r = Shuttle(ShipClass.Freighter, "Earth", "Mars");

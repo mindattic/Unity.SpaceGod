@@ -690,7 +690,31 @@ namespace Unity.SpaceGod.Core
                 Burn(ship, departJd, hop.From, () => RampOrbit(hop, hop.From, departJd), allowConic: true);
             }
             else if (ship.Wander) Burn(ship, departJd, to, () => WanderOrbit(to, ship));
-            else Burn(ship, departJd, to, () => ArrivalFor(ship, to), allowConic: true);
+            else
+            {
+                var home = ship.Orbit;
+                var ring = ship.Ring;
+                var hold = ship.HoldPoint;
+                Burn(ship, departJd, to, () => ArrivalFor(ship, to), allowConic: true);
+                // The planned transfer orbit failed at the real departure: the straight flip-and-burn was only ever the
+                // comparison baseline, so take the lanes the planner priced as the alternative (U.SPC-T390).
+                if (direct && ship.Conic == null && Lanes != null && !ship.Wander)
+                {
+                    int fromSystem = Lanes.SystemOf(from), toSystem = Lanes.SystemOf(to);
+                    var route = fromSystem != toSystem ? Lanes.Route(fromSystem, toSystem, departJd) : null;
+                    if (route != null)
+                    {
+                        RefundUnflown(ship, departJd);
+                        ship.Orbit = home;
+                        ship.Ring = ring;
+                        ship.HoldPoint = hold;
+                        ship.Journey = route;
+                        ship.JourneyIndex = 0;
+                        var hop = route[0];
+                        Burn(ship, departJd, hop.From, () => RampOrbit(hop, hop.From, departJd), allowConic: true);
+                    }
+                }
+            }
         }
 
         /// <summary>
