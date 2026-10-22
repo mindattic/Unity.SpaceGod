@@ -340,7 +340,8 @@ namespace Unity.SpaceGod.Core
                     return;
                 }
                 // The far end held against it is forced: it goes through, to fight there.
-                if (GateNetwork.Passable(gate, ship.Faction, when))
+                // (Through a ring that works: a sabotaged or fought-down one is shut to a war fleet too, U.SPC-T383.)
+                if (gate.Link.Working && GateNetwork.Passable(gate, ship.Faction, when))
                 {
                     atGates.RemoveAll(e => e.ship == ship);
                     Enter(system, ship, gate, when);
