@@ -405,6 +405,20 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void FineToOwnFactionIsDebitedAndBurned()
+        {
+            var w = CreateWorld();
+            var ship = Pilot(w);
+            var own = ship.Faction;
+            own.Treasury = 1e9;
+            w.Law.Player.Bounty[own] = 5000;
+            Assert.That(w.Law.PayFine(ship, own, StartJd, out double paid), Is.True);
+            Assert.That(paid, Is.EqualTo(5000));
+            Assert.That(own.Treasury, Is.EqualTo(1e9 - 5000));
+            Assert.That(w.Law.Player.BountyBy(own), Is.EqualTo(0));
+        }
+
+        [Test]
         public void StandingMovesPricesAtAFactionsMarkets()
         {
             var w = CreateWorld();

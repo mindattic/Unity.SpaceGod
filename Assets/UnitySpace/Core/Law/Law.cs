@@ -391,7 +391,7 @@ namespace Unity.SpaceGod.Core
             paid = Player.BountyBy(f);
             if (ship?.Faction == null || paid <= 0 || ship.Faction.Treasury < paid) { paid = 0; return false; }
             ship.Faction.Treasury -= paid;
-            f.Treasury += paid;
+            if (f != ship.Faction) f.Treasury += paid; // a fine to one's own faction is burned as court costs (U.SPC-T389)
             ClearBounty(Player, f);
             if (Player.StandingWith(f) < DockMinStanding) Player.Standing[f] = DockMinStanding;
             if (Hail != null && Hail.By == f) Hail = null;
