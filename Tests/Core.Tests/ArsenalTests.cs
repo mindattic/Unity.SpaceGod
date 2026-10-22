@@ -247,5 +247,26 @@ namespace Unity.SpaceGod.Core.Tests
             }
             Assert.That(Health(them), Is.LessThan(before), "a missile locked onto a fighter never reached it");
         }
+
+        [Test]
+        public void APlayersMissileAndEmpAreNotWastedOnAHullThatStruckItsColours()
+        {
+            var (b, me, them) = Duel(ShipClass.Courier, ShipClass.Fighter, new DVec3(2, 0, 0));
+            me.PlayerLockTarget = them;
+            me.PlayerAim = DVec3.UnitX;
+            me.PlayerSecondaryHeld = true;
+            me.PlayerEmpHeld = true;
+            them.Surrendering = true;
+            int ammo = me.Combat.Subsystems.Sum(s => s.Ammo);
+            for (int i = 0; i < 30; i++)
+            {
+                me.Forward = DVec3.UnitX;
+                them.Pos = new DVec3(2, 0, 0);
+                them.Vel = DVec3.Zero;
+                b.Advance(0.1);
+            }
+            Assert.That(me.Combat.Subsystems.Sum(s => s.Ammo), Is.EqualTo(ammo), "ammunition was spent on a hull that had surrendered");
+            Assert.That(them.Stunned, Is.EqualTo(0), "an EMP was spent on a hull that had surrendered");
+        }
     }
 }

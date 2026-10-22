@@ -989,7 +989,7 @@ namespace Unity.SpaceGod.Core
         {
             foreach (var o in Units)
             {
-                if (!Hostile(u, o) || o.Combat.Disabled || o.Stunned > 0 || !o.Combat.Armed) continue;
+                if (!Hostile(u, o) || o.Combat.Disabled || o.Stunned > 0 || !o.Combat.Armed || o.Surrendering || o.Captured) continue;
                 var to = o.Pos - u.Pos;
                 double d = to.Length;
                 if (d < 1e-6 || d > TailKm) continue;
@@ -1575,7 +1575,7 @@ namespace Unity.SpaceGod.Core
             double bestCos = Math.Cos(25 * Astro.Deg2Rad);
             foreach (var o in Units)
             {
-                if (!Hostile(u, o) || o.Stunned > 0) continue;
+                if (!Hostile(u, o) || o.Stunned > 0 || o.Surrendering || o.Captured) continue;
                 var to = o.Pos - origin;
                 double d = to.Length;
                 if (d < 1e-6 || d - o.Radius > w.RangeKm) continue;
@@ -1680,7 +1680,7 @@ namespace Unity.SpaceGod.Core
         BattleUnit PlayerLockedTarget(BattleUnit u, WeaponSpec w, DVec3 origin)
         {
             var t = u.PlayerLockTarget;
-            if (t == null || !t.Present || !Hostile(u, t)) return null;
+            if (t == null || !t.Present || !Hostile(u, t) || t.Surrendering || t.Captured) return null;
             return (t.Pos - origin).Length - t.Radius <= w.RangeKm ? t : null;
         }
 
@@ -1695,7 +1695,7 @@ namespace Unity.SpaceGod.Core
                 {
                     if (!Hostile(u, o) || o.Captured || o.Surrendering) continue;
                     double d = (o.Pos - origin).Length - o.Radius;
-                    if (d < best && (o.Kind == UnitKind.Fighter || near == null || near.Kind != UnitKind.Fighter))
+                    if ((d < best && (near == null || near.Kind != UnitKind.Fighter || o.Kind == UnitKind.Fighter)) || (o.Kind == UnitKind.Fighter && near != null && near.Kind != UnitKind.Fighter && d < w.RangeKm))
                     {
                         best = d;
                         near = o;
