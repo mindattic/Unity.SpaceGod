@@ -5,6 +5,7 @@ using Unity.SpaceGod.Core;
 using Unity.SpaceGod.Views;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace Unity.SpaceGod.UI
 {
@@ -21,6 +22,7 @@ namespace Unity.SpaceGod.UI
             Main,
             Load,
             Profiles,
+            AssetLibraries,
         }
 
         Page page;
@@ -164,6 +166,7 @@ namespace Unity.SpaceGod.UI
             {
                 case Page.Load: DrawLoad(); break;
                 case Page.Profiles: DrawProfiles(); break;
+                case Page.AssetLibraries: DrawAssetLibraries(); break;
                 default: DrawMain(); break;
             }
         }
@@ -172,7 +175,7 @@ namespace Unity.SpaceGod.UI
 
         void DrawMain()
         {
-            const float w = 380, h = 372;
+            const float w = 380, h = 420;
             var r = Centred(w, h);
             GUI.Label(new Rect(r.x, r.y - 70, w, 48), "UNITYSPACE", heading);
             GUI.Box(r, GUIContent.none, panel);
@@ -191,7 +194,8 @@ namespace Unity.SpaceGod.UI
             GUI.enabled = enabled;
             if (GUI.Button(new Rect(r.x + 20, y + 144, bw, 38), "Profiles", button)) Open(Page.Profiles);
             if (GUI.Button(new Rect(r.x + 20, y + 192, bw, 38), "Settings", button)) settings.OpenSettings();
-            if (GUI.Button(new Rect(r.x + 20, y + 240, bw, 38), "Quit", button)) Quit();
+            if (GUI.Button(new Rect(r.x + 20, y + 240, bw, 38), "Asset Library POC", button)) Open(Page.AssetLibraries);
+            if (GUI.Button(new Rect(r.x + 20, y + 288, bw, 38), "Quit", button)) Quit();
         }
 
         void DrawLoad()
@@ -280,6 +284,38 @@ namespace Unity.SpaceGod.UI
                 if (submit) e.Use();
             }
             if (!string.IsNullOrEmpty(notice)) GUI.Label(new Rect(r.x + 20, y + 58, w - 170, 36), notice, small);
+            if (GUI.Button(new Rect(r.xMax - 130, r.yMax - 46, 110, 30), "Back", button)) Open(Page.Main);
+        }
+
+        /// <summary>Whether a candidate's demo scene is in the build, so the menu can load it (U.SPC-T378).</summary>
+        static bool DemoInstalled(AssetCandidate c) => SceneUtility.GetBuildIndexByScenePath(c.DemoScenePath) >= 0;
+
+        void DrawAssetLibraries()
+        {
+            const float w = 760;
+            var list = AssetLibraryCandidates.All;
+            float h = 150 + list.Count * 52;
+            var r = Centred(w, h);
+            GUI.Box(r, GUIContent.none, panel);
+            GUI.Label(new Rect(r.x + 20, r.y + 14, w - 40, 22), "ASSET LIBRARY POC", title);
+            GUI.Label(new Rect(r.x + 20, r.y + 38, w - 40, 32),
+                "Candidate Asset Store packages, to judge in game before buying for real. Buy and import a package, add its demo scene to the build at the path shown, then launch it here  ·  Esc to go back", small);
+            for (int i = 0; i < list.Count; i++)
+            {
+                var c = list[i];
+                bool installed = DemoInstalled(c);
+                var row0 = new Rect(r.x + 20, r.y + 78 + i * 52, w - 40, 48);
+                GUI.Box(row0, GUIContent.none, row);
+                GUI.Label(new Rect(row0.x + 6, row0.y + 3, 300, 20), c.Name, text);
+                GUI.Label(new Rect(row0.x + 6, row0.y + 22, row0.width - 130, 24),
+                    c.Purpose + "  ·  Unity 6: " + AssetCandidate.Describe(c.Unity6) + ", URP: " + AssetCandidate.Describe(c.Urp)
+                    + ", HDRP: " + AssetCandidate.Describe(c.Hdrp) + "  ·  " + (installed ? "demo installed" : "not installed (" + c.DemoScenePath + ")"), small);
+                bool enabled = GUI.enabled;
+                GUI.enabled = enabled && installed;
+                if (GUI.Button(new Rect(row0.xMax - 110, row0.y + 10, 104, 28), "Launch demo", installed ? buttonActive : button))
+                    SceneManager.LoadScene(c.DemoScenePath);
+                GUI.enabled = enabled;
+            }
             if (GUI.Button(new Rect(r.xMax - 130, r.yMax - 46, 110, 30), "Back", button)) Open(Page.Main);
         }
 
