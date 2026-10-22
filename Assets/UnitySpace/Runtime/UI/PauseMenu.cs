@@ -6,9 +6,12 @@ namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// The pause menu (U.SPC-T276), opened by Esc once there is nothing left for it to back out of (or at the
-    /// helm): Resume, Save / Load, Settings, Main Menu and Quit. Settings holds the Display page, where the resolution, the window mode
-    /// and VSync are picked; nothing changes until Apply, and what Apply puts on the screen is taken back after
-    /// ten real seconds unless the player keeps it. While the menu is open the whole simulation stands still
+    /// helm): Resume, Save / Load, Settings, Main Menu and Quit. Settings lists every setting the game's systems
+    /// declare in the <see cref="SettingsRegistry"/> (U.SPC-T431), by group, with a search across them all, each
+    /// taking effect at once and remembered in the profile, with Reset per setting and per group; a new setting
+    /// shows up here by being declared, never by an edit to this menu. Settings also holds the Display page, where
+    /// the resolution, the window mode and VSync are picked; nothing changes there until Apply, and what Apply puts
+    /// on the screen is taken back after ten real seconds unless the player keeps it. While the menu is open the whole simulation stands still
     /// (the app skips its frame), the cursor is free and the piloted hull takes no stick or trigger. Esc goes
     /// back one page, and on the first page resumes. The main menu opens the same Settings on their own
     /// (<see cref="OpenSettings"/>).
@@ -39,9 +42,17 @@ namespace Unity.SpaceGod.UI
         /// <summary>A line under the Display page's buttons saying what last happened (kept, reverted).</summary>
         string notice;
 
+        /// <summary>The Settings page: the group shown (null: the first), the search typed, and how far its list is scrolled.</summary>
+        string group;
+        string search = "";
+        Vector2 settingsScroll;
+
+        /// <summary>The words that find the Display page in a search, as the registry's settings are found by theirs.</summary>
+        const string DisplaySearchWords = "display graphics resolution screen window mode borderless fullscreen exclusive vsync aspect ratio ultrawide";
+
         bool stylesReady;
-        GUIStyle panel, title, text, small, button, buttonActive, row, rowSelected, countdown;
-        Texture2D panelTexture, shadeTexture, buttonTexture, buttonActiveTexture, rowHoverTexture, rowSelectedTexture;
+        GUIStyle panel, title, text, small, button, buttonActive, row, rowSelected, countdown, field, label;
+        Texture2D panelTexture, shadeTexture, buttonTexture, buttonActiveTexture, rowHoverTexture, rowSelectedTexture, fieldTexture;
 
         public bool IsOpen { get; private set; }
 
@@ -107,7 +118,9 @@ namespace Unity.SpaceGod.UI
                     page = Page.Settings;
                     break;
                 case Page.Settings:
-                    if (settingsOnly) Close();
+                    // Esc clears a search before it leaves the page.
+                    if (!string.IsNullOrEmpty(search)) search = "";
+                    else if (settingsOnly) Close();
                     else page = Page.Main;
                     break;
                 default:
@@ -225,16 +238,147 @@ namespace Unity.SpaceGod.UI
             }
         }
 
+        const float SettingRowH = 58;
+
+        /// <summary>
+        /// The Settings page (U.SPC-T431): Display and every group the registry holds down the left, the chosen
+        /// group's settings (or, while something is typed in Search, every setting it finds) on the right.
+        /// </summary>
         void DrawSettings()
         {
-            const float w = 320, h = 170;
+            var registry = GameSettingsHost.Registry;
+            var groups = registry.Groups();
+            if (group == null || !groups.Contains(group)) group = groups.Count > 0 ? groups[0] : null;
+
+            float w = Mathf.Min(820, Screen.width - 40), h = Mathf.Min(560, Screen.height - 40);
             var r = Centred(w, h);
             GUI.Box(r, GUIContent.none, panel);
             GUI.Label(new Rect(r.x + 20, r.y + 14, w - 40, 22), "SETTINGS", title);
-            GUI.Label(new Rect(r.x + 20, r.y + 38, w - 40, 18), "Esc to go back", small);
-            float y = r.y + 70;
-            if (GUI.Button(new Rect(r.x + 20, y, w - 40, 34), "Display", button)) OpenDisplay();
-            if (GUI.Button(new Rect(r.x + 20, y + 44, w - 40, 34), "Back", button)) Back();
+            GUI.Label(new Rect(r.x + 20, r.y + 38, w - 340, 18),
+                "Changes take effect at once and are kept in profile " + ActiveProfile.Current.Name + "  ·  Esc to go back", small);
+
+            // Search, across every group.
+            GUI.Label(new Rect(r.xMax - 320, r.y + 16, 60, 24), "Search", text);
+            string typed = GUI.TextField(new Rect(r.xMax - 260, r.y + 14, 240, 26), search ?? "", 48, field);
+            if (typed != search)
+            {
+                search = typed;
+                settingsScroll = Vector2.zero;
+            }
+            bool searching = !string.IsNullOrWhiteSpace(search);
+
+            // The groups.
+            const float navW = 190;
+            float top = r.y + 70, bottom = r.yMax - 56;
+            float ny = top;
+            if (GUI.Button(new Rect(r.x + 20, ny, navW, 30), "Display", button)) OpenDisplay();
+            ny += 36;
+            foreach (var g in groups)
+            {
+                if (ny + 30 > bottom) break;
+                if (GUI.Button(new Rect(r.x + 20, ny, navW, 30), g, !searching && g == group ? buttonActive : button))
+                {
+                    group = g;
+                    search = "";
+                    settingsScroll = Vector2.zero;
+                }
+                ny += 34;
+            }
+
+            // The settings.
+            float px = r.x + 20 + navW + 20, pw = r.xMax - 20 - px;
+            var shown = searching ? registry.Search(search) : group != null ? registry.InGroup(group) : new List<GameSetting>();
+            bool displayFound = searching && MatchesAll(DisplaySearchWords, search);
+            int rows = shown.Count + (displayFound ? 1 : 0);
+            string heading = searching ? rows + " found for \"" + search.Trim() + "\"" : group ?? "Nothing to set";
+            GUI.Label(new Rect(px, top, pw, 22), heading, text);
+
+            var view = new Rect(px, top + 28, pw, bottom - top - 28);
+            var content = new Rect(0, 0, pw - 18, Mathf.Max(rows * SettingRowH, 1));
+            settingsScroll = GUI.BeginScrollView(view, settingsScroll, content);
+            float y = 0;
+            if (displayFound)
+            {
+                GUI.Label(new Rect(4, y + 4, content.width - 280, 20), "Display", label);
+                GUI.Label(new Rect(4, y + 24, content.width - 280, 30), "Resolution, aspect ratio, window mode and VSync.", small);
+                if (GUI.Button(new Rect(content.width - 266, y + 10, 200, 28), "Open Display", button)) OpenDisplay();
+                y += SettingRowH;
+            }
+            foreach (var setting in shown)
+            {
+                DrawSetting(setting, new Rect(0, y, content.width, SettingRowH), searching);
+                y += SettingRowH;
+            }
+            if (rows == 0)
+                GUI.Label(new Rect(4, 4, content.width - 8, 40), searching ? "No setting matches that." : "No system has declared a setting yet.", small);
+            GUI.EndScrollView();
+
+            // Reset the group shown (or everything found), and Back.
+            float by = r.yMax - 46;
+            var resettable = shown.FindAll(s => !s.IsDefault);
+            bool enabled = GUI.enabled;
+            GUI.enabled = enabled && resettable.Count > 0;
+            string resetLabel = searching ? "Reset these" : "Reset " + (group ?? "");
+            if (GUI.Button(new Rect(px, by, 220, 30), resetLabel, button))
+                foreach (var s in resettable) s.Reset();
+            GUI.enabled = enabled;
+            if (GUI.Button(new Rect(r.xMax - 20 - 110, by, 110, 30), "Back", button))
+            {
+                search = ""; // the button leaves the page outright; only Esc stops at clearing a search first
+                Back();
+            }
+        }
+
+        /// <summary>One setting's row: its name and what it does on the left, its control and Reset on the right.</summary>
+        void DrawSetting(GameSetting setting, Rect r, bool showGroup)
+        {
+            const float controlW = 250, resetW = 60;
+            float textW = r.width - controlW - resetW - 24;
+            GUI.Label(new Rect(r.x + 4, r.y + 4, textW, 20), showGroup ? setting.Group + "  ·  " + setting.Label : setting.Label, label);
+            GUI.Label(new Rect(r.x + 4, r.y + 24, textW, SettingRowH - 26), setting.Description, small);
+
+            float cx = r.x + textW + 12, cy = r.y + 10;
+            switch (setting)
+            {
+                case ToggleSetting toggle:
+                {
+                    float half = (controlW - 6) * 0.5f;
+                    if (GUI.Button(new Rect(cx, cy, half, 28), "On", toggle.Value ? buttonActive : button)) toggle.Set(true);
+                    if (GUI.Button(new Rect(cx + half + 6, cy, half, 28), "Off", !toggle.Value ? buttonActive : button)) toggle.Set(false);
+                    break;
+                }
+                case RangeSetting range:
+                {
+                    const float valueW = 86;
+                    float f = GUI.HorizontalSlider(new Rect(cx, cy + 8, controlW - valueW - 8, 16), (float)range.Fraction, 0f, 1f);
+                    if (!Mathf.Approximately(f, (float)range.Fraction)) range.SetFraction(f);
+                    GUI.Label(new Rect(cx + controlW - valueW, cy + 2, valueW, 24), range.ValueText, text);
+                    break;
+                }
+                case ChoiceSetting choice:
+                {
+                    if (GUI.Button(new Rect(cx, cy, 32, 28), "<", button)) choice.Cycle(-1);
+                    GUI.Label(new Rect(cx + 36, cy, controlW - 72, 28), choice.Selected, rowSelected);
+                    if (GUI.Button(new Rect(cx + controlW - 32, cy, 32, 28), ">", button)) choice.Cycle(1);
+                    break;
+                }
+                default:
+                    GUI.Label(new Rect(cx, cy + 4, controlW, 24), setting.ValueText, text);
+                    break;
+            }
+
+            bool enabled = GUI.enabled;
+            GUI.enabled = enabled && !setting.IsDefault;
+            if (GUI.Button(new Rect(r.xMax - resetW, cy, resetW, 28), "Reset", button)) setting.Reset();
+            GUI.enabled = enabled;
+        }
+
+        /// <summary>Whether every word of <paramref name="query"/> is among <paramref name="words"/>.</summary>
+        static bool MatchesAll(string words, string query)
+        {
+            foreach (var q in query.ToLowerInvariant().Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries))
+                if (words.IndexOf(q, System.StringComparison.Ordinal) < 0) return false;
+            return true;
         }
 
         void DrawDisplay()
@@ -329,6 +473,16 @@ namespace Unity.SpaceGod.UI
             title = new GUIStyle { fontSize = 15, fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
             text = new GUIStyle { fontSize = 13, normal = { textColor = Color.white }, clipping = TextClipping.Clip };
             small = new GUIStyle { fontSize = 11, normal = { textColor = Hud.Dim }, wordWrap = true };
+            label = new GUIStyle { fontSize = 13, fontStyle = FontStyle.Bold, normal = { textColor = Color.white }, clipping = TextClipping.Clip };
+            fieldTexture = Hud.Solid(new Color(0.02f, 0.03f, 0.05f, 0.95f), new Color(0.45f, 0.85f, 1f, 0.8f));
+            field = new GUIStyle
+            {
+                fontSize = 13, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(8, 8, 0, 0), border = new RectOffset(2, 2, 2, 2),
+                clipping = TextClipping.Clip,
+                normal = { background = fieldTexture, textColor = Color.white },
+                focused = { background = fieldTexture, textColor = Color.white },
+                hover = { background = fieldTexture, textColor = Color.white },
+            };
             countdown = new GUIStyle { fontSize = 14, fontStyle = FontStyle.Bold, normal = { textColor = Hud.Accent } };
             button = new GUIStyle
             {
@@ -357,7 +511,8 @@ namespace Unity.SpaceGod.UI
             if (buttonActiveTexture != null) Object.Destroy(buttonActiveTexture);
             if (rowHoverTexture != null) Object.Destroy(rowHoverTexture);
             if (rowSelectedTexture != null) Object.Destroy(rowSelectedTexture);
-            panelTexture = shadeTexture = buttonTexture = buttonActiveTexture = rowHoverTexture = rowSelectedTexture = null;
+            if (fieldTexture != null) Object.Destroy(fieldTexture);
+            panelTexture = shadeTexture = buttonTexture = buttonActiveTexture = rowHoverTexture = rowSelectedTexture = fieldTexture = null;
         }
     }
 }

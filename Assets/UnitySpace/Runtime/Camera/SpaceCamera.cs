@@ -41,6 +41,7 @@ namespace Unity.SpaceGod.Cameras
     /// made level (Alpha Centauri's A-B orbit lies steeply across the ecliptic). Yaw, pitch and the
     /// focus orbit are measured in that frame; <see cref="Level"/> swings to a new one smoothly.
     /// </summary>
+    [SettingsSource]
     public sealed class SpaceCamera
     {
         public enum CameraMode
@@ -90,7 +91,24 @@ namespace Unity.SpaceGod.Cameras
 
         const float TravelSeconds = 1.6f;
         const float LevelSeconds = 1.4f;
-        const float LookSensitivity = 0.12f;
+        /// <summary>Mouse look, in degrees a count at the default sensitivity; the free, focus and pilot views alike.</summary>
+        const float BaseLookSensitivity = 0.12f;
+
+        /// <summary>Controls (U.SPC-T431): how far the mouse turns the view, as a multiple of the usual.</summary>
+        public static readonly RangeSetting LookSensitivitySetting = new RangeSetting("controls.lookSensitivity", SettingGroups.Controls,
+            "Mouse look sensitivity", 1, 0.25, 4, 0.05,
+            "How far the view (and a fighter's aim) turns for a mouse movement.",
+            v => v.ToString("0.00") + "x", "mouse camera speed aim");
+
+        /// <summary>Controls (U.SPC-T431): mouse forward looks down, as in a flight stick.</summary>
+        public static readonly ToggleSetting InvertLook = new ToggleSetting("controls.invertLook", SettingGroups.Controls,
+            "Invert vertical look", false, "Pushing the mouse forward looks (and pitches) down instead of up.", "mouse y pitch flight");
+
+        /// <summary>Degrees of turn per mouse count, as the player has set it.</summary>
+        public static float LookSensitivity => BaseLookSensitivity * (float)LookSensitivitySetting.Value;
+
+        /// <summary>A mouse movement's up-down part, the way the player wants it read.</summary>
+        public static float LookY(float dy) => InvertLook.Value ? -dy : dy;
         const double MinSpeedMultiplier = 1.0 / 64, MaxSpeedMultiplier = 64;
 
         /// <summary>How fast the pilot chase camera's rotation catches up to the hull's own facing
@@ -318,7 +336,7 @@ namespace Unity.SpaceGod.Cameras
             if (input.LookHeld)
             {
                 yaw += input.LookDelta.x * LookSensitivity;
-                pitch = Mathf.Clamp(pitch - input.LookDelta.y * LookSensitivity, -89f, 89f);
+                pitch = Mathf.Clamp(pitch - LookY(input.LookDelta.y) * LookSensitivity, -89f, 89f);
             }
             Rotation = UpFrame * Quaternion.Euler(pitch, yaw, 0);
 
@@ -381,7 +399,7 @@ namespace Unity.SpaceGod.Cameras
             if (input.LookHeld)
             {
                 orbitYaw += input.LookDelta.x * LookSensitivity;
-                orbitPitch = Mathf.Clamp(orbitPitch - input.LookDelta.y * LookSensitivity, -88f, 88f);
+                orbitPitch = Mathf.Clamp(orbitPitch - LookY(input.LookDelta.y) * LookSensitivity, -88f, 88f);
             }
             if (Math.Abs(input.Scroll) > 0)
                 zoomTarget = Math.Max(MinZoom(FocusTarget), Math.Min(5e7, zoomTarget * Math.Pow(0.82, input.Scroll)));

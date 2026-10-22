@@ -35,12 +35,13 @@ namespace Unity.SpaceGod
         public static Profile Current => current ??= Store.Current;
 
         /// <summary>Makes <paramref name="name"/> the profile in use (made if it is new, and remembered for the next
-        /// run) and puts its display settings on the screen.</summary>
+        /// run) and puts its display settings, and every other setting it remembers, into effect.</summary>
         public static Profile Switch(string name)
         {
             var store = Store;
             if (!store.Exists(name)) store.Create(name);
             current = store.Select(name);
+            GameSettingsHost.Bind(); // the new profile's settings (U.SPC-T431)
             DisplayOptions.ApplySaved();
             return current;
         }

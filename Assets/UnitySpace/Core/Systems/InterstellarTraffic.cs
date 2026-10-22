@@ -165,6 +165,7 @@ namespace Unity.SpaceGod.Core
     /// way. A gate's owner closes it to all but its own ships for <see cref="BlockadeDays"/> after
     /// raiders come through it; traffic then goes round by other gates where it can, or waits.
     /// </summary>
+    [SettingsSource]
     public sealed class InterstellarTraffic
     {
         readonly Galaxy galaxy;
@@ -217,8 +218,14 @@ namespace Unity.SpaceGod.Core
         /// <summary>A freighter goes only for a margin of at least this share of what the cargo cost landed.</summary>
         public const double MinMargin = 0.12;
 
-        /// <summary>The most freighters out on one system's runs to another at once.</summary>
-        public const int MaxTradersPerRoute = 4;
+        /// <summary>The most freighters out on one system's runs to another at once (4 unless the player tunes it, U.SPC-T431).</summary>
+        public static int MaxTradersPerRoute => TradersPerRoute.IntValue;
+
+        /// <summary>The settings menu's Economy tuning of <see cref="MaxTradersPerRoute"/>.</summary>
+        public static readonly RangeSetting TradersPerRoute = new RangeSetting("economy.tradersPerRoute", SettingGroups.Economy,
+            "Freighters per interstellar route", 4, 1, 12, 1,
+            "The most of a system's freighters out on its runs to one other system at once: more makes busier lanes and tighter margins.",
+            v => v.ToString("0", CultureInfo.InvariantCulture), "trade traffic interstellar freight");
 
         /// <summary>
         /// The most of a system's own freighters that may be out on interstellar runs at once, as a share of them: the

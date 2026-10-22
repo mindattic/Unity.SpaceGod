@@ -3,6 +3,7 @@ using System;
 namespace Unity.SpaceGod.Core
 {
     /// <summary>Simulation time as a Julian date, advanced by real time multiplied by a warp level.</summary>
+    [SettingsSource]
     public sealed class SimClock
     {
         public readonly struct WarpLevel
@@ -32,6 +33,11 @@ namespace Unity.SpaceGod.Core
         };
 
         public const int DefaultWarpIndex = 4;
+
+        /// <summary>The warp a new game starts at (a save keeps its own), from the settings menu's Simulation group (U.SPC-T431).</summary>
+        public static readonly ChoiceSetting StartingWarp = new ChoiceSetting("simulation.startingWarp", SettingGroups.Simulation,
+            "Starting time warp", Array.ConvertAll(Levels, l => l.Label), DefaultWarpIndex,
+            "How fast the clock runs when a new game starts; the time controls still change it in play.", "speed clock rate time");
 
         public double Jd { get; private set; }
         public int WarpIndex { get; private set; } = DefaultWarpIndex;

@@ -52,7 +52,7 @@ namespace Unity.SpaceGod.UI
 
         void Awake()
         {
-            Application.targetFrameRate = 144;
+            GameSettingsHost.Bind(); // every declared setting, from the profile (frame rate, volume...) (U.SPC-T431)
             Time.timeScale = 1;
             DisplayOptions.ApplySaved(); // the profile's resolution, window mode and VSync
             Cursor.lockState = CursorLockMode.None;

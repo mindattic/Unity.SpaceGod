@@ -24,6 +24,7 @@ namespace Unity.SpaceGod
     /// so a 3 km ship next to the camera renders cleanly while Neptune sits 4.5 million units away.
     /// </summary>
     [DefaultExecutionOrder(-100)]
+    [SettingsSource]
     public sealed partial class UnitySpaceApp : MonoBehaviour, ICameraWorld
     {
         /// <summary>Raised when the galaxy is rebuilt from scratch (a backwards time reset): anything holding
@@ -92,7 +93,7 @@ namespace Unity.SpaceGod
         /// hull's own roof and starboard axes, so steering stays screen-relative however the hull has
         /// rolled, and it can point anywhere -- straight up, down or behind -- with no gimbal clamp.</summary>
         DVec3 pilotAim = DVec3.UnitX;
-        const float PilotLookSensitivity = 0.12f;
+        static float PilotLookSensitivity => SpaceCamera.LookSensitivity;
 
         /// <summary>A freighter's stick is slower: it is a heavy thing to point (U.SPC-T269).</summary>
         const float HaulerLookFactor = 0.6f;
@@ -328,13 +329,13 @@ namespace Unity.SpaceGod
 
         void Awake()
         {
-            Application.targetFrameRate = 144;
+            GameSettingsHost.Bind(); // every declared setting, from the active profile (U.SPC-T431)
             DisplayOptions.ApplySaved(); // the resolution, window mode and VSync last kept (VSync on until then)
-            AutoReorient = ActiveProfile.Current.Flag(GameSettings.AutoReorient, true);
             pauseMenu.ShowSaves = () => ShowSaves = true;
             pauseMenu.ToMainMenu = () => pendingMainMenu = true;
 
             Clock = SimClock.StartingNow();
+            Clock.SetWarp(SimClock.StartingWarp.Index);
             Scale = new ScaleModel { Blend = 1 };
             Galaxy = Galaxy.CreateDefault(Clock.Jd);
 
@@ -479,7 +480,7 @@ namespace Unity.SpaceGod
             UnityCamera.nearClipPlane = 0.1f;
             UnityCamera.farClipPlane = 5e8f;
             UnityCamera.allowHDR = false;
-            UnityCamera.allowMSAA = true;
+            UnityCamera.allowMSAA = EngineSettings.Msaa.Value;
             var listener = UnityCamera.GetComponent<AudioListener>();
             if (listener != null) listener.enabled = true;
         }
@@ -1180,6 +1181,7 @@ namespace Unity.SpaceGod
             var control = PilotControlMode = PilotTuning.ControlOf(ship.Spec.Class);
             double leadRad = PilotFlight.AimLeadRad(hull, tuning);
             var look = ClickPanelOpen ? Vector2.zero : Input.MouseDelta;
+            look.y = SpaceCamera.LookY(look.y);
             double lookRight = look.x * PilotLookSensitivity * Mathf.Deg2Rad, lookUp = look.y * PilotLookSensitivity * Mathf.Deg2Rad;
             double strafeRight = Input.Move.x, strafeUp = Input.Move.y;
             switch (control)
@@ -1959,13 +1961,16 @@ namespace Unity.SpaceGod
             IsSol ? "the ecliptic" : !Catalog.Root.IsStar ? "the A–B orbital plane" : Catalog.Root.Name + "'s planetary plane";
 
         /// <summary>Whether the view keeps the active system's plane level by itself (R or the on-screen toggle; remembered between sessions).</summary>
-        public bool AutoReorient { get; private set; }
+        public bool AutoReorient => AutoReorientSetting.Value;
+
+        /// <summary>Controls (U.SPC-T431), under the key the R toggle has always been remembered by.</summary>
+        public static readonly ToggleSetting AutoReorientSetting = new ToggleSetting(GameSettings.AutoReorient, SettingGroups.Controls,
+            "Auto-reorient view", true, "Keep the active system's plane level by itself when the view moves to a new system (R in play).",
+            "camera level plane horizon");
 
         public void ToggleAutoReorient()
         {
-            AutoReorient = !AutoReorient;
-            try { ActiveProfile.Current.SetFlag(GameSettings.AutoReorient, AutoReorient); }
-            catch (Exception e) { Debug.LogError("[Unity.SpaceGod] Saving the auto-reorient setting failed: " + e); }
+            AutoReorientSetting.Set(!AutoReorient); // remembered in the profile by the settings registry
             ShowToast(AutoReorient ? "AUTO-REORIENT ON: keeping " + SystemPlaneName + " level" : "AUTO-REORIENT OFF: the view stays as you leave it");
         }
 

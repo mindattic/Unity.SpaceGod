@@ -20,6 +20,7 @@ namespace Unity.SpaceGod.Views
     /// than a single instant line, and every direct-fire shot gets a brief muzzle flash and recoil kick
     /// at the gun itself.
     /// </summary>
+    [SettingsSource]
     public sealed class BattleFx
     {
         enum Shape
@@ -59,7 +60,13 @@ namespace Unity.SpaceGod.Views
         readonly List<Vector3> uvs = new List<Vector3>();
         readonly List<int> indices = new List<int>();
 
-        const int MaxEffects = 4000;
+        /// <summary>The render budget for weapons fire on screen at once (U.SPC-T431): past it the oldest effects go first.</summary>
+        public static readonly RangeSetting EffectsBudget = new RangeSetting("lod.battleEffects", SettingGroups.RenderBudget,
+            "Battle effects budget", 4000, 500, 8000, 500,
+            "The most beams, tracers, missiles and explosions drawn at once; the oldest give way first in a big fight.",
+            v => v.ToString("0") + " effects", "weapons fire particles performance");
+
+        static int MaxEffects => EffectsBudget.IntValue;
         const int MaxNewPerBattlePerFrame = 160;
 
         public BattleFx(UnitySpaceApp app, Transform parent)

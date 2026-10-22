@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Unity.Shared.Core;
+using Unity.Shared.Core.Json;
 
 namespace Unity.SpaceGod.Core
 {
@@ -126,6 +127,45 @@ namespace Unity.SpaceGod.Core
             for (int i = 2; Directory.Exists(target) || File.Exists(target); i++)
                 target = Path.Combine(profileFolder, KeptAsideName + "-" + stamp + "-" + i);
             return target;
+        }
+    }
+
+    /// <summary>
+    /// The settings registry's store (U.SPC-T431) over a profile's settings.json: each declared setting is a field
+    /// of the <c>game</c> block under its key, an on/off one as a JSON bool and a number as a JSON number (so the
+    /// auto-reorient flag reads and writes exactly as it always has), anything else as text. Each change is
+    /// written to settings.json at once; one back at its default is removed.
+    /// </summary>
+    public sealed class ProfileSettingStore : ISettingStore
+    {
+        readonly Profile profile;
+
+        public ProfileSettingStore(Profile profile) => this.profile = profile ?? throw new ArgumentNullException(nameof(profile));
+
+        public string ReadSetting(string key)
+        {
+            object v = profile.Settings.Game[key];
+            switch (v)
+            {
+                case string s: return s;
+                case bool b: return b ? "true" : "false";
+                case JsonNumber n: return n.Raw;
+                default: return null;
+            }
+        }
+
+        public void WriteSetting(string key, string value)
+        {
+            var game = profile.Settings.Game;
+            if (value == "true" || value == "false") game.Set(key, value == "true");
+            else if (value != null && MiniJson.IsNumber(value)) game.Set(key, JsonNumber.FromRaw(value));
+            else game.Set(key, value ?? "");
+            profile.SaveSettings();
+        }
+
+        public void ForgetSetting(string key)
+        {
+            if (profile.Settings.Game.Remove(key)) profile.SaveSettings();
         }
     }
 }
