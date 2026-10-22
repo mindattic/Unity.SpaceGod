@@ -224,6 +224,10 @@ namespace Unity.SpaceGod.Core.Tests
             var w = CreateWorld();
             int earth = Body(w, "Earth"), mars = Body(w, "Mars");
             var o = Raider(w, mars);
+            // Only the band the test sets up at Mars: the seeded world's own bands swept into its opening fights there
+            // would outgun the hunter, which then rightly passes the contract up.
+            foreach (var s in w.Fleet.Ships.Where(s => !s.Destroyed && s.Faction.IsPirate && s.Controller != o.Ship && s.Controller.Orbit?.Body == mars).ToList())
+                s.Destroyed = true;
             w.Law.Commit(o.Record, CrimeKind.Piracy, w.Sol, w.Belt, mars, StartJd, "Ares Prime", "Battle of Mars");
             var h = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
             Assert.That(w.Outlaws.IsHunter(h.Ship), Is.True);

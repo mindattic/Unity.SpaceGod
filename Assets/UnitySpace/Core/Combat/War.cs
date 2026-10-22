@@ -21,6 +21,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Lie in wait off a jump gate, where traffic bunches up going in and coming out (pirates; U.SPC-T94).</summary>
         GateWatch,
+
+        /// <summary>Hold one of the navy's own jump gates against raiders lying in wait off it: take station on its approach
+        /// and fight them there (U.SPC-T374).</summary>
+        HoldGate,
     }
 
     /// <summary>
@@ -126,6 +130,16 @@ namespace Unity.SpaceGod.Core
         /// <summary>Raised when a pirate clan takes loot or a prize here: the clan, what it was worth (credits) and the date
         /// (U.SPC-T94; the clans' victims put a price on them, see <see cref="PirateClans"/>).</summary>
         public event Action<Faction, double, double> Plundered;
+
+        /// <summary>
+        /// Raised when a pirate clan destroys a merchant or civilian hull here outright rather than robbing it (U.SPC-T374):
+        /// the clan, the heat it draws (credits the robbed states add to the price on its head, see
+        /// <see cref="RaidDoctrine.DestroyHeat"/>) and the date. A wreck draws far more than a clean robbery.
+        /// </summary>
+        public event Action<Faction, double, double> Heat;
+
+        /// <summary>The heat each clan has drawn here by destroying hulls it could have robbed (credits, all time; U.SPC-T374).</summary>
+        public readonly Dictionary<Faction, double> HeatDrawn = new Dictionary<Faction, double>();
 
         /// <summary>The chance a raider group, deciding where to go next, lies in wait off its system's busiest gate instead.</summary>
         public const double GateWatchChance = 0.2;
@@ -278,10 +292,34 @@ namespace Unity.SpaceGod.Core
                     double before = laneSeen.TryGetValue(v, out var b) && b.lane == lane ? b.at : now;
                     if ((before - station) * (now - station) <= 0 || Math.Abs(now - station) < window) victims.Add(v);
                 }
-                if (victims.Count > 0) Interdict(lurker, station, victims, jd);
+                if (victims.Count > 0 && WorthPulsing(lurker, victims)) Interdict(lurker, station, victims, jd);
             }
             laneSeen.Clear();
             foreach (var kv in seen) laneSeen[kv.Key] = kv.Value;
+        }
+
+        /// <summary>
+        /// Whether a lurker sets its pulse off on <paramref name="victims"/> passing its station (U.SPC-T374): it sizes them
+        /// up first (<see cref="BestMark"/>), and lets a merchant or civilian hull ride on when none of them is worth the guns
+        /// riding with them or the heat (a warship passing alone it pulls out as before, if the guns about are few enough).
+        /// </summary>
+        bool WorthPulsing(Ship lurker, List<Ship> victims)
+        {
+            var marks = new List<Ship>();
+            double guns = 0;
+            foreach (var v in victims)
+            {
+                if (v.Spec.IsMilitary || v.Faction.IsPirate) guns += GroupStrength(v);
+                else
+                {
+                    marks.Add(v);
+                    // Its escorts ride the lane with it.
+                    guns += GroupStrength(v) - v.Combat.Strength;
+                }
+            }
+            if (marks.Count == 0) return true;
+            double band = GroupStrength(lurker);
+            return BestMark(marks, guns, band) != null || (guns > 0 && guns <= band * RaidDoctrine.BaseNerve);
         }
 
         /// <summary>A raider lying in wait beside its lane, pulse at the ready: not one in a fight, at the helm, or off
@@ -491,7 +529,9 @@ namespace Unity.SpaceGod.Core
                             ship.Cargo = null;
                         }
                     }
-                    world.Log(jd, $"{b.Name}: the {ship.Name} hands its cargo to {who} and is let go", WorldEventKind.Capture, Shown(b));
+                    world.Log(jd, captor != null && captor.IsPirate
+                        ? $"{b.Name}: the {ship.Name} jettisons its cargo, {who} drones collect it, and it is let go"
+                        : $"{b.Name}: the {ship.Name} hands its cargo to {who} and is let go", WorldEventKind.Capture, Shown(b));
                     break;
                 case SurrenderTerms.LetGo:
                     world.Log(jd, $"{b.Name}: {who} let the {ship.Name} go", WorldEventKind.Battle, Shown(b));
@@ -1091,6 +1131,9 @@ namespace Unity.SpaceGod.Core
                     armed = true;
                 }
             if (hostile.Count == 0 || !armed) return null;
+            // Raiders falling on a port's merchants size them up first (U.SPC-T374): with no guns there to fight, they
+            // spring only on a mark worth the heat (a civilian hull is left alone unless it is worth a great deal).
+            if (aggressor.IsPirate && !byPlayer && !WorthAFight(aggressor, body, present, jd)) return null;
 
             // A fight needs someone fit and willing to start it: a healthy armed warship or a platform.
             bool aggressorArmed = false, defenderArmed = false, aggressorFresh = false;
@@ -1131,6 +1174,31 @@ namespace Unity.SpaceGod.Core
             BumpDanger(body, 1.5);
             BattleStarted?.Invoke(b);
             return b;
+        }
+
+        /// <summary>
+        /// Whether raiders of <paramref name="clan"/> at <paramref name="body"/> have anything there worth starting a fight
+        /// over (U.SPC-T374): any hostile warship or platform to fight (the commanded-combat rules and the raid orders decide
+        /// those), or else a merchant or civilian hull among <paramref name="present"/> worth the heat (<see cref="BestMark"/>).
+        /// </summary>
+        bool WorthAFight(Faction clan, int body, List<Ship> present, double jd)
+        {
+            foreach (var st in Economy.At(body))
+                if (st.Platforms.Count > 0 && Diplomacy.Hostile(clan, st.Owner)) return true;
+            var marks = new List<Ship>();
+            double band = 0;
+            foreach (var s in present)
+            {
+                if (s.Faction == clan)
+                {
+                    if (Willing(s.Controller, jd)) band += s.Combat.Strength;
+                    continue;
+                }
+                if (!Diplomacy.Hostile(clan, s.Faction) || Withdrawing(s.Controller, jd)) continue;
+                if (s.Spec.IsMilitary || s.Faction.IsPirate) return true;
+                if (!s.IsEscort) marks.Add(s);
+            }
+            return marks.Count == 0 || BestMark(marks, 0, Math.Max(band, 1e-6)) != null;
         }
 
         /// <summary>A defence platform or gate fort lost (or taken) is struck off its settlement's or gate's list.</summary>
@@ -1315,17 +1383,20 @@ namespace Unity.SpaceGod.Core
                 if (lurker.Destroyed || lurker.IsEscort || !lurker.Faction.IsPirate || lurker.Runner || lurker.StakeoutKm == null) continue;
                 if (lurker.Battle != null || lurker == world.PilotedShip || !Fleet.IsAt(lurker, root) || !Willing(lurker, jd)) continue;
                 var at = lurker.Orbit.OffsetAt(jd);
-                Ship prey = null;
+                var marks = new List<Ship>();
                 double guns = 0;
                 foreach (var s in Fleet.Ships)
                 {
                     if (s.Destroyed || s.Battle != null || s == world.PilotedShip || s.Derelict || !Fleet.IsAt(s.Controller, root)) continue;
                     if (!Diplomacy.Hostile(lurker.Faction, s.Faction) || (s.Controller.Orbit.OffsetAt(jd) - at).Length > GateAmbushRangeKm) continue;
                     if (s.Spec.IsMilitary || s.Faction.IsPirate) guns += s.Combat.Strength;
-                    else if (!s.IsEscort) prey ??= s;
+                    else if (!s.IsEscort) marks.Add(s);
                 }
-                if (prey == null && guns <= 0) continue;
-                if (guns > GroupStrength(lurker) * 0.8) continue;
+                // The band sizes up what is there first (U.SPC-T374): the best mark worth the guns about it; with none, the
+                // warships alone, if they are few enough to take on.
+                double band = GroupStrength(lurker);
+                var prey = BestMark(marks, guns, band);
+                if (prey == null && (guns <= 0 || guns > band * RaidDoctrine.BaseNerve)) continue;
                 var b = TryStartBattle(root, lurker.Faction, jd, at);
                 if (b == null) continue;
                 var gate = GateNear(at);
@@ -1334,6 +1405,30 @@ namespace Unity.SpaceGod.Core
                     (prey != null ? $"the {prey.Name}" : "the warships coming through"), WorldEventKind.Battle, root);
                 return;
             }
+        }
+
+        /// <summary>
+        /// A raider band's threat assessment (U.SPC-T374, see <see cref="RaidDoctrine"/>): of <paramref name="marks"/> (the
+        /// merchant and civilian hulls in reach), the one most worth springing on with <paramref name="guns"/> of hostile
+        /// strength about them and the band's own <paramref name="band"/>, or null when none is worth the risk or the heat.
+        /// </summary>
+        public Ship BestMark(List<Ship> marks, double guns, double band)
+        {
+            Ship best = null;
+            double bestScore = double.NegativeInfinity;
+            foreach (var s in marks)
+            {
+                double value = RaidDoctrine.PreyValue(s, world.Contracts);
+                double heat = RaidDoctrine.Heat(s, world.Contracts);
+                if (!RaidDoctrine.WorthTaking(value, heat, guns, band)) continue;
+                double score = RaidDoctrine.Score(value, heat, guns, band);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = s;
+                }
+            }
+            return best;
         }
 
         /// <summary>
@@ -1414,10 +1509,20 @@ namespace Unity.SpaceGod.Core
             double jd = b.StartJd + b.Seconds / Astro.SecondsPerDay;
             if (u.Ship != null)
             {
+                // A merchant or civilian hull raiders destroy rather than rob draws heat on their clan (U.SPC-T374), worked
+                // out before the hull is struck off (its jobs and cargo still on it).
+                var raiders = u.Side == 0 || u.Side == 1 ? b.SideLeaders[1 - u.Side] : null;
+                double heat = raiders != null && RaidDoctrine.Robs(raiders, u.Ship) ? RaidDoctrine.DestroyHeat(u.Ship, world.Contracts) : 0;
                 u.Ship.Destroyed = true;
                 losses.TryGetValue(u.Faction, out int n);
                 losses[u.Faction] = n + 1;
                 Wrecks.Add(u, b.Body, b.Anchor, jd, site: b.Site);
+                if (heat > 0)
+                {
+                    HeatDrawn.TryGetValue(raiders, out double drawn);
+                    HeatDrawn[raiders] = drawn + heat;
+                    Heat?.Invoke(raiders, heat, jd);
+                }
             }
             AbandonShip(b, u, jd);
             BumpDanger(b.Body, u.Ship != null && !u.Ship.Spec.IsMilitary ? 2.0 : 0.6);
@@ -1770,7 +1875,8 @@ namespace Unity.SpaceGod.Core
                 case OrderKind.Assault:
                 case OrderKind.Defend: return 1.0;
                 case OrderKind.Raid: return 1.5 + rng.NextDouble();
-                case OrderKind.GateWatch: return 0.5;
+                case OrderKind.GateWatch:
+                case OrderKind.HoldGate: return 0.5;
                 default: return normal;
             }
         }
@@ -1781,6 +1887,9 @@ namespace Unity.SpaceGod.Core
             bool withdrawing = retreating.TryGetValue(leader, out double until) && jd < until;
             if (f.IsPirate) return DecidePirate(leader, here, jd, withdrawing);
             if (leader.PatrolWing) return DecideWing(leader, here, jd, withdrawing);
+            // A fresh plan: a gate it was holding is held again only if it is still the order (U.SPC-T374).
+            var held = leader.StakeoutKm;
+            leader.StakeoutKm = null;
 
             if (withdrawing || GroupDamage(leader) > 0.22 || MissilesLow(leader) || !leader.Combat.Armed || HangarsLow(leader) || MarinesLow(leader))
             {
@@ -1842,11 +1951,75 @@ namespace Unity.SpaceGod.Core
                 if (s.Owner == f && s.Body != here && PiratesSeenAt(s.Body, f, at, jd))
                     return new GroupOrder { Kind = OrderKind.Hunt, Body = s.Body };
 
+            // Hold one of its own jump gates that raiders are known to be lying off (U.SPC-T374): command sends a group
+            // strong enough to clear them, which takes station on the gate's approach and fights them there.
+            if (!IsHomeGuard(leader) && GateToHold(leader, here, at, jd, held) != null)
+                return new GroupOrder { Kind = OrderKind.HoldGate, Body = Catalog.Root.Index };
+
             // Strike a hidden haven this navy has found, if the group can take its garrison.
             if (!IsHomeGuard(leader) && AssaultTarget(leader, here, jd) is Settlement mark)
                 return new GroupOrder { Kind = OrderKind.Assault, Body = mark.Body };
 
             return new GroupOrder { Kind = OrderKind.Patrol, Body = NextPatrol(leader, here) };
+        }
+
+        /// <summary>How long a navy group holds a gate it was sent to (days on station after it gets there) before command
+        /// looks again (U.SPC-T374).</summary>
+        public const double HoldGateDays = 3;
+
+        /// <summary>
+        /// The jump gate command sends navy group <paramref name="leader"/> to hold (U.SPC-T374), or null: one of its own
+        /// navy's gates here with raiders known to be lying off it (in its picture, see <see cref="Sensors"/>; every band
+        /// staked out there when there are no sensors), which the group is strong enough to clear and can reach within a
+        /// month. Already holding one (<paramref name="held"/>, its station on the approach) it stays on it while the watch
+        /// lasts. Sets the group's station on the approach (<see cref="Ship.StakeoutKm"/>), where the fight is fought.
+        /// </summary>
+        JumpGate GateToHold(Ship leader, int here, DVec3 at, double jd, DVec3? held)
+        {
+            var f = leader.Faction;
+            int root = Catalog.Root.Index;
+            if (held is DVec3 spot && jd < leader.StakeoutUntilJd && GateNear(spot) is JumpGate holding && holding.Owner == f)
+            {
+                leader.StakeoutKm = spot;
+                return holding;
+            }
+            if (world.Gates.Count == 0) return null;
+            double strength = GroupStrength(leader);
+            JumpGate best = null;
+            double bestBand = 0;
+            foreach (var g in world.Gates)
+            {
+                if (g.Owner != f) continue;
+                double band = RaidersOffGate(g, f, at, jd);
+                if (band <= 0 || strength < band * 1.25) continue;
+                if (band > bestBand)
+                {
+                    bestBand = band;
+                    best = g;
+                }
+            }
+            if (best == null) return null;
+            double days = here == root ? 0 : Fleet.EstimateTravelDays(leader, here, root, jd);
+            if (days > 30) return null;
+            StakeOut(leader, best, jd + days + HoldGateDays);
+            return best;
+        }
+
+        /// <summary>The strength of the raider bands navy <paramref name="f"/> (looking from <paramref name="at"/>) knows to be
+        /// lying in wait off <paramref name="gate"/>, or 0.</summary>
+        double RaidersOffGate(JumpGate gate, Faction f, DVec3 at, double jd)
+        {
+            int root = Catalog.Root.Index;
+            var sensors = world.Sensors;
+            double total = 0;
+            foreach (var s in Fleet.Ships)
+            {
+                if (s.Destroyed || s.IsEscort || s.Faction == null || !s.Faction.IsPirate || s.Runner || s.StakeoutKm == null) continue;
+                if (!Diplomacy.Hostile(f, s.Faction) || GateNear(s.StakeoutKm.Value) != gate) continue;
+                if (sensors != null && !(sensors.KnownAt(f, s, at, jd) is ContactSighting seen && seen.Body == root && seen.Level >= ContactLevel.Class)) continue;
+                total += GroupStrength(s);
+            }
+            return total;
         }
 
         /// <summary>

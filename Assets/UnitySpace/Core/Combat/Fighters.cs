@@ -297,7 +297,7 @@ namespace Unity.SpaceGod.Core
                 if (s.Kind != SubsystemKind.Torpedo || s.Destroyed || s.Ammo <= 0 || s.Cooldown > 0) continue;
                 s.Ammo--;
                 s.Cooldown = s.Def.Weapon.Cooldown;
-                var sub = b.PickSubsystem(u.Target);
+                var sub = b.PickSubsystem(u.Target, u);
                 b.Missiles.Add(new Missile
                 {
                     Pos = u.Pos, Vel = u.Vel, Target = u.Target, TargetSub = sub, Damage = s.Def.Weapon.Damage,

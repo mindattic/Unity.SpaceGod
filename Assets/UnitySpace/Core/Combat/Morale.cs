@@ -99,7 +99,9 @@ namespace Unity.SpaceGod.Core
             SurrenderTerms terms;
             if (captorIsPirate)
             {
-                if (targetHasCargo) terms = roll < 0.6 ? SurrenderTerms.RansomCargo : SurrenderTerms.TakeShip;
+                // Disable and loot (U.SPC-T374, see RaidDoctrine): the hold is what they came for; only now and then is
+                // the hull itself worth the trouble of taking.
+                if (targetHasCargo) terms = roll < PirateRansomShare ? SurrenderTerms.RansomCargo : SurrenderTerms.TakeShip;
                 else terms = roll < 0.75 ? SurrenderTerms.TakeShip : SurrenderTerms.LetGo;
             }
             else terms = targetIsWarship && roll < 0.85 ? SurrenderTerms.TakeShip : SurrenderTerms.LetGo;
@@ -107,6 +109,9 @@ namespace Unity.SpaceGod.Core
                 terms = captorIsPirate && targetHasCargo ? SurrenderTerms.RansomCargo : SurrenderTerms.LetGo;
             return terms;
         }
+
+        /// <summary>How often pirates settle for a surrendered hull's cargo rather than taking the hull (U.SPC-T374).</summary>
+        public const double PirateRansomShare = 0.85;
 
         static double Clamp01(double v) => Math.Max(0, Math.Min(1, v));
     }

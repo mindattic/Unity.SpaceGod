@@ -118,6 +118,8 @@ namespace Unity.SpaceGod.Core
             var w = system.World;
             if (w.War == null) return;
             w.War.Plundered += (clan, value, jd) => OnPlundered(w, clan, value);
+            // A hull destroyed rather than robbed brings the state down on the clan far harder (U.SPC-T374).
+            w.War.Heat += (clan, heat, jd) => Pledge(Polities.HolderOf(w), clan, heat);
             w.War.BattleEnded += (b, jd) => OnBattleEnded(w, b, jd);
         }
 

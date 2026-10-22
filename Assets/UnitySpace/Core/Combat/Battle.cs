@@ -105,8 +105,8 @@ namespace Unity.SpaceGod.Core
         /// hulls do not all strike their colours on the same tick under the same pressure. See <see cref="Morale.Pressure"/>.</summary>
         public double MoraleThreshold;
 
-        /// <summary>Pirates hailing this (player-flown) hull with "your cargo or your life": who is asking,
-        /// or null. Answered through <see cref="Battle.AnswerCargoDemand"/>; unanswered, it lapses into a fight.</summary>
+        /// <summary>Pirates hailing this hull with "your cargo or your life": who is asking, or null. Answered through
+        /// <see cref="Battle.AnswerCargoDemand"/> (at once by an AI hull); unanswered, it lapses into a fight.</summary>
         public Faction CargoDemandedBy;
 
         /// <summary>Seconds the current <see cref="CargoDemandedBy"/> has gone unanswered.</summary>
@@ -114,6 +114,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Set once a cargo demand has been made of this hull, so pirates ask only once a battle.</summary>
         public bool CargoDemandMade;
+
+        /// <summary>Set when this hull turned down (or let lapse) a pirate cargo demand: the raiders no longer spare it once
+        /// it lies dead in space (U.SPC-T374, see <see cref="RaidDoctrine"/>).</summary>
+        public bool CargoRefused;
 
         /// <summary>Formation: the unit this one keeps station on, and where (km, in the leader's frame).</summary>
         public BattleUnit Leader;
@@ -734,7 +738,13 @@ namespace Unity.SpaceGod.Core
                 Surrender(u);
                 return;
             }
-            if (u.Kind == UnitKind.Ship && u.Faction.IsPirate && !u.PlayerControlled) MaybeDemandCargo(u);
+            if (u.Kind == UnitKind.Ship && u.Faction.IsPirate && !u.PlayerControlled)
+            {
+                MaybeDemandCargo(u);
+                // The cargo in hand and nothing left worth taking: raiders withdraw rather than trade fire with escorts for
+                // nothing (U.SPC-T374).
+                if (!u.Fleeing && !c.Disabled && RaidDone(u)) u.Fleeing = true;
+            }
             if (u.Kind == UnitKind.Ship)
             {
                 bool merchant = u.Ship != null && !u.Ship.Spec.IsMilitary && !u.Faction.IsPirate;
@@ -779,6 +789,9 @@ namespace Unity.SpaceGod.Core
                 if (!Hostile(u, o) || o.Captured || o.Surrendering) continue;
                 // A hunter wants its quarry's captain alive: a disabled flagship is boarded, not finished off.
                 if (o.Combat.Disabled && WantsAlive != null && WantsAlive(u, o) && SideCanBoard(u.Side)) continue;
+                // Raiders rob a merchant or civilian hull, they don't destroy it (U.SPC-T374): once it lies dead in space
+                // they hold their fire, and demand its cargo instead (see MaybeDemandCargo).
+                if (o.Combat.Disabled && Spares(u, o)) continue;
                 double score = (o.Pos - u.Pos).Length;
                 // A disabled hull is a prize, not a threat: shoot it only if nothing else is left.
                 if (o.Combat.Disabled) score += 40;
@@ -1196,7 +1209,7 @@ namespace Unity.SpaceGod.Core
                     s.Aim = DVec3.Zero;
                     continue;
                 }
-                var sub = PickSubsystem(target);
+                var sub = PickSubsystem(target, u);
                 var aimPoint = sub != null ? target.PointOf(sub.Def) : target.Pos;
                 s.Aim = (aimPoint - origin).Normalized;
                 s.Cooldown = w.Cooldown * (0.85 + rng.NextDouble() * 0.3);
@@ -1723,7 +1736,7 @@ namespace Unity.SpaceGod.Core
                 double best = w.RangeKm;
                 foreach (var o in Units)
                 {
-                    if (!Hostile(u, o) || o.Captured || o.Surrendering) continue;
+                    if (!Hostile(u, o) || o.Captured || o.Surrendering || HoldsFireOn(u, o)) continue;
                     double d = (o.Pos - origin).Length - o.Radius;
                     if ((d < best && (near == null || near.Kind != UnitKind.Fighter || o.Kind == UnitKind.Fighter)) || (o.Kind == UnitKind.Fighter && near != null && near.Kind != UnitKind.Fighter && d < w.RangeKm))
                     {
@@ -1737,7 +1750,7 @@ namespace Unity.SpaceGod.Core
             // Its own target only while that is still a fair one: not struck its colours, not since taken
             // by this side (a capture doesn't clear everyone's target the way a surrender does).
             bool emp = w.EmpSeconds > 0;
-            if (t != null && Hostile(u, t) && !t.Surrendering && !t.Captured && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile && !emp) && !(emp && t.Stunned > 0))
+            if (t != null && Hostile(u, t) && !t.Surrendering && !t.Captured && !HoldsFireOn(u, t) && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile && !emp) && !(emp && t.Stunned > 0))
                 return t;
             BattleUnit any = null;
             double nearest = w.RangeKm;
@@ -1746,7 +1759,7 @@ namespace Unity.SpaceGod.Core
                 // An EMP round is for a small craft too, but wasted on one already drifting dead (U.SPC-T271).
                 // An auto turret's fire control takes fighters as readily as hulls (U.SPC-T278).
                 bool takesFighters = emp || u.Kind == UnitKind.Fighter || ReferenceEquals(w, WeaponSpec.AutoTurret);
-                if (!Hostile(u, o) || o.Captured || o.Surrendering || (emp && o.Stunned > 0) || (o.Kind == UnitKind.Fighter && (w.Missile && !emp || !takesFighters))) continue;
+                if (!Hostile(u, o) || o.Captured || o.Surrendering || HoldsFireOn(u, o) || (emp && o.Stunned > 0) || (o.Kind == UnitKind.Fighter && (w.Missile && !emp || !takesFighters))) continue;
                 double d = (o.Pos - origin).Length - o.Radius;
                 if (d < nearest)
                 {
@@ -1774,9 +1787,12 @@ namespace Unity.SpaceGod.Core
             return best;
         }
 
-        /// <summary>Gunners go for weapons first, then shields, engines and the bridge; the reactor is a lucky shot.</summary>
-        public Subsystem PickSubsystem(BattleUnit target)
+        /// <summary>Gunners go for weapons first, then shields, engines and the bridge; the reactor is a lucky shot. Raiders
+        /// working a merchant or civilian hull (<paramref name="shooter"/>, see <see cref="RaidDoctrine"/>, U.SPC-T374) go for
+        /// its shields and engines instead, to leave it dead in space, and never its reactor.</summary>
+        public Subsystem PickSubsystem(BattleUnit target, BattleUnit shooter = null)
         {
+            bool robbing = shooter != null && !shooter.PlayerControlled && RaidDoctrine.Robs(shooter.Faction, target.Ship);
             if (target.Kind == UnitKind.Fighter) return null;
             double total = 0;
             var subs = target.Combat.Subsystems;
@@ -1786,7 +1802,8 @@ namespace Unity.SpaceGod.Core
                 var s = subs[i];
                 if (s.Destroyed) continue;
                 double w;
-                switch (s.Kind)
+                if (robbing) w = RaidDoctrine.SubsystemWeight(s.Kind, s.Shield > 0);
+                else switch (s.Kind)
                 {
                     case SubsystemKind.HeavyLaser:
                     case SubsystemKind.LaserTurret:
@@ -1971,7 +1988,7 @@ namespace Unity.SpaceGod.Core
                 var spread = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, rng.NextDouble() - 0.5) * 0.3;
                 Missiles.Add(new Missile
                 {
-                    Pos = origin, Vel = ((target.Pos - origin).Normalized + spread).Normalized * 0.3 + u.Vel, Target = target, TargetSub = PickSubsystem(target),
+                    Pos = origin, Vel = ((target.Pos - origin).Normalized + spread).Normalized * 0.3 + u.Vel, Target = target, TargetSub = PickSubsystem(target, u),
                     Damage = s.Def.Weapon.Damage, Speed = s.Def.Weapon.MissileSpeedKmS, Hp = 40, Life = 60, Side = u.Side, Kind = MissileKind.Pod,
                     Owner = u.Faction, Marines = WeaponSpec.PodMarines, Source = u,
                 });
@@ -2054,6 +2071,9 @@ namespace Unity.SpaceGod.Core
                 if (!Hostile(u, o) || o.Captured || o.Kind != UnitKind.Ship) continue;
                 if (o.Combat.Interior.Boarder != null && o.Combat.Interior.Boarder != u.Faction) continue;
                 if (!MayBoard(u, o) || (o.Surrendering && !o.SurrenderOpenToBoarding)) continue;
+                // A merchant's hold is asked for, not fought through its corridors for (U.SPC-T374): raiders board a hull
+                // with cargo aboard only once it has turned their demand down.
+                if (Spares(u, o) && o.Ship.HasCargo && !o.SurrenderOpenToBoarding) continue;
                 bool open = o.Combat.Disabled || o.SurrenderOpenToBoarding || o.Stunned > 10 || (breacher && (o.Combat.Shield <= o.Combat.Spec.Shield * 0.25 || !o.Combat.HasShieldGenerator));
                 if (!open) continue;
                 if (!breacher && ThreatNear(u, o.Pos, 6)) continue;
@@ -2300,6 +2320,7 @@ namespace Unity.SpaceGod.Core
         {
             u.SurrenderOutcome = terms;
             if (terms == SurrenderTerms.TakeShip) u.SurrenderOpenToBoarding = true;
+            if (terms == SurrenderTerms.RansomCargo && captor != null && captor.IsPirate && (u.Side == 0 || u.Side == 1)) Robbed[1 - u.Side] = true;
             SurrenderDecided?.Invoke(this, u, captor, terms);
             // Released: the hull powers up and leaves the field.
             if (terms != SurrenderTerms.TakeShip) u.Fled = true;
@@ -2328,38 +2349,98 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// Pirates with the upper hand hail a player-flown hull that carries cargo: hand it over and go,
-        /// or fight. Asked once a battle.
+        /// Pirates with the upper hand hail a hull that carries cargo: jettison it and go, or fight. Asked once a battle.
+        /// A player-flown hull answers through <see cref="AnswerCargoDemand"/>; an AI merchant or civilian hull is asked
+        /// once the raiders have done what their doctrine says to first (U.SPC-T374, <see cref="RaidDoctrine"/>): left it
+        /// dead in space or knocked out by a pulse, or stripped its shields while they have it outgunned. Its crew are paid
+        /// to deliver, not to die, so it complies, and the raiders' drones collect what it jettisons.
         /// </summary>
         void MaybeDemandCargo(BattleUnit pirate)
         {
             foreach (var v in Units)
             {
-                if (!Hostile(pirate, v) || !v.PlayerControlled || v.CargoDemandMade || v.Surrendering) continue;
+                if (!Hostile(pirate, v) || v.CargoDemandMade || v.Surrendering || !v.Present || v.Captured) continue;
                 if (v.Ship == null || !v.Ship.HasCargo) continue;
-                if (!Morale.ShouldDemandCargo(OutgunnedOf(v), DamageTollOf(v))) continue;
+                if (v.PlayerControlled)
+                {
+                    if (!v.Combat.Disabled && !Morale.ShouldDemandCargo(OutgunnedOf(v), DamageTollOf(v))) continue;
+                }
+                else if (!RaidDoctrine.Robs(pirate.Faction, v.Ship) || !Stripped(v)) continue;
                 v.CargoDemandMade = true;
                 v.CargoDemandedBy = pirate.Faction;
                 v.CargoDemandTimer = 0;
                 Emit(FxKind.Hail, pirate.Pos, v.Pos, pirate.LengthKm, pirate.Side, pirate, -1);
                 CargoDemanded?.Invoke(this, v, pirate.Faction);
+                if (!v.PlayerControlled) AnswerCargoDemand(v, true);
             }
         }
 
+        /// <summary>Whether raiders have done to <paramref name="v"/> what their doctrine says to before they demand its
+        /// cargo: left it dead in space or stunned by a pulse, or stripped its shields while they have it outgunned.</summary>
+        bool Stripped(BattleUnit v)
+        {
+            var c = v.Combat;
+            if (c.Disabled || v.Stunned > 0) return true;
+            bool shieldsDown = c.Spec.Shield <= 0 || c.Shield <= c.Spec.Shield * 0.05;
+            return shieldsDown && OutgunnedOf(v) >= 0.3;
+        }
+
         /// <summary>
-        /// The player's answer to a pirate cargo demand: comply and the cargo is ransomed and the hull
-        /// goes free (it leaves the field); refuse and the fight goes on. False when nothing was asked.
+        /// The answer to a pirate cargo demand: comply and the cargo is jettisoned for the raiders' drones to collect and the
+        /// hull goes free (it leaves the field); refuse and the fight goes on, and the raiders no longer spare it. False when
+        /// nothing was asked.
         /// </summary>
         public bool AnswerCargoDemand(BattleUnit victim, bool comply)
         {
             if (victim == null || victim.CargoDemandedBy == null) return false;
             var pirates = victim.CargoDemandedBy;
             victim.CargoDemandedBy = null;
+            if (!comply) victim.CargoRefused = true;
             if (!comply || !victim.Present) return true;
             victim.SurrenderOutcome = SurrenderTerms.RansomCargo;
+            if (victim.Side == 0 || victim.Side == 1) Robbed[1 - victim.Side] = true;
             SurrenderDecided?.Invoke(this, victim, pirates, SurrenderTerms.RansomCargo);
             victim.Fled = true;
             return true;
+        }
+
+        /// <summary>Whether each side has robbed a hull of its cargo in this fight (U.SPC-T374): raiders who have, with nothing
+        /// left worth taking, withdraw (see <see cref="RaidDone"/>).</summary>
+        public readonly bool[] Robbed = new bool[2];
+
+        /// <summary>Whether <paramref name="u"/>, an AI raider, means to rob <paramref name="o"/> rather than destroy it: a
+        /// merchant or civilian hull that hasn't turned its demand down (see <see cref="RaidDoctrine"/>).</summary>
+        bool Spares(BattleUnit u, BattleUnit o) =>
+            !u.PlayerControlled && !o.CargoRefused && RaidDoctrine.Robs(u.Faction, o.Ship);
+
+        /// <summary>A raider holds its fire on a hull it is robbing once that lies dead in space.</summary>
+        bool HoldsFireOn(BattleUnit u, BattleUnit o) => o.Combat.Disabled && Spares(u, o);
+
+        /// <summary>
+        /// Whether raider <paramref name="u"/>'s work here is done (U.SPC-T374): no merchant or civilian hull is left that it
+        /// could still rob (one with cargo it hasn't handed over, one that turned the demand down, one waiting on terms, one
+        /// its side is boarding or has marines to board), and either its side has robbed someone or there is nobody armed left to fight. Then it
+        /// withdraws, rather than trade fire with escorts for nothing.
+        /// </summary>
+        bool RaidDone(BattleUnit u)
+        {
+            if (u.Side != 0 && u.Side != 1) return false;
+            bool armedFoe = false, prey = false;
+            foreach (var o in Units)
+            {
+                if (!o.Present || o.Captured || !Hostile(u, o)) continue;
+                if (o.Ship == null || !RaidDoctrine.Robs(u.Faction, o.Ship))
+                {
+                    if (!o.Surrendering && !o.Combat.Disabled && (o.Combat.Armed || CanBoard(o))) armedFoe = true;
+                    continue;
+                }
+                prey = true;
+                bool stillToTake = (o.Ship.HasCargo && o.SurrenderOutcome == null) || o.CargoRefused || IsPrize(u, o) ||
+                    (o.Surrendering && o.SurrenderOutcome == null) || o.SurrenderOpenToBoarding || SideCanBoard(u.Side);
+                if (stillToTake) return false;
+            }
+            if (!prey && !Robbed[u.Side]) return false;
+            return Robbed[u.Side] || !armedFoe;
         }
 
         static double SegmentPointDistance(DVec3 a, DVec3 b, DVec3 p)
