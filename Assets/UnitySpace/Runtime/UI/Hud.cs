@@ -1604,7 +1604,9 @@ namespace Unity.SpaceGod.UI
                 }
                 else if (c.Phase == ShipPhase.Transit)
                 {
+                    // A fixed point is a lane's ramp, unless the ship is bound for a jump gate or a raider stakeout off one (U.SPC-T435).
                     string where = c.Ring != null && c.Orbit == c.HoldPoint ? c.Ring.Name + ", " + app.Catalog[c.Orbit.Body].Name
+                        : c.Orbit.Fixed && (c.GateKm != null || c.StakeoutKm != null) ? "a jump gate's approach"
                         : c.Orbit.Fixed ? app.Catalog[c.Orbit.Body].Name + " hyperlane ramp" : app.Catalog[c.Orbit.Body].Name;
                     lines.Add(("Status", (st.Progress < 0.5 ? "Burning toward " : "Braking for ") + where));
                     if (c.Journey != null) lines.Add(("Bound for", app.Catalog[c.FinalBody].Name + " by " + JourneyText(c)));
