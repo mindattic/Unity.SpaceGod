@@ -74,7 +74,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void ANameThatIsNotOneFolderIsRefused()
         {
             var store = new ProfileStore(root);
-            foreach (var bad in new[] { "", " ", "..", "a/b", "a\\b", "c:", " padded" })
+            foreach (var bad in new[] { "", " ", "..", "a/b", "a\\b", "c:", " padded", "Ryan.", "NUL", "con", "COM1.txt" })
                 Assert.That(ProfileStore.IsValidName(bad), Is.False, bad);
             Assert.Throws<ArgumentException>(() => store.Select("../escape"));
             File.WriteAllText(Path.Combine(store.Current().Folder, "..", "current.txt"), "../escape");

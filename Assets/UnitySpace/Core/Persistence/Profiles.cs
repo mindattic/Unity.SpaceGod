@@ -64,7 +64,23 @@ namespace Unity.SpaceGod.Core
         /// <summary>A name that makes one folder on every platform: not empty, not a path, nothing a file system refuses.</summary>
         public static bool IsValidName(string name) =>
             !string.IsNullOrWhiteSpace(name) && name.Length <= 64 && name == name.Trim() && name != "." && name != ".."
-            && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && name.IndexOfAny(new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' }) < 0;
+            && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && name.IndexOfAny(new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' }) < 0
+            // Windows drops a trailing dot ("Ryan." is the folder "Ryan", which Exists would not see) and refuses a device's name as a folder.
+            && !name.EndsWith(".", StringComparison.Ordinal) && !IsDeviceName(name);
+
+        static readonly string[] DeviceNames =
+        {
+            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        };
+
+        /// <summary>A reserved Windows device name, with or without an extension ("NUL", "con.txt").</summary>
+        static bool IsDeviceName(string name)
+        {
+            int dot = name.IndexOf('.');
+            string stem = dot < 0 ? name : name.Substring(0, dot);
+            return Array.Exists(DeviceNames, d => string.Equals(d, stem, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     /// <summary>
