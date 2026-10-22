@@ -206,7 +206,26 @@ namespace Unity.SpaceGod.Core
             if (dt <= 0) return;
             var forwardBeforeTurn = s.Forward;
             Rotate(ref s, hull, tuning, input, dt);
+            double driveMult = DriveMultiplier(ref s, combat, tuning, input, forwardBeforeTurn, dt);
 
+            var thrust = input.FlightAssistOff
+                ? RawThrust(s, hull, input, driveMult)
+                : AssistThrust(s, hull, tuning, input, gravityKmS2, driveMult, dt, StrafeSpeedFraction, hull.LateralAccel, hull.VerticalAccel);
+            Integrate(ref s, thrust, gravityKmS2, dt);
+        }
+
+        // ------------------------------------------------------------ the stages of a step
+        // Step above is the Newtonian model (NewtonianFlightModel); other flight models (see
+        // IFlightModel) compose these same stages with their own rules in between.
+
+        /// <summary>
+        /// Drains or recharges the boost charge and advances the cruise drive's ramp, returning this
+        /// frame's main-drive multiplier: boost (an afterburner) and cruise (the drive spooled up) are
+        /// more main-drive thrust, and flight assist's set point rises with the tier.
+        /// <paramref name="forwardBeforeTurn"/> is the nose before this frame's turn (cruise drops on a hard turn).
+        /// </summary>
+        public static double DriveMultiplier(ref PilotState s, ShipCombat combat, in PilotTuning tuning, in PilotInput input, DVec3 forwardBeforeTurn, double dt)
+        {
             // Holding boost only ever drains it (never recharges, even once empty); recharge only
             // resumes once released — otherwise holding it down at empty would flicker on and off.
             bool wantsBoost = input.Boost && tuning.BoostDurationS > 0;
@@ -218,39 +237,50 @@ namespace Unity.SpaceGod.Core
                     ? Math.Max(0, combat.BoostFraction - rate * dt)
                     : Math.Min(1, combat.BoostFraction + rate * RechargeFraction * dt);
             }
-            // Boost (an afterburner) and cruise (the drive spooled up) are more main-drive thrust; the
-            // speed comes from burning it, and flight assist's set point rises with the tier.
-            double driveMult = (boosting ? tuning.BoostSpeedMultiplier : 1)
+            return (boosting ? tuning.BoostSpeedMultiplier : 1)
                 * StepCruise(ref s.Cruise, input, forwardBeforeTurn, combat, tuning, dt);
+        }
 
+        /// <summary>Flight assist off: the throttle and strafe are raw thrust on each set of thrusters, km/s².</summary>
+        public static DVec3 RawThrust(in PilotState s, in HullDynamics hull, in PilotInput input, double driveMult)
+        {
+            double throttle = Clamp(input.Throttle), strafeR = Clamp(input.StrafeRight), strafeU = Clamp(input.StrafeUp);
+            double main = hull.MainAccel * driveMult;
+            return s.Forward * (throttle >= 0 ? throttle * main : throttle * hull.RetroAccel)
+                + s.Right * (strafeR * hull.LateralAccel)
+                + s.Up * (strafeU * hull.VerticalAccel);
+        }
+
+        /// <summary>
+        /// Flight assist on: the throttle and strafe are a commanded velocity (forward up to the set
+        /// point, strafe up to <paramref name="strafeSpeedFraction"/> of it), and this is exactly the push
+        /// that lands on it this frame with gravity cancelled, cut to what the thrusters can give: the
+        /// main drive and retro thrusters along the nose, and at most <paramref name="lateralCap"/> and
+        /// <paramref name="verticalCap"/> km/s² across it (the Newtonian model passes the manoeuvre
+        /// thrusters' own; a model with more grip passes more).
+        /// </summary>
+        public static DVec3 AssistThrust(in PilotState s, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, DVec3 gravityKmS2, double driveMult, double dt, double strafeSpeedFraction, double lateralCap, double verticalCap)
+        {
             var f = s.Forward;
             var u = s.Up;
             var r = s.Right;
             double throttle = Clamp(input.Throttle), strafeR = Clamp(input.StrafeRight), strafeU = Clamp(input.StrafeUp);
             double main = hull.MainAccel * driveMult;
+            double setPoint = tuning.MaxSpeed * driveMult;
+            var commanded = f * (throttle * setPoint)
+                + r * (strafeR * setPoint * strafeSpeedFraction)
+                + u * (strafeU * setPoint * strafeSpeedFraction);
+            var need = (commanded - s.Vel) / dt - gravityKmS2;
+            return f * Math.Max(-hull.RetroAccel, Math.Min(main, DVec3.Dot(need, f)))
+                + r * Limit(DVec3.Dot(need, r), lateralCap)
+                + u * Limit(DVec3.Dot(need, u), verticalCap);
+        }
 
-            DVec3 thrust;
-            if (input.FlightAssistOff)
-            {
-                thrust = f * (throttle >= 0 ? throttle * main : throttle * hull.RetroAccel)
-                    + r * (strafeR * hull.LateralAccel)
-                    + u * (strafeU * hull.VerticalAccel);
-            }
-            else
-            {
-                double setPoint = tuning.MaxSpeed * driveMult;
-                var commanded = f * (throttle * setPoint)
-                    + r * (strafeR * setPoint * StrafeSpeedFraction)
-                    + u * (strafeU * setPoint * StrafeSpeedFraction);
-                // Exactly the push that lands on the commanded velocity this frame, gravity cancelled,
-                // then cut to what each set of thrusters can actually give.
-                var need = (commanded - s.Vel) / dt - gravityKmS2;
-                thrust = f * Math.Max(-hull.RetroAccel, Math.Min(main, DVec3.Dot(need, f)))
-                    + r * Limit(DVec3.Dot(need, r), hull.LateralAccel)
-                    + u * Limit(DVec3.Dot(need, u), hull.VerticalAccel);
-            }
-
-            s.Vel += (thrust + gravityKmS2) * dt;
+        /// <summary>Applies this frame's thrust and gravity: velocity then position (semi-implicit Euler,
+        /// which with no force carries momentum exactly).</summary>
+        public static void Integrate(ref PilotState s, DVec3 thrustKmS2, DVec3 gravityKmS2, double dt)
+        {
+            s.Vel += (thrustKmS2 + gravityKmS2) * dt;
             s.Pos += s.Vel * dt;
         }
 
@@ -341,7 +371,7 @@ namespace Unity.SpaceGod.Core
         /// started, keeps going until countered. With assist off and no stick input at all, nothing
         /// touches the spin: angular momentum is conserved.
         /// </summary>
-        static void Rotate(ref PilotState s, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, double dt)
+        public static void Rotate(ref PilotState s, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, double dt)
         {
             var f = s.Forward;
             var w = s.AngularVelocity;

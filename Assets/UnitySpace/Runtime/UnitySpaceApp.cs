@@ -1269,7 +1269,8 @@ namespace Unity.SpaceGod
             var gravity = PilotGravity();
             var posBefore = pilot.Pos;
             var velBefore = pilot.Vel;
-            PilotFlight.Step(ref pilot, ship.Combat, hull, tuning, input, gravity, dt);
+            // Each family of craft flies by its own rules (U.SPC-T17, docs/FLIGHT_MODELS.md).
+            FlightModelRegistry.Default.For(ship.Spec.Class).Step(ref pilot, ship.Combat, hull, tuning, input, gravity, dt);
             SpaceCamera.PilotView = PilotViewRotation(control);
             // The drive runs on the ship's own tanks: every change of velocity its thrusters make (not gravity's
             // pull, which is free) is paid for in reaction mass by the rocket equation, and a dry hull only coasts.
