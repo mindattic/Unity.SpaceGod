@@ -17,6 +17,15 @@ A ground-up rebuild of [ExperimentSolarSystem](https://github.com/mindattic/Expe
 - **A living system.** Twenty-one settlements run a supply-and-demand economy that merchants trade on by themselves; three navies and a pirate band fight real battles with lasers, missiles and carrier fighters, losing ships and ports; and traffic between planetary systems rides X3-style hyperlanes. You watch it happen.
 - **Take the helm when you want to.** Press P on any ship to fly it yourself: steer with the mouse, fire its forward guns, cruise across open space, trade crates and fill its tanks at a port, answer a pirate's demand, latch on to a derelict or a wreck and pick it over, turn outlaw and run from the patrols, or fly through a jump gate to another star.
 
+## Design principles
+
+Every change is held to these. Where the game falls short of one today, new work moves toward it and never further away.
+
+1. **Expandable and extensible first.** New mechanics, ship classes, factions, star systems and polity behaviours plug in through clear extension points and data: a new spec, table entry or registered handler, not edits threaded through the core loops of `Fleet`, `War` or `UnitySpaceApp`. If adding the second of something means touching the code that runs the first, add the extension point first.
+2. **The universe is fully flyable.** Given long enough, a pilot can fly from one end of the galaxy to the other in continuous space, the way I-War 2 lets you point at a place, engage and eventually arrive. Jump gates and hyperlanes are shortcuts that carry most traffic, never the only way, and capital ships and deep-space explorers can cross between stars under their own power. Today a gate crossing is a timed hop and the trip between stars is a camera glide; those are stand-ins to be replaced, so build nothing that assumes a ship can only leave a system by a gate, or that space between systems is empty or unsimulated. Coordinates must hold their precision at galactic distances.
+3. **Render only what can be seen.** In a 3D world the size of the universe, a full-detail model for something too far or too small to see is waste. Everything degrades by apparent size: full model, simpler model, icon or impostor, then one marker for a fleet or a system, and nothing at all below a pixel. The floating origin and the billboard icons are the start of this; new renderable things join the same scheme instead of always drawing in full.
+4. **No loading screens.** Systems, ships and assets stream in and out in the background without stalling a frame. The only cover allowed is visual trickery at a jump gate (a transit effect long enough to finish loading what lies on the far side); arriving anywhere by plain flight never pauses to load.
+
 ## Gameplay vs realistic
 
 The same moment, focused on Earth, before and after pressing G. At gameplay scale the Sun, Venus and the Moon crowd the view. At realistic scale they drop back to their true distances and sizes, while Earth stays put.
