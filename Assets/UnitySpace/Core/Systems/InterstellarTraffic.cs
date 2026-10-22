@@ -280,13 +280,20 @@ namespace Unity.SpaceGod.Core
                 TryEnter(system, ship, when, jd);
             }
 
+            // In the order they come out, not the order they went in: each draws on shared random numbers, so two
+            // due in one step must take them as they would on separate frames (U.SPC-T384).
+            List<Passage> due = null;
             for (int i = inGates.Count - 1; i >= 0; i--)
                 if (inGates[i].ExitJd <= jd)
                 {
-                    var p = inGates[i];
+                    (due ??= new List<Passage>()).Add(inGates[i]);
                     inGates.RemoveAt(i);
-                    Emerge(p);
                 }
+            if (due != null)
+            {
+                due.Sort((a, b) => a.ExitJd.CompareTo(b.ExitJd));
+                foreach (var p in due) Emerge(p);
+            }
 
             // The news: relays sent and reports arrived, before anyone plans on it.
             News.Update(jd);
