@@ -32,6 +32,8 @@ namespace Unity.SpaceGod.Core.Tests
             navy = new Faction("Navy", "NS", new Rgb(0, 0, 1)) { IsMilitary = true };
             pirates = new Faction("Black Banner", "", new Rgb(1, 0, 0)) { IsPirate = true };
             hunters = new Faction("Belt Consortium", "BCS", new Rgb(1, 0.5f, 0)) { IsMilitary = true };
+            // Patrons pay out of their own treasuries (U.SPC-T391), so fund them.
+            traders.Treasury = pirates.Treasury = hunters.Treasury = 1e9;
             lane = new Lane { Id = 7, A = 3, B = 4, Name = "Earth-Mars" };
             ships = new List<Ship>();
             wrecks = new List<Wreck>();
@@ -514,6 +516,42 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(helpedOp.State, Is.EqualTo(OpportunityState.Completed));
             Assert.That(director.ReputationWith(traders), Is.EqualTo(helpedOp.Reward.Reputation));
             Assert.That(aloneOp.State, Is.EqualTo(OpportunityState.Failed));
+        }
+
+        [Test]
+        public void ABrokePatronPaysOnlyWhatItHoldsAndThePlayerGetsOnlyThat()
+        {
+            var helped = Add(ShipClass.Freighter, traders, Near);
+            Fight(helped);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            double asked = op.Reward.Credits;
+            Assert.That(asked, Is.GreaterThan(1000));
+            traders.Treasury = 1000;
+            Tick(Jd + 0.01, player, Near);
+            double navyBefore = navy.Treasury;
+            helped.Battle = null;
+            Tick(Jd + 0.02, player, Near);
+            Assert.That(op.State, Is.EqualTo(OpportunityState.Completed));
+            Assert.That(op.Reward.Credits, Is.EqualTo(1000));
+            Assert.That(traders.Treasury, Is.Zero);
+            Assert.That(navy.Treasury - navyBefore, Is.EqualTo(1000));
+        }
+
+        [Test]
+        public void AFundedPatronIsDebitedTheFullReward()
+        {
+            var helped = Add(ShipClass.Freighter, traders, Near);
+            Fight(helped);
+            Tick(Jd);
+            var op = Expect.Single(director.Active);
+            traders.Treasury = 1e9;
+            Tick(Jd + 0.01, player, Near);
+            double navyBefore = navy.Treasury;
+            helped.Battle = null;
+            Tick(Jd + 0.02, player, Near);
+            Assert.That(traders.Treasury, Is.EqualTo(1e9 - op.Reward.Credits));
+            Assert.That(navy.Treasury - navyBefore, Is.EqualTo(op.Reward.Credits));
         }
 
         [Test]

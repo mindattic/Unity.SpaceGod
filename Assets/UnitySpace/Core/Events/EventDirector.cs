@@ -677,6 +677,15 @@ namespace Unity.SpaceGod.Core
             // Paid to whoever saw it through, as they were when they came: not whoever holds the helm
             // when it resolves (another ship, another faction), nor the captor of a ship since lost.
             var purse = op.EngagedFaction ?? player?.Faction;
+            // A patron pays from its own treasury, capped at what it holds (as Crews' pod rescue does); the
+            // reward is rewritten to what actually moved. Patronless rewards stay new money (U.SPC-T391).
+            var patron = r.ReputationWith;
+            if (patron != null && patron != purse && r.Credits > 0)
+            {
+                double paid = Math.Max(0, Math.Min(r.Credits, patron.Treasury));
+                patron.Treasury -= paid;
+                r.Credits = op.Reward.Credits = paid;
+            }
             if (purse != null) purse.Treasury += r.Credits;
             // Cargo into the hold of the ship that came, while it still exists and is still theirs; else
             // into the ship they fly now, if it is their own.
