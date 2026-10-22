@@ -1526,12 +1526,12 @@ namespace Unity.SpaceGod.UI
                     var parent = app.Catalog[b.ParentIndex];
                     var k = b.Elements.At(app.Clock.Jd);
                     double dist = eph.Relative(t.Body).Length;
-                    if (parent.UsesStellarMapping) lines.Add(("From " + (parent.IsVisible ? parent.Name : "barycentre"), (dist > 1000 * Astro.AuKm ? (dist / Astro.AuKm).ToString("N0", CultureInfo.InvariantCulture) + " AU" : Au(dist)) + "  (" + LightTime(dist) + " light)"));
+                    if (parent.UsesStellarMapping) lines.Add(("From " + (parent.IsVisible ? parent.Name : "barycentre"), StellarDistance(dist) + "  (" + LightTime(dist) + " light)"));
                     else lines.Add(("From " + parent.Name, Km(dist)));
                     lines.Add(("Orbital speed", eph.OrbitalSpeedKmS(t.Body).ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
                     lines.Add(("Period", Duration(k.PeriodDays)));
                     lines.Add(("Eccentricity", k.E.ToString("0.0000", CultureInfo.InvariantCulture)));
-                    lines.Add(("Semi-major axis", parent.UsesStellarMapping ? (k.A > 1000 * Astro.AuKm ? (k.A / Astro.AuKm).ToString("N0", CultureInfo.InvariantCulture) + " AU" : Au(k.A)) : Km(k.A)));
+                    lines.Add(("Semi-major axis", parent.UsesStellarMapping ? StellarDistance(k.A) : Km(k.A)));
                 }
                 if (b.RotationHours != 0)
                     lines.Add(("Day (sidereal)", (Math.Abs(b.RotationHours) < 48 ? Math.Abs(b.RotationHours).ToString("0.00", CultureInfo.InvariantCulture) + " h" : Duration(Math.Abs(b.RotationHours) / 24)) + (b.RotationHours < 0 ? " retro" : "")));
@@ -3049,7 +3049,8 @@ namespace Unity.SpaceGod.UI
             switch (b.Kind)
             {
                 case BodyKind.Star:
-                    string kind = b.TeffK < 2400 ? "Brown dwarf" : b.RadiusKm < 0.05 * 695700 ? "White dwarf"
+                    if (b.Singularity) return "Artificial gravity generator";
+                    string kind = b.TeffK < 2400 ? "Brown dwarf" : b.RadiusKm < 0.05 * 695700 ? (b.TeffK >= 7500 ? "White dwarf" : "Tiny sun")
                         : b.TeffK < 3900 ? "Red dwarf star" : b.TeffK < 5300 ? "Orange dwarf star" : b.TeffK < 7500 ? "Yellow dwarf star" : "White main-sequence star";
                     return string.IsNullOrEmpty(b.SpectralType) ? kind : kind + "  (" + b.SpectralType + ")";
                 case BodyKind.DwarfPlanet: return "Dwarf planet";
@@ -3071,6 +3072,10 @@ namespace Unity.SpaceGod.UI
             if (km < 1e7) return km.ToString("N0", CultureInfo.InvariantCulture) + " km";
             return Au(km);
         }
+
+        /// <summary>A distance in a star's frame: AU as a rule, but a Void Base's tiny suns circle their generator within a few hundred km, which would read 0.000 AU.</summary>
+        static string StellarDistance(double km) =>
+            km < 1e6 ? Km(km) : km > 1000 * Astro.AuKm ? (km / Astro.AuKm).ToString("N0", CultureInfo.InvariantCulture) + " AU" : Au(km);
 
         static string Au(double km) => (km / Astro.AuKm).ToString(km / Astro.AuKm < 10 ? "0.000" : "0.00", CultureInfo.InvariantCulture) + " AU";
 
