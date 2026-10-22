@@ -354,13 +354,17 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>Outlaws whose flagship is gone outside any battle (lost in a collision, scuttled) or flies under other colours.</summary>
+        /// <summary>Outlaws whose flagship is gone outside any battle (lost in a collision, scuttled) or flies under other colours.
+        /// A flagship through a gate (a raid, a move, a smuggling run) is not gone: <see cref="InterstellarTraffic"/> marks the
+        /// departing hull <see cref="Ship.Destroyed"/> as well as <see cref="Ship.GateDeparted"/>, and the captain is merely away,
+        /// ashore until a band sails again (<see cref="Sync"/>), with their record and bounties intact (U.SPC-T434).</summary>
         void SettleFates(double jd)
         {
             foreach (var o in All)
             {
                 if (!o.Aboard) continue;
                 if (o.Ship.Faction == null || !o.Ship.Faction.IsPirate) End(o, OutlawFate.Captured, jd, o.Ship.Faction?.Name);
+                else if (o.Ship.GateDeparted) o.Ashore = true;
                 else if (o.Ship.Destroyed || o.Ship.Derelict) End(o, OutlawFate.Vanished, jd, null);
             }
         }

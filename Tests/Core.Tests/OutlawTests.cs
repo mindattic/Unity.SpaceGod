@@ -430,6 +430,28 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ARaiderCaptainWhoseBandWentThroughAGateIsAwayNotVanished()
+        {
+            var w = CreateWorld();
+            var o = Raider(w, Body(w, "Earth"), "Gate Runner");
+            var record = o.Record;
+            var gone = o.Ship;
+            gone.Destroyed = true; // off on a raid beyond the gates: InterstellarTraffic.Retire marks the departing hull both ways
+            gone.GateDeparted = true;
+            w.Outlaws.Update(StartJd);
+            w.Outlaws.Update(StartJd + 1);
+            Assert.That(o.Fate, Is.EqualTo(OutlawFate.AtLarge), "a captain whose band left through a gate was struck off as vanished");
+            // The band comes home as a fresh hull: the captain takes it up again, record and all.
+            var back = w.Fleet.AddShip("Homecoming", ShipClass.Destroyer, w.Pirates, ShipRole.Patrol);
+            back.Route = new[] { Body(w, "Deimos") };
+            w.Fleet.Station(back, Body(w, "Earth"), StartJd + 2);
+            w.Outlaws.Sync(StartJd + 2);
+            Assert.That(w.Outlaws.Of(back), Is.SameAs(o), "the captain did not take the band home");
+            Assert.That(o.Record, Is.SameAs(record));
+            Assert.That(w.Law.FindRecord(back), Is.SameAs(record), "the law's file did not follow the captain home");
+        }
+
+        [Test]
         public void ADestroyedHunterWithNoHeirIsDroppedFromTheRoster()
         {
             var w = CreateWorld();
