@@ -162,6 +162,25 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ABracedCarriersFightersRideThePulseOutWithIt()
+        {
+            var t = Create(ShipClass.Carrier);
+            var (seenJd, threat) = RideToWarning(t);
+            Assert.That(threat.Braced, Is.True, "a warship's suite makes out the raider lying dark");
+            RideUntilCaught(t, seenJd, seenJd + (threat.SecondsToPulse + 30) * Second);
+            var b = t.Pilot.Battle;
+            Assert.That(b, Is.Not.Null);
+            var fighters = b.Units.Where(u => u.Kind == UnitKind.Fighter && u.Fighter.Carrier.Ship == t.Pilot).ToList();
+            Assert.That(fighters, Is.Not.Empty, "the carrier launched its wings into the fight");
+            Assert.That(b.UnitOf(t.Pilot).Stunned, Is.EqualTo(0), "the carrier itself was braced");
+            foreach (var f in fighters)
+            {
+                Assert.That(f.Stunned, Is.EqualTo(0), "its fighters launched into a pulse the carrier had braced for");
+                Assert.That(f.Combat.Shield, Is.GreaterThan(0));
+            }
+        }
+
+        [Test]
         public void SurgingSpeedsTheRestOfTheRideFromWhereItIsOnceARide()
         {
             var t = Create();

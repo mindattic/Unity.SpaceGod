@@ -339,7 +339,9 @@ namespace Unity.SpaceGod.Core
             foreach (var u in b.Units)
             {
                 if (u.Side != 1) continue;
-                if (u.Ship != null && warned.Contains(u.Ship.Controller)) continue;
+                // A fighter rides with the carrier that launched it: a braced carrier's wings are braced too.
+                var owner = u.Ship ?? u.Fighter?.Carrier?.Ship;
+                if (owner != null && warned.Contains(owner.Controller)) continue;
                 u.Stunned = 60 + rng.NextDouble() * 60;
                 u.Combat.ZeroAllShields();
             }
