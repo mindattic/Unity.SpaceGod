@@ -1200,7 +1200,7 @@ namespace Unity.SpaceGod.Core
             for (int i = Hunters.Count - 1; i >= 0; i--)
             {
                 var h = Hunters[i];
-                if (!h.Retired && !h.Ship.Destroyed) continue;
+                if (!h.Retired && (!h.Ship.Destroyed || h.Ship.GateDeparted)) continue;
                 Hunters.RemoveAt(i);
                 if (byHunter.TryGetValue(h.Ship, out var cur) && cur == h) byHunter.Remove(h.Ship);
             }

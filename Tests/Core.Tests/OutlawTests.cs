@@ -419,7 +419,8 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var w = CreateWorld();
             var h = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
-            h.Ship.GateDeparted = true; // off on a hunt beyond the gates
+            h.Ship.Destroyed = true; // off on a hunt beyond the gates: InterstellarTraffic.Retire marks the departing hull both ways
+            h.Ship.GateDeparted = true;
             w.Outlaws.Update(StartJd);
             w.Outlaws.Update(StartJd + 1);
             Assert.That(w.Outlaws.Hunters.Contains(h), Is.True, "a hunter away through a gate lost its row before it came home");
