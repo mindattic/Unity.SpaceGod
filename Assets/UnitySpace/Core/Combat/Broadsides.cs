@@ -8,8 +8,8 @@ namespace Unity.SpaceGod.Core
     // style. Batteries are ordered by the arc they fire into, a volley is called and telegraphed, shields are angled toward
     // a facing, the hull is angled so shots strike its armour obliquely, the crew braces for a broadside and damage control
     // teams patch mounts under fire, and the flagship orders its line into formation. AI captains use the same commands
-    // by doctrine. The handling itself (engine telegraph, steerage, keel, battle plane) is the capital flight model's
-    // (U.SPC-T442, docs/FLIGHT_MODELS.md); this file is everything a captain does on top of it.
+    // by doctrine. The handling itself (engine telegraph, steerage, keel, full 3D) is the capital flight model's
+    // (U.SPC-T499, docs/FLIGHT_MODELS.md); this file is everything a captain does on top of it.
 
     /// <summary>The four arcs a capital ship's batteries, shields and armour are ordered by (U.SPC-T425).</summary>
     public enum Facing

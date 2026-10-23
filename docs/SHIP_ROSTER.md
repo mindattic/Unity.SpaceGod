@@ -82,7 +82,7 @@ The game keeps the feel of real space and drops what would get in the way of pla
 - **Inertial dampeners** are why piloted dogfights work: pilots survive the manoeuvres the fight demands.
 - **Bridges** are buried at the centre of the hull with no viewports. The crew sees out through sensors and holo/VR displays.
 - **Radiators** are a weak point on big ships, but not a constant worry.
-- **Combat is full 3D**, above all in dogfights.
+- **Everything fights in full 3D**: fighters, capitals and stations alike, with no battle plane.
 - **Shields** exist, so bombers knock the shields down first and then torpedo.
 
 ## Construction
@@ -94,9 +94,9 @@ Hardpoints are places on the hull's surface. Facilities are things inside the bo
 - **Gate fleet.** Large, but predictable, because it must come through a chokepoint.
 - **Jump strike group.** A carrier, FTL-capable capitals and docked escorts. Smaller, but it can show up anywhere.
 
-## Open question
+## Capital ships fight in full 3D
 
-Whether capital ships fight near a battle plane (the Rebel Galaxy handling of U.SPC-T442) or in full 3D like the fighters. This is the owner's to decide and is not settled here.
+Settled by the owner (2026-10-23): capital ships fight in full 3D, like the fighters, never on a battle plane. U.SPC-T499 builds the capital flight model that way (it replaces U.SPC-T442, which assumed a plane).
 
 ## Where the game is today
 

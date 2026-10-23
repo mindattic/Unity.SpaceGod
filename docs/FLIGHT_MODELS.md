@@ -88,18 +88,18 @@ Tunables (`HeavyFighterHandling`): turn-rate cap fraction, settle time, strafe f
 
 ### Recommendation
 
-**Use Black Flag's handling and pass rhythm on Rebel Galaxy's battle plane.** Black Flag is the closer fit for how a capital ship should *fly*. Its stepped sails, its rule that a slower ship turns tighter, and its pass rhythm are what make positioning a skill, and that skill is what the owner asked to study. Rebel Galaxy's main contribution is the plane: without one, getting a broadside to bear in 3D becomes a mess of pitch, and the beam-on geometry a pass depends on breaks down. Rebel Galaxy's deflector timing and Black Flag's brace are the same idea, and that belongs to T425.
+**Use Black Flag's handling and pass rhythm, in full 3D.** Black Flag is the closer fit for how a capital ship should *fly*. Its stepped sails, its rule that a slower ship turns tighter, and its pass rhythm are what make positioning a skill, and that skill is what the owner asked to study. This study first recommended Rebel Galaxy's battle plane as well, to keep beam-on geometry readable; the owner decided against it (2026-10-23): **capital ships fight in full 3D, like the fighters**, so a capital climbs, dives and rolls to bring a broadside to bear above or below. Rebel Galaxy's deflector timing and Black Flag's brace are the same idea, and that belongs to T425.
 
 Handling rules for `CapitalFlightModel`:
 
 1. **Engine telegraph.** W and S step through a set of speeds instead of being held: Full Astern, Stop, Slow, Half, Full, and Flank, which is the boost and drains the boost charge. The setting holds after the key is let go. The HUD shows the current step, and the hull eases toward each step's speed at the class's own spool rate.
 2. **Steerageway.** Turn rate depends on speed. It peaks around Half, which is the fighting speed, drops at Full and Flank, and falls to a slow thruster pivot at Stop (about 25% of peak). This is the Black Flag rule that slowing tightens the turn, plus the naval rule that a ship needs way on to steer.
 3. **Keel.** With assist on, slip across the hull is damped strongly, so a turn traces a turning circle instead of a pivot-and-slide. The hull goes where it points, with a little visible slip at Flank.
-4. **Battle plane.** Inside a battle the plane is the battle's own plane, and outside one it is the system's plane. Pitch is held within about ±15° of the plane, and the hull levels itself when the keys are released. Q and E change depth slowly, like ballast, instead of pitching, so a ship can step over or under a line without leaving the plane.
+4. **Full 3D, no battle plane.** Pitch and yaw are both slow and heavy but free in every direction, and roll is free too, so a capital can climb over a line, dive under it, or roll to put a broadside on a ship above or below. Nothing holds the hull to a plane or levels it by itself.
 5. **Pass timing as data.** Each class gets a target come-about time, meaning a 180° turn at Half: Destroyer about 6 s, Cruiser about 10 s, Battleship about 14 s, Carrier about 18 s. These sit against T425's broadside reload, which should be about half a beam window, so a pass at the fighting speed gives one volley per side and a quick-handed captain gets two. The handling numbers are fitted to the come-about times, not the other way round, and a test checks them.
-6. **The Destroyer is the skirmisher** (as in `Battle.BroadsideFacing`). It keeps the telegraph and the plane, but its turning circle is tighter and its Flank faster, so it can cut across a battleship's bow.
+6. **The Destroyer is the skirmisher** (as in `Battle.BroadsideFacing`). It keeps the telegraph, but its turning circle is tighter and its Flank faster, so it can cut across a battleship's bow.
 
-Tunables (`CapitalHandling`, with per-class overrides): telegraph speed fractions, spool time, steerage curve, keel damping, plane pitch limit and level-off rate, and come-about target.
+Tunables (`CapitalHandling`, with per-class overrides): telegraph speed fractions, spool time, steerage curve, keel damping, pitch, yaw and roll rates, and come-about target.
 
 ## Haulers: freighters and miners
 
@@ -124,7 +124,7 @@ Each family is its own ticket, linked part-of U.SPC-T17, approved and worked one
 
 1. U.SPC-T440: the light-fighter review and tuning pass with the owner, covering the open questions above.
 2. U.SPC-T441: the heavy-fighter model (Everspace 2).
-3. U.SPC-T442: the capital model (Black Flag handling on Rebel Galaxy's plane).
+3. U.SPC-T499: the capital model (Black Flag handling in full 3D; it replaces U.SPC-T442, which assumed a battle plane).
 4. U.SPC-T443: the hauler model.
 5. U.SPC-T444: the Courier, as a Runner family or a light fighter.
 
