@@ -22,6 +22,12 @@ namespace Unity.SpaceGod.Core
         public int Squadron;
         public int Slot;
         public bool Bomber;
+
+        /// <summary>Its class (U.SPC-T424): what it is built for and how it flies.</summary>
+        public FighterRole Role;
+
+        /// <summary>What its squadron's lead has told it to do (U.SPC-T424, see <see cref="Wing"/>).</summary>
+        public WingOrder Order;
         public FighterPhase Phase;
         public double PhaseTime;
 
@@ -43,44 +49,38 @@ namespace Unity.SpaceGod.Core
         /// <summary>The share of the craft's top speed it holds along its nose, 0-1.</summary>
         public double Throttle;
 
-        /// <summary>The torpedo trigger, held this step.</summary>
+        /// <summary>The second trigger, held this step: it fires <see cref="SecondaryGroup"/>.</summary>
         public bool Secondary;
+
+        /// <summary>The guided weapons the second trigger fires (U.SPC-T424, see <see cref="WeaponGroups"/>).</summary>
+        public WeaponGroup SecondaryGroup = WeaponGroup.Missiles;
+
+        /// <summary>Strafe and roll (each -1..1), the afterburner, and flight assist switched off (U.SPC-T424).</summary>
+        public double StrafeRight, StrafeUp, Roll;
+        public bool Boost, FlightAssistOff;
+
+        /// <summary>The craft's roof and spin, carried from step to step by its flight model (U.SPC-T424).</summary>
+        public DVec3 Up, AngularVelocity;
     }
 
     /// <summary>
-    /// Carrier fighters. A carrier launches its squadrons (six craft each: two interceptor squadrons
-    /// to one of bombers) as it enters a battle. Each squadron's lead flies attack runs on an enemy
-    /// capital ship (approach from the side, dive at it guns firing or torpedo away, pass close, break
-    /// off, swing round from a new side) or, for interceptors with enemy fighters about, dogfights.
-    /// Wingmen fly a loose vee on the lead: each pilot has their own wander, reaction lag and
-    /// discipline, so formations breathe and stretch the way human-flown ones do, and spread out on
-    /// the run. A lead that dies is replaced by its senior wingman.
+    /// Carrier fighters. A carrier launches its squadrons (six craft each, of the classes in
+    /// <see cref="FighterCraft.SquadronMix"/>: interceptors, heavy fighters, bombers) as it enters a battle. Each
+    /// squadron's lead flies attack runs on an enemy capital ship (approach from the side, or for bombers from where its
+    /// weak points lie open, dive at it guns firing or torpedo away, pass close, break off, swing round from a new side)
+    /// or, for fighters with enemy fighters about, dogfights. Wingmen fly a loose vee on the lead: each pilot has their
+    /// own wander, reaction lag and discipline, so formations breathe and stretch the way human-flown ones do, and spread
+    /// out on the run; told to (<see cref="Wing"/>), they break off and fight on their own. A lead that dies is replaced
+    /// by its senior wingman. Pilots share their reactor as the fight needs (<see cref="PowerDistribution"/>) and throw
+    /// flares at missiles closing on them.
     /// </summary>
     public static class FighterAI
     {
         public const double FighterLengthKm = 0.016, BomberLengthKm = 0.024;
 
-        public static readonly CombatSpec Interceptor = new CombatSpec
-        {
-            Hull = 70, Shield = 30, ShieldRegen = 2, Armor = 0, MaxSpeed = 0.35, Accel = 0.25, TurnRateDegS = 120,
-            Layout = new[]
-            {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0.2, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.FighterGuns, -0.2, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
-            },
-        };
+        public static readonly CombatSpec Interceptor = FighterCraft.Interceptor.Spec;
 
-        public static readonly CombatSpec BomberSpec = new CombatSpec
-        {
-            Hull = 130, Shield = 50, ShieldRegen = 2, Armor = 1, MaxSpeed = 0.26, Accel = 0.15, TurnRateDegS = 80,
-            Layout = new[]
-            {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0, 0.05, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.Torpedo, 0, -0.1, 0),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
-            },
-        };
+        public static readonly CombatSpec BomberSpec = FighterCraft.Bomber.Spec;
 
         const int SquadronSize = 6;
 
@@ -99,19 +99,20 @@ namespace Unity.SpaceGod.Core
             carrier.Basis(out var right, out var up);
             for (int q = 0; q < squadrons; q++)
             {
-                bool bomber = q % 3 == 2;
+                var craft = FighterCraft.Of(FighterCraft.RoleOfSquadron(q));
+                bool bomber = craft.Role == FighterRole.Bomber;
                 BattleUnit lead = null;
                 for (int k = 0; k < SquadronSize && count > 0; k++, count--)
                 {
-                    var spec = bomber ? BomberSpec : Interceptor;
                     // Out of the bow and side bays, fanning ahead of the carrier.
                     var pos = carrier.PointOf(carrier.Combat.Subsystems.Find(s => s.Kind == SubsystemKind.Hangar && !s.Destroyed).Def)
                               + carrier.Forward * (0.3 + 0.15 * k) + right * ((q - 1) * 0.6 + (k % 2 == 0 ? 0.1 : -0.1) * k) + up * (0.05 * k);
-                    var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(spec, ShipClass.Courier), bomber ? BomberLengthKm : FighterLengthKm, pos, carrier.Forward);
+                    var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(craft.Spec, ShipClass.Courier), craft.LengthKm, pos, carrier.Forward);
                     u.Vel = carrier.Vel + carrier.Forward * 0.25;
+                    u.Power = new PowerDistribution();
                     u.Fighter = new FighterState
                     {
-                        Carrier = carrier, Lead = lead, Squadron = q, Slot = k, Bomber = bomber, Phase = FighterPhase.Launch,
+                        Carrier = carrier, Lead = lead, Squadron = q, Slot = k, Bomber = bomber, Role = craft.Role, Phase = FighterPhase.Launch,
                         Skill = 0.4 + rng.NextDouble() * 0.6, Reaction = 0.4 + rng.NextDouble() * 1.4, Discipline = 0.45 + rng.NextDouble() * 0.5,
                         Seed = rng.NextDouble() * 1000,
                     };
@@ -139,8 +140,26 @@ namespace Unity.SpaceGod.Core
                 return;
             }
             if (f.Lead != null && !f.Lead.Present) f.Lead = NewLead(b, u);
+            SharePower(b, u);
             if (f.Lead == null) Lead(b, u, dt);
             else Wingman(b, u, dt);
+        }
+
+        /// <summary>
+        /// A pilot shares its reactor as the fight needs (U.SPC-T424): shields when they are low or something is on its
+        /// tail, engines to break off or run home, weapons on the run or in the dogfight, an even share otherwise.
+        /// </summary>
+        public static void SharePower(Battle b, BattleUnit u)
+        {
+            var p = u.Power;
+            if (p == null) return;
+            var f = u.Fighter;
+            var lead = f.Lead != null && f.Order == WingOrder.FormUp ? f.Lead.Fighter : f;
+            double shields = u.Combat.Spec.Shield > 0 ? u.Combat.Shield / u.Combat.Spec.Shield : 1;
+            if (shields < 0.35 || b.MissileInbound(u, Countermeasures.ReachKm) != null) p.Set(1, 4, 1);
+            else if (lead.Phase == FighterPhase.Return || lead.Phase == FighterPhase.BreakOff) p.Set(1, 1, 4);
+            else if (lead.Phase == FighterPhase.AttackRun || lead.Phase == FighterPhase.Dogfight) p.Set(4, 1, 1);
+            else p.Balance();
         }
 
         /// <summary>The senior surviving wingman takes over the squadron.</summary>
@@ -158,16 +177,34 @@ namespace Unity.SpaceGod.Core
 
         // ---------------------------------------------------------------- the lead
 
-        static void Lead(Battle b, BattleUnit u, double dt)
+        /// <summary>A target still worth fighting: hostile, present, not struck and not taken.</summary>
+        static bool Fair(Battle b, BattleUnit u, BattleUnit t) => t != null && b.Hostile(u, t) && !t.Surrendering && !t.Captured;
+
+        /// <summary>
+        /// A craft flying its own runs: a squadron's lead, or a wingman told to fight on its own. With
+        /// <paramref name="pinned"/> it fights that target (its lead's, or what is on its lead) instead of choosing.
+        /// </summary>
+        static void Lead(Battle b, BattleUnit u, double dt, BattleUnit pinned = null)
         {
             var f = u.Fighter;
             var rng = b.Rng;
-            // A target that has struck its colours or changed hands is no longer one.
-            bool lost = u.Target == null || !b.Hostile(u, u.Target) || u.Target.Surrendering || u.Target.Captured;
-            if (lost || (f.Phase != FighterPhase.AttackRun && rng.NextDouble() < dt / 20))
+            if (pinned != null)
             {
-                u.Target = ChooseTarget(b, u);
-                if (f.Phase == FighterPhase.Dogfight || f.Phase == FighterPhase.AttackRun) Switch(f, FighterPhase.Approach);
+                if (u.Target != pinned)
+                {
+                    u.Target = pinned;
+                    if (f.Phase == FighterPhase.Dogfight || f.Phase == FighterPhase.AttackRun) Switch(f, FighterPhase.Approach);
+                }
+            }
+            else
+            {
+                // A target that has struck its colours or changed hands is no longer one.
+                bool lost = !Fair(b, u, u.Target);
+                if (lost || (f.Phase != FighterPhase.AttackRun && rng.NextDouble() < dt / 20))
+                {
+                    u.Target = ChooseTarget(b, u);
+                    if (f.Phase == FighterPhase.Dogfight || f.Phase == FighterPhase.AttackRun) Switch(f, FighterPhase.Approach);
+                }
             }
             var t = u.Target;
             DVec3 goal;
@@ -277,6 +314,14 @@ namespace Unity.SpaceGod.Core
         /// <summary>A run starts 5-7 km off the target, from a side the squadron picks for itself.</summary>
         static DVec3 PickEntry(Battle b, BattleUnit u, BattleUnit t)
         {
+            // A bomber lines its run up on the side a weak point lies open from (U.SPC-T424): under the reactor's vent,
+            // astern of the engines, over the shield emitters.
+            if (u.Fighter.Bomber && WeakPoints.AiGoesForThem.Value && WeakPoints.Preferred(t) is Subsystem weak)
+            {
+                var axis = WeakPoints.Axis(t, WeakPoints.SpecOf(weak.Kind));
+                var jitter = new DVec3(b.Rng.NextDouble() - 0.5, b.Rng.NextDouble() - 0.5, b.Rng.NextDouble() - 0.5) * 0.5;
+                return (axis + jitter).Normalized * (5 + b.Rng.NextDouble() * 2);
+            }
             var from = (u.Pos - t.Pos).Normalized;
             var side = DVec3.Cross(from, DVec3.UnitZ);
             if (side.LengthSquared < 1e-9) side = DVec3.UnitX;
@@ -294,8 +339,8 @@ namespace Unity.SpaceGod.Core
         static void Torpedo(Battle b, BattleUnit u)
         {
             var f = u.Fighter;
-            // Only a lead changes phase; a wingman flies (and fires on) its lead's run.
-            var phase = f.Lead != null ? f.Lead.Fighter.Phase : f.Phase;
+            // Only a lead changes phase; a wingman in the vee flies (and fires on) its lead's run, one fighting on its own its own run.
+            var phase = f.Lead != null && FlysInFormation(b, u) ? f.Lead.Fighter.Phase : f.Phase;
             // The lead's own retarget check runs once a tick and can lag a target's death or
             // surrender by a tick (both are resolved later in Battle.Step, after fighters fly);
             // re-check the target's own state here so neither the lead nor a wingman copying its
@@ -311,6 +356,21 @@ namespace Unity.SpaceGod.Core
         /// <summary>How near the nose a torpedo's target must be (cosine): about 25 degrees.</summary>
         public const double TorpedoBoresightCos = 0.9;
 
+        /// <summary>
+        /// The hardpoint a torpedo goes for (U.SPC-T424): the weak point the player has picked on the hull they have locked;
+        /// for a pilot, the most telling weak point lying open from where it is; else wherever the seeker takes it.
+        /// </summary>
+        public static Subsystem TorpedoAimPoint(Battle b, BattleUnit u, BattleUnit target)
+        {
+            if (u.PlayerControlled)
+            {
+                var picked = u.PlayerSubTarget;
+                if (target == u.PlayerLockTarget && picked != null && !picked.Destroyed && target.Combat.Subsystems.Contains(picked)) return picked;
+            }
+            else if (WeakPoints.AiGoesForThem.Value && WeakPoints.BestFrom(target, u.Pos) is Subsystem open) return open;
+            return b.PickSubsystem(target, u);
+        }
+
         /// <summary>Every ready torpedo the craft carries, away at <paramref name="target"/>.</summary>
         static void LaunchTorpedoes(Battle b, BattleUnit u, BattleUnit target)
         {
@@ -319,11 +379,12 @@ namespace Unity.SpaceGod.Core
                 if (s.Kind != SubsystemKind.Torpedo || s.Destroyed || s.Ammo <= 0 || s.Cooldown > 0) continue;
                 s.Ammo--;
                 s.Cooldown = s.Def.Weapon.Cooldown;
-                var sub = b.PickSubsystem(target, u);
+                var sub = TorpedoAimPoint(b, u, target);
                 b.Missiles.Add(new Missile
                 {
                     Pos = u.Pos, Vel = u.Vel, Target = target, TargetSub = sub, Damage = s.Def.Weapon.Damage,
                     Speed = s.Def.Weapon.MissileSpeedKmS + u.Vel.Length, Hp = 25, Life = 30, Side = u.Side, Torpedo = true,
+                    Kind = MissileKind.Torpedo, SmallCraft = true,
                 });
                 b.Emit(FxKind.MissileLaunch, u.Pos, u.Pos + u.Forward, 0, u.Side, u, s.Index);
             }
@@ -332,38 +393,67 @@ namespace Unity.SpaceGod.Core
         // ---------------------------------------------------------------- flown by the player (U.SPC-T422)
 
         /// <summary>
-        /// One step of a launched craft the player has taken (<see cref="FighterSeat"/>): the nose turns toward the stick at
-        /// the craft's own rate, the throttle sets the speed it holds along the nose (eased in at its own acceleration, so it
-        /// carves rather than slides), the guns fire down the crosshair through the battle's usual player path, and the
-        /// secondary trigger looses its torpedoes at the hostile hull nearest the nose. Its own drives knocked out, it drifts.
+        /// One step of a launched craft the player has taken (<see cref="FighterSeat"/>), flown by its own class's flight
+        /// model (U.SPC-T17, U.SPC-T424; see <see cref="FighterCraft.Model"/>): the nose swings toward the stick at the
+        /// craft's own rate and spin-up, flight assist holds the throttle's share of its top speed along the nose (strafing,
+        /// rolling and the afterburner as the model allows, or off, drifting on its momentum), and engine power scales its
+        /// thrust and top speed. The guns fire down the crosshair through the battle's usual player path; the second
+        /// trigger fires the selected group: missiles at the locked target once the lock is made (the battle's own path),
+        /// torpedoes at the locked hull, or the hostile hull nearest the nose. Its own drives knocked out, it drifts.
         /// </summary>
         public static void FlyManned(Battle b, BattleUnit u, FighterControl stick, double dt)
         {
+            // The lock is its target: wingmen in the vee fire on it, and told to, go after it.
+            if (u.PlayerLockTarget != null && !u.PlayerLockTarget.Present)
+            {
+                u.PlayerLockTarget = null;
+                u.PlayerSubTarget = null;
+            }
+            u.Target = u.PlayerLockTarget;
+            u.PlayerSecondaryHeld = stick.Secondary && stick.SecondaryGroup == WeaponGroup.Missiles;
             if (u.Stunned > 0)
             {
                 u.Pos += u.Vel * dt;
                 return;
             }
-            var spec = u.Combat.Spec;
-            if (stick.Aim.LengthSquared > 1e-12)
+            var craft = u.Fighter != null ? FighterCraft.Of(u.Fighter.Role) : FighterCraft.Interceptor;
+            double engines = PowerDistribution.FactorOf(u, PowerSystem.Engines);
+            var hull = HullDynamics.Of(u.Combat.Spec);
+            hull = new HullDynamics(hull.MassKt, hull.MainAccel * engines, hull.RetroAccel * engines, hull.LateralAccel * engines, hull.VerticalAccel * engines,
+                hull.PitchYawAngularAccel, hull.RollAngularAccel);
+            var state = new PilotState
             {
-                var want = stick.Aim.Normalized;
-                double turn = spec.TurnRateDegS * Astro.Deg2Rad * dt;
-                double angle = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(u.Forward, want))));
-                u.Forward = angle <= turn ? want : DVec3.TurnStep(u.Forward, want, turn / angle);
-            }
-            double throttle = Math.Max(0, Math.Min(1, stick.Throttle));
-            var dv = u.Forward * (spec.MaxSpeed * throttle) - u.Vel;
-            double step = spec.Accel * dt;
-            u.Vel += dv.Length > step ? dv.Normalized * step : dv;
-            u.Pos += u.Vel * dt;
-            if (stick.Secondary && TorpedoTarget(b, u) is BattleUnit target) LaunchTorpedoes(b, u, target);
+                Pos = u.Pos, Vel = u.Vel, Forward = u.Forward,
+                Up = stick.Up.LengthSquared > 1e-12 ? stick.Up : PilotState.LevelUp(u.Forward),
+                AngularVelocity = stick.AngularVelocity,
+            };
+            var input = new PilotInput
+            {
+                DesiredForward = stick.Aim.LengthSquared > 1e-12 ? stick.Aim.Normalized : DVec3.Zero,
+                Throttle = Math.Max(0, Math.Min(1, stick.Throttle)),
+                StrafeRight = stick.StrafeRight, StrafeUp = stick.StrafeUp, Roll = stick.Roll,
+                Boost = stick.Boost, InCombat = true, FlightAssistOff = stick.FlightAssistOff,
+            };
+            craft.Model.Step(ref state, u.Combat, hull, craft.Tuning(engines), input, DVec3.Zero, dt);
+            u.Pos = state.Pos;
+            u.Vel = state.Vel;
+            u.Forward = state.Forward;
+            stick.Up = state.Up;
+            stick.AngularVelocity = state.AngularVelocity;
+            if (stick.Secondary && stick.SecondaryGroup == WeaponGroup.Torpedoes && TorpedoTarget(b, u) is BattleUnit target) LaunchTorpedoes(b, u, target);
         }
 
-        /// <summary>The hostile hull (never a fighter, never one that has struck or been taken) nearest the nose, within
-        /// torpedo range and the torpedo's boresight; null if none.</summary>
+        /// <summary>The hostile hull (never a fighter, never one that has struck or been taken) a torpedo goes at: the locked
+        /// one if it is within torpedo range and the boresight, else the one nearest the nose that is; null if none.</summary>
         public static BattleUnit TorpedoTarget(Battle b, BattleUnit u)
         {
+            var locked = u.PlayerLockTarget;
+            if (locked != null && locked.Present && locked.Kind != UnitKind.Fighter && Fair(b, u, locked))
+            {
+                var toLocked = locked.Pos - u.Pos;
+                double d = toLocked.Length;
+                if (d > 1e-9 && d - locked.Radius <= WeaponSpec.Torpedo.RangeKm && DVec3.Dot(u.Forward, toLocked / d) >= TorpedoBoresightCos) return locked;
+            }
             BattleUnit best = null;
             double bestCos = TorpedoBoresightCos;
             foreach (var o in b.Units)
@@ -412,11 +502,42 @@ namespace Unity.SpaceGod.Core
             return new DVec3(side * 0.16 * rank, 0.03 * rank, -0.14 * rank);
         }
 
+        /// <summary>
+        /// What a wingman's order leaves it fighting on its own (U.SPC-T424): its lead's target, whatever is on its lead,
+        /// or one of its own; null when it holds the vee.
+        /// </summary>
+        static bool Independent(Battle b, BattleUnit u, out BattleUnit pinned)
+        {
+            var f = u.Fighter;
+            pinned = null;
+            switch (f.Order)
+            {
+                case WingOrder.AttackMyTarget:
+                    pinned = Fair(b, u, f.Lead.Target) ? f.Lead.Target : null;
+                    return pinned != null;
+                case WingOrder.CoverMe:
+                    pinned = Wing.Threat(b, f.Lead);
+                    return pinned != null;
+                case WingOrder.EngageAtWill:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>Whether a wingman is holding the vee on its lead (rather than fighting on its own, as ordered).</summary>
+        static bool FlysInFormation(Battle b, BattleUnit u) => u.Fighter.Lead != null && !Independent(b, u, out _);
+
         static void Wingman(Battle b, BattleUnit u, double dt)
         {
             var f = u.Fighter;
             var lead = f.Lead;
             var lf = lead.Fighter;
+            if (Independent(b, u, out var pinned))
+            {
+                Lead(b, u, dt, pinned);
+                return;
+            }
             u.Target = lead.Target;
             // Station: the slot in the lead's frame, stretched on the run, plus this pilot's own wander.
             lead.Basis(out var right, out var up);
@@ -442,6 +563,9 @@ namespace Unity.SpaceGod.Core
         static void Steer(Battle b, BattleUnit u, DVec3 goal, double speed, double dt, DVec3? match = null, bool homing = false)
         {
             var spec = u.Combat.Spec;
+            // Power to the engines (U.SPC-T424) is speed and thrust.
+            double engines = PowerDistribution.FactorOf(u, PowerSystem.Engines);
+            speed *= engines;
             var to = goal - u.Pos;
             double dist = to.Length;
             // Stay inside the battle -- except homing on its carrier, wherever that has drifted to.
@@ -458,7 +582,7 @@ namespace Unity.SpaceGod.Core
             if (match is DVec3 m) want = Math.Min(speed, m.Length + dist * 1.2);
             var desiredVel = u.Forward * want;
             var dv = desiredVel - u.Vel;
-            double step = spec.Accel * dt;
+            double step = spec.Accel * engines * dt;
             u.Vel += dv.Length > step ? dv.Normalized * step : dv;
             u.Pos += u.Vel * dt;
         }

@@ -87,9 +87,14 @@ namespace Unity.SpaceGod.Core.Tests
             var start = craft.Forward;
             var goal = PilotFlight.RotateAbout(start, DVec3.UnitZ, 90 * Astro.Deg2Rad);
             session.Step(new EmbodimentInput { Aim = goal }, 0.1);
+            // A light fighter turns at its own rate for the speed it is flying (U.SPC-T17, U.SPC-T424): its full rate at the
+            // corner speed, a little less above it.
+            var model = (LightFighterFlightModel)FighterCraft.Interceptor.Model;
+            double rate = model.TurnRateAt(craft.Vel.Length, FighterCraft.Interceptor.Tuning());
+            Assert.That(rate, Is.LessThanOrEqualTo(FighterAI.Interceptor.TurnRateDegS).And.GreaterThan(FighterAI.Interceptor.TurnRateDegS * 0.6));
             b.Advance(0.5);
             double turned = AngleDeg(craft.Forward, start);
-            Assert.That(turned, Is.EqualTo(FighterAI.Interceptor.TurnRateDegS * 0.5).Within(1), "half a second at its own turn rate, not a snap");
+            Assert.That(turned, Is.EqualTo(rate * 0.5).Within(1), "half a second at its own turn rate, not a snap");
 
             Fly(b, session, () => goal, 10);
             Assert.That(AngleDeg(craft.Forward, goal), Is.LessThan(1e-6), "the nose is where the stick is");

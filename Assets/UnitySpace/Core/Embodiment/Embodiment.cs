@@ -50,6 +50,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The main trigger (guns) and the secondary (missiles), held this frame.</summary>
         public bool Primary, Secondary;
+
+        /// <summary>The afterburner, held this frame, for things that move (U.SPC-T424).</summary>
+        public bool Boost;
     }
 
     /// <summary>

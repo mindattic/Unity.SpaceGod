@@ -174,6 +174,18 @@ namespace Unity.SpaceGod.Core
         /// <summary>At the helm: seconds the volley has been building, up to <see cref="Battle.VolleyBuildSeconds"/>.</summary>
         public double VolleyCharge;
 
+        /// <summary>How a small craft shares its reactor between weapons, shields and engines (U.SPC-T424); null runs
+        /// everything as designed.</summary>
+        public PowerDistribution Power;
+
+        /// <summary>While <see cref="PlayerControlled"/>: the weak point on <see cref="PlayerLockTarget"/> its missiles and
+        /// torpedoes are aimed at (U.SPC-T424), or null to leave it to the seeker.</summary>
+        public Subsystem PlayerSubTarget;
+
+        /// <summary>While <see cref="PlayerControlled"/>: a flare-and-chaff cloud asked for this frame (the battle clears it
+        /// once it has tried, U.SPC-T424).</summary>
+        public bool PlayerDecoyRequested;
+
         /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north).</summary>
         public void Basis(out DVec3 right, out DVec3 up)
         {
@@ -290,6 +302,12 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>An EMP round's stun and reach (see <see cref="WeaponSpec.EmpSeconds"/>).</summary>
         public double EmpSeconds, EmpRadiusKm;
+
+        /// <summary>Fired by a small craft, so it hits a capital ship's weak points as hard as one (U.SPC-T424, see <see cref="WeakPoints"/>).</summary>
+        public bool SmallCraft;
+
+        /// <summary>The flare-and-chaff cloud it has been drawn off onto, or null (U.SPC-T424).</summary>
+        public Decoy Decoy;
     }
 
     /// <summary>
@@ -325,6 +343,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>An aimed round (U.SPC-T270): no roll at the muzzle and no <see cref="Target"/>; it hits
         /// whatever hostile hull it actually flies through, or nothing (see <see cref="Gunnery"/>).</summary>
         public bool Aimed;
+
+        /// <summary>Fired by a small craft (U.SPC-T424, see <see cref="WeakPoints"/>).</summary>
+        public bool SmallCraft;
     }
 
     public enum FxKind
@@ -408,6 +429,9 @@ namespace Unity.SpaceGod.Core
         public readonly List<Missile> Missiles = new List<Missile>();
         public readonly List<KineticRound> Rounds = new List<KineticRound>();
         public readonly List<Mine> Mines = new List<Mine>();
+
+        /// <summary>Flare-and-chaff clouds burning in the battle (U.SPC-T424).</summary>
+        public readonly List<Decoy> Decoys = new List<Decoy>();
         public readonly List<Embedded> Embedded = new List<Embedded>();
 
         /// <summary>Gun mounts the player has taken (U.SPC-T18, see <see cref="MountedTurret"/>): each is laid and fired by
@@ -613,6 +637,7 @@ namespace Unity.SpaceGod.Core
                 if (u.PlayerControlled)
                 {
                     u.PlayerMineRequested = false;
+                    u.PlayerDecoyRequested = false;
                     if (u.PlayerVolleyRelease) u.VolleyCharge = 0;
                     u.PlayerVolleyRelease = false;
                 }
@@ -620,6 +645,7 @@ namespace Unity.SpaceGod.Core
             StepMissiles(dt);
             StepRounds(dt);
             StepMines(dt);
+            StepDecoys(dt);
             StepBoarding(dt);
             StepSurrenders(dt);
             double track = 1 - Math.Exp(-dt / Gunnery.TrackingLagS);
@@ -629,7 +655,8 @@ namespace Unity.SpaceGod.Core
                 u.SeenVel += (u.Vel - u.SeenVel) * track;
                 var c = u.Combat;
                 if (u.Stunned > 0) u.Stunned -= dt;
-                else c.RegenShields(Seconds, dt);
+                // A small craft with power to spare for its shields recharges them that much faster (U.SPC-T424).
+                else c.RegenShields(Seconds, dt * PowerDistribution.FactorOf(u, PowerSystem.Shields));
                 // No escape with boarders fighting aboard (or a breacher stuck in the hull), nor for a hull that has struck
                 // its colours or been taken: drifting off with its drives cold is not running.
                 if (u.Kind == UnitKind.Ship && u.Latched == null && !c.Disabled && !c.Interior.UnderBoarding && !u.Surrendering && !u.Captured && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
@@ -1136,12 +1163,14 @@ namespace Unity.SpaceGod.Core
             // Knocked out by a pulse or an EMP: no gun on the hull fires until its systems come back.
             if (u.Captured || u.Surrendering || u.Stunned > 0) return;
             double accuracyScale = c.BridgeIntact ? 1 : 0.6;
+            // A small craft's weapons reload as fast as the power it gives them (U.SPC-T424).
+            double weaponPower = PowerDistribution.FactorOf(u, PowerSystem.Weapons);
             foreach (var s in c.Subsystems)
             {
                 var w = s.Def.Weapon;
                 if (w == null || s.Destroyed) continue;
                 // A fleet out of supply reloads slower: short of rounds, of spares for its mounts, of power to spare (U.SPC-T93).
-                s.Cooldown -= dt * c.Readiness;
+                s.Cooldown -= dt * c.Readiness * weaponPower;
                 // A mount the player has taken is theirs to lay and fire, reloading or not (U.SPC-T18).
                 if (Manned.Count > 0 && Manned.TryGetValue(s, out var manned))
                 {
@@ -1216,10 +1245,15 @@ namespace Unity.SpaceGod.Core
                     s.Aim = DVec3.Zero;
                     continue;
                 }
-                var sub = PickSubsystem(target, u);
+                // A player's guided rounds go for the weak point picked on the locked hull (U.SPC-T424).
+                var sub = u.PlayerControlled && w.Missile && target == u.PlayerLockTarget && u.PlayerSubTarget != null && !u.PlayerSubTarget.Destroyed
+                          && target.Combat.Subsystems.Contains(u.PlayerSubTarget)
+                    ? u.PlayerSubTarget
+                    : PickSubsystem(target, u);
                 var aimPoint = sub != null ? target.PointOf(sub.Def) : target.Pos;
                 s.Aim = (aimPoint - origin).Normalized;
                 s.Cooldown = w.Cooldown * (0.85 + rng.NextDouble() * 0.3);
+                bool small = WeakPoints.IsSmallCraft(u);
 
                 if (w.Missile)
                 {
@@ -1236,7 +1270,7 @@ namespace Unity.SpaceGod.Core
                             Target = target, TargetSub = sub, Damage = w.Damage, Speed = w.MissileSpeedKmS,
                             Hp = s.Kind == SubsystemKind.TorpedoTube ? 40 : torpedo ? 25 : 12, Life = 90, Side = u.Side, Torpedo = torpedo,
                             Kind = w.EmpSeconds > 0 ? MissileKind.Emp : torpedo ? MissileKind.Torpedo : MissileKind.Missile,
-                            EmpSeconds = w.EmpSeconds, EmpRadiusKm = w.EmpRadiusKm,
+                            EmpSeconds = w.EmpSeconds, EmpRadiusKm = w.EmpRadiusKm, SmallCraft = small,
                         });
                     }
                     Emit(FxKind.MissileLaunch, origin, origin + s.Aim, 0, u.Side, u, s.Index);
@@ -1274,7 +1308,7 @@ namespace Unity.SpaceGod.Core
                 if (hit)
                 {
                     Emit(kind, origin, aimPoint, w.Damage, u.Side, target, sub?.Index ?? -1);
-                    ApplyDamage(target, sub, w.Damage, aimPoint);
+                    ApplyDamage(target, sub, w.Damage, aimPoint, null, small ? WeakPoints.Factor(target, sub, aimPoint - origin) : 1);
                 }
                 else
                 {
@@ -1311,6 +1345,7 @@ namespace Unity.SpaceGod.Core
                 Pos = origin, Vel = vel, Target = target, TargetSub = targetSub, Damage = w.Damage,
                 ArriveIn = arriveIn, Life = arriveIn + (hit ? 0 : 0.5), Side = u.Side, Hit = hit,
                 Railgun = mount.Kind == SubsystemKind.Railgun || mount.Kind == SubsystemKind.LightRailgun,
+                SmallCraft = WeakPoints.IsSmallCraft(u),
             });
         }
 
@@ -1339,7 +1374,7 @@ namespace Unity.SpaceGod.Core
                     if (r.Target.Present && r.Target.Side != r.Side && !r.Target.Surrendering)
                     {
                         var sub = r.TargetSub != null && !r.TargetSub.Destroyed ? r.TargetSub : null;
-                        ApplyDamage(r.Target, sub, r.Damage, r.Pos);
+                        ApplyDamage(r.Target, sub, r.Damage, r.Pos, null, r.SmallCraft ? WeakPoints.Factor(r.Target, sub, r.Vel - r.Target.Vel) : 1);
                     }
                 }
                 else if (r.Life <= 0) r.Gone = true;
@@ -1433,7 +1468,7 @@ namespace Unity.SpaceGod.Core
                 Rounds.Add(new KineticRound
                 {
                     Pos = origin, Vel = u.Vel + dir * w.MuzzleSpeedKmS, Damage = damage, Life = w.RangeKm / w.MuzzleSpeedKmS,
-                    Side = u.Side, Railgun = slug, Aimed = true,
+                    Side = u.Side, Railgun = slug, Aimed = true, SmallCraft = WeakPoints.IsSmallCraft(u),
                 });
                 return;
             }
@@ -1446,7 +1481,7 @@ namespace Unity.SpaceGod.Core
             var at = origin + dir * t;
             var sub = SubsystemNear(hit, at);
             Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.Beam, origin, at, damage, u.Side, hit, sub?.Index ?? -1);
-            ApplyDamage(hit, sub, damage, at);
+            ApplyDamage(hit, sub, damage, at, null, WeakPoints.IsSmallCraft(u) ? WeakPoints.Factor(hit, sub, dir) : 1);
         }
 
         /// <summary>An aimed round flies on, and hits the first hostile hull its path crosses this step.</summary>
@@ -1462,7 +1497,8 @@ namespace Unity.SpaceGod.Core
                 {
                     var at = r.Pos + step / len * t;
                     r.Gone = true;
-                    ApplyDamage(hit, SubsystemNear(hit, at), r.Damage, at);
+                    var sub = SubsystemNear(hit, at);
+                    ApplyDamage(hit, sub, r.Damage, at, null, r.SmallCraft ? WeakPoints.Factor(hit, sub, r.Vel - hit.Vel) : 1);
                     return;
                 }
             }
@@ -1594,6 +1630,11 @@ namespace Unity.SpaceGod.Core
         /// is on its tail.</summary>
         void TryDeploy(BattleUnit u, Subsystem s, WeaponSpec w)
         {
+            if (w.Deploy == DeployKind.Decoy)
+            {
+                ThrowDecoy(u, s, w);
+                return;
+            }
             bool want = u.PlayerControlled ? u.PlayerMineRequested : SomethingOnItsTail(u);
             if (!want || s.Ammo <= 0 || u.Stunned > 0) return;
             s.Ammo--;
@@ -1614,6 +1655,60 @@ namespace Unity.SpaceGod.Core
                 if (d < 2.5 && d > 1e-6 && DVec3.Dot(u.Forward, to / d) < -0.3) return true;
             }
             return false;
+        }
+
+        // ---------------------------------------------------------------- countermeasures (U.SPC-T424)
+
+        /// <summary>
+        /// Throws a flare-and-chaff cloud astern when the dispenser's owner wants one (the player when asked, a pilot when
+        /// a guided round is closing on it), and gives every round homing on the craft within
+        /// <see cref="Countermeasures.ReachKm"/> its chance of being drawn off onto it.
+        /// </summary>
+        void ThrowDecoy(BattleUnit u, Subsystem s, WeaponSpec w)
+        {
+            bool want = u.PlayerControlled ? u.PlayerDecoyRequested : MissileInbound(u, Countermeasures.AiReactKm) != null;
+            if (!want || s.Ammo <= 0 || u.Stunned > 0) return;
+            s.Ammo--;
+            s.Cooldown = w.Cooldown;
+            var at = u.Pos - u.Forward * (u.Radius + 0.02);
+            var decoy = new Decoy { Pos = at, Vel = u.Vel * 0.6 - u.Forward * 0.05, Side = u.Side, Life = Countermeasures.LifeSeconds };
+            Decoys.Add(decoy);
+            Emit(FxKind.Deployed, at, at, 0.03, u.Side, u, s.Index);
+            foreach (var m in Missiles)
+            {
+                if (m.Gone || m.Target != u || m.Decoy != null || (m.Pos - u.Pos).Length > Countermeasures.ReachKm) continue;
+                if (rng.NextDouble() < Countermeasures.SeduceChance(m.Kind)) m.Decoy = decoy;
+            }
+        }
+
+        /// <summary>The nearest guided round homing on <paramref name="u"/> within <paramref name="km"/> and not already drawn off, or null.</summary>
+        public Missile MissileInbound(BattleUnit u, double km)
+        {
+            Missile best = null;
+            double bestD = km;
+            foreach (var m in Missiles)
+            {
+                if (m.Gone || m.Target != u || m.Decoy != null || m.Kind == MissileKind.Pod) continue;
+                double d = (m.Pos - u.Pos).Length;
+                if (d <= bestD)
+                {
+                    bestD = d;
+                    best = m;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Clouds drift and burn out.</summary>
+        void StepDecoys(double dt)
+        {
+            foreach (var d in Decoys)
+            {
+                d.Pos += d.Vel * dt;
+                d.Life -= dt;
+                if (d.Life <= 0) d.Gone = true;
+            }
+            Decoys.RemoveAll(d => d.Gone);
         }
 
         /// <summary>What the player's EMP launcher fires at: the locked hull if it is in reach, else the hostile nearest
@@ -1704,7 +1799,8 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         void StepPlayerWeapons(BattleUnit u, double dt)
         {
-            u.Heat = Math.Max(0, u.Heat - Gunnery.HeatCoolPerS * dt);
+            // Power to the weapons cools the guns faster (U.SPC-T424).
+            u.Heat = Math.Max(0, u.Heat - Gunnery.HeatCoolPerS * PowerDistribution.FactorOf(u, PowerSystem.Weapons) * dt);
             if (u.PlayerHelm && u.PlayerFireHeld) u.VolleyCharge = Math.Min(VolleyBuildSeconds, u.VolleyCharge + dt);
             if (u.Overheated && u.Heat < Gunnery.HeatRecoverBelow) u.Overheated = false;
 
@@ -1759,7 +1855,9 @@ namespace Unity.SpaceGod.Core
             // Its own target only while that is still a fair one: not struck its colours, not since taken
             // by this side (a capture doesn't clear everyone's target the way a surrender does).
             bool emp = w.EmpSeconds > 0;
-            if (t != null && Hostile(u, t) && !t.Surrendering && !t.Captured && !HoldsFireOn(u, t) && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile && !emp) && !(emp && t.Stunned > 0))
+            // A dogfight missile's seeker takes a fighter as readily as a hull (U.SPC-T424).
+            bool seeksSmall = emp || w.SeeksSmallCraft;
+            if (t != null && Hostile(u, t) && !t.Surrendering && !t.Captured && !HoldsFireOn(u, t) && (t.Pos - origin).Length - t.Radius <= w.RangeKm && !(t.Kind == UnitKind.Fighter && w.Missile && !seeksSmall) && !(emp && t.Stunned > 0))
                 return t;
             BattleUnit any = null;
             double nearest = w.RangeKm;
@@ -1767,8 +1865,8 @@ namespace Unity.SpaceGod.Core
             {
                 // An EMP round is for a small craft too, but wasted on one already drifting dead (U.SPC-T271).
                 // An auto turret's fire control takes fighters as readily as hulls (U.SPC-T278).
-                bool takesFighters = emp || u.Kind == UnitKind.Fighter || ReferenceEquals(w, WeaponSpec.AutoTurret);
-                if (!Hostile(u, o) || o.Captured || o.Surrendering || HoldsFireOn(u, o) || (emp && o.Stunned > 0) || (o.Kind == UnitKind.Fighter && (w.Missile && !emp || !takesFighters))) continue;
+                bool takesFighters = seeksSmall || u.Kind == UnitKind.Fighter || ReferenceEquals(w, WeaponSpec.AutoTurret);
+                if (!Hostile(u, o) || o.Captured || o.Surrendering || HoldsFireOn(u, o) || (emp && o.Stunned > 0) || (o.Kind == UnitKind.Fighter && (w.Missile && !seeksSmall || !takesFighters))) continue;
                 double d = (o.Pos - origin).Length - o.Radius;
                 if (d < nearest)
                 {
@@ -1845,9 +1943,11 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// Shields soak damage first; armour blunts each hit (small guns most); what gets through is
-        /// split between the struck hardpoint and the hull. A lost reactor takes the ship with it.
+        /// split between the struck hardpoint and the hull. A lost reactor takes the ship with it. What gets through the
+        /// shields is multiplied by <paramref name="exposed"/>: a small craft's hit on an open weak point (U.SPC-T424, see
+        /// <see cref="WeakPoints.Factor"/>).
         /// </summary>
-        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at, DVec3? shieldAt = null)
+        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at, DVec3? shieldAt = null, double exposed = 1)
         {
             if (!target.Present) return;
             var c = target.Combat;
@@ -1867,6 +1967,7 @@ namespace Unity.SpaceGod.Core
                     if (damage <= 0) return;
                 }
             }
+            if (sub != null && exposed > 1) damage *= exposed;
             damage = Math.Max(damage * 0.15, damage - c.Spec.Armor);
             Emit(FxKind.Impact, at, at, damage, target.Side, target, sub?.Index ?? -1);
             if (sub != null && !sub.Destroyed)
@@ -1933,6 +2034,22 @@ namespace Unity.SpaceGod.Core
                     Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.05, m.Side, null, -1);
                     continue;
                 }
+                // Drawn off by a flare-and-chaff cloud (U.SPC-T424): it chases the cloud and goes off in it, harmlessly.
+                if (m.Decoy != null)
+                {
+                    var toDecoy = m.Decoy.Pos - m.Pos;
+                    if (m.Decoy.Gone || toDecoy.Length <= Math.Max(0.03, m.Speed * dt))
+                    {
+                        m.Gone = true;
+                        Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.05, m.Side, null, -1);
+                        continue;
+                    }
+                    var chase = toDecoy.Normalized * m.Speed - m.Vel;
+                    double swing = m.Speed * 0.6 * dt;
+                    m.Vel += chase.Length > swing ? chase.Normalized * swing : chase;
+                    m.Pos += m.Vel * dt;
+                    continue;
+                }
                 var t = m.Target;
                 var aim = m.TargetSub != null && !m.TargetSub.Destroyed ? t.PointOf(m.TargetSub.Def) : t.Pos;
                 var to = aim - m.Pos;
@@ -1955,7 +2072,11 @@ namespace Unity.SpaceGod.Core
                     var entry = t.Pos + from.Normalized * t.Radius;
                     if (m.Kind == MissileKind.Pod) PodHit(m, t, aim, entry);
                     else if (m.Kind == MissileKind.Emp) EmpBurst(m.Pos, m.Side, m.EmpSeconds, m.EmpRadiusKm);
-                    else ApplyDamage(t, m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t), m.Damage, aim, entry);
+                    else
+                    {
+                        var sub = m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t);
+                        ApplyDamage(t, sub, m.Damage, aim, entry, m.SmallCraft ? WeakPoints.Factor(t, sub, m.Vel - t.Vel) : 1);
+                    }
                 }
             }
             Missiles.RemoveAll(m => m.Gone);

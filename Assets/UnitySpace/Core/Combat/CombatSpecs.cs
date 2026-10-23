@@ -47,10 +47,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>A capital torpedo tube (U.SPC-T377): a fixed launcher that fires one heavy, slow, hard-to-stop
         /// torpedo down the bow at a time. A carrier bomber's slung <see cref="Torpedo"/> is a different, smaller thing.</summary>
         TorpedoTube,
+
+        /// <summary>Throws flare-and-chaff clouds astern that draw off missiles homing on the craft (U.SPC-T424, see <see cref="Decoy"/>).</summary>
+        Countermeasures,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
-    public enum DeployKind { None, Mine }
+    public enum DeployKind { None, Mine, Decoy }
 
     /// <summary>What a weapon does. Ranges are km, damage is hit points, cooldowns are seconds.</summary>
     public sealed class WeaponSpec
@@ -120,6 +123,16 @@ namespace Unity.SpaceGod.Core
         /// <summary>A capital torpedo (U.SPC-T377): the hardest single hit in the game, slow enough that point defence
         /// has time to work on it, and only six in the tube's magazine.</summary>
         public static readonly WeaponSpec HeavyTorpedo = new WeaponSpec { RangeKm = 32, Damage = 900, Cooldown = 45, Accuracy = 1, Missile = true, MissileSpeedKmS = 1.0, Salvo = 1, Ammo = 6 };
+
+        /// <summary>A small craft's dogfight missile (U.SPC-T424): short-ranged, quick and agile enough to run down another
+        /// fighter once the lock is made, and light enough for point defence or a flare to stop.</summary>
+        public static readonly WeaponSpec DogfightMissile = new WeaponSpec { RangeKm = 3.5, Damage = 70, Cooldown = 3, Accuracy = 1, Missile = true, MissileSpeedKmS = 1.1, Salvo = 1, Ammo = 2, SeeksSmallCraft = true };
+
+        /// <summary>A small craft's flare-and-chaff dispenser (U.SPC-T424): <see cref="Ammo"/> clouds, one every <see cref="Cooldown"/> seconds.</summary>
+        public static readonly WeaponSpec Flares = new WeaponSpec { RangeKm = 0, Damage = 0, Cooldown = 2, Accuracy = 1, Ammo = 5, Deploy = DeployKind.Decoy };
+
+        /// <summary>A guided round whose seeker locks onto small craft as readily as onto hulls (U.SPC-T424).</summary>
+        public bool SeeksSmallCraft;
 
         /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
         public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };
@@ -199,6 +212,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.MineLayer: return 30;
                 case SubsystemKind.AutoTurret: return 50;
                 case SubsystemKind.TorpedoTube: return 280;
+                case SubsystemKind.Countermeasures: return 30;
                 default: return 200;
             }
         }
@@ -221,6 +235,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.MineLayer: return WeaponSpec.Mines;
                 case SubsystemKind.AutoTurret: return WeaponSpec.AutoTurret;
                 case SubsystemKind.TorpedoTube: return WeaponSpec.HeavyTorpedo;
+                case SubsystemKind.Countermeasures: return WeaponSpec.Flares;
                 default: return null;
             }
         }
@@ -248,6 +263,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.MineLayer: return "Mine layer";
                 case SubsystemKind.AutoTurret: return "Auto turret";
                 case SubsystemKind.TorpedoTube: return "Torpedo tube";
+                case SubsystemKind.Countermeasures: return "Countermeasures";
                 default: return "Reactor";
             }
         }

@@ -81,7 +81,9 @@ namespace Unity.SpaceGod
         }
 
         static string SeatKeys(IEmbodiable s) => s is FighterSeat
-            ? "  (mouse aims, W/S throttle, left mouse guns, right mouse torpedoes, ' ; next seat, P back to command)"
+            ? "  (mouse aims, W/S throttle, A/D Q/E strafe, Z/X roll, Shift boost, F flight assist, left mouse guns, right mouse " +
+              "weapon group, 1 next group, T lock, 6 next weak point, Ctrl flares, 2 attack my target, 3 cover me, 4 form up, " +
+              "5 engage at will, 7/8/9 power to weapons/shields/engines, 0 even power, ' ; next seat, P back to command)"
             : "  (mouse lays it, left mouse fires, / next gun, P back to command)";
 
         /// <summary>What the camera rides with at a seat: the craft itself, or the hull a gun is mounted on.</summary>
@@ -255,9 +257,14 @@ namespace Unity.SpaceGod
             {
                 Aim = new DVec3(seatAim.x, seatAim.y, seatAim.z).SwapYZ,
                 Throttle = Mathf.Clamp(Input.Move.z, -1f, 1f),
+                StrafeRight = Mathf.Clamp(Input.Move.x, -1f, 1f),
+                StrafeUp = Mathf.Clamp(Input.Move.y, -1f, 1f),
+                Roll = Mathf.Clamp(Input.Roll, -1f, 1f),
+                Boost = Input.Boost,
                 Primary = Input.Fire && !ClickPanelOpen,
                 Secondary = Input.LookHeld && !ClickPanelOpen,
             };
+            if (held is FighterSeat cockpit && !ClickPanelOpen) UpdateCockpit(cockpit, input.Aim);
             // On the sim clock's time, so a fight run faster is flown faster too.
             double simDt = dt * Clock.Warp.SimSecondsPerSecond * Clock.Speed;
             if (!seat.Step(input, simDt))
@@ -270,20 +277,56 @@ namespace Unity.SpaceGod
             SpaceCamera.PilotView = Quaternion.LookRotation(seatAim, Vector3.Dot(roof, seatAim) > 0.99f ? up : roof);
         }
 
+        /// <summary>
+        /// The dogfight game's keys in a cockpit (U.SPC-T424): F flight assist, T a lock on the hostile nearest the crosshair
+        /// (again for the next), Ctrl flares, and the number keys: 1 the next weapon group on the second trigger, 2-5 orders
+        /// to the wing (attack my target, cover me, form up, engage at will), 6 the next weak point on the locked hull, 7/8/9
+        /// a pip of power to weapons, shields or engines, 0 an even share.
+        /// </summary>
+        void UpdateCockpit(FighterSeat f, DVec3 aim)
+        {
+            if (Input.ToggleFlightAssist) ShowToast(f.ToggleFlightAssist() ? "Flight assist off: it drifts on its momentum" : "Flight assist on");
+            if (Input.LockTarget)
+            {
+                var locked = f.CycleLock(aim);
+                ShowToast(locked == null ? "Nothing hostile near the crosshair to lock"
+                    : "Locking " + locked.Name + (f.Unit.PlayerSubTarget != null ? " @ " + WeakPoints.Label(f.Unit.PlayerSubTarget) : "") + ": hold the crosshair on it");
+            }
+            if (Input.DropMine) f.DropCountermeasures();
+            switch (Input.NumberKey)
+            {
+                case 1:
+                    var nextGroup = f.CycleSecondaryGroup();
+                    ShowToast(nextGroup == null ? "No guided weapons aboard" : "Second trigger: " + WeaponGroups.Label(nextGroup.Value));
+                    break;
+                case 2: OrderWing(f, WingOrder.AttackMyTarget); break;
+                case 3: OrderWing(f, WingOrder.CoverMe); break;
+                case 4: OrderWing(f, WingOrder.FormUp); break;
+                case 5: OrderWing(f, WingOrder.EngageAtWill); break;
+                case 6:
+                    var weak = f.CycleWeakPoint();
+                    ShowToast(weak == null ? "Lock a capital ship (T) to pick a weak point" : "Weak point: " + WeakPoints.Label(weak));
+                    break;
+                case 7: f.ShiftPower(PowerSystem.Weapons); break;
+                case 8: f.ShiftPower(PowerSystem.Shields); break;
+                case 9: f.ShiftPower(PowerSystem.Engines); break;
+                case 0: f.BalancePower(); break;
+            }
+        }
+
+        void OrderWing(FighterSeat f, WingOrder order)
+        {
+            int heard = f.OrderWing(order);
+            ShowToast(heard == 0 ? "No wingmen left to order" : "Wing (" + heard + "): " + Wing.Label(order));
+        }
+
         /// <summary>The HUD's line at a non-helm seat (null when none is held): what is held, its state, and the keys out.</summary>
         public string SeatLine()
         {
             switch (seat.Current)
             {
                 case FighterSeat f:
-                {
-                    var spec = f.Unit.Combat.Spec;
-                    string hull = Mathf.RoundToInt((float)(100 * f.Unit.Combat.Hull / System.Math.Max(1, spec.Hull))) + "%";
-                    string thr = f.Battle.Flown.TryGetValue(f.Unit, out var stick) ? Mathf.RoundToInt((float)(100 * stick.Throttle)) + "%" : "-";
-                    string heat = f.Unit.Overheated ? "  ·  GUNS OVERHEATED" : "";
-                    return (f.Unit.Fighter.Bomber ? "BOMBER" : "FIGHTER") + "  ·  " + f.Name + "  ·  hull " + hull + "  ·  throttle " + thr + heat +
-                           "  ·  ' ; next seat   P back to command";
-                }
+                    return f.Readout() + "  ·  ' ; next seat   P back to command";
                 case MountedTurret t:
                     return "GUN  ·  " + t.Name + "  ·  " + (t.Mount.Cooldown > 0 ? "reloading" : "ready") + "  ·  / next gun   P back to command";
                 default:
