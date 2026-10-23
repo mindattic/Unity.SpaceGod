@@ -105,9 +105,8 @@ Whether capital ships fight near a battle plane (the Rebel Galaxy handling of U.
 | Cruisers and destroyers have no FTL; carriers and gate breakers always do, battleships and command cruisers only when fitted | Cruisers and destroyers have their own FTL drives in `FtlCarriage` | U.SPC-T472 |
 | Carriers clamp a few escorts to the hull; a lost carrier strands its wings | Not modelled | U.SPC-T473 |
 | Gate fleets and jump strike groups, used differently | Navies do not yet raise the two kinds of force | U.SPC-T474 |
-| The Breacher is a fired marine round | A flown heavy fighter | U.SPC-T466 |
+| The Breacher is a fired marine round | A flown assault craft that rams its drill prow home | U.SPC-T466 |
 | Marines live in a Marine Habitat | A flat marine figure per class | U.SPC-T465 |
-| A dedicated heavy fighter / gunship hull | The Breacher fills those slots | U.SPC-T467 |
 | Boarding the player takes part in | Boarding only resolves on its own | U.SPC-T468 |
 | Hardpoints outside, facilities inside, limited internal space | Not split this way | U.SPC-T470 |
 | Frigate, corvette, command cruiser, gate breaker | Not yet classes | U.SPC-T475 to U.SPC-T478 |
