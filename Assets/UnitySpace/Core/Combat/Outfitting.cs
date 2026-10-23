@@ -50,6 +50,12 @@ namespace Unity.SpaceGod.Core
         /// <summary>A capital ship's spinal tachyon lance (U.SPC-T487, see <see cref="TachyonLances"/>): a bow mount of a
         /// capital hull only, built only at the greatest yards, and dear.</summary>
         TachyonLance,
+
+        /// <summary>A phaser-style beam array (U.SPC-T488): destroyers and cruisers only, on a weapon or light mount.</summary>
+        PhaserArray,
+
+        /// <summary>A plasma cannon (U.SPC-T488): the brawlers' heavy gun (battleships, breachers), on a weapon mount.</summary>
+        PlasmaCannon,
     }
 
     /// <summary>The kinds of hardpoint a hull offers on its surface: its weapon hardpoints (light ones take point defence, a
@@ -110,6 +116,10 @@ namespace Unity.SpaceGod.Core
             // The tachyon lance (U.SPC-T487): its own power plant and capacitor banks, and the platinum and rare earths of
             // its emitter, some eight times a railgun's worth.
             new ModuleSpec(ModuleKind.TachyonLance, "Tachyon lance", 950, false, (Good.Alloys, 260), (Good.Electronics, 180), (Good.Machinery, 90), (Good.Platinum, 30), (Good.RareEarths, 45)),
+            // Energy weapons (U.SPC-T488): an array is mostly emitters and their power conditioning; a plasma cannon a
+            // magnetic bottle, its injectors and heavy plate round both.
+            new ModuleSpec(ModuleKind.PhaserArray, "Phaser array", 200, false, (Good.Alloys, 55), (Good.Electronics, 40), (Good.Machinery, 10)),
+            new ModuleSpec(ModuleKind.PlasmaCannon, "Plasma cannon", 380, false, (Good.Alloys, 120), (Good.Electronics, 30), (Good.Machinery, 28)),
         };
 
         public static ModuleSpec Of(ModuleKind k) => All[(int)k];
@@ -137,10 +147,12 @@ namespace Unity.SpaceGod.Core
         {
             switch (slot)
             {
-                case SlotKind.LightMount: return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret || m == ModuleKind.Autocannon || m == ModuleKind.AutoTurret;
+                // A phaser array is light enough for a point-defence mount: a destroyer's screen sweeps fighters from one.
+                case SlotKind.LightMount: return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret || m == ModuleKind.Autocannon || m == ModuleKind.AutoTurret || m == ModuleKind.PhaserArray;
                 case SlotKind.HeavyMount:
                     return m == ModuleKind.LaserTurret || m == ModuleKind.HeavyLaser || m == ModuleKind.MissileLauncher ||
                            m == ModuleKind.PointDefense || m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun ||
+                           m == ModuleKind.PhaserArray || m == ModuleKind.PlasmaCannon ||
                            ((m == ModuleKind.Railgun || m == ModuleKind.TorpedoTube || m == ModuleKind.TachyonLance) && bearsOnBow);
                 // A torpedo tube is a fixed launcher: it takes a tube or a missile launcher, nothing that traverses.
                 case SlotKind.TorpedoTube: return m == ModuleKind.TorpedoTube || m == ModuleKind.MissileLauncher;
@@ -170,6 +182,8 @@ namespace Unity.SpaceGod.Core
                 case ModuleKind.AutoTurret: return SubsystemKind.AutoTurret;
                 case ModuleKind.TorpedoTube: return SubsystemKind.TorpedoTube;
                 case ModuleKind.TachyonLance: return SubsystemKind.TachyonLance;
+                case ModuleKind.PhaserArray: return SubsystemKind.PhaserArray;
+                case ModuleKind.PlasmaCannon: return SubsystemKind.PlasmaCannon;
                 case ModuleKind.ShieldGenerator:
                 case ModuleKind.HardenedShield: return SubsystemKind.ShieldGenerator;
                 default: return SubsystemKind.Engine;
@@ -307,6 +321,8 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.LaserTurret:
                 case SubsystemKind.HeavyLaser:
                 case SubsystemKind.MissileLauncher:
+                case SubsystemKind.PhaserArray:
+                case SubsystemKind.PlasmaCannon:
                 case SubsystemKind.Railgun:
                 case SubsystemKind.TachyonLance: return SlotKind.HeavyMount;
                 case SubsystemKind.ShieldGenerator: return SlotKind.ShieldMount;
@@ -334,6 +350,8 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AutoTurret: return ModuleKind.AutoTurret;
                 case SubsystemKind.TorpedoTube: return ModuleKind.TorpedoTube;
                 case SubsystemKind.TachyonLance: return ModuleKind.TachyonLance;
+                case SubsystemKind.PhaserArray: return ModuleKind.PhaserArray;
+                case SubsystemKind.PlasmaCannon: return ModuleKind.PlasmaCannon;
                 default: return null;
             }
         }
@@ -693,7 +711,8 @@ namespace Unity.SpaceGod.Core
             var s = l.Slots[slot];
             // A tachyon lance goes only into a capital hull (U.SPC-T487).
             if (m == ModuleKind.TachyonLance && !TachyonLances.CanCarry(l.Class)) return false;
-            return ModuleSpec.Fits(m, s.Kind, s.BearsOnBow);
+            // A role-bound weapon (a phaser array, a plasma cannon) goes only on the hulls of its role (U.SPC-T488).
+            return ModuleSpec.Fits(m, s.Kind, s.BearsOnBow) && EnergyWeapons.RoleAllows(m, l.Class);
         }
 
         /// <summary>Whether the ship can be refitted at the yard now: a yard that lets it dock, out of battle and not boarded.</summary>

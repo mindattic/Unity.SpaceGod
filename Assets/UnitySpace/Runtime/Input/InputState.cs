@@ -106,6 +106,9 @@ namespace Unity.SpaceGod.Input
         /// goes back up to the helm.</summary>
         public bool ManGun;
 
+        /// <summary>While piloting in a fight (U.SPC-T488): Insert retunes the hull's phaser arrays, a narrow lance for hulls or a wide sweep for fighters and missiles.</summary>
+        public bool TunePhasers;
+
         /// <summary>While piloting: locks (or clears) the camera's tracking onto the hovered/selected
         /// ship. Shares its key with <see cref="ResetTime"/>, which is gated off while piloting so the
         /// two never fire together.</summary>
@@ -237,6 +240,7 @@ namespace Unity.SpaceGod.Input
             Pilot = kb.pKey.wasPressedThisFrame;
             CycleSeat = kb.quoteKey.wasPressedThisFrame ? 1 : kb.semicolonKey.wasPressedThisFrame ? -1 : 0;
             ManGun = kb.slashKey.wasPressedThisFrame;
+            TunePhasers = kb.insertKey.wasPressedThisFrame;
             ActivateGate = kb.yKey.wasPressedThisFrame;
             EngageFtl = kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame;
             ToggleFtlAutopilot = kb.endKey.wasPressedThisFrame;
@@ -277,6 +281,7 @@ namespace Unity.SpaceGod.Input
             CycleFtlTarget = 0;
             CycleSeat = 0;
             ManGun = false;
+            TunePhasers = false;
             NumberKey = -1;
         }
 

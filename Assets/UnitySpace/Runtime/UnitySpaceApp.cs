@@ -1657,6 +1657,9 @@ namespace Unity.SpaceGod
             UpdateSurrenderPrompts(ship.Battle, unit);
             // A capital ship's captain's orders: batteries, shields, brace, damage control, the line (U.SPC-T425).
             UpdateHelmCommand(ship.Battle, unit);
+            // The phaser arrays' tuning, on any hull that carries them (U.SPC-T488).
+            if (Input.TunePhasers && EnergyWeapons.HasPhasers(unit.Combat))
+                ShowToast("Phaser arrays tuned to a " + EnergyWeapons.Label(EnergyWeapons.Retune(unit.Combat)));
         }
 
         /// <summary>

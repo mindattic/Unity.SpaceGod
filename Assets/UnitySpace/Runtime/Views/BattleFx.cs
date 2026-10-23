@@ -239,6 +239,19 @@ namespace Unity.SpaceGod.Views
                     e.Color = Color.Lerp(faction, Color.white, 0.5f);
                     e.Life = 0.5f;
                     break;
+                case FxKind.Phaser:
+                case FxKind.PhaserMiss:
+                    // A phaser (U.SPC-T488): amber, tinted to the faction; a lance holds as one long hard line, a sweep
+                    // (low damage per pulse) is a brief thin flicker.
+                    e.Color = Color.Lerp(new Color(1f, 0.6f, 0.2f), faction, 0.2f) * (fx.Size > 50 ? 1.8f : 1.1f);
+                    e.Life = fx.Size > 50 ? 0.5f : 0.12f;
+                    break;
+                case FxKind.Plasma:
+                case FxKind.PlasmaMiss:
+                    // A plasma bolt (U.SPC-T488): a fat green-white slug of plasma that visibly crosses the gap.
+                    e.Color = Color.Lerp(new Color(0.4f, 1f, 0.5f), Color.white, 0.25f) * 2f;
+                    e.Life = 0.45f;
+                    break;
                 default:
                     return;
             }
@@ -295,6 +308,46 @@ namespace Unity.SpaceGod.Views
                 case FxKind.TachyonLanceMiss:
                     DrawLance(e, age, fade);
                     break;
+                case FxKind.Phaser:
+                case FxKind.PhaserMiss:
+                {
+                    // The beam lances out across the first fifth of its life, then holds and fades; it burns a bright
+                    // spot where it lands on a hull.
+                    var a = Point(e.Battle, e.A);
+                    var bFull = Point(e.Battle, e.B);
+                    var b = Vector3.Lerp(a, bFull, Mathf.Clamp01(age / Mathf.Max(e.Life * 0.2f, 1e-4f)));
+                    float px = e.Size > 50 ? 3.4f : 1.4f;
+                    Ribbon(a, b, px, e.Color * fade);
+                    Ribbon(a, b, px * 0.4f, Color.white * fade * 0.8f);
+                    if (e.Kind == FxKind.Phaser && e.Size > 0)
+                        Sprite(bFull, PixelSize(bFull, e.Size > 50 ? 11f : 5f) * (0.8f + 0.2f * Mathf.Sin(age * 60f)), e.Color * fade, Shape.Radial);
+                    break;
+                }
+                case FxKind.Plasma:
+                case FxKind.PlasmaMiss:
+                {
+                    // The bolt is a short fat streak with a glowing head that flies from the muzzle to where it lands over
+                    // the first two-thirds of its life, then bursts there (a hit) or flies on and fades (a miss).
+                    var a = Point(e.Battle, e.A);
+                    var bFull = Point(e.Battle, e.B);
+                    float flight = Mathf.Clamp01(t / 0.66f);
+                    var head = Vector3.Lerp(a, bFull, flight);
+                    var tail = Vector3.Lerp(a, bFull, Mathf.Max(0, flight - 0.18f));
+                    if (flight < 1)
+                    {
+                        Ribbon(tail, head, 5f, e.Color * 0.7f);
+                        Sprite(head, PixelSize(head, 14f), e.Color, Shape.Radial);
+                        if (age < 0.08f) Sprite(a, PixelSize(a, 18f) * (1 - age / 0.08f), Color.white, Shape.Radial);
+                    }
+                    else if (e.Kind == FxKind.Plasma)
+                    {
+                        float burst = (t - 0.66f) / 0.34f;
+                        // The splash grows with what the bolt still carried: a close shot blooms, a long one fizzles.
+                        float px = Mathf.Lerp(10f, 34f, Mathf.Clamp01((float)e.Size / 480f));
+                        Sprite(bFull, PixelSize(bFull, px) * (0.6f + burst), e.Color * (1 - burst), Shape.Radial);
+                    }
+                    break;
+                }
                 case FxKind.ShieldHit:
                     DrawShieldHit(e, t, fade);
                     break;

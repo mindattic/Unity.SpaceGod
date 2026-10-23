@@ -340,6 +340,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.PointDefense:
                 case SubsystemKind.ShieldGenerator:
                 case SubsystemKind.TachyonLance:
+                case SubsystemKind.PhaserArray:
                     return Good.Electronics;
                 case SubsystemKind.MissileLauncher:
                 case SubsystemKind.Torpedo:
@@ -481,6 +482,8 @@ namespace Unity.SpaceGod.Core
             {
                 case SubsystemKind.LaserTurret: return "laser turret";
                 case SubsystemKind.HeavyLaser: return "heavy laser";
+                case SubsystemKind.PhaserArray: return "phaser array";
+                case SubsystemKind.PlasmaCannon: return "plasma cannon";
                 case SubsystemKind.MissileLauncher: return "missile launcher";
                 case SubsystemKind.PointDefense: return "point-defence mount";
                 case SubsystemKind.FighterGuns: return "gun pack";

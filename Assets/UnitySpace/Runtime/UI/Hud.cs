@@ -915,7 +915,8 @@ namespace Unity.SpaceGod.UI
             string orders = "1 BATTERIES " + Order(Facing.Bow) + " " + Order(Facing.Starboard) + " " + Order(Facing.Stern) + " " + Order(Facing.Port)
                 + "    2 SHIELDS " + (cmd.ShieldTrim == null ? "even" : Facings.Label(cmd.ShieldTrim.Value))
                 + "    " + brace
-                + "    4 DAMAGE CONTROL " + Broadsides.Label(cmd.Focus) + " (" + Broadsides.Teams(me) + " teams)";
+                + "    4 DAMAGE CONTROL " + Broadsides.Label(cmd.Focus) + " (" + Broadsides.Teams(me) + " teams)"
+                + (EnergyWeapons.HasPhasers(me.Combat) ? "    INS PHASERS " + EnergyWeapons.Label(me.Combat.PhaserTuning) : "");
             DrawLabel(orders, new Vector2(x, y - 62), cmd.Braced ? LockColor : Dim, true);
             double turn = me.Ship != null ? PilotTuning.Of(me.Ship.Spec.Class).TurnRateDegS : me.Combat.Spec.TurnRateDegS;
             double radius = Broadsides.TurningRadiusKm(me.Vel.Length, turn);
@@ -3410,6 +3411,7 @@ namespace Unity.SpaceGod.UI
                 "   captain's orders, to the side you look at: 1 that battery at will / hold fire / volley   2 angle the shields there   3 brace   4 damage control focus",
                 "      5 line ahead  6 line abreast  7 echelon  8 screen  9 engage at will   0 all batteries at will   angle the hull to the enemy's line to make shots glance",
                 "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   an auto turret fires on its own",
+                "   Insert: retune the phaser arrays, a narrow lance for hulls or a wide sweep for fighters and missiles   a plasma cannon hits hardest close in",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "FTL  (capital ships, survey hulls)   beyond the system's outer rim, put the nose on another star, Enter to spool (hold it there), it engages for that star",

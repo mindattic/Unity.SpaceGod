@@ -75,6 +75,8 @@ Battleships are as big as carriers or bigger, so they never land on one.
 | Plasma Cannons | Short | Devastating, bleeds off over distance | Brawlers, gate breakers |
 | Antimatter / Photon Torpedoes | Medium | Heavy guided warheads | Frigates, capitals |
 
+Phaser arrays are tuned by beam shape, by the captain in battle, every array on the hull at once: a narrow lance that burns hulls at medium range, or a wide sweep that works like point defence against fighters and missiles close in. Plasma cannons lose damage evenly with the distance the bolt crosses (U.SPC-T488, `Core/Combat/EnergyWeapons.cs`).
+
 ## Realism rules, softened
 
 The game keeps the feel of real space and drops what would get in the way of play.
@@ -119,7 +121,6 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 | Lane interdictor, gate picket, lane tender and lane upkeep | Not yet classes (an interdiction pulse exists) | U.SPC-T479 to U.SPC-T481 |
 | Truss-and-pod freighters; ice hauler / ore tug | Not yet | U.SPC-T482, U.SPC-T483 |
 | Recon / EW fighter; boarding shuttle | Not yet classes (the interceptor, space superiority fighter and bomber are hulls of their own since U.SPC-T484) | U.SPC-T485, U.SPC-T486 |
-| Phaser arrays, plasma cannons | Not yet weapons | U.SPC-T488 |
 | Antimatter / photon torpedoes, flak, interceptor missiles | Not yet | U.SPC-T489 |
 | Dreadnought spinal mounts and rear-line doctrine | Not yet | U.SPC-T490 |
 | Radiators and heat on big ships | Not yet | U.SPC-T491 |

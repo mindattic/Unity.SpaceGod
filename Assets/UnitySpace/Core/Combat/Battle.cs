@@ -396,6 +396,15 @@ namespace Unity.SpaceGod.Core
         /// wide, violet-white line from the bow to what it struck.</summary>
         TachyonLance,
         TachyonLanceMiss,
+
+        /// <summary>A phaser array's beam (U.SPC-T488): Size is its damage, so a lance draws as one hard line and a
+        /// sweep as a thin flicker.</summary>
+        Phaser,
+        PhaserMiss,
+
+        /// <summary>A plasma cannon's bolt (U.SPC-T488): Size is the damage it landed with, after its bleed over distance.</summary>
+        Plasma,
+        PlasmaMiss,
     }
 
     /// <summary>Something to draw: a beam, a hit, an explosion. A and B are battle-local km.</summary>
@@ -1198,9 +1207,11 @@ namespace Unity.SpaceGod.Core
             bool braced = !Broadsides.Fires(u);
             // Which arcs' broadsides go this step, now every gun is as loaded as it will be (U.SPC-T425).
             Broadsides.BeginVolleys(u);
+            // The captain tunes the phaser arrays for the fight as it stands: a lance or a sweep (U.SPC-T488).
+            EnergyWeapons.Step(this, u);
             foreach (var s in c.Subsystems)
             {
-                var w = s.Def.Weapon;
+                var w = EnergyWeapons.Effective(s, c);
                 if (w == null || s.Destroyed) continue;
                 // A mount the player has taken is theirs to lay and fire, reloading or not (U.SPC-T18).
                 if (Manned.Count > 0 && Manned.TryGetValue(s, out var manned))
@@ -1238,7 +1249,7 @@ namespace Unity.SpaceGod.Core
                                 Emit(FxKind.MissileKill, missile.Pos, missile.Pos, 0.08, missile.Side, null, -1);
                             }
                         }
-                        Emit(FxKind.PointDefense, origin, missile.Pos, 0, u.Side, u, s.Index);
+                        Emit(EnergyWeapons.FxOf(s.Kind, true) ?? FxKind.PointDefense, origin, missile.Pos, 0, u.Side, u, s.Index);
                         continue;
                     }
                 }
@@ -1345,7 +1356,8 @@ namespace Unity.SpaceGod.Core
                 double falloff = w.Lance ? 1 : 1 - 0.4 * dist / w.RangeKm;
                 double chance = w.Accuracy * accuracyScale * size * falloff * (volley > 1 ? 1 + Broadsides.CrewVolleyAccuracyBonus : 1);
                 bool hit = rng.NextDouble() < chance;
-                var kind = s.Kind == SubsystemKind.FighterGuns || s.Kind == SubsystemKind.Autocannon || s.Kind == SubsystemKind.AutoTurret ? FxKind.Guns
+                var kind = EnergyWeapons.FxOf(s.Kind, hit) is FxKind energy ? energy
+                    : s.Kind == SubsystemKind.FighterGuns || s.Kind == SubsystemKind.Autocannon || s.Kind == SubsystemKind.AutoTurret ? FxKind.Guns
                     : w.AntiSmall ? FxKind.PointDefense
                     : w.Lance ? (hit ? FxKind.TachyonLance : FxKind.TachyonLanceMiss)
                     : s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
@@ -1361,8 +1373,10 @@ namespace Unity.SpaceGod.Core
 
                 if (hit)
                 {
-                    Emit(kind, origin, aimPoint, w.Damage * volley, u.Side, target, sub?.Index ?? -1);
-                    ApplyDamage(target, sub, w.Damage * volley, aimPoint, null, small ? WeakPoints.Factor(target, sub, aimPoint - origin) : 1, aimPoint - origin);
+                    // A plasma bolt bleeds off over the distance it crossed (U.SPC-T488); every other beam hits as hard at any range.
+                    double landed = w.DamageAt(dist) * volley;
+                    Emit(kind, origin, aimPoint, landed, u.Side, target, sub?.Index ?? -1);
+                    ApplyDamage(target, sub, landed, aimPoint, null, small ? WeakPoints.Factor(target, sub, aimPoint - origin) : 1, aimPoint - origin);
                 }
                 else
                 {
@@ -1530,12 +1544,14 @@ namespace Unity.SpaceGod.Core
             double t = FirstHostileAlong(u.Side, origin, dir, w.RangeKm, out var hit);
             if (hit == null)
             {
-                Emit(w.AntiSmall ? FxKind.PointDefense : w.Lance ? FxKind.TachyonLanceMiss : FxKind.BeamMiss, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
+                Emit(EnergyWeapons.FxOf(s.Kind, false) ?? (w.AntiSmall ? FxKind.PointDefense : w.Lance ? FxKind.TachyonLanceMiss : FxKind.BeamMiss), origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
                 return;
             }
             var at = origin + dir * t;
             var sub = SubsystemNear(hit, at);
-            Emit(w.AntiSmall ? FxKind.PointDefense : w.Lance ? FxKind.TachyonLance : FxKind.Beam, origin, at, damage, u.Side, hit, sub?.Index ?? -1);
+            // A plasma bolt bleeds off over the distance it crossed (U.SPC-T488).
+            if (w.FalloffEdgeShare < 1 && w.Damage > 0) damage *= w.DamageAt(t) / w.Damage;
+            Emit(EnergyWeapons.FxOf(s.Kind, true) ?? (w.AntiSmall ? FxKind.PointDefense : w.Lance ? FxKind.TachyonLance : FxKind.Beam), origin, at, damage, u.Side, hit, sub?.Index ?? -1);
             ApplyDamage(hit, sub, damage, at, null, WeakPoints.IsSmallCraft(u) ? WeakPoints.Factor(hit, sub, dir) : 1, dir);
         }
 
@@ -1974,6 +1990,8 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.LightRailgun:
                     case SubsystemKind.AutoTurret:
                     case SubsystemKind.TorpedoTube:
+                    case SubsystemKind.PhaserArray:
+                    case SubsystemKind.PlasmaCannon:
                     case SubsystemKind.MissileLauncher: w = 3; break;
                     // The gun that outranges them all is the one gunners most want silenced (U.SPC-T487).
                     case SubsystemKind.TachyonLance: w = 4; break;

@@ -120,6 +120,30 @@ namespace Unity.SpaceGod.Rendering
                         b.Box(new Vector3(0, 0.023f, -0.01f), new Vector3(0.03f, 0.006f, 0.024f), b.Accent);
                     }
                     break;
+                case SubsystemKind.PhaserArray:
+                    // A phaser array (U.SPC-T488): no barrel to traverse, a long low emitter strip laid along the hull
+                    // with a glowing amber collimator band down its length, and the beam can leave from any point of it.
+                    b.Box(new Vector3(0, 0.004f, 0), new Vector3(0.07f, 0.008f, 0.02f), b.Hull);
+                    b.Box(new Vector3(0, 0.009f, 0), new Vector3(0.064f, 0.003f, 0.008f), b.Glow(new Color(1f, 0.62f, 0.25f)));
+                    b.Box(new Vector3(-0.036f, 0.006f, 0), new Vector3(0.006f, 0.01f, 0.024f), b.Dark);
+                    b.Box(new Vector3(0.036f, 0.006f, 0), new Vector3(0.006f, 0.01f, 0.024f), b.Dark);
+                    break;
+                case SubsystemKind.PlasmaCannon:
+                    // A plasma cannon (U.SPC-T488): a squat armoured turret, one short fat barrel ringed by the magnetic
+                    // bottle's glowing green coils that hold the bolt together until it leaves.
+                    if (barrels)
+                    {
+                        b.Cylinder(new Vector3(0, 0, 0.034f), 0.0085f, 0.06f, b.Dark);
+                        b.Cylinder(new Vector3(0, 0, 0.022f), 0.0105f, 0.006f, b.Glow(new Color(0.45f, 1f, 0.55f)));
+                        b.Cylinder(new Vector3(0, 0, 0.044f), 0.0105f, 0.006f, b.Glow(new Color(0.45f, 1f, 0.55f)));
+                        b.Box(new Vector3(0, 0, 0.002f), new Vector3(0.03f, 0.016f, 0.02f), b.Hull);
+                    }
+                    else
+                    {
+                        b.Box(new Vector3(0, 0.011f, 0), new Vector3(0.058f, 0.024f, 0.058f), b.Hull);
+                        b.Box(new Vector3(0, 0.024f, -0.014f), new Vector3(0.026f, 0.006f, 0.02f), b.Accent);
+                    }
+                    break;
                 case SubsystemKind.Railgun:
                     // Fixed spinal gun, not a turret: one long rail barrel on a bulky capacitor base,
                     // with a glowing coil band where the round gets its final kick.

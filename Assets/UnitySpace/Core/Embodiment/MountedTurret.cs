@@ -69,7 +69,9 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AutoTurret: return 120;
                 case SubsystemKind.Autocannon:
                 case SubsystemKind.FighterGuns: return 90;
-                case SubsystemKind.LaserTurret: return 45;
+                case SubsystemKind.LaserTurret:
+                case SubsystemKind.PhaserArray: return 45;
+                case SubsystemKind.PlasmaCannon: return 20;
                 case SubsystemKind.LightRailgun: return 30;
                 case SubsystemKind.HeavyLaser: return 25;
                 case SubsystemKind.Railgun: return 10;

@@ -55,6 +55,13 @@ namespace Unity.SpaceGod.Core
         /// instant it is fired, at the longest reach of any gun, but it is fixed down the bow, charges slowly and starves
         /// the shields while it does.</summary>
         TachyonLance,
+
+        /// <summary>A phaser-style beam array (U.SPC-T488): a versatile medium-range energy weapon its captain tunes in battle,
+        /// a narrow lance for hulls or a wide sweep for fighters and missiles (see <see cref="EnergyWeapons"/>).</summary>
+        PhaserArray,
+
+        /// <summary>A plasma cannon (U.SPC-T488): a devastating short-range bolt whose damage bleeds off over distance.</summary>
+        PlasmaCannon,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
@@ -88,6 +95,18 @@ namespace Unity.SpaceGod.Core
         /// <summary>The tachyon lance: the longest reach of any gun and a hit second only to a capital torpedo, landing
         /// the instant it is fired, on a long recharge. Its figures are the <see cref="TachyonLances"/> settings'.</summary>
         public static readonly WeaponSpec TachyonLance = new WeaponSpec { RangeKm = 60, Damage = 650, Cooldown = 60, Accuracy = 0.95, Lance = true };
+        /// <summary>The share of <see cref="Damage"/> a shot still does at the very edge of <see cref="RangeKm"/>, falling off
+        /// evenly from full at the muzzle (a plasma bolt bleeding off over distance, U.SPC-T488); 1, the default, for a weapon
+        /// that hits as hard at any range.</summary>
+        public double FalloffEdgeShare = 1;
+
+        /// <summary>What a shot does landing <paramref name="km"/> from the muzzle (see <see cref="FalloffEdgeShare"/>).</summary>
+        public double DamageAt(double km)
+        {
+            if (FalloffEdgeShare >= 1 || RangeKm <= 0) return Damage;
+            double f = Math.Max(0, Math.Min(1, km / RangeKm));
+            return Damage * (1 - (1 - Math.Max(0, FalloffEdgeShare)) * f);
+        }
 
         public static readonly WeaponSpec Laser = new WeaponSpec { RangeKm = 16, Damage = 45, Cooldown = 3.0, Accuracy = 0.8 };
         public static readonly WeaponSpec Heavy = new WeaponSpec { RangeKm = 24, Damage = 190, Cooldown = 9.0, Accuracy = 0.72 };
@@ -227,6 +246,8 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.TorpedoTube: return 280;
                 case SubsystemKind.Countermeasures: return 30;
                 case SubsystemKind.TachyonLance: return 450;
+                case SubsystemKind.PhaserArray: return 260;
+                case SubsystemKind.PlasmaCannon: return 400;
                 default: return 200;
             }
         }
@@ -251,6 +272,8 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.TorpedoTube: return WeaponSpec.HeavyTorpedo;
                 case SubsystemKind.Countermeasures: return WeaponSpec.Flares;
                 case SubsystemKind.TachyonLance: return TachyonLances.Spec;
+                case SubsystemKind.PhaserArray: return EnergyWeapons.PhaserLance;
+                case SubsystemKind.PlasmaCannon: return EnergyWeapons.PlasmaCannon;
                 default: return null;
             }
         }
@@ -280,6 +303,8 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.TorpedoTube: return "Torpedo tube";
                 case SubsystemKind.Countermeasures: return "Countermeasures";
                 case SubsystemKind.TachyonLance: return "Tachyon lance";
+                case SubsystemKind.PhaserArray: return "Phaser array";
+                case SubsystemKind.PlasmaCannon: return "Plasma cannon";
                 default: return "Reactor";
             }
         }

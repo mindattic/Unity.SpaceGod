@@ -79,6 +79,10 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public double Readiness = 1;
 
+        /// <summary>How the captain has tuned the hull's phaser arrays (U.SPC-T488, <see cref="EnergyWeapons"/>): a narrow lance
+        /// for hulls or a wide sweep for fighters and missiles, all its arrays at once.</summary>
+        public PhaserTuning PhaserTuning;
+
         /// <param name="hull">The ship class, or null for a defence platform.</param>
         public ShipCombat(CombatSpec spec, ShipClass? hull = null) : this(spec, hull, null) { }
 
@@ -113,6 +117,7 @@ namespace Unity.SpaceGod.Core
                 Fighters = Math.Min(spec.Squadrons * 6, Fighters),
                 BoostFraction = BoostFraction,
                 Readiness = Readiness,
+                PhaserTuning = PhaserTuning,
             };
             for (int i = 0; i < c.Subsystems.Count && i < Subsystems.Count; i++)
             {
