@@ -27,7 +27,7 @@ This is a universe, not a product. There is no ship date, no feature freeze and 
 
 - **Alive.** Civilisations are simulated, not scripted: they found colonies, grow, specialise, form and break alliances, fight, and die out. (Civilisation dynamics: U.SPC-T396 to U.SPC-T409.)
 - **Continuous and flyable.** Space between stars is real space. A pilot can fly from one end of the galaxy to the other, given long enough. (Flight and galaxy: U.SPC-T412 to U.SPC-T415.)
-- **Travel like I-War 2.** Between stars you point at a place, engage the FTL drive and, eventually, arrive. Most traffic uses jump gates, which are fast shortcuts; capital ships and deep-space explorers can cross between stars under their own power. (FTL: U.SPC-T417 to U.SPC-T421.)
+- **Travel like I-War 2.** Between stars you point at a place, engage the FTL drive and, eventually, arrive. Most traffic uses jump gates, which are fast shortcuts; capital ships and deep-space explorers can cross between stars under their own power. (FTL: U.SPC-T417 to U.SPC-T421.) The full roster of ships and the three travel layers (gates, self-contained FTL, hyper lanes) are in [SHIP_ROSTER.md](SHIP_ROSTER.md).
 
 ## The five games
 

@@ -533,6 +533,7 @@ Planned, from the open tickets in [docs/USER_STORIES.md](docs/USER_STORIES.md):
 - [Assets/UnitySpace/Core/Systems/SOURCES.md](Assets/UnitySpace/Core/Systems/SOURCES.md): Alpha Centauri, nearby stars, spacecraft orbits and ring sites, with the assumptions made.
 - [docs/FLIGHT_MODELS.md](docs/FLIGHT_MODELS.md): how each family of craft flies, the flight-model extension point, and the plan for the families still to come.
 - [docs/EMBODIMENT.md](docs/EMBODIMENT.md): taking charge of anything (a ship's helm, a fighter, a gun mount), the one extension point every kind of seat plugs into, and switching between seats from the strategy view.
+- [docs/SHIP_ROSTER.md](docs/SHIP_ROSTER.md): the ship roster and doctrine canon: the three travel layers, every class and who has its own FTL, the weapons by tier, the softened realism rules and the two fleet doctrines.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repo.
 
 ## License
