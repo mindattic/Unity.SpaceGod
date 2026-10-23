@@ -263,5 +263,17 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(drive.SpoolDays, Is.EqualTo(drive.RatedSpoolDays));
             Assert.That(FtlRules.PropellantFor(drive, ship, 50), Is.GreaterThan(0));
         }
+
+        [Test]
+        public void FirstEntry_FindsAFieldTheStretchEndsInside()
+        {
+            var from = default(GalacticPosition);
+            var to = default(GalacticPosition).Offset(new DVec3(3e9, 0, 0));
+            var field = new GravityField("Projector", GravityFieldKind.Projector, from.Offset(new DVec3(2.5e9, 0, 0)), 2e9);
+            Assert.That(FtlRules.FirstEntry(from, to, new[] { field }, out _, out double along), Is.True, "ends inside the field");
+            Assert.That(along, Is.EqualTo(0.5 / 3).Within(1e-9));
+            var inside = from.Offset(new DVec3(2.5e9, 0, 0));
+            Assert.That(FtlRules.FirstEntry(inside, to, new[] { field }, out _, out _), Is.False, "a stretch that starts inside enters nothing");
+        }
     }
 }

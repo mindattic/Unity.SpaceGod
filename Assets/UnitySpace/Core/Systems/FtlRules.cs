@@ -259,7 +259,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// The first field among <paramref name="fields"/> the straight run from <paramref name="from"/> to <paramref name="to"/>
-        /// enters (not one either end is already inside), and how far along the run (0..1) it is entered. False if none.
+        /// enters (not one the run starts inside; one it ends inside is entered on the way), and how far along the run (0..1) it is entered. False if none.
         /// </summary>
         public static bool FirstEntry(GalacticPosition from, GalacticPosition to, IEnumerable<GravityField> fields, out GravityField hit, out double along)
         {
@@ -275,7 +275,6 @@ namespace Unity.SpaceGod.Core
                 var c = f.Center.KmFrom(from);
                 double r2 = f.RadiusKm * f.RadiusKm;
                 if (c.LengthSquared <= r2) continue;
-                if ((c - d).LengthSquared <= r2) continue;
                 // |t d - c| = r: the nearer root, if it is on the run.
                 double b = DVec3.Dot(c, d) / len2;
                 if (b <= 0 || b >= 1 + f.RadiusKm / len) continue;
