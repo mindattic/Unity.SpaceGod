@@ -471,12 +471,18 @@ namespace Unity.SpaceGod.Core.Tests
         public void ATankerChargesACallOutFeeAndAPremiumAndAShipKeepsItsTanksThroughAJumpGate()
         {
             Assert.That(Propulsion.TankerFee(1000), Is.GreaterThan(1000 * Propulsion.PropellantBasePrice * 2));
-            var ship = Freighter();
-            ship.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
+
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Systems[0];
+            var ac = g.Systems[1];
+            var ship = sol.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort);
             ship.Propellant = 1234;
-            var gate = typeof(Ship).GetMethod("CloneForGateArrival", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var copy = (Ship)gate.Invoke(ship, null);
-            Assert.That(copy.Propellant, Is.EqualTo(1234));
+
+            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
+
+            // The same hull crosses (U.SPC-T453, never a copy), tanks and all.
+            Assert.That(arrived, Is.SameAs(ship));
+            Assert.That(arrived.Propellant, Is.EqualTo(1234));
         }
     }
 }

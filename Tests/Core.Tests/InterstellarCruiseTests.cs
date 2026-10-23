@@ -343,6 +343,7 @@ namespace Unity.SpaceGod.Core.Tests
             var ship = Free();
             Assume.That(ship, Is.Not.Null, "no warship came free to send");
             string name = ship.Name;
+            int originId = ship.Id;
             var v = g.Traffic.SendByCruise(ship, sol, ac, VoyagePurpose.Expedition, jd);
             Assert.That(v, Is.Not.Null);
             Assert.That(v.ByCruise, Is.True);
@@ -353,7 +354,13 @@ namespace Unity.SpaceGod.Core.Tests
             jd = RunUntil(g, jd, 40, () => g.DeepSpace.Cruises.Any(c => c.Leader.Name == name));
             var cruise = g.DeepSpace.Cruises.FirstOrDefault(c => c.Leader.Name == name);
             Assert.That(cruise, Is.Not.Null, "it never engaged its drive");
-            Assert.That(ship.Destroyed && ship.GateDeparted, Is.True, "the hull that left Sol is retired there");
+            // The same hull is out there cruising (U.SPC-T453, never a copy): it left Sol's own fleet list, a gone
+            // marker left in its old slot so no other id there moves.
+            Assert.That(cruise.Leader, Is.SameAs(ship));
+            Assert.That(ship.Destroyed, Is.False, "the hull itself is alive and cruising, not a retired husk");
+            Assert.That(sol.World.Fleet.Ships[originId], Is.Not.SameAs(ship));
+            Assert.That(sol.World.Fleet.Ships[originId].Destroyed && sol.World.Fleet.Ships[originId].GateDeparted, Is.True,
+                "its old slot in Sol's fleet is left a gone marker");
             Assert.That(g.Traffic.InTransit().Any(s => s.Name == name), Is.True);
             Assert.That(cruise.Leader.Voyage, Is.SameAs(v));
 

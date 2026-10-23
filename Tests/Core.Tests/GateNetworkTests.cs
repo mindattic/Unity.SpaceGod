@@ -290,7 +290,10 @@ namespace Unity.SpaceGod.Core.Tests
             jd = RunUntil(g, jd, 120, () => At(tau) != null);
             var there = At(tau);
             Assert.That(there, Is.Not.Null, "never reached Tau Ceti");
-            Assert.That(ship.Destroyed && ship.GateDeparted, Is.True, "the hull that left Sol is retired there");
+            // The same hull the whole way (U.SPC-T453, never a copy), alive at Tau Ceti; each system it merely
+            // passed through keeps a gone marker under its name instead.
+            Assert.That(there, Is.SameAs(ship));
+            Assert.That(ship.Destroyed, Is.False);
             foreach (var w in waypoints)
                 Assert.That(w.World.Fleet.Ships.Any(x => x.Name == name && x.GateDeparted), Is.True, "passed through " + w.Name);
             Assert.That(there.Voyage.Purpose, Is.EqualTo(VoyagePurpose.Survey));
@@ -322,8 +325,10 @@ namespace Unity.SpaceGod.Core.Tests
             var behind = escorts.Take(2).ToList();
             foreach (var e in behind) e.Battle = fight;
 
-            RunUntil(g, jd, 120, () => raider.GateDeparted);
-            Assert.That(raider.GateDeparted, Is.True, "the raider never went through the gate");
+            // The raider is the same hull all the way (U.SPC-T453, never a copy): it never goes through Destroyed and
+            // GateDeparted the way the husk it leaves behind does, it simply turns up in the far fleet.
+            RunUntil(g, jd, 120, () => ac.World.Fleet.Ships.Contains(raider));
+            Assert.That(ac.World.Fleet.Ships, Does.Contain(raider), "the raider never went through the gate");
             Assert.That(behind.All(e => !e.Destroyed), Is.True, "the escorts left fighting went with it");
             Assert.That(sol.World.Fleet.Ships.Any(s => !s.Destroyed && s.Leader == raider), Is.False,
                 "escorts left behind are still tied to a flagship that has gone through the gate");

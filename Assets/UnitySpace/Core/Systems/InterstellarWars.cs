@@ -27,7 +27,7 @@ namespace Unity.SpaceGod.Core
     /// over the gate graph (<see cref="GateNetwork.Route"/>, forcing gates the enemy holds), fights each such gate's forts
     /// and holds the gate until it is taken, then, in the goal system, breaks the platforms and warships over each enemy
     /// settlement and lands its marines to take it. The flagship carries the campaign on its <see cref="Voyage"/>, so it
-    /// survives the gates' copying a hull from one system to the next and a flagship lost to its heir.
+    /// survives the gates' carrying a hull from one system to the next and a flagship lost to its heir.
     /// </summary>
     public sealed class Campaign
     {

@@ -840,9 +840,9 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void AGateDepartedShipsStandingOrderIsDroppedNotKeptForever()
         {
-            // GateTransit's instant crossing of the player's own flown ship sets Destroyed and GateDeparted directly,
-            // without calling War.Forget the way InterstellarTraffic's AI gate crossing does (U.SPC-T311): any order
-            // or cooldown book still naming that ship must still be cleared some other way, or it never is.
+            // A hull marked gone both ways without a War.Forget call to clear it (U.SPC-T311) -- the mark left behind
+            // in a fleet's own list for a ship that went on elsewhere (a gate's gone marker, U.SPC-T453, or some other
+            // retirement) -- must still have any order or cooldown book naming it cleared some other way, or it never is.
             var w = CreateWorld();
             var f = MakeFaction(w, "Departed Navy");
             var ship = ParkWarship(w, f, ShipClass.Destroyer, w.Catalog["Pluto"].Index);

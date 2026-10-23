@@ -7,8 +7,8 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// A group (flagship first, then its escorts) crossing open space between the stars under its own cruise drive
     /// (U.SPC-T412, see <see cref="CruiseDriveSpec"/>). Like a ship inside a gate it belongs to no system's fleet while it
-    /// is out here (its hulls in the system it left were retired and these are their copies, see
-    /// <see cref="GateTransit"/> for why), but unlike a gate passage it is somewhere the whole way: a real place in the
+    /// is out here (the same hulls that left the system behind, a gone marker left in their old slots, see
+    /// <see cref="Fleet.LetGo"/>), but unlike a gate passage it is somewhere the whole way: a real place in the
     /// galaxy (<see cref="PositionAt"/>), moving at a real speed, where it can meet other groups and find what lies out
     /// here, and from where it flies into the far system at the edge of its star's well.
     /// </summary>
@@ -237,7 +237,7 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// Puts <paramref name="ships"/> (copies, flagship first, already out of every fleet) into open space at
+        /// Puts <paramref name="ships"/> (the same hulls, flagship first, already out of every fleet) into open space at
         /// <paramref name="fromKm"/> in <paramref name="from"/> (km from its root), bound for <paramref name="to"/> on
         /// <paramref name="drive"/>; it charges from <paramref name="jd"/> (or engages at once if already <paramref name="charged"/>).
         /// </summary>
@@ -368,6 +368,9 @@ namespace Unity.SpaceGod.Core
             var right = DVec3.Cross(forward, up).Normalized;
             foreach (var s in c.Ships)
             {
+                // Still exactly as it was engaging its drive (U.SPC-T453: the same object, never reset mid-flight)
+                // until now, dropping out at the edge of this system's well.
+                s.ResetForArrival();
                 s.Orbit = new ParkingOrbit
                 {
                     Body = system.Catalog.Root.Index, RadiusKm = 0, Center = at, U = right, V = forward,

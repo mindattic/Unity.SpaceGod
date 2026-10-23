@@ -38,7 +38,7 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// One ship's (or group's) trip across the gate network: where it belongs, where it is bound,
     /// the gates to take, and what it does when it gets there. Kept on the flagship
-    /// (<see cref="Ship.Voyage"/>), and carried over to each copy the gates make of it.
+    /// (<see cref="Ship.Voyage"/>), the same object all the way (U.SPC-T453).
     /// </summary>
     public sealed class Voyage
     {
@@ -138,7 +138,7 @@ namespace Unity.SpaceGod.Core
     /// <summary>A ship (and its escorts) inside a gate, between leaving one system and coming out in the next.</summary>
     public sealed class Passage
     {
-        /// <summary>Flagship first, then its escorts (the copies that will come out at the far end).</summary>
+        /// <summary>Flagship first, then its escorts: the same hulls that will come out at the far end (U.SPC-T453).</summary>
         public readonly List<Ship> Ships = new List<Ship>();
         public JumpGate From, To;
         public double EnterJd, ExitJd;
@@ -159,10 +159,10 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// The traffic between the star systems. Every system runs its own world and nothing else is
     /// shared, so a ship crosses by flying to one of its system's gates (a burn to the gate's fixed
-    /// point, see <see cref="Ship.GateKm"/>), going in (the hull is retired where it was, as the
-    /// piloted crossing does; see <see cref="GateTransit"/>), spending <see cref="GateNetwork.TransitDays"/>
-    /// in the gate (a <see cref="Passage"/>), and coming out as a copy in the next system's fleet, at
-    /// the far gate. A route of several gates crosses each system between them gate to gate.
+    /// point, see <see cref="Ship.GateKm"/>), going in (the hull itself leaves its fleet's list, a gone
+    /// marker left in its place, as the piloted crossing does; see <see cref="GateTransit"/>, <see cref="Fleet.LetGo"/>),
+    /// spending <see cref="GateNetwork.TransitDays"/> in the gate (a <see cref="Passage"/>), and coming out the
+    /// same hull in the next system's fleet, at the far gate. A route of several gates crosses each system between them gate to gate.
     ///
     /// Each day it sends out what the settled systems would: freighters carrying a good to another
     /// system's market when the price gap there beats the cost of the trip, gate tolls included
@@ -446,7 +446,11 @@ namespace Unity.SpaceGod.Core
             Enter(system, ship, gate, when);
         }
 
-        /// <summary>Retires the group here and puts copies of it in the gate, bound for the far end.</summary>
+        /// <summary>
+        /// Takes the group itself (never copies, U.SPC-T453) out of the fleet here and into the gate, bound for the
+        /// far end: each hull the same object all the way, <see cref="Fleet.LetGo"/> leaving a gone marker in its old
+        /// slot so no other id here moves.
+        /// </summary>
         void Enter(StarSystem system, Ship leader, JumpGate gate, double jd)
         {
             var v = leader.Voyage;
@@ -470,30 +474,29 @@ namespace Unity.SpaceGod.Core
             world.Economy.Release(leader);
 
             var p = new Passage { From = gate, To = gate.Partner, EnterJd = jd, ExitJd = jd + link.TransitDays, News = News.Bundle(system, jd) };
-            var copy = CopyOf(leader);
-            copy.Voyage = v;
-            copy.Role = leader.Role;
-            p.Ships.Add(copy);
+            p.Ships.Add(leader);
+            var going = new List<Ship>();
             foreach (var e in world.Fleet.Ships)
             {
                 // An escort still fighting, or left a hulk, stays behind.
                 if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict) continue;
-                var ec = CopyOf(e);
-                ec.Role = ShipRole.Escort;
-                ec.Leader = copy;
-                ec.FormationSlot = e.FormationSlot;
-                p.Ships.Add(ec);
+                going.Add(e);
+            }
+            foreach (var e in going)
+            {
+                p.Ships.Add(e);
                 if (world.Escorts != null && world.Escorts.IsHired(e))
                 {
-                    p.Hired.Add(ec);
+                    p.Hired.Add(e);
                     world.Escorts.UnmarkHired(e);
                 }
-                Retire(world, e);
+                world.War?.Forget(e);
+                world.Fleet.LetGo(e);
+                // The same leader it was flying with, still the one going along with it, orbit and all until it
+                // too is reset at the far gate (Ship.ResetForArrival, in Emerge).
+                e.Leader = leader;
             }
-            Retire(world, leader);
-            // Those left behind (U.SPC-T310) are no longer its escorts: they carry on here under the strongest of them,
-            // rather than holding station for ever on a hull that has gone. A hunter's place on the boards goes with it.
-            world.War?.HandOverCommand(leader, keepHunter: v.Purpose == VoyagePurpose.Hunt);
+            DepartLeader(world, leader, v);
             inGates.Add(p);
             Crossings++;
             LogCrossing(new GateCrossing
@@ -506,21 +509,28 @@ namespace Unity.SpaceGod.Core
             world.Log(jd, $"{leader.Name}{group} enter{(p.Ships.Count > 1 ? "" : "s")} the {gate.Name} for {gate.Destination.Name}", WorldEventKind.Info, system.Catalog.Root.Index);
         }
 
-        static Ship CopyOf(Ship s)
+        /// <summary>
+        /// Takes <paramref name="leader"/> itself out of <paramref name="world"/>'s fleet (U.SPC-T453), whether bound
+        /// for a gate or across open space under its own drive: its orders here are for a hull no longer here
+        /// (U.SPC-T311), and those left behind (U.SPC-T310) are no longer its escorts, so they carry on under the
+        /// strongest of them rather than holding station for ever on a hull that has gone -- a hunter's place on the
+        /// boards goes with it. The hand-over reads the leader's own state (route, orbit, journey) to pass to any
+        /// such heir, so <see cref="Fleet.LetGo"/> (which clears some of it) comes after, and the voyage is masked
+        /// off first so a stay-behind heir starts fresh rather than inheriting a journey it never asked for; the
+        /// caller gets the same object back, ready to cross, with its own voyage restored, everything else about it
+        /// (orbit included) still exactly as it was here until <see cref="Ship.ResetForArrival"/> at the far end.
+        /// </summary>
+        static void DepartLeader(World world, Ship leader, Voyage v)
         {
-            var c = s.CloneForGateArrival();
-            c.Role = s.Role;
-            return c;
-        }
-
-        static void Retire(World world, Ship s)
-        {
-            // Its orders here are for a ship no longer here (U.SPC-T311): the copy in the gate takes up its own beyond it.
-            world.War?.Forget(s);
-            s.Destroyed = true;
-            s.GateDeparted = true;
-            s.Voyage = null;
-            s.GateKm = null;
+            world.War?.Forget(leader);
+            leader.GateKm = null;
+            leader.Voyage = null;
+            // The old flagship's hold goes with the hull that is actually leaving, not a stay-behind heir.
+            leader.Destroyed = true;
+            world.War?.HandOverCommand(leader, keepHunter: v.Purpose == VoyagePurpose.Hunt);
+            leader.Destroyed = false;
+            world.Fleet.LetGo(leader);
+            leader.Voyage = v;
         }
 
         /// <summary>Out of the far gate: into that system's fleet, then on to the next gate or to the voyage's business there.</summary>
@@ -542,6 +552,9 @@ namespace Unity.SpaceGod.Core
             };
             foreach (var s in p.Ships)
             {
+                // Still exactly as it was leaving the last system (U.SPC-T453: the same object, never reset in
+                // transit) until now, arriving at this one.
+                s.ResetForArrival();
                 s.Orbit = AtGate();
                 s.Phase = ShipPhase.Parked;
                 s.PhaseStartJd = jd;
@@ -647,8 +660,8 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// At the edge of the well: the group's hulls with a drive go out into open space together, as copies (the ones
-        /// here retired, as at a gate); escorts that cannot cross on their own stay behind under the strongest of them.
+        /// At the edge of the well: the group's hulls with a drive go out into open space together, the same objects
+        /// (U.SPC-T453), never copies; escorts that cannot cross on their own stay behind under the strongest of them.
         /// </summary>
         void EngageCruise(StarSystem system, Ship leader, double jd)
         {
@@ -666,30 +679,30 @@ namespace Unity.SpaceGod.Core
             world.Economy.Release(leader);
             var at = leader.Orbit != null ? leader.Orbit.OffsetAt(jd) : leader.GateKm ?? DVec3.Zero;
 
-            var ships = new List<Ship>();
+            var ships = new List<Ship> { leader };
             var hired = new HashSet<Ship>();
-            var copy = CopyOf(leader);
-            copy.Voyage = v;
-            copy.Role = leader.Role;
-            ships.Add(copy);
+            var going = new List<Ship>();
             foreach (var e in world.Fleet.Ships)
             {
                 // An escort still fighting, left a hulk, or with no drive of its own, stays behind.
                 if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict || !CanCruise(e)) continue;
-                var ec = CopyOf(e);
-                ec.Role = ShipRole.Escort;
-                ec.Leader = copy;
-                ec.FormationSlot = e.FormationSlot;
-                ships.Add(ec);
+                going.Add(e);
+            }
+            foreach (var e in going)
+            {
+                ships.Add(e);
                 if (world.Escorts != null && world.Escorts.IsHired(e))
                 {
-                    hired.Add(ec);
+                    hired.Add(e);
                     world.Escorts.UnmarkHired(e);
                 }
-                Retire(world, e);
+                world.War?.Forget(e);
+                world.Fleet.LetGo(e);
+                // The same leader it was flying with, still the one going along with it, orbit and all until it
+                // too is reset dropping out of cruise (Ship.ResetForArrival, in DeepSpace.Drop).
+                e.Leader = leader;
             }
-            Retire(world, leader);
-            world.War?.HandOverCommand(leader, keepHunter: v.Purpose == VoyagePurpose.Hunt);
+            DepartLeader(world, leader, v);
 
             var news = News.Bundle(system, jd);
             var c = star != null
@@ -757,8 +770,10 @@ namespace Unity.SpaceGod.Core
             ship.Route = v.HomeRoute;
             ship.RouteIndex = 0;
             ship.Ports = v.HomePorts ?? ship.Ports;
-            // A bounty hunter takes up its old place on the home boards (U.SPC-T94).
-            if (v.Purpose == VoyagePurpose.Hunt && v.Origin != null) system.World.Outlaws?.OnSuccession(v.Origin, ship);
+            // A bounty hunter takes up its old place on the home boards (U.SPC-T94). The hull that set out is the one
+            // coming home now (U.SPC-T453: the same object the whole trip) unless it was lost abroad and an escort
+            // took the hunt on as heir, so this only rebinds the hunter's row when that actually happened.
+            if (v.Purpose == VoyagePurpose.Hunt && v.Origin != null && v.Origin != ship) system.World.Outlaws?.OnSuccession(v.Origin, ship);
             // A smuggler back with goods it could not sell puts them back in the haven's stores.
             if (ship.Runner && ship.Plunder != null && system.World.War.LiveHavenOf(ship.Faction) is Settlement haven)
             {

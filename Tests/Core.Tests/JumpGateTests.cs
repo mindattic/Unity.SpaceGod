@@ -80,12 +80,13 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void TransitRetiresTheOriginHullAndAppendsAnArrivedCopyToTheDestinationFleet()
+        public void TransitTakesTheSameHullOutOfTheOriginFleetAndIntoTheDestinationFleet()
         {
             var g = Create();
             var sol = g.Systems[0];
             var ac = g.Systems[1];
             var ship = sol.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort);
+            int originId = ship.Id;
             string name = ship.Name;
             double credits = ship.Credits = 1234;
             int acCountBefore = ac.World.Fleet.Ships.Count;
@@ -94,12 +95,14 @@ namespace Unity.SpaceGod.Core.Tests
             bool ok = GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived);
 
             Assert.That(ok, Is.True);
-            Assert.That(arrived, Is.Not.Null);
-            // The origin hull stays in its fleet at its own id (ids are fixed indices -- see Fleet.Receive),
-            // just retired in place rather than actually removed.
-            Assert.That(sol.World.Fleet.Ships, Does.Contain(ship));
-            Assert.That(ship.Destroyed, Is.True);
-            Assert.That(ship.GateDeparted, Is.True);
+            // The same object comes out the far side (U.SPC-T453), never a copy.
+            Assert.That(arrived, Is.SameAs(ship));
+            // Its old slot in sol's fleet keeps a gone marker at the same id (ids are fixed indices -- see
+            // Fleet.LetGo), so no other id there moves; the hull itself is no longer in that list.
+            Assert.That(sol.World.Fleet.Ships, Does.Not.Contain(ship));
+            Assert.That(sol.World.Fleet.Ships[originId].Name, Is.EqualTo(name));
+            Assert.That(sol.World.Fleet.Ships[originId].Destroyed, Is.True);
+            Assert.That(sol.World.Fleet.Ships[originId].GateDeparted, Is.True);
             Assert.That(sol.World.Fleet.Ships.Count, Is.EqualTo(solCountBefore));
 
             Assert.That(ac.World.Fleet.Ships, Does.Contain(arrived));
@@ -107,6 +110,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(arrived.Name, Is.EqualTo(name));
             Assert.That(arrived.Credits, Is.EqualTo(credits));
             Assert.That(arrived.Destroyed, Is.False);
+            Assert.That(arrived.GateDeparted, Is.False);
             Assert.That(arrived.Role, Is.EqualTo(ShipRole.Free));
             Assert.That(arrived.Orbit.Body, Is.EqualTo(ac.Catalog.Root.Index));
             Assert.That((sol.GateTo(ac).ArrivalOffsetKm - arrived.Orbit.Center).Length < 1e-6, Is.True, "the ship should land exactly at the arrival offset the activated gate computes");
@@ -129,7 +133,7 @@ namespace Unity.SpaceGod.Core.Tests
 
             Assert.That(announced, Is.True, "the far system was never told a ship came in");
             Assert.That(arrived.Company, Is.SameAs(company));
-            Assert.That(company.Ships, Does.Contain(arrived), "the copy dropped out of its company");
+            Assert.That(company.Ships, Does.Contain(arrived), "the hull dropped out of its company");
         }
 
         [Test]

@@ -423,7 +423,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var w = CreateWorld();
             var h = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
-            h.Ship.Destroyed = true; // off on a hunt beyond the gates: InterstellarTraffic.Retire marks the departing hull both ways
+            h.Ship.Destroyed = true; // a hull some other code marks gone both ways (U.SPC-T453: a live crossing no longer does) reads as merely away
             h.Ship.GateDeparted = true;
             w.Outlaws.Update(StartJd);
             w.Outlaws.Update(StartJd + 1);
@@ -440,7 +440,7 @@ namespace Unity.SpaceGod.Core.Tests
             var o = Raider(w, Body(w, "Earth"), "Gate Runner");
             var record = o.Record;
             var gone = o.Ship;
-            gone.Destroyed = true; // off on a raid beyond the gates: InterstellarTraffic.Retire marks the departing hull both ways
+            gone.Destroyed = true; // a hull some other code marks gone both ways (U.SPC-T453: a live crossing no longer does) reads as merely away
             gone.GateDeparted = true;
             w.Outlaws.Update(StartJd);
             w.Outlaws.Update(StartJd + 1);

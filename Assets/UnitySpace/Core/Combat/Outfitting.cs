@@ -414,7 +414,7 @@ namespace Unity.SpaceGod.Core
             return spec;
         }
 
-        /// <summary>A copy for a hull that is handed on (a jump gate's arrival).</summary>
+        /// <summary>An independent copy, fitted the same way (a newly built hull's own loadout).</summary>
         public Loadout Copy()
         {
             int bays = 0;

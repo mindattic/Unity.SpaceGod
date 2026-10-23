@@ -355,16 +355,18 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>Outlaws whose flagship is gone outside any battle (lost in a collision, scuttled) or flies under other colours.
-        /// A flagship through a gate (a raid, a move, a smuggling run) is not gone: <see cref="InterstellarTraffic"/> marks the
-        /// departing hull <see cref="Ship.Destroyed"/> as well as <see cref="Ship.GateDeparted"/>, and the captain is merely away,
-        /// ashore until a band sails again (<see cref="Sync"/>), with their record and bounties intact (U.SPC-T434).</summary>
+        /// A flagship through a gate or under its own cruise drive (a raid, a move, a smuggling run) is not gone: it is the
+        /// same hull carrying on abroad (U.SPC-T453), so <see cref="Ship.Destroyed"/> and <see cref="Ship.GateDeparted"/> stay
+        /// false on it; it is simply no longer in this world's own fleet (<see cref="Fleet.IsPresent"/>), which (a hull some
+        /// other code marks both ways instead, a scrapping say) reads the same way -- the captain is merely away, ashore
+        /// until a band sails again (<see cref="Sync"/>), with their record and bounties intact (U.SPC-T434).</summary>
         void SettleFates(double jd)
         {
             foreach (var o in All)
             {
                 if (!o.Aboard) continue;
                 if (o.Ship.Faction == null || !o.Ship.Faction.IsPirate) End(o, OutlawFate.Captured, jd, o.Ship.Faction?.Name);
-                else if (o.Ship.GateDeparted) o.Ashore = true;
+                else if (o.Ship.GateDeparted || !world.Fleet.IsPresent(o.Ship)) o.Ashore = true;
                 else if (o.Ship.Destroyed || o.Ship.Derelict) End(o, OutlawFate.Vanished, jd, null);
             }
         }
@@ -1350,7 +1352,9 @@ namespace Unity.SpaceGod.Core
             if (ship.Battle != null || !Law.Player.Wanted) return null;
             foreach (var h in Hunters)
             {
-                if (!h.Alive || h.Contract?.Target != Law.Player || h.Ship.Battle != null || h.Ship == ship) continue;
+                // A hunter off abroad through a gate or its own cruise drive (U.SPC-T453) is still the same, live
+                // Ship, just no longer in this world's own fleet: nothing here gives a position for it to engage from.
+                if (!h.Alive || h.Contract?.Target != Law.Player || h.Ship.Battle != null || h.Ship == ship || !world.Fleet.IsPresent(h.Ship)) continue;
                 if ((world.Fleet.StateOf(h.Ship, jd).HelioKm - pilotHelio).Length > EngageKm) continue;
                 var b = world.War.TryStartHunt(ship, h.Ship, body, offsetKm, forward, jd);
                 if (b == null) continue;

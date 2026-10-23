@@ -123,8 +123,8 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         /// <summary>
-        /// U.SPC-T311: a flagship that goes through a jump gate is retired in the system it left, its copy flying on beyond;
-        /// its orders there went with it, rather than staying behind as a dead entry for every gate it ever crossed.
+        /// U.SPC-T311: a flagship that goes through a jump gate is the same hull flying on beyond (U.SPC-T453, never a
+        /// copy); its orders there went with it, rather than staying behind as a dead entry for every gate it ever crossed.
         /// </summary>
         [Test]
         public void AFlagshipThatGoesThroughAGateLeavesNoOrdersBehind()
@@ -140,8 +140,10 @@ namespace Unity.SpaceGod.Core.Tests
             var leader = ac.World.Fleet.Ships.First(s => s.Voyage != null && s.Voyage.Purpose == VoyagePurpose.Campaign && !s.IsEscort);
             var orders = ac.World.War.Orders;
             orders[leader] = new GroupOrder { Kind = OrderKind.Patrol, Body = leader.Orbit.Body, SinceJd = jd };
-            Run(g, jd, 60, () => leader.GateDeparted);
-            Assert.That(leader.GateDeparted, Is.True, "the flagship never went through the gate");
+            // The same hull goes through (U.SPC-T453), so it never reads Destroyed/GateDeparted the way the gone
+            // marker left behind in its old slot does; its own departure from this fleet is the signal to wait on.
+            Run(g, jd, 60, () => !ac.World.Fleet.Ships.Contains(leader));
+            Assert.That(ac.World.Fleet.Ships, Does.Not.Contain(leader), "the flagship never went through the gate");
             Assert.That(orders.ContainsKey(leader), Is.False, "the departed flagship's orders stayed behind");
             Assert.That(orders.Keys.Where(s => s.GateDeparted), Is.Empty, "a ship gone through a gate left orders behind");
         }

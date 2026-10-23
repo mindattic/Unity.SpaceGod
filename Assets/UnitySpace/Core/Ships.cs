@@ -563,40 +563,93 @@ namespace Unity.SpaceGod.Core
         public Ship Controller => Leader ?? this;
 
         /// <summary>
-        /// A copy for a jump gate to hand to the destination system's fleet (see <see cref="GateTransit"/>):
-        /// everything that makes it feel like the same ship to the player -- name, hull class, combat
-        /// state (hull, shields, hardpoints), cargo and the personal hold, credits, propellant -- but none of the
-        /// origin system's scheduling state (orbit, route, journey), which the caller sets fresh for
-        /// wherever the ship actually arrives. Nor the cargo's booking: that market (and the contract
-        /// bonus it posted) belongs to the origin system's economy, so the goods arrive unbooked.
+        /// Clears every scheduling and per-system field a hull carries only while it is in one system's own
+        /// simulation -- orbit, route, journey, lane state, booked cargo, the market it was loaded for -- so the
+        /// same object (never a copy, U.SPC-T453: this replaces the old CloneForGateArrival) arrives at a jump
+        /// gate's far end, or at the edge of a well under its own cruise drive, as free an agent as the old copy
+        /// always did. Called right at arrival, immediately before the caller sets Orbit, Phase, the PhaseJds,
+        /// DestinationBody, Role and Ports fresh for wherever it actually lands -- never at departure, since a hull
+        /// sitting in a gate's passage or out on a cruise is not yet anywhere new and must keep a valid Orbit in the
+        /// meantime (whoever still has eyes on it reads where it last was, same as a retired husk always could).
+        /// Leaves <see cref="Leader"/>, <see cref="FormationSlot"/> and <see cref="Voyage"/> alone: an escort's tie to
+        /// its leader (the same object, still itself) survives the crossing, and a voyage still under way outlives
+        /// this one call, read fresh by whatever the caller does with it afterward. Untouched too: name, hull class,
+        /// combat state (hull, shields, hardpoints), cargo and the personal hold, credits, propellant, its company --
+        /// everything that makes it feel like the same ship to the player.
         /// </summary>
-        internal Ship CloneForGateArrival() => new Ship
+        internal void ResetForArrival()
         {
-            Name = Name,
-            Spec = Spec,
-            Faction = Faction,
-            Combat = Combat,
-            CapacityTonnes = CapacityTonnes,
-            HasCargo = HasCargo,
-            CargoGood = CargoGood,
-            CargoTonnes = CargoTonnes,
-            CargoCost = CargoCost,
-            Cargo = Cargo,
-            Credits = Credits,
-            TripsCompleted = TripsCompleted,
-            personalHold = personalHold,
-            propellant = propellant,
-            Loadout = Loadout?.Copy(),
-            Prisoners = Prisoners,
-            PrisonerBounty = PrisonerBounty,
-            SilentRunning = SilentRunning,
-            // Still its company's hull over there; the company books its trade as before.
-            Company = Company,
-            CompanyBookedCredits = CompanyBookedCredits,
-            // The loot or contraband aboard goes with it.
-            Plunder = (double[])Plunder?.Clone(),
-            Runner = Runner,
-        };
+            BandId = -1;
+            Route = null;
+            RouteIndex = 0;
+            Phase = ShipPhase.Parked;
+            Orbit = null;
+            DepartureOrbit = null;
+            OriginBody = -1;
+            DestinationBody = -1;
+            PhaseStartJd = 0;
+            PhaseEndJd = 0;
+            FrameBody = 0;
+            DepartureVelocity = DVec3.Zero;
+            ArrivalVelocity = DVec3.Zero;
+            Path = null;
+            PathCumulative = null;
+            PathLength = 0;
+            AccelKmPerDay2 = 0;
+            Conic = null;
+            GravityLossKmS = 0;
+            PlannedConicDepartJd = double.NaN;
+            PlannedConicDays = 0;
+            PlannedDirect = false;
+            Journey = null;
+            JourneyIndex = 0;
+            FinalBody = -1;
+            LaneLeg = default;
+            LaneFromOffset = DVec3.Zero;
+            LaneToOffset = DVec3.Zero;
+            LaneLengthKm = 0;
+            LaneStar = -1;
+            LaneShape = -1;
+            LaneStartProgress = 0;
+            LaneEndProgress = 1;
+            LaneHold = 0;
+            LaneHoldSide = DVec3.Zero;
+            LaneSurged = false;
+            LurkLane = null;
+            LurkAt = 0;
+            LurkDays = 0;
+            Derelict = false;
+            DerelictSinceJd = 0;
+            DerelictBy = null;
+            Salvage.Clear();
+            // The market it was loaded for (and the contract bonus it posted) belongs to the origin system's
+            // economy, so the goods arrive unbooked.
+            CargoDestination = null;
+            CargoBonus = 0;
+            CargoBonusPayer = null;
+            CaptainsHeld = 0;
+            LoadedFrom = null;
+            LoadedJd = 0;
+            LoadedCredits = 0;
+            Scrapped = false;
+            OutOfPropellant = false;
+            OutOfPropellantSinceJd = 0;
+            StrandedInFlight = false;
+            LegPropellant = 0;
+            StrandJd = double.NaN;
+            Destroyed = false;
+            GateDeparted = false;
+            GateKm = null;
+            StakeoutKm = null;
+            StakeoutUntilJd = 0;
+            PatrolWing = false;
+            Convoy = false;
+            Civil = CivilCraft.None;
+            Wander = false;
+            Ring = null;
+            HoldPoint = null;
+            Battle = null;
+        }
 
         /// <summary>
         /// What a ship leaving its system leaves in its place in that fleet's list (U.SPC-T417, see <see cref="Fleet.LetGo"/>):

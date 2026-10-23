@@ -1730,8 +1730,9 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// A ship gone from this system for good without a successor taking its place (retired into a jump gate, its copy
-        /// living on in another system's fleet): its orders and per-ship bookkeeping here go with it (U.SPC-T311).
+        /// A ship gone from this system for good without a successor taking its place (through a jump gate or its own
+        /// cruise drive, the same hull living on in another system's fleet): its orders and per-ship bookkeeping here
+        /// go with it (U.SPC-T311).
         /// </summary>
         public void Forget(Ship ship)
         {

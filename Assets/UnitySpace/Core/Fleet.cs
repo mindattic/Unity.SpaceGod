@@ -1888,17 +1888,26 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// Adds a ship built elsewhere than <see cref="AddShip"/> straight into this fleet's list:
-        /// a jump gate's arrival (see <see cref="GateTransit"/>), which clones rather than moves the
-        /// departing hull, since every other ship's id is its fixed index into this very list (ships
-        /// are never removed, only marked <see cref="Ship.Destroyed"/> in place) -- shuffling an
-        /// existing one out from the middle would desync every id after it.
+        /// Adds a ship built elsewhere than <see cref="AddShip"/> straight into this fleet's list: a jump gate's
+        /// arrival or a cruise dropping out (see <see cref="GateTransit"/>, <see cref="LetGo"/>) -- the same hull
+        /// that left another fleet's list, not a copy (U.SPC-T453), since every other ship's id there is its fixed
+        /// index into that list (ships are never removed, only marked <see cref="Ship.Destroyed"/> in place) --
+        /// shuffling an existing one out from the middle would desync every id after it.
         /// </summary>
         public void Receive(Ship ship)
         {
             ship.Id = ships.Count;
             ships.Add(ship);
         }
+
+        /// <summary>
+        /// Whether <paramref name="ship"/> itself still sits in this very fleet's list at its own id (not a gone
+        /// marker that has taken its slot, see <see cref="LetGo"/>): a tracker outside the fleet (an outlaw's
+        /// captain, a sensor book) that holds a ship reference across a long game should check this before reading
+        /// anything this fleet's own catalogue and ephemeris give it a position with -- once it is carried on
+        /// elsewhere (U.SPC-T453), that position belongs to a different system's fleet, never this one's.
+        /// </summary>
+        public bool IsPresent(Ship ship) => ship != null && ship.Id >= 0 && ship.Id < ships.Count && ships[ship.Id] == ship;
 
         /// <summary>
         /// Takes <paramref name="ship"/> itself out of this fleet to go on somewhere else, the same object (U.SPC-T417: a
@@ -1926,7 +1935,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// Creates a ship of a class/design (see <see cref="AddShip"/>) and parks it at an exact
         /// body-relative offset facing <paramref name="forward"/>, for a dev/sandbox spawn rather than
-        /// a real yard -- built the same way a jump gate's arrival parks a fresh copy at the far gate
+        /// a real yard -- parked the same way a jump gate's arrival parks the hull at the far gate
         /// (see <see cref="GateTransit.TryPerform"/>). Free role with every visible body as a port, so
         /// it behaves like any independent ship if ever released from piloting.
         /// </summary>

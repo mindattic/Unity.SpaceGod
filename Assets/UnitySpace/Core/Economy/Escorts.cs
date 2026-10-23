@@ -30,10 +30,10 @@ namespace Unity.SpaceGod.Core
         double nextJd;
         int named;
 
-        /// <summary>Every fighter taken on here and not yet paid off (U.SPC-T288). A gate crossing retires the hull this
-        /// tracks and hands the merchant's voyage on as a fresh copy in the destination's own fleet (see
-        /// <see cref="InterstellarTraffic"/>), so the far system's <see cref="MarkHired"/> has to pick each crossed
-        /// escort back up there, or it would fly on untracked and never be paid off once its merchant is gone (U.SPC-T301).</summary>
+        /// <summary>Every fighter taken on here and not yet paid off (U.SPC-T288). A gate crossing takes the hull this
+        /// tracks (the same object) on into the destination's own fleet (see <see cref="InterstellarTraffic"/>), so
+        /// the far system's <see cref="MarkHired"/> has to pick each crossed escort back up there, or it would fly
+        /// on untracked and never be paid off once its merchant is gone (U.SPC-T301).</summary>
         readonly HashSet<Ship> hired = new HashSet<Ship>();
 
         /// <summary>Whether <paramref name="s"/> is a fighter hired here and not yet paid off.</summary>
