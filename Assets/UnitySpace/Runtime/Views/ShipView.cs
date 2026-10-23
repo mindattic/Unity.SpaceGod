@@ -336,12 +336,14 @@ namespace Unity.SpaceGod.Views
                 mount.localRotation = part.Rest;
                 part.Mount = mount;
                 var list = new List<Renderer> { ShipModels.Part(mount, ShipMeshFactory.GetPart(sub.Kind, Ship.Faction, false), "Base") };
-                part.Turret = sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.LaserTurret || sub.Kind == SubsystemKind.PointDefense || sub.Kind == SubsystemKind.PlasmaCannon;
+                part.Turret = sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.LaserTurret || sub.Kind == SubsystemKind.PointDefense || sub.Kind == SubsystemKind.PlasmaCannon ||
+                              sub.Kind == SubsystemKind.FlakCannon;
                 if (part.Turret)
                 {
                     var barrels = new GameObject("Barrels").transform;
                     barrels.SetParent(mount, false);
-                    barrels.localPosition = new Vector3(0, sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.PlasmaCannon ? 0.014f : sub.Kind == SubsystemKind.LaserTurret ? 0.009f : 0.008f, 0);
+                    barrels.localPosition = new Vector3(0, sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.PlasmaCannon ? 0.014f : sub.Kind == SubsystemKind.LaserTurret ? 0.009f
+                        : sub.Kind == SubsystemKind.FlakCannon ? 0.011f : 0.008f, 0);
                     part.Barrels = barrels;
                     list.Add(ShipModels.Part(barrels, ShipMeshFactory.GetPart(sub.Kind, Ship.Faction, true), "Barrels"));
                 }
@@ -461,7 +463,7 @@ namespace Unity.SpaceGod.Views
                     goalBarrels = Quaternion.Euler(-Mathf.Clamp(elevation, -8f, 80f), 0, 0);
                 }
             }
-            float traverse = (sub.Kind == SubsystemKind.PointDefense ? 360f : sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.PlasmaCannon ? 50f : 90f) * dt;
+            float traverse = (sub.Kind == SubsystemKind.PointDefense ? 360f : sub.Kind == SubsystemKind.FlakCannon ? 240f : sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.PlasmaCannon ? 50f : 90f) * dt;
             p.Mount.localRotation = Quaternion.RotateTowards(p.Mount.localRotation, goalMount, traverse);
             p.Barrels.localRotation = Quaternion.RotateTowards(p.Barrels.localRotation, goalBarrels, traverse);
         }

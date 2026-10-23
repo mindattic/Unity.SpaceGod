@@ -214,8 +214,12 @@ namespace Unity.SpaceGod.Core.Tests
                 // A fighter crossing a destroyer's bow at full speed, steadily or reversing every second or so.
                 var (b, player, enemy) = Duel(ShipClass.Fighter, ShipClass.Destroyer, new DVec3(4, 0, 0), seed);
                 enemy.Forward = -DVec3.UnitX;
-                // Guns only: a homing missile is not dodged by jinking.
-                foreach (var s in enemy.Combat.Subsystems) s.Ammo = 0;
+                // Guns only: a homing missile is not dodged by jinking, nor a flak burst (U.SPC-T489).
+                foreach (var s in enemy.Combat.Subsystems)
+                {
+                    s.Ammo = 0;
+                    if (ScreenWeapons.IsScreenMount(s.Kind)) s.Hp = 0;
+                }
                 var c = player.Combat;
                 double Health() => c.Hull + c.Subsystems.Sum(s => s.Hp + s.Shield);
                 double taken = 0;

@@ -247,6 +247,12 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>An EMP round: it bursts beside its target and stuns rather than damages (U.SPC-T271).</summary>
         Emp,
+
+        /// <summary>An antimatter (photon) torpedo (U.SPC-T489): a heavy guided warhead, tougher than a torpedo to stop.</summary>
+        Antimatter,
+
+        /// <summary>A screen's interceptor (U.SPC-T489): it hunts a hostile round (<see cref="Missile.Prey"/>) or a fighter.</summary>
+        Interceptor,
     }
 
     /// <summary>
@@ -313,6 +319,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The flare-and-chaff cloud it has been drawn off onto, or null (U.SPC-T424).</summary>
         public Decoy Decoy;
+
+        /// <summary>The hostile round an interceptor is hunting (U.SPC-T489), or null for one sent after a fighter.</summary>
+        public Missile Prey;
     }
 
     /// <summary>
@@ -405,6 +414,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>A plasma cannon's bolt (U.SPC-T488): Size is the damage it landed with, after its bleed over distance.</summary>
         Plasma,
         PlasmaMiss,
+
+        /// <summary>A flak shell (U.SPC-T489): its tracer from the cannon (A) to its burst (B), Size the burst, km.</summary>
+        FlakBurst,
     }
 
     /// <summary>Something to draw: a beam, a hit, an explosion. A and B are battle-local km.</summary>
@@ -940,6 +952,14 @@ namespace Unity.SpaceGod.Core
                     var station = StationOf(u);
                     desired = desired * 0.45 + (station - u.Pos) * 0.03 * 0.55 + u.Leader.Vel * 0.55;
                 }
+                // A hull carrying the screen keeps between the capital it guards and the enemy, so what comes at the capital
+                // passes through its umbrella first (U.SPC-T489).
+                double screen = ScreenWeapons.ScreenStation.Value;
+                if (screen > 0 && ScreenWeapons.Screens(c) && ScreenWeapons.WardOf(this, u) is BattleUnit ward)
+                {
+                    var post = ScreenWeapons.StationOn(ward, ThreatTo(ward, u));
+                    desired = desired * (1 - screen) + ((post - u.Pos) * 0.05 + ward.Vel) * screen;
+                }
             }
             else
             {
@@ -1110,7 +1130,7 @@ namespace Unity.SpaceGod.Core
             Dictionary<int, double> byArc = null;
             foreach (var s in u.Combat.Subsystems)
             {
-                if (!s.Def.IsWeapon || s.Destroyed || s.Kind == SubsystemKind.PointDefense || s.Kind == SubsystemKind.BoardingPods || s.Def.Weapon.Supporting) continue;
+                if (!s.Def.IsWeapon || s.Destroyed || s.Def.Weapon.AntiSmall || s.Kind == SubsystemKind.BoardingPods || s.Def.Weapon.Supporting) continue;
                 var w = s.Def.Weapon;
                 if (w.Missile && s.Ammo <= 0) continue;
                 byArc ??= new Dictionary<int, double>();
@@ -1235,7 +1255,17 @@ namespace Unity.SpaceGod.Core
                 }
                 var origin = u.PointOf(s.Def);
 
-                if (w.AntiSmall)
+                if (w.AntiSmall && ScreenWeapons.IsScreenMount(s.Kind))
+                {
+                    // The screen (U.SPC-T489): flak bursts on, or an interceptor goes after, the worst round in reach.
+                    var threat = ScreenTarget(u, s, origin, w);
+                    if (threat != null)
+                    {
+                        FireScreen(u, s, origin, w, threat, null, accuracyScale);
+                        continue;
+                    }
+                }
+                else if (w.AntiSmall)
                 {
                     var missile = NearestMissile(u.Side, origin, w.RangeKm);
                     if (missile != null)
@@ -1309,6 +1339,13 @@ namespace Unity.SpaceGod.Core
                     s.Aim = DVec3.Zero;
                     continue;
                 }
+                // No round in reach: the screen turns on fighters (U.SPC-T489); a flak cannon with only a hull near fires on it as
+                // point defence does.
+                if (ScreenWeapons.IsScreenMount(s.Kind) && WeakPoints.IsSmallCraft(target))
+                {
+                    FireScreen(u, s, origin, w, null, target, accuracyScale);
+                    continue;
+                }
                 // A player's guided rounds go for the weak point picked on the locked hull (U.SPC-T424).
                 var sub = u.PlayerControlled && w.Missile && target == u.PlayerLockTarget && u.PlayerSubTarget != null && !u.PlayerSubTarget.Destroyed
                           && target.Combat.Subsystems.Contains(u.PlayerSubTarget)
@@ -1322,8 +1359,10 @@ namespace Unity.SpaceGod.Core
                 if (w.Missile)
                 {
                     if (s.Ammo <= 0) continue;
-                    // A capital torpedo tube's round flies as a torpedo: tougher for point defence to stop (U.SPC-T377).
-                    bool torpedo = s.Kind == SubsystemKind.Torpedo || s.Kind == SubsystemKind.TorpedoTube;
+                    // A capital torpedo tube's round flies as a torpedo: tougher for point defence to stop (U.SPC-T377); an
+                    // antimatter torpedo is tougher still and hits hardest of all (U.SPC-T489).
+                    var kindOf = ScreenWeapons.KindOf(s.Kind, w);
+                    bool torpedo = kindOf == MissileKind.Torpedo || kindOf == MissileKind.Antimatter;
                     for (int k = 0; k < w.Salvo && s.Ammo > 0; k++)
                     {
                         s.Ammo--;
@@ -1331,9 +1370,9 @@ namespace Unity.SpaceGod.Core
                         Missiles.Add(new Missile
                         {
                             Pos = origin, Vel = (u.Forward + spread + s.Aim).Normalized * (w.MissileSpeedKmS * 0.3) + u.Vel,
-                            Target = target, TargetSub = sub, Damage = w.Damage, Speed = w.MissileSpeedKmS,
-                            Hp = s.Kind == SubsystemKind.TorpedoTube ? 40 : torpedo ? 25 : 12, Life = 90, Side = u.Side, Torpedo = torpedo,
-                            Kind = w.EmpSeconds > 0 ? MissileKind.Emp : torpedo ? MissileKind.Torpedo : MissileKind.Missile,
+                            Target = target, TargetSub = sub, Damage = ScreenWeapons.Warhead(s.Kind, w), Speed = w.MissileSpeedKmS,
+                            Hp = ScreenWeapons.RoundHp(s.Kind), Life = 90, Side = u.Side, Torpedo = torpedo,
+                            Kind = kindOf,
                             EmpSeconds = w.EmpSeconds, EmpRadiusKm = w.EmpRadiusKm, SmallCraft = small,
                         });
                     }
@@ -1915,6 +1954,8 @@ namespace Unity.SpaceGod.Core
                 foreach (var o in Units)
                 {
                     if (!Hostile(u, o) || o.Captured || o.Surrendering || HoldsFireOn(u, o)) continue;
+                    // An interceptor is wasted on a hull: it goes only after small craft (U.SPC-T489).
+                    if (w.Missile && !WeakPoints.IsSmallCraft(o)) continue;
                     double d = (o.Pos - origin).Length - o.Radius;
                     if ((d < best && (near == null || near.Kind != UnitKind.Fighter || o.Kind == UnitKind.Fighter)) || (o.Kind == UnitKind.Fighter && near != null && near.Kind != UnitKind.Fighter && d < w.RangeKm))
                     {
@@ -1950,13 +1991,184 @@ namespace Unity.SpaceGod.Core
             return any;
         }
 
+        // ---------------------------------------------------------------- the screen (U.SPC-T489)
+
+        /// <summary>
+        /// The hostile round a screen mount on <paramref name="u"/> shoots at: the worst threat (<see cref="ScreenWeapons.Threat"/>)
+        /// within its reach, not merely the nearest. An interceptor launcher skips a round one of its side's interceptors is
+        /// already hunting, so a salvo spreads over a swarm instead of piling onto its leader.
+        /// </summary>
+        Missile ScreenTarget(BattleUnit u, Subsystem mount, DVec3 origin, WeaponSpec w)
+        {
+            bool interceptor = mount.Kind == SubsystemKind.InterceptorMissile;
+            if (interceptor && mount.Ammo <= 0) return null;
+            Missile best = null;
+            double bestThreat = 0;
+            foreach (var m in Missiles)
+            {
+                if (m.Side == u.Side || !ScreenWeapons.IsThreat(m)) continue;
+                if ((m.Pos - origin).Length > w.RangeKm) continue;
+                if (interceptor && Hunted(m, u.Side)) continue;
+                double threat = ScreenWeapons.Threat(m);
+                if (threat > bestThreat)
+                {
+                    bestThreat = threat;
+                    best = m;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Where the danger to <paramref name="ward"/> comes from, for its screen <paramref name="u"/> to stand in the way
+        /// of: the centre of the hostile rounds homing on it, weighted by their warheads, or the enemy's centre when none are.</summary>
+        DVec3 ThreatTo(BattleUnit ward, BattleUnit u)
+        {
+            var sum = DVec3.Zero;
+            double weight = 0;
+            foreach (var m in Missiles)
+            {
+                if (m.Gone || m.Side == u.Side || m.Target != ward || !ScreenWeapons.IsThreat(m)) continue;
+                double w = Math.Max(m.Damage, 1);
+                sum += m.Pos * w;
+                weight += w;
+            }
+            return weight > 0 ? sum / weight : HostileCentroid(u);
+        }
+
+        /// <summary>Whether an interceptor of <paramref name="side"/> is already after <paramref name="m"/>.</summary>
+        bool Hunted(Missile m, int side)
+        {
+            foreach (var i in Missiles)
+                if (!i.Gone && i.Kind == MissileKind.Interceptor && i.Side == side && i.Prey == m) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// A screen mount fires on a hostile round (<paramref name="round"/>) or, with none in reach, a fighter
+        /// (<paramref name="craft"/>): a flak cannon lays a shell that bursts on it (scattered by a miss, but a burst among a
+        /// swarm still finds something), an interceptor launcher sends a round after it.
+        /// </summary>
+        void FireScreen(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w, Missile round, BattleUnit craft, double accuracyScale)
+        {
+            var at = round != null ? round.Pos : craft.Pos;
+            s.Aim = (at - origin).Normalized;
+            s.Cooldown = w.Cooldown * (0.85 + rng.NextDouble() * 0.3);
+            if (s.Kind == SubsystemKind.InterceptorMissile)
+            {
+                if (s.Ammo <= 0) return;
+                s.Ammo--;
+                Missiles.Add(new Missile
+                {
+                    Pos = origin, Vel = s.Aim * (w.MissileSpeedKmS * 0.4) + u.Vel,
+                    Target = craft, Prey = round, Damage = w.Damage, Speed = w.MissileSpeedKmS,
+                    Hp = ScreenWeapons.InterceptorHp, Life = ScreenWeapons.InterceptorLifeSeconds, Side = u.Side,
+                    Kind = MissileKind.Interceptor,
+                });
+                Emit(FxKind.MissileLaunch, origin, origin + s.Aim, 0, u.Side, u, s.Index);
+                return;
+            }
+            double burst = Math.Max(w.BurstKm, 0.05) * ScreenWeapons.FlakBurst.Value;
+            if (rng.NextDouble() >= w.Accuracy * accuracyScale)
+            {
+                // Wide: the shell bursts a burst and a half or two off its mark.
+                var off = new DVec3(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, rng.NextDouble() - 0.5);
+                at += (off.LengthSquared > 1e-9 ? off.Normalized : DVec3.UnitX) * burst * (1.5 + rng.NextDouble() * 0.5);
+            }
+            FlakBurstAt(at, u.Side, w.Damage * ScreenWeapons.FlakDamage.Value, burst);
+            Emit(FxKind.FlakBurst, origin, at, burst, u.Side, u, s.Index);
+        }
+
+        /// <summary>A flak burst at <paramref name="at"/>: every hostile round (an interceptor too) and every hostile small craft
+        /// within <paramref name="radiusKm"/> takes its <paramref name="damage"/>, less toward the burst's edge.</summary>
+        public void FlakBurstAt(DVec3 at, int side, double damage, double radiusKm)
+        {
+            if (damage <= 0 || radiusKm <= 0) return;
+            foreach (var m in Missiles)
+            {
+                if (m.Gone || m.Side == side) continue;
+                double d = (m.Pos - at).Length;
+                if (d > radiusKm) continue;
+                m.Hp -= damage * (1 - 0.5 * d / radiusKm);
+                if (m.Hp <= 0)
+                {
+                    m.Gone = true;
+                    Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.08, m.Side, null, -1);
+                }
+            }
+            for (int i = 0; i < Units.Count; i++)
+            {
+                var o = Units[i];
+                if (o.Side == side || !o.Present || !WeakPoints.IsSmallCraft(o) || o.Surrendering) continue;
+                double d = Math.Max(0, (o.Pos - at).Length - o.Radius);
+                if (d > radiusKm) continue;
+                ApplyDamage(o, null, damage * (1 - 0.5 * d / radiusKm), at);
+            }
+        }
+
+        /// <summary>
+        /// An interceptor hunting a round: it leads its prey hard (it is far quicker and more agile than what it hunts), and
+        /// its proximity fuze goes off when it passes near enough, killing the round at <see cref="ScreenWeapons.InterceptorReliability"/>.
+        /// A prey gone already (shot down, gone off, drawn away) and it looks for another within <see cref="ScreenWeapons.ReacquireKm"/>
+        /// nobody else is hunting, or gives up.
+        /// </summary>
+        void StepInterceptor(Missile m, double dt)
+        {
+            if (m.Life <= 0)
+            {
+                m.Gone = true;
+                Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.03, m.Side, null, -1);
+                return;
+            }
+            if (m.Prey == null || m.Prey.Gone)
+            {
+                m.Prey = null;
+                double bestD = ScreenWeapons.ReacquireKm;
+                foreach (var o in Missiles)
+                {
+                    if (o.Side == m.Side || !ScreenWeapons.IsThreat(o) || Hunted(o, m.Side)) continue;
+                    double d = (o.Pos - m.Pos).Length;
+                    if (d < bestD)
+                    {
+                        bestD = d;
+                        m.Prey = o;
+                    }
+                }
+                if (m.Prey == null)
+                {
+                    m.Gone = true;
+                    Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.03, m.Side, null, -1);
+                    return;
+                }
+            }
+            var prey = m.Prey;
+            var to = prey.Pos - m.Pos;
+            double dist = to.Length;
+            var lead = prey.Pos + prey.Vel * Math.Min(dist / Math.Max(m.Speed, 1e-6), 10);
+            var want = (lead - m.Pos).Normalized * m.Speed;
+            var dv = want - m.Vel;
+            double turn = m.Speed * 1.2 * dt;
+            m.Vel += dv.Length > turn ? dv.Normalized * turn : dv;
+            var start = m.Pos;
+            m.Pos += m.Vel * dt;
+            // Swept, and allowing for the prey's own motion this step, so neither a coarse step nor a crossing shot slips past.
+            if (SegmentPointDistance(start, m.Pos, prey.Pos) > ScreenWeapons.FuzeKm + prey.Vel.Length * dt) return;
+            m.Gone = true;
+            Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.04, m.Side, null, -1);
+            if (rng.NextDouble() >= ScreenWeapons.InterceptorReliability.Value) return;
+            prey.Hp -= m.Damage;
+            if (prey.Hp > 0) return;
+            prey.Gone = true;
+            Emit(FxKind.MissileKill, prey.Pos, prey.Pos, 0.08, prey.Side, null, -1);
+        }
+
         Missile NearestMissile(int side, DVec3 origin, double range)
         {
             Missile best = null;
             double bestD = range;
             foreach (var m in Missiles)
             {
-                if (m.Gone || m.Side == side) continue;
+                // Another side's interceptors threaten nothing a laser need waste a shot on (U.SPC-T489).
+                if (m.Gone || m.Side == side || m.Kind == MissileKind.Interceptor) continue;
                 double d = (m.Pos - origin).Length;
                 if (d < bestD)
                 {
@@ -1994,6 +2206,7 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.TorpedoTube:
                     case SubsystemKind.PhaserArray:
                     case SubsystemKind.PlasmaCannon:
+                    case SubsystemKind.AntimatterTorpedo:
                     case SubsystemKind.MissileLauncher: w = 3; break;
                     // The gun that outranges them all is the one gunners most want silenced (U.SPC-T487).
                     case SubsystemKind.TachyonLance: w = 4; break;
@@ -2002,6 +2215,9 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.Hangar: w = target.Combat.Fighters > 0 ? 1.8 : 0.4; break;
                     case SubsystemKind.Bridge: w = 1.1; break;
                     case SubsystemKind.PointDefense: w = 0.8; break;
+                    // The screen is worth knocking out before the strike goes in (U.SPC-T489).
+                    case SubsystemKind.FlakCannon:
+                    case SubsystemKind.InterceptorMissile: w = 1.2; break;
                     case SubsystemKind.Reactor: w = 0.25; break;
                     default: w = 0.5; break;
                 }
@@ -2120,6 +2336,12 @@ namespace Unity.SpaceGod.Core
             {
                 if (m.Gone) continue;
                 m.Life -= dt;
+                // An interceptor after a round flies its own hunt (U.SPC-T489).
+                if (m.Kind == MissileKind.Interceptor && m.Target == null)
+                {
+                    StepInterceptor(m, dt);
+                    continue;
+                }
                 // A hull that has struck its colours is no longer shot at, nor boarded until its terms open it.
                 bool spared = m.Target != null && m.Target.Surrendering && !(m.Kind == MissileKind.Pod && m.Target.SurrenderOpenToBoarding);
                 if (m.Life <= 0 || m.Target == null || !m.Target.Present || m.Target.Side == m.Side || spared)

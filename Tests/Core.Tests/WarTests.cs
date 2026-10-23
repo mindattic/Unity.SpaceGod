@@ -314,7 +314,7 @@ namespace Unity.SpaceGod.Core.Tests
             raider.LurkAt = 0.5;
             raider.LurkDays = 3;
             // Badly hurt before it ever got to the lane: off to repair instead.
-            raider.Combat.Hull = raider.Combat.Spec.Hull * 0.3;
+            raider.Combat.Hull = raider.Combat.Spec.Hull * 0.15;
             w.War.ChooseNext(raider, body, StartJd);
             Assert.That(w.War.Orders[raider].Kind, Is.EqualTo(OrderKind.Repair));
             Assert.That(raider.LurkLane, Is.Null, "a stale ambush would stop the trip to repair on that lane for days");

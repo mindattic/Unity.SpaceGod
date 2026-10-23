@@ -345,6 +345,9 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.MissileLauncher:
                 case SubsystemKind.Torpedo:
                 case SubsystemKind.TorpedoTube:
+                case SubsystemKind.AntimatterTorpedo:
+                case SubsystemKind.InterceptorMissile:
+                case SubsystemKind.FlakCannon:
                 case SubsystemKind.FighterGuns:
                     return Good.Munitions;
                 case SubsystemKind.Engine:
@@ -489,6 +492,9 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.FighterGuns: return "gun pack";
                 case SubsystemKind.Torpedo: return "torpedo rack";
                 case SubsystemKind.TorpedoTube: return "torpedo tube";
+                case SubsystemKind.AntimatterTorpedo: return "antimatter torpedo launcher";
+                case SubsystemKind.FlakCannon: return "flak cannon";
+                case SubsystemKind.InterceptorMissile: return "interceptor launcher";
                 case SubsystemKind.Railgun: return "railgun";
                 case SubsystemKind.TachyonLance: return "tachyon lance";
                 case SubsystemKind.BoardingPods: return "pod launcher";

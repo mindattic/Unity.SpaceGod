@@ -339,7 +339,8 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The chance a cloud seduces a round of <paramref name="kind"/>; never an EMP round or a boarding pod.</summary>
         public static double SeduceChance(MissileKind kind) =>
-            kind == MissileKind.Missile ? Effectiveness.Value : kind == MissileKind.Torpedo ? Effectiveness.Value * TorpedoShare : 0;
+            kind == MissileKind.Missile || kind == MissileKind.Interceptor ? Effectiveness.Value
+            : kind == MissileKind.Torpedo || kind == MissileKind.Antimatter ? Effectiveness.Value * TorpedoShare : 0;
     }
 
     // ---------------------------------------------------------------- capital-ship weak points

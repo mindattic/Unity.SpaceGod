@@ -252,6 +252,10 @@ namespace Unity.SpaceGod.Views
                     e.Color = Color.Lerp(new Color(0.4f, 1f, 0.5f), Color.white, 0.25f) * 2f;
                     e.Life = 0.45f;
                     break;
+                case FxKind.FlakBurst:
+                    e.Color = new Color(1f, 0.7f, 0.35f);
+                    e.Life = 0.6f;
+                    break;
                 default:
                     return;
             }
@@ -403,6 +407,23 @@ namespace Unity.SpaceGod.Views
                     Sprite(c, PixelSize(c, 8 + 16 * t), e.Color * fade, Shape.Ring);
                     break;
                 }
+                case FxKind.FlakBurst:
+                {
+                    // A flak shell (U.SPC-T489): a quick tracer out to the burst, then a hot flash and a dirty grey puff
+                    // swelling to the burst's reach and hanging there as it fades.
+                    var a = Point(e.Battle, e.A);
+                    var c = Point(e.Battle, e.B);
+                    const float flight = 0.12f;
+                    if (age < flight) Ribbon(a, Vector3.Lerp(a, c, age / flight), 1.4f, new Color(1f, 0.85f, 0.5f) * (1 - age / flight));
+                    else
+                    {
+                        float bt = Mathf.Clamp01((age - flight) / (e.Life - flight));
+                        float r = (float)(e.Size * app.BattleKmScale) * (0.35f + 0.65f * Mathf.Sqrt(bt));
+                        if (bt < 0.2f) Sprite(c, Mathf.Max(r * 0.6f, PixelSize(c, 7)), e.Color * 2f * (1 - bt / 0.2f), Shape.Radial);
+                        Sprite(c, Mathf.Max(r, PixelSize(c, 5)), new Color(0.55f, 0.5f, 0.45f) * (1 - bt) * 0.7f, Shape.Radial);
+                    }
+                    break;
+                }
                 case FxKind.Pulse:
                 {
                     // The interdiction pulse: a shell racing outward far past the battle.
@@ -529,6 +550,24 @@ namespace Unity.SpaceGod.Views
                 var c = side != null ? Color.Lerp(new Color(side.Color.R, side.Color.G, side.Color.B), Color.white, 0.6f) : Color.white;
                 bool pod = m.Kind == MissileKind.Pod;
                 if (pod) c = new Color(1f, 0.75f, 0.35f);
+                if (m.Kind == MissileKind.Antimatter)
+                {
+                    // An antimatter torpedo (U.SPC-T489): a pulsing violet star with a long glowing wake.
+                    float pulse = 0.8f + 0.2f * Mathf.Sin(Time.unscaledTime * 14f + m.GetHashCode());
+                    var violet = Color.Lerp(new Color(0.75f, 0.4f, 1f), c, 0.25f);
+                    Sprite(p, PixelSize(p, 11 * pulse), violet * 1.8f, Shape.Radial);
+                    Sprite(p, PixelSize(p, 4), Color.white * 1.6f, Shape.Radial);
+                    Ribbon(Point(b, m.Pos - m.Vel * 4.0), p, 2.4f, violet * 0.6f);
+                    continue;
+                }
+                if (m.Kind == MissileKind.Interceptor)
+                {
+                    // An interceptor (U.SPC-T489): a small, hot blue-white dart with a short, thin streak.
+                    var ice = new Color(0.65f, 0.9f, 1f);
+                    Sprite(p, PixelSize(p, 3.5f), ice * 1.6f, Shape.Radial);
+                    Ribbon(Point(b, m.Pos - m.Vel * 0.8), p, 1f, ice * 0.6f);
+                    continue;
+                }
                 Sprite(p, PixelSize(p, pod ? 8 : m.Torpedo ? 7 : 5), c * 1.4f, Shape.Radial);
                 var tail = Point(b, m.Pos - m.Vel * (pod ? 4.0 : m.Torpedo ? 3.0 : 2.0));
                 Ribbon(tail, p, pod ? 2.2f : 1.4f, c * 0.5f);

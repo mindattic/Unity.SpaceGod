@@ -56,6 +56,17 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A plasma cannon (U.SPC-T488): the brawlers' heavy gun (battleships, breachers), on a weapon mount.</summary>
         PlasmaCannon,
+
+        // Heavy warheads and the anti-fighter screen (U.SPC-T489).
+
+        /// <summary>An antimatter torpedo launcher, with its first four rounds: a tube or a mount bearing on the bow takes one.</summary>
+        AntimatterTorpedo,
+
+        /// <summary>A rotary flak cannon: a light or heavy mount takes one.</summary>
+        FlakCannon,
+
+        /// <summary>An interceptor missile launcher, with its first twenty rounds: a light or heavy mount takes one.</summary>
+        InterceptorMissile,
     }
 
     /// <summary>The kinds of hardpoint a hull offers on its surface: its weapon hardpoints (light ones take point defence, a
@@ -120,6 +131,12 @@ namespace Unity.SpaceGod.Core
             // magnetic bottle, its injectors and heavy plate round both.
             new ModuleSpec(ModuleKind.PhaserArray, "Phaser array", 200, false, (Good.Alloys, 55), (Good.Electronics, 40), (Good.Machinery, 10)),
             new ModuleSpec(ModuleKind.PlasmaCannon, "Plasma cannon", 380, false, (Good.Alloys, 120), (Good.Electronics, 30), (Good.Machinery, 28)),
+
+            // Four antimatter rounds at 9 t a round: the containment is most of the price.
+            new ModuleSpec(ModuleKind.AntimatterTorpedo, "Antimatter torpedo", 300, false, (Good.Alloys, 80), (Good.Electronics, 40), (Good.Machinery, 18), (Good.Munitions, 36)),
+            new ModuleSpec(ModuleKind.FlakCannon, "Flak cannon", 70, false, (Good.Alloys, 25), (Good.Electronics, 6), (Good.Machinery, 8), (Good.Munitions, 6)),
+            // Twenty interceptors at 0.6 t a round.
+            new ModuleSpec(ModuleKind.InterceptorMissile, "Interceptor missiles", 90, false, (Good.Alloys, 25), (Good.Electronics, 16), (Good.Machinery, 5), (Good.Munitions, 12)),
         };
 
         public static ModuleSpec Of(ModuleKind k) => All[(int)k];
@@ -148,14 +165,17 @@ namespace Unity.SpaceGod.Core
             switch (slot)
             {
                 // A phaser array is light enough for a point-defence mount: a destroyer's screen sweeps fighters from one.
-                case SlotKind.LightMount: return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret || m == ModuleKind.Autocannon || m == ModuleKind.AutoTurret || m == ModuleKind.PhaserArray;
+                case SlotKind.LightMount:
+                    return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret || m == ModuleKind.Autocannon || m == ModuleKind.AutoTurret || m == ModuleKind.PhaserArray ||
+                           m == ModuleKind.FlakCannon || m == ModuleKind.InterceptorMissile;
                 case SlotKind.HeavyMount:
                     return m == ModuleKind.LaserTurret || m == ModuleKind.HeavyLaser || m == ModuleKind.MissileLauncher ||
                            m == ModuleKind.PointDefense || m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun ||
                            m == ModuleKind.PhaserArray || m == ModuleKind.PlasmaCannon ||
-                           ((m == ModuleKind.Railgun || m == ModuleKind.TorpedoTube || m == ModuleKind.TachyonLance) && bearsOnBow);
-                // A torpedo tube is a fixed launcher: it takes a tube or a missile launcher, nothing that traverses.
-                case SlotKind.TorpedoTube: return m == ModuleKind.TorpedoTube || m == ModuleKind.MissileLauncher;
+                           m == ModuleKind.FlakCannon || m == ModuleKind.InterceptorMissile ||
+                           ((m == ModuleKind.Railgun || m == ModuleKind.TorpedoTube || m == ModuleKind.TachyonLance || m == ModuleKind.AntimatterTorpedo) && bearsOnBow);
+                // A torpedo tube is a fixed launcher: it takes a tube, an antimatter launcher or a missile launcher, nothing that traverses.
+                case SlotKind.TorpedoTube: return m == ModuleKind.TorpedoTube || m == ModuleKind.AntimatterTorpedo || m == ModuleKind.MissileLauncher;
                 case SlotKind.GunMount: return m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun || m == ModuleKind.LaserTurret;
                 case SlotKind.UtilityMount:
                     return m == ModuleKind.MissileLauncher || m == ModuleKind.EmpLauncher || m == ModuleKind.MineLayer || m == ModuleKind.AutoTurret;
@@ -184,6 +204,9 @@ namespace Unity.SpaceGod.Core
                 case ModuleKind.TachyonLance: return SubsystemKind.TachyonLance;
                 case ModuleKind.PhaserArray: return SubsystemKind.PhaserArray;
                 case ModuleKind.PlasmaCannon: return SubsystemKind.PlasmaCannon;
+                case ModuleKind.AntimatterTorpedo: return SubsystemKind.AntimatterTorpedo;
+                case ModuleKind.FlakCannon: return SubsystemKind.FlakCannon;
+                case ModuleKind.InterceptorMissile: return SubsystemKind.InterceptorMissile;
                 case ModuleKind.ShieldGenerator:
                 case ModuleKind.HardenedShield: return SubsystemKind.ShieldGenerator;
                 default: return SubsystemKind.Engine;
@@ -317,7 +340,11 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.EmpLauncher:
                 case SubsystemKind.MineLayer:
                 case SubsystemKind.AutoTurret: return SlotKind.UtilityMount;
-                case SubsystemKind.PointDefense: return SlotKind.LightMount;
+                case SubsystemKind.PointDefense:
+                case SubsystemKind.FlakCannon:
+                case SubsystemKind.InterceptorMissile: return SlotKind.LightMount;
+                // A bow launcher, so it takes what a bow mount takes (a railgun, a tube, a heavy turret).
+                case SubsystemKind.AntimatterTorpedo:
                 case SubsystemKind.LaserTurret:
                 case SubsystemKind.HeavyLaser:
                 case SubsystemKind.MissileLauncher:
@@ -352,6 +379,9 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.TachyonLance: return ModuleKind.TachyonLance;
                 case SubsystemKind.PhaserArray: return ModuleKind.PhaserArray;
                 case SubsystemKind.PlasmaCannon: return ModuleKind.PlasmaCannon;
+                case SubsystemKind.AntimatterTorpedo: return ModuleKind.AntimatterTorpedo;
+                case SubsystemKind.FlakCannon: return ModuleKind.FlakCannon;
+                case SubsystemKind.InterceptorMissile: return ModuleKind.InterceptorMissile;
                 default: return null;
             }
         }

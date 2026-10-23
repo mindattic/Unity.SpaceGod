@@ -186,6 +186,33 @@ namespace Unity.SpaceGod.Rendering
                     b.Cylinder(new Vector3(0, 0.008f, 0.018f), 0.009f, 0.03f, b.Dark);
                     b.Cylinder(new Vector3(0, 0.008f, 0.034f), 0.0105f, 0.003f, b.Glow(new Color(1f, 0.45f, 0.25f)));
                     break;
+                case SubsystemKind.AntimatterTorpedo:
+                    // An antimatter launcher (U.SPC-T489): a heavier tube than a torpedo's, ringed by violet containment coils.
+                    b.Box(new Vector3(0, 0.01f, -0.014f), new Vector3(0.036f, 0.02f, 0.044f), b.Hull);
+                    b.Cylinder(new Vector3(0, 0.01f, 0.02f), 0.011f, 0.034f, b.Dark);
+                    b.Cylinder(new Vector3(0, 0.01f, 0.006f), 0.0125f, 0.004f, b.Glow(new Color(0.75f, 0.4f, 1f)));
+                    b.Cylinder(new Vector3(0, 0.01f, 0.026f), 0.0125f, 0.004f, b.Glow(new Color(0.75f, 0.4f, 1f)));
+                    break;
+                case SubsystemKind.FlakCannon:
+                    // A rotary flak cannon (U.SPC-T489): a squat turret and a cluster of six short barrels round a hub.
+                    if (barrels)
+                    {
+                        b.Cylinder(new Vector3(0, 0, 0.012f), 0.004f, 0.012f, b.Accent);
+                        for (int k = 0; k < 6; k++)
+                        {
+                            float a = Mathf.PI * 2 * k / 6;
+                            b.Cylinder(new Vector3(Mathf.Cos(a) * 0.0045f, Mathf.Sin(a) * 0.0045f, 0.024f), 0.0014f, 0.034f, b.Dark);
+                        }
+                    }
+                    else b.Box(new Vector3(0, 0.006f, 0), new Vector3(0.024f, 0.014f, 0.024f), b.Hull);
+                    break;
+                case SubsystemKind.InterceptorMissile:
+                    // An interceptor launcher (U.SPC-T489): a box of vertical cells, their hatches lit pale blue.
+                    b.Box(new Vector3(0, 0.006f, 0), new Vector3(0.026f, 0.012f, 0.026f), b.Hull);
+                    for (int r = 0; r < 3; r++)
+                        for (int c = 0; c < 3; c++)
+                            b.Box(new Vector3(-0.008f + c * 0.008f, 0.0125f, -0.008f + r * 0.008f), new Vector3(0.005f, 0.002f, 0.005f), b.Glow(new Color(0.6f, 0.85f, 1f)));
+                    break;
                 case SubsystemKind.ShieldGenerator:
                     b.Cylinder(new Vector3(0, 0.008f, 0), 0.008f, 0.016f, b.Dark);
                     b.Box(new Vector3(0, 0.018f, 0), new Vector3(0.03f, 0.004f, 0.03f), b.Glow(new Color(0.4f, 0.75f, 1f)));

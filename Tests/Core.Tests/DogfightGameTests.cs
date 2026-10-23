@@ -290,7 +290,8 @@ namespace Unity.SpaceGod.Core.Tests
             int flares = pilot.Combat.Subsystems.Where(s => s.Kind == SubsystemKind.Countermeasures).Sum(s => s.Ammo);
             b.Missiles.Add(new Missile
             {
-                Pos = pilot.Pos + new DVec3(1.0, 0, 0), Vel = DVec3.Zero, Target = pilot, Damage = 70, Speed = 1.1, Hp = 12, Life = 30, Side = 0,
+                Pos = pilot.Pos + new DVec3(1.0, 0, 0), Vel = DVec3.Zero, Target = pilot, Damage = 70, Speed = 1.1, Hp = 1000, Life = 30, Side = 0,
+                // Too tough for its own carrier's point defence to stop before the pilot reacts: what is tested is the pilot.
                 Kind = MissileKind.Missile,
             });
             b.Advance(1);

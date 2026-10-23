@@ -228,7 +228,7 @@ namespace Unity.SpaceGod.Core
             {
                 // Mines, sentry turrets and EMP rounds are a hull's means of getting away, not of fighting (U.SPC-T271).
                 foreach (var s in Subsystems)
-                    if (s.Def.IsWeapon && !s.Destroyed && s.Kind != SubsystemKind.PointDefense && (!s.Def.Weapon.Missile || s.Ammo > 0) && !s.Def.Weapon.Supporting) return true;
+                    if (s.Def.IsWeapon && !s.Destroyed && !s.Def.Weapon.AntiSmall && (!s.Def.Weapon.Missile || s.Ammo > 0) && !s.Def.Weapon.Supporting) return true;
                 return false;
             }
         }

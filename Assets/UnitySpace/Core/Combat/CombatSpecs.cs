@@ -62,6 +62,18 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A plasma cannon (U.SPC-T488): a devastating short-range bolt whose damage bleeds off over distance.</summary>
         PlasmaCannon,
+
+        /// <summary>An antimatter (photon) torpedo launcher (U.SPC-T489): a heavy guided warhead at medium range for frigates
+        /// and capitals, the hardest single hit in the game, tough but not too tough for a screen to shoot down.</summary>
+        AntimatterTorpedo,
+
+        /// <summary>A rotary flak cannon (U.SPC-T489): a destroyer's short-ranged screen gun, whose shells burst among
+        /// missiles and fighters and hurt everything hostile in the burst.</summary>
+        FlakCannon,
+
+        /// <summary>An interceptor missile launcher (U.SPC-T489): fast guided rounds that run down incoming missiles and
+        /// fighters before they reach the hulls the screen is guarding.</summary>
+        InterceptorMissile,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
@@ -166,6 +178,22 @@ namespace Unity.SpaceGod.Core
         /// <summary>A guided round whose seeker locks onto small craft as readily as onto hulls (U.SPC-T424).</summary>
         public bool SeeksSmallCraft;
 
+        /// <summary>A flak shell's burst, km (U.SPC-T489): every hostile missile and fighter within it is hurt, not only the one
+        /// it was laid on. Zero for every weapon that hits only what it hits.</summary>
+        public double BurstKm;
+
+        /// <summary>An antimatter torpedo (U.SPC-T489, see <see cref="ScreenWeapons"/> for its settings): medium-ranged, quicker
+        /// than a tube's torpedo and nearly twice the warhead, four to a launcher.</summary>
+        public static readonly WeaponSpec AntimatterTorpedo = new WeaponSpec { RangeKm = 20, Damage = 1600, Cooldown = 35, Accuracy = 1, Missile = true, MissileSpeedKmS = 1.3, Salvo = 1, Ammo = 4 };
+
+        /// <summary>A rotary flak cannon (U.SPC-T489): a shell every 0.8 s out to 5 km, each bursting over
+        /// <see cref="BurstKm"/> (times <see cref="ScreenWeapons.FlakBurst"/>) among the missiles and fighters it was laid on.</summary>
+        public static readonly WeaponSpec Flak = new WeaponSpec { RangeKm = 5, Damage = 30, Cooldown = 0.8, Accuracy = 0.6, AntiSmall = true, BurstKm = 0.4 };
+
+        /// <summary>An interceptor missile (U.SPC-T489): a fast, agile round that hunts an incoming missile (or a fighter) out
+        /// to 14 km, its warhead enough to kill any one of them.</summary>
+        public static readonly WeaponSpec Interceptor = new WeaponSpec { RangeKm = 14, Damage = 80, Cooldown = 3, Accuracy = 1, Missile = true, MissileSpeedKmS = 3.2, Salvo = 1, Ammo = 20, AntiSmall = true, SeeksSmallCraft = true };
+
         /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
         public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };
 
@@ -248,6 +276,9 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.TachyonLance: return 450;
                 case SubsystemKind.PhaserArray: return 260;
                 case SubsystemKind.PlasmaCannon: return 400;
+                case SubsystemKind.AntimatterTorpedo: return 300;
+                case SubsystemKind.FlakCannon: return 110;
+                case SubsystemKind.InterceptorMissile: return 120;
                 default: return 200;
             }
         }
@@ -274,6 +305,9 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.TachyonLance: return TachyonLances.Spec;
                 case SubsystemKind.PhaserArray: return EnergyWeapons.PhaserLance;
                 case SubsystemKind.PlasmaCannon: return EnergyWeapons.PlasmaCannon;
+                case SubsystemKind.AntimatterTorpedo: return WeaponSpec.AntimatterTorpedo;
+                case SubsystemKind.FlakCannon: return WeaponSpec.Flak;
+                case SubsystemKind.InterceptorMissile: return WeaponSpec.Interceptor;
                 default: return null;
             }
         }
@@ -305,6 +339,9 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.TachyonLance: return "Tachyon lance";
                 case SubsystemKind.PhaserArray: return "Phaser array";
                 case SubsystemKind.PlasmaCannon: return "Plasma cannon";
+                case SubsystemKind.AntimatterTorpedo: return "Antimatter torpedo";
+                case SubsystemKind.FlakCannon: return "Flak cannon";
+                case SubsystemKind.InterceptorMissile: return "Interceptor missiles";
                 default: return "Reactor";
             }
         }
@@ -415,6 +452,8 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, 0.027, 0, -0.49),
                     new SubsystemDef(SubsystemKind.Engine, 0.075, 0, -0.49),
                     new SubsystemDef(SubsystemKind.Reactor, 0, -0.01, -0.3),
+                    // A dorsal antimatter torpedo launcher on the bow (U.SPC-T489): a capital's heavy guided warhead.
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0, 0.06, 0.36, arcCenterDeg: 0, arcWidthDeg: 90),
                 },
             } },
             [ShipClass.Battleship] = new[] { new CombatSpec
@@ -455,6 +494,8 @@ namespace Unity.SpaceGod.Core
                     // A pair of bow torpedo tubes under the forward heavy battery (U.SPC-T377).
                     new SubsystemDef(SubsystemKind.TorpedoTube, 0.03, -0.025, 0.46, arcCenterDeg: 0, arcWidthDeg: 60),
                     new SubsystemDef(SubsystemKind.TorpedoTube, -0.03, -0.025, 0.46, arcCenterDeg: 0, arcWidthDeg: 60),
+                    // A dorsal antimatter torpedo launcher ahead of the forward battery (U.SPC-T489).
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0, 0.05, 0.33, arcCenterDeg: 0, arcWidthDeg: 90),
                 },
             } },
             [ShipClass.Cruiser] = new[] { new CombatSpec
@@ -515,6 +556,11 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, -0.035, 0, -0.47),
                     new SubsystemDef(SubsystemKind.Engine, 0.035, 0, -0.47),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
+                    // The anti-fighter screen beside its point defence (U.SPC-T489): a rotary flak cannon on each beam and an
+                    // interceptor launcher amidships, the umbrella that stops missile swarms and fighters short of the capitals.
+                    new SubsystemDef(SubsystemKind.FlakCannon, 0.06, 0.03, 0.05),
+                    new SubsystemDef(SubsystemKind.FlakCannon, -0.06, 0.03, 0.05),
+                    new SubsystemDef(SubsystemKind.InterceptorMissile, 0, 0.05, -0.15),
                 },
             } },
             [ShipClass.Freighter] = new[] { new CombatSpec
