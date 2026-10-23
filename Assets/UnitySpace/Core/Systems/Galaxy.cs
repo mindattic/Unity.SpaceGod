@@ -295,6 +295,7 @@ namespace Unity.SpaceGod.Core
         {
             DeepSpace = new DeepSpace(this);
             Polities.Command.Galaxy = this;
+            Polities.Statecraft.Galaxy = this;
         }
 
         /// <summary>The ships crossing between systems and the voyages that send them (see <see cref="InterstellarTraffic"/>).</summary>
@@ -371,6 +372,8 @@ namespace Unity.SpaceGod.Core
             Wars?.Update(jd);
             // The polities' standing directives: research accrues, and groups given objectives elsewhere are sent (U.SPC-T423).
             Polities.Command.Update(jd);
+            // The diplomacy game: opinions, pacts kept, allies called to arms, and the AI's proposals (U.SPC-T427).
+            Polities.Statecraft.Update(jd);
         }
 
         /// <summary>
@@ -451,6 +454,8 @@ namespace Unity.SpaceGod.Core
             // routes between the running systems, where the powers' relays and listening posts stand, from the start.
             g.DeepSpace.RouteLife = true;
             g.DeepSpace.SeedSystemRoutes();
+            // The powers treat with each other (and with the player) of their own accord (U.SPC-T427).
+            g.Polities.Statecraft.AutoDiplomacy = true;
             return g;
         }
 

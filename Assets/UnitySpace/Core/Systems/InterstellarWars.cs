@@ -238,6 +238,11 @@ namespace Unity.SpaceGod.Core
         {
             if (aggressor == null || defender == null || aggressor == defender || aggressor.IsPirate || defender.IsPirate) return null;
             if (Of(aggressor) != null || Of(defender) != null || Diplomacy.InTruce(aggressor, defender, jd)) return null;
+            // A pact that keeps the peace must be broken first (Statecraft.DeclareWar), and a vassal makes no war of its own (U.SPC-T427).
+            var statecraft = Polities.Statecraft;
+            if (statecraft.BoundToPeace(aggressor, defender)) return null;
+            var liege = statecraft.OverlordOf(aggressor);
+            if (liege != null && liege != defender) return null;
             var w = new Conflict { Aggressor = aggressor, Defender = defender, StartJd = jd, LastActiveJd = jd };
             if (goals != null && goals.Length > 0) w.Goals.AddRange(goals);
             else
@@ -1085,7 +1090,7 @@ namespace Unity.SpaceGod.Core
             var options = new List<(Faction f, Faction g, StarSystem goal)>();
             foreach (var f in Polities.Factions)
             {
-                if (!Warlike(f) || Polities.AtWar(f)) continue;
+                if (!Warlike(f) || Polities.AtWar(f) || Polities.Statecraft.OverlordOf(f) != null) continue;
                 double mine = NavyStrength(f);
                 if (mine <= 0) continue;
                 foreach (var home in Polities.SystemsWithHoldings(f))
@@ -1097,6 +1102,8 @@ namespace Unity.SpaceGod.Core
                         var next = link.Other(homeSystem);
                         var g = Polities.HolderOf(next.World);
                         if (g == null || g == f || !Warlike(g) || Polities.AtWar(g) || Diplomacy.InTruce(f, g, jd)) continue;
+                        // Bound by a pact, or too friendly to want it (U.SPC-T427).
+                        if (Polities.Statecraft.BoundToPeace(f, g) || Polities.Statecraft.Opinion(f, g) > 40) continue;
                         if (mine < DeclareRatio * Math.Max(NavyStrength(g), 1)) continue;
                         options.Add((f, g, next));
                     }

@@ -41,7 +41,14 @@ namespace Unity.SpaceGod.Core
         /// <summary>The strategy layer (U.SPC-T423): each polity's production, build and research priorities and its fleet groups' objectives.</summary>
         public StrategicCommand Command { get; }
 
-        public Polities() => Command = new StrategicCommand(this);
+        /// <summary>The diplomacy game (U.SPC-T427): opinions, pacts, proposals, declarations of war and peace between the states.</summary>
+        public Statecraft Statecraft { get; }
+
+        public Polities()
+        {
+            Command = new StrategicCommand(this);
+            Statecraft = new Statecraft(this);
+        }
 
         public IReadOnlyList<Faction> Factions => factions;
 

@@ -3243,7 +3243,7 @@ namespace Unity.SpaceGod.UI
             int seconds = Mathf.CeilToInt((float)hail.SecondsLeft(app.Clock.Jd));
             string s = "HAILED  ·  " + hail.By.Name.ToUpperInvariant() + " PATROL " + hail.Patrol.Name.ToUpperInvariant() + "  ·  " +
                 (hail.Interdiction ? "HEAVE TO:  1 pay the " + Credits(hail.Fine) + " fine, or be fired on in " + seconds + " s"
-                    : "CARGO SCAN: hold position, " + seconds + " s  (running is a crime)");
+                    : "CARGO SCAN: hold position, " + seconds + " s  (running is a crime)") + "    F12 parley";
             var line = new GUIContent(s);
             float lw = text.CalcSize(line).x + 28;
             var r = Panel(new Rect((Screen.width - lw) * 0.5f, Screen.height - 112, lw, 30));
@@ -3343,6 +3343,7 @@ namespace Unity.SpaceGod.UI
                 "K   satellites    R   auto-reorient on/off (keep this system's plane level)",
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 "F11  galaxy map: every system, who holds it, gate traffic, war fronts, blockades and raiders, as far as the news goes; click a star to inspect, double-click to travel",
+                "F12  hail the polity of the ship locked or selected (or the patrol hailing you) and treat with it; the galaxy map's DIPLOMACY panel: pacts, tribute, fealty, war and peace",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
                 "Take charge, any time   '  ;   jump into the next seat in the fight in view (a ship's helm, a fighter or bomber)   /   man the next gun on the hull",
                 "   in a fighter: mouse aims, W/S throttle, left mouse guns, right mouse torpedoes   P hands the seat back to its AI and returns you to command",

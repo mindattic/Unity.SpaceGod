@@ -55,6 +55,12 @@ namespace Unity.SpaceGod.UI
         PolityReport report;
         float reportAt = -10f;
 
+        /// <summary>The DIPLOMACY panel (the envoy screen, U.SPC-T427) is up in place of the system detail; the state treated with.</summary>
+        bool diplomacyMode, warArmed;
+        Faction envoyWith;
+        Vector2 diplomacyScroll;
+        float diplomacyHeight = 600;
+
         GUIStyle title, text, small, label, labelDim, button, buttonOn;
         Texture2D panelTex, buttonTex, buttonOnTex, glow;
 
@@ -121,7 +127,17 @@ namespace Unity.SpaceGod.UI
             if (Event.current.type == EventType.Repaint) DrawMap(canvas, jd);
             DrawHeader(header, jd);
             DrawLegend(legend);
-            if (commandMode) DrawCommand(detail, jd);
+            if (app.EnvoyTo != null)
+            {
+                // A hail from the helm (F12) opens the envoy on the polity hailed.
+                envoyWith = app.EnvoyTo;
+                app.EnvoyTo = null;
+                diplomacyMode = true;
+                commandMode = false;
+                warArmed = false;
+            }
+            if (diplomacyMode) DrawDiplomacy(detail, jd);
+            else if (commandMode) DrawCommand(detail, jd);
             else DrawDetail(detail, jd);
         }
 
@@ -461,13 +477,20 @@ namespace Unity.SpaceGod.UI
                 if (m.Known) known++;
             var old = GUI.contentColor;
             GUI.contentColor = Dim;
-            GUI.Label(new Rect(r.x + 14, r.y + 26, r.width - 400, 16),
+            GUI.Label(new Rect(r.x + 14, r.y + 26, r.width - 530, 16),
                 "As known in " + app.ActiveSystem.Name + "   ·   " + known + " of " + model.Systems.Count + " systems heard from   ·   " +
                 model.Links.Count + " gate links   ·   traffic over the last " + GalaxyMap.FlowWindowDays.ToString("0", CultureInfo.InvariantCulture) + " days", small);
             GUI.contentColor = old;
+            if (GUI.Button(new Rect(r.xMax - 470, r.y + 10, 120, 26), diplomacyMode ? "SYSTEM DETAIL" : "DIPLOMACY", diplomacyMode ? buttonOn : button))
+            {
+                diplomacyMode = !diplomacyMode;
+                commandMode = false;
+                warArmed = false;
+            }
             if (GUI.Button(new Rect(r.xMax - 340, r.y + 10, 120, 26), commandMode ? "SYSTEM DETAIL" : "COMMAND", commandMode ? buttonOn : button))
             {
                 commandMode = !commandMode;
+                diplomacyMode = false;
                 reportAt = -10f;
             }
             if (GUI.Button(new Rect(r.xMax - 210, r.y + 10, 120, 26), "Reset view", button)) fitted = false;
@@ -791,6 +814,175 @@ namespace Unity.SpaceGod.UI
             app.ShowToast(why ?? given + (given == 1 ? " group: " : " groups: ") + command.Describe(kind, target.World, -1, charge).ToLowerInvariant());
             reportAt = -10f;
         }
+
+        // ---------------------------------------------------------------- diplomacy (U.SPC-T427)
+
+        /// <summary>
+        /// The envoy screen (U.SPC-T427): the state you speak for (the one commanded), the proposals other states have put to
+        /// it waiting on your answer, every other state with its mood toward you and how you stand, and for the one picked
+        /// its answer to your hail, the pacts between you (each can be broken), every deal your envoy can put with how they
+        /// would take it (the same weighing the AI answers by), a gift, and a declaration of war (clicked twice).
+        /// </summary>
+        void DrawDiplomacy(Rect r, double jd)
+        {
+            var statecraft = app.Galaxy.Polities.Statecraft;
+            var command = app.Galaxy.Polities.Command;
+            var states = CommandableStates().FindAll(Statecraft.Party);
+            float x = r.x + 14, w = r.width - 28, top = r.y + 10;
+            if (states.Count == 0)
+            {
+                Line(ref top, x, w, "No state to speak for.", Dim);
+                return;
+            }
+            if (commanded == null || !states.Contains(commanded))
+            {
+                var mine = command.Player ?? app.Piloted.Ship?.Faction;
+                var holder = app.ActiveSystem.Holder;
+                commanded = mine != null && states.Contains(mine) ? mine : holder != null && states.Contains(holder) ? holder : states[0];
+                envoyWith = null;
+            }
+            command.Player = commanded;
+            var inv = CultureInfo.InvariantCulture;
+
+            if (GUI.Button(new Rect(x, top, 26, 22), "<", button)) CycleSpeaker(states, -1);
+            if (GUI.Button(new Rect(x + w - 26, top, 26, 22), ">", button)) CycleSpeaker(states, 1);
+            var old = GUI.contentColor;
+            GUI.contentColor = Tint(commanded.Color, 1);
+            GUI.Label(new Rect(x + 34, top + 2, w - 68, 22), commanded.Name.ToUpperInvariant(), title);
+            GUI.contentColor = old;
+            top += 28;
+
+            var view = new Rect(r.x + 4, top, r.width - 8, r.yMax - top - 6);
+            diplomacyScroll = GUI.BeginScrollView(view, diplomacyScroll, new Rect(0, 0, view.width - 16, Mathf.Max(diplomacyHeight, view.height)));
+            x = 10;
+            w = view.width - 36;
+            float y = 0;
+            Line(ref y, x, w, "Treasury " + commanded.Treasury.ToString("N0", inv) + " cr" + (statecraft.OverlordOf(commanded) != null ? "   ·   vassal of the " + statecraft.OverlordOf(commanded).Name : ""), Color.white);
+
+            // What the others have put to you.
+            var waiting = new List<Proposal>();
+            foreach (var p in statecraft.Inbox)
+                if (p.To == commanded) waiting.Add(p);
+            if (waiting.Count > 0)
+            {
+                Heading(ref y, x, w, "AWAITING YOUR ANSWER");
+                foreach (var p in waiting)
+                {
+                    double left = Statecraft.InboxDays - (jd - p.Jd);
+                    Line(ref y, x, w, Capital(p.Describe()) + "  (" + Math.Max(0, left).ToString("0", inv) + " days to answer)", Accent);
+                    float half = (w - 4) / 2;
+                    if (GUI.Button(new Rect(x, y, half, 22), "ACCEPT", buttonOn))
+                        app.ShowToast(statecraft.Answer(p, true, jd) ? "Agreed: " + p.Describe() : "That offer no longer stands");
+                    if (GUI.Button(new Rect(x + half + 4, y, half, 22), "DECLINE", button))
+                    {
+                        statecraft.Answer(p, false, jd);
+                        app.ShowToast("Declined: " + p.Describe());
+                    }
+                    y += 26;
+                }
+            }
+
+            Heading(ref y, x, w, "TREAT WITH");
+            foreach (var g in statecraft.Parties())
+            {
+                if (g == commanded) continue;
+                if (envoyWith == null) envoyWith = g;
+                bool on = g == envoyWith;
+                if (GUI.Button(new Rect(x, y, w, 34), GUIContent.none, on ? buttonOn : button))
+                {
+                    envoyWith = g;
+                    warArmed = false;
+                }
+                var c = GUI.contentColor;
+                GUI.contentColor = Tint(g.Color, 1);
+                GUI.Label(new Rect(x + 6, y + 1, w - 12, 16), g.Name, labelDim);
+                GUI.contentColor = statecraft.Polities.Diplomacy.Get(commanded, g) == Relation.War ? FrontColor : Dim;
+                GUI.Label(new Rect(x + 6, y + 16, w - 12, 16), Statecraft.Mood(statecraft.Opinion(g, commanded)) + "  ·  " + statecraft.Standing(commanded, g), small);
+                GUI.contentColor = c;
+                y += 36;
+            }
+
+            if (envoyWith != null && envoyWith != commanded && Statecraft.Party(envoyWith))
+            {
+                var them = envoyWith;
+                y += 4;
+                Heading(ref y, x, w, "ENVOY TO THE " + them.Name.ToUpperInvariant());
+                Line(ref y, x, w, statecraft.Hail(commanded, them, jd), Color.white);
+                Line(ref y, x, w, "They think of you " + statecraft.Opinion(them, commanded).ToString("0", inv) + " (" + Statecraft.Mood(statecraft.Opinion(them, commanded)) +
+                                  "); you of them " + statecraft.Opinion(commanded, them).ToString("0", inv) + ".  Navies " +
+                                  statecraft.Power(commanded).ToString("N0", inv) + " to " + statecraft.Power(them).ToString("N0", inv), Dim);
+
+                foreach (var p in statecraft.PactsOf(commanded))
+                {
+                    if (!p.Involves(them)) continue;
+                    string until = double.IsNaN(p.UntilJd) ? "" : "  (" + Math.Max(0, p.UntilJd - jd).ToString("0", inv) + " days left)";
+                    Line(ref y, x, w, Capital(p.Describe()) + until, CourseColor);
+                    if (GUI.Button(new Rect(x, y, w, 20), p.Kind == PactKind.Vassalage && p.A == commanded ? "THROW OFF THEIR RULE" : "BREAK IT", button))
+                    {
+                        statecraft.Break(p, commanded, jd);
+                        app.ShowToast("You break the " + p.Describe() + ": they will not forget it");
+                    }
+                    y += 24;
+                }
+
+                Heading(ref y, x, w, "PROPOSE");
+                foreach (var o in statecraft.Envoy(commanded, them, jd))
+                {
+                    string name = o.Deal.Name.ToUpperInvariant() + (o.Deal.HasAmount ? "  " + o.Amount.ToString("N0", inv) + " cr a month" : "");
+                    bool can = o.Unavailable == null;
+                    var was = GUI.enabled;
+                    GUI.enabled = was && can;
+                    if (GUI.Button(new Rect(x, y, w, 22), name, can && o.Read.Accepted ? buttonOn : button))
+                    {
+                        string why = statecraft.Propose(o.Deal, commanded, them, jd, out var answer, o.Amount);
+                        app.ShowToast(why ?? (answer == null ? "Put to them: they will answer" : (answer.Accepted ? "Agreed: " : "Refused: ") + answer.Main));
+                    }
+                    GUI.enabled = was;
+                    y += 24;
+                    if (!can) Line(ref y, x + 8, w - 8, o.Unavailable, Unknown);
+                    else Line(ref y, x + 8, w - 8, (o.Read.Accepted ? "They would agree: " : "They would refuse: ") + o.Read.Main, o.Read.Accepted ? CourseColor : FrontColor);
+                }
+
+                double gift = Statecraft.SuggestedGift(commanded);
+                if (GUI.Button(new Rect(x, y, w, 22), "SEND A GIFT  " + gift.ToString("N0", inv) + " cr", button))
+                    app.ShowToast(statecraft.Gift(commanded, them, gift, jd) ?? "The " + them.Name + " receives your gift");
+                y += 26;
+                if (statecraft.Polities.Diplomacy.Get(commanded, them) != Relation.War)
+                {
+                    if (GUI.Button(new Rect(x, y, w, 24), warArmed ? "CONFIRM: DECLARE WAR (breaks every pact with them)" : "DECLARE WAR", buttonOn))
+                    {
+                        if (!warArmed) warArmed = true;
+                        else
+                        {
+                            warArmed = false;
+                            string why = statecraft.DeclareWar(commanded, them, jd);
+                            app.ShowToast(why ?? "The " + commanded.Name + " is at war with the " + them.Name);
+                        }
+                    }
+                    y += 28;
+                }
+            }
+
+            Heading(ref y, x, w, "LATELY");
+            var record = statecraft.Record;
+            if (record.Count == 0) Line(ref y, x, w, "Nothing has passed between the states yet.", Dim);
+            for (int i = record.Count - 1; i >= 0 && i >= record.Count - 8; i--) Line(ref y, x, w, record[i], Dim);
+            if (Event.current.type == EventType.Repaint) diplomacyHeight = y + 10;
+            GUI.EndScrollView();
+        }
+
+        void CycleSpeaker(List<Faction> states, int step)
+        {
+            int i = states.IndexOf(commanded);
+            commanded = states[((i < 0 ? 0 : i) + step + states.Count) % states.Count];
+            app.Galaxy.Polities.Command.Player = commanded;
+            envoyWith = null;
+            warArmed = false;
+            commandGroup = null;
+            reportAt = -10f;
+        }
+
+        static string Capital(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 
         /// <summary>A plain star on the charts (U.SPC-T420): what is known of it, and an FTL course to it.</summary>
         void DrawStarDetail(Rect r, NearbyStar star)

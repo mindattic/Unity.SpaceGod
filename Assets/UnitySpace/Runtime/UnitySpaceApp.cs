@@ -199,6 +199,32 @@ namespace Unity.SpaceGod
         /// <summary>The galaxy map (F11, U.SPC-T103): a full screen of every system, its holder, the gate traffic, fronts and raiders.</summary>
         public bool ShowGalaxyMap { get; set; }
 
+        /// <summary>The polity the galaxy map's envoy screen opens on next (U.SPC-T427), set by a hail; the map takes it and clears it.</summary>
+        public Faction EnvoyTo { get; set; }
+
+        /// <summary>
+        /// F12 (U.SPC-T427): hails the polity of the ship locked at the helm, the one selected, or the patrol hailing you, in the
+        /// name of the polity you speak for (the one commanded from the map, else your own ship's), shows its answer and opens
+        /// the galaxy map's DIPLOMACY panel on it to treat.
+        /// </summary>
+        void HailPolity()
+        {
+            var statecraft = Galaxy.Polities.Statecraft;
+            Faction to = pilotLockTarget.IsShip ? pilotLockTarget.Ship.Faction : null;
+            if (to == null && Selected.IsShip) to = Selected.Ship.Faction;
+            if (to == null) to = World.Law?.Hail?.By;
+            var from = statecraft.Player ?? Piloted.Ship?.Faction;
+            if (to == null || to == from)
+            {
+                ShowToast("Nobody to hail: lock or select a ship of another polity first (F12 hails it)");
+                return;
+            }
+            ShowToast(statecraft.Hail(from, to, Clock.Jd));
+            if (!Statecraft.Party(to)) return;
+            EnvoyTo = to;
+            ShowGalaxyMap = true;
+        }
+
         /// <summary>The news feed panel in place of the four-line ticker (X).</summary>
         public bool ShowNews { get; set; }
         public bool ShowSpawn { get; set; }
@@ -752,6 +778,7 @@ namespace Unity.SpaceGod
             if (i.ToggleContracts) ShowContracts = !ShowContracts;
             if (i.ToggleFleet) ShowFleet = !ShowFleet;
             if (i.ToggleGalaxyMap) ShowGalaxyMap = !ShowGalaxyMap;
+            if (i.HailPolity) HailPolity();
             // At the helm X rolls the hull (Z/X): the news feed would free the cursor and take the stick and guns.
             if (i.ToggleNews && !AtControls) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;

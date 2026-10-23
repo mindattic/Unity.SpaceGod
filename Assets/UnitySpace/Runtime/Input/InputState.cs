@@ -75,6 +75,9 @@ namespace Unity.SpaceGod.Input
         /// <summary>F11: the galaxy map (U.SPC-T103).</summary>
         public bool ToggleGalaxyMap;
 
+        /// <summary>F12 (U.SPC-T427): hails the polity of the ship locked, selected or hailing you, and opens the envoy screen to treat with it.</summary>
+        public bool HailPolity;
+
         /// <summary>The news feed: the full log of what has happened, filterable (X).</summary>
         public bool ToggleNews;
 
@@ -217,6 +220,7 @@ namespace Unity.SpaceGod.Input
             ToggleContracts = kb.f7Key.wasPressedThisFrame;
             ToggleFleet = kb.f10Key.wasPressedThisFrame;
             ToggleGalaxyMap = kb.f11Key.wasPressedThisFrame;
+            HailPolity = kb.f12Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;
             ToggleSpawn = kb.vKey.wasPressedThisFrame;
             WatchBattle = kb.bKey.wasPressedThisFrame;
