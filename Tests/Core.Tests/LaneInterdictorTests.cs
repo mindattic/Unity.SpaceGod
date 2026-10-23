@@ -8,7 +8,8 @@ namespace Unity.SpaceGod.Core.Tests
     /// from any raider lying beside a lane. Raider bands sail with one for their lane ambushes and navies fly one in a lane
     /// picket, and ships its pulse throws out of the lane drop into the battle beside it as before.
     /// </summary>
-    [TestFixture]
+    // Not run beside other fixtures: one test fits a projector to another class for a moment, a static the save code walks.
+    [TestFixture, NonParallelizable]
     public class LaneInterdictorTests
     {
         const double StartJd = 2461324.0;
