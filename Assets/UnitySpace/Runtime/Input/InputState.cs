@@ -72,6 +72,9 @@ namespace Unity.SpaceGod.Input
         /// <summary>The player's own fleet and property (F10; F9 is the model viewer's): owned ships, captains, standing orders, the books.</summary>
         public bool ToggleFleet;
 
+        /// <summary>The trade desk (F12, U.SPC-T426): runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
+        public bool ToggleTrade;
+
         /// <summary>F11: the galaxy map (U.SPC-T103).</summary>
         public bool ToggleGalaxyMap;
 
@@ -219,6 +222,7 @@ namespace Unity.SpaceGod.Input
             ToggleBounties = kb.f4Key.wasPressedThisFrame;
             ToggleContracts = kb.f7Key.wasPressedThisFrame;
             ToggleFleet = kb.f10Key.wasPressedThisFrame;
+            ToggleTrade = kb.f12Key.wasPressedThisFrame;
             ToggleGalaxyMap = kb.f11Key.wasPressedThisFrame;
             HailPolity = kb.f12Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;
@@ -267,7 +271,7 @@ namespace Unity.SpaceGod.Input
             Boost = Slow = Fire = Cruise = FireEmp = DropMine = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleGalaxyMap = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = EngageFtl = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleTrade = ToggleGalaxyMap = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = EngageFtl = false;
             QuickSave = QuickLoad = ToggleSaves = false;
             ToggleFtlAutopilot = ClearFtlCourse = false;
             CycleFtlTarget = 0;

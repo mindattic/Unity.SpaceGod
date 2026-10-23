@@ -14,7 +14,7 @@ namespace Unity.SpaceGod.UI
     /// selection brackets and an off-screen pointer. Panels: time and scale bar, navigator tree,
     /// selection details, camera status and the controls card.
     /// </summary>
-    public sealed class Hud
+    public sealed partial class Hud
     {
         readonly UnitySpaceApp app;
         bool stylesReady;
@@ -153,6 +153,7 @@ namespace Unity.SpaceGod.UI
             if (app.ShowBounties) DrawBounties();
             if (app.ShowContracts) DrawContracts();
             if (app.ShowFleet) DrawFleet();
+            if (app.ShowTrade) DrawTradeDesk();
             if (app.ShowHelp) DrawHelp();
             if (app.ShowSaves) DrawSaves();
             DrawToast();
@@ -2486,14 +2487,19 @@ namespace Unity.SpaceGod.UI
             {
                 if (o.Lost) continue;
                 GUI.contentColor = o.Ship == flown ? new Color(0.55f, 1f, 0.6f) : Color.white;
-                string captain = o.Captain != null ? "Capt. " + o.Captain.Name : "no captain";
+                string captain = (o.Captain != null ? "Capt. " + o.Captain.Name : "no captain") + (world.Trade?.Insurance.Of(o) != null ? "  ·  insured" : "");
                 GUI.Label(new Rect(4, ly, 540, rowH), o.Name + "  (" + o.Ship.Spec.DisplayName + ")  ·  " + captain + "  ·  " + o.Orders.Describe(world.Catalog) + "  ·  net " + Credits(o.Net), small);
                 if (GUI.Button(new Rect(w - 36 - 236, ly, 70, rowH - 2), o.Captain == null ? "Hire" : "Dismiss", button))
                 {
                     if (o.Captain == null) app.ShowToast("Captain " + h.Hire(o, jd).Name + " takes the " + o.Name);
                     else h.Dismiss(o, jd);
                 }
-                if (GUI.Button(new Rect(w - 36 - 162, ly, 160, rowH - 2), "Orders: next", button))
+                if (o.OnCharter)
+                {
+                    GUI.contentColor = Dim;
+                    GUI.Label(new Rect(w - 36 - 162, ly, 160, rowH), "on charter (F12)", small);
+                }
+                else if (GUI.Button(new Rect(w - 36 - 162, ly, 160, rowH - 2), "Orders: next", button))
                 {
                     var next = NextOrders(o, sel);
                     app.ShowToast(o.Name + ": " + next.Describe(world.Catalog));
@@ -2545,6 +2551,7 @@ namespace Unity.SpaceGod.UI
                 claim != null ? StandingOrder.Mining(claim) : null,
                 charge != null && charge != o.Ship ? StandingOrder.Escort(charge) : null,
                 there >= 0 ? (here >= 0 && here != there ? StandingOrder.Patrol(here, there) : StandingOrder.Patrol(there)) : null,
+                StandingOrder.FreeTrade(),
             };
             int start = (int)o.Orders.Kind;
             for (int k = 1; k <= choices.Count; k++)
@@ -2568,6 +2575,8 @@ namespace Unity.SpaceGod.UI
             // Buy/Sell only make sense for a market the player's own ship could actually hand goods
             // over at right now -- not one merely being looked at from across the system.
             bool canTrade = market != null && app.CanTradeNow(market);
+            // Prices seen in port go into the trade desk's intelligence (U.SPC-T426).
+            if (canTrade && Event.current.type == EventType.Layout) app.World.Trade?.Intel.Observe(market, app.Clock.Jd, "seen in port");
             var law = app.World.Law;
             var pilotRecord = app.IsPiloting && law != null ? law.Player : null;
             bool lawful = market != null && market.Owner != null && !market.Owner.IsPirate;
@@ -3364,6 +3373,7 @@ namespace Unity.SpaceGod.UI
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
                 "F7  contracts board of the port in view: freight, passengers, colonists, escorts, patrols, surveys, bounties",
                 "F10  your fleet: buy hulls, warehouses, station shares and claims; hire captains and give them standing orders",
+                "F12  trade desk: runs from your price intelligence, brokers, trade news, charters, insurance, warehouses, the back door",
                 "F4  bounty board of the port in view: outlaws wanted there, their records, where last seen, who hunts them",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",

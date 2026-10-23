@@ -85,6 +85,10 @@ namespace Unity.SpaceGod.Core
         /// station shares and mining claims, and the house account their earnings go to (see <see cref="Core.Holdings"/>).</summary>
         public Holdings Holdings { get; private set; }
 
+        /// <summary>The player's trading career (U.SPC-T426): price intelligence, trade news, charters, insurance, the
+        /// back door and the trader's rank (see <see cref="Core.TradeDesk"/>).</summary>
+        public TradeDesk Trade { get; private set; }
+
         /// <summary>Factions founding new settlements as their people run out of room (U.SPC-T98).</summary>
         public Colonisation Colonisation { get; private set; }
 
@@ -161,6 +165,7 @@ namespace Unity.SpaceGod.Core
             Contracts.Update(jd);
             Escorts?.Update(jd);
             Holdings.Update(jd);
+            Trade?.Update(jd);
             Mining?.Update(jd);
             if (jd >= nextRecountJd)
             {
@@ -446,6 +451,7 @@ namespace Unity.SpaceGod.Core
             war.BattleEnded += Contracts.OnBattleEnded;
             // Each subsystem its own offset: two on one seed would draw the very same "random" numbers in step.
             Holdings = new Holdings(this, seed + 23);
+            Trade = new TradeDesk(this, seed + 41);
             WireMining(seed + 31);
             economy.DockAllowed = Law.AllowsDocking;
             economy.PriceFactor = Law.PriceFactorFor;

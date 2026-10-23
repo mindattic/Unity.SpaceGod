@@ -21,6 +21,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Make the round of a list of waypoints, fighting whatever hostile it finds there.</summary>
         Patrol,
+
+        /// <summary>Trade wherever pays best, as a merchant captain does: buy what earns most a day and carry it there
+        /// (U.SPC-T426; a hull out on charter works this way for its charterer).</summary>
+        FreeTrade,
     }
 
     /// <summary>A captain's standing orders: what to do, and where (the stops of a route or patrol, a claim, a charge).</summary>
@@ -45,6 +49,7 @@ namespace Unity.SpaceGod.Core
         public static StandingOrder Patrol(params int[] waypoints) => new StandingOrder { Kind = StandingOrderKind.Patrol, Stops = waypoints };
         public static StandingOrder Mining(Property claim) => new StandingOrder { Kind = StandingOrderKind.Mining, Claim = claim };
         public static StandingOrder Escort(Ship charge) => new StandingOrder { Kind = StandingOrderKind.Escort, Charge = charge };
+        public static StandingOrder FreeTrade() => new StandingOrder { Kind = StandingOrderKind.FreeTrade };
 
         /// <summary>The orders in a line: "trade route Earth - Mars - Ceres", "escorting MV Plenty".</summary>
         public string Describe(BodyCatalog catalog)
@@ -62,6 +67,7 @@ namespace Unity.SpaceGod.Core
                 case StandingOrderKind.Patrol: return "patrol " + Stops(", ");
                 case StandingOrderKind.Mining: return Claim == null ? "mining" : "mining " + Claim.Name;
                 case StandingOrderKind.Escort: return Charge == null ? "escort" : "escorting " + Charge.Name;
+                case StandingOrderKind.FreeTrade: return "free trading";
                 default: return "holding in port";
             }
         }
@@ -112,6 +118,12 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Mining time owed before it leaves the claim, days (set when it loads, spent as its dwell).</summary>
         internal double MiningDays;
+
+        /// <summary>The time charter it is out on (U.SPC-T426, see <see cref="Charters"/>), or null: while it runs, the ship
+        /// trades for its charterer, who keeps its takings and pays the house a day rate, and its orders are the charter's.</summary>
+        public Charter Charter;
+
+        public bool OnCharter => Charter != null && Charter.Active;
 
         public double Net => Earned - Spent - Wages - Repairs;
         public string Name => Ship.Name;
@@ -226,6 +238,14 @@ namespace Unity.SpaceGod.Core
 
         readonly Dictionary<Ship, OwnedShip> byShip = new Dictionary<Ship, OwnedShip>();
         double nextTickJd = double.NaN;
+
+        /// <summary>Raised when an owned ship is lost (destroyed, taken or cast adrift, not gone through a gate): the ship,
+        /// what it was worth with its cargo, and the date. Where an underwriter pays out (U.SPC-T426).</summary>
+        public event Action<OwnedShip, double, double> ShipLost;
+
+        /// <summary>Raised when a property is lost (seized by pirates, or lost with an abandoned port): the property, what it
+        /// was worth with its stock, and the date.</summary>
+        public event Action<Property, double, double> PropertyLost;
         int captainNames;
 
         // ---------------------------------------------------------------- tuning
@@ -309,6 +329,20 @@ namespace Unity.SpaceGod.Core
             House.Treasury -= amount;
             to.Treasury += amount;
             Book(jd, "Withdrawn to the " + to.Name + "'s purse", -amount, earned: false);
+            return true;
+        }
+
+        /// <summary>
+        /// Credits paid into (+) or out of (-) the house account by the house's other business (charter hire, insurance
+        /// premiums and claims, U.SPC-T426), booked as trade income or cost. False (and nothing moved) for a payment out
+        /// the account cannot cover, unless <paramref name="overdraw"/>.
+        /// </summary>
+        public bool Transact(double amount, string text, double jd, bool overdraw = false)
+        {
+            if (amount < 0 && !overdraw && House.Treasury < -amount) return false;
+            House.Treasury += amount;
+            Book(jd, text, amount);
+            if (double.IsNaN(nextTickJd)) nextTickJd = jd + TickDays;
             return true;
         }
 
@@ -416,10 +450,11 @@ namespace Unity.SpaceGod.Core
             return c;
         }
 
-        /// <summary>Lets the captain go: the ship lies in port (unless the player flies it) until another is hired.</summary>
+        /// <summary>Lets the captain go: the ship lies in port (unless the player flies it) until another is hired. Not
+        /// while it is out on charter: a hull is chartered with its crew.</summary>
         public void Dismiss(OwnedShip owned, double jd)
         {
-            if (owned?.Captain == null) return;
+            if (owned?.Captain == null || owned.OnCharter) return;
             Book(jd, $"Captain {owned.Captain.Name} leaves the {owned.Name}", 0, earned: false);
             owned.Captain = null;
         }
@@ -429,7 +464,10 @@ namespace Unity.SpaceGod.Core
         /// that cannot carry the claim's ore, a route of under two stops, escorting itself). They take effect when it
         /// next plans a trip.
         /// </summary>
-        public bool Order(OwnedShip owned, StandingOrder orders)
+        public bool Order(OwnedShip owned, StandingOrder orders) => !(owned?.OnCharter ?? false) && SetOrders(owned, orders);
+
+        /// <summary>Gives standing orders even to a ship out on charter (the charter's own: free trading, then its old orders back).</summary>
+        internal bool SetOrders(OwnedShip owned, StandingOrder orders)
         {
             if (owned == null || owned.Lost || orders == null || !CanFollow(owned.Ship, orders)) return false;
             owned.Orders = orders;
@@ -446,6 +484,8 @@ namespace Unity.SpaceGod.Core
             {
                 case StandingOrderKind.TradeRoute:
                     return o.Stops != null && o.Stops.Length >= 2 && Economy.CapacityOf(ship.Spec.Class) > 0;
+                case StandingOrderKind.FreeTrade:
+                    return Economy.CapacityOf(ship.Spec.Class) > 0;
                 case StandingOrderKind.Patrol:
                     return o.Stops != null && o.Stops.Length >= 1;
                 case StandingOrderKind.Mining:
@@ -463,7 +503,8 @@ namespace Unity.SpaceGod.Core
         {
             switch (kind)
             {
-                case StandingOrderKind.TradeRoute: return ShipRole.Trader;
+                case StandingOrderKind.TradeRoute:
+                case StandingOrderKind.FreeTrade: return ShipRole.Trader;
                 case StandingOrderKind.Mining: return ShipRole.Miner;
                 case StandingOrderKind.Patrol: return ShipRole.Patrol;
                 case StandingOrderKind.Escort: return ShipRole.Escort;
@@ -700,6 +741,14 @@ namespace Unity.SpaceGod.Core
             double delta = o.Ship.Credits - o.SeenCredits;
             o.SeenCredits = o.Ship.Credits;
             if (Math.Abs(delta) < 0.5) return;
+            // Out on charter: what it made or spent trading is the charterer's, who pays the house its hire instead.
+            if (o.OnCharter && o.Charter.Charterer != null)
+            {
+                House.Treasury -= delta;
+                o.Charter.Charterer.Cash += delta;
+                o.Charter.TradeResult += delta;
+                return;
+            }
             if (delta > 0)
             {
                 o.Earned += delta;
@@ -731,7 +780,17 @@ namespace Unity.SpaceGod.Core
                 Book(jd, $"The {o.Name} {how}", -value, cash: false);
                 // The cargo it was carrying was paid for out of the account: that cash is gone with it.
                 if (s.HasCargo) BookBalance -= s.CargoCost;
+                // On charter the cargo was the charterer's, bought on the house's credit: it makes the house good for it.
+                if (s.HasCargo && s.CargoCost > 0 && o.OnCharter && o.Charter.Charterer != null)
+                {
+                    o.Charter.Charterer.Cash -= s.CargoCost;
+                    o.Charter.TradeResult -= s.CargoCost;
+                    House.Treasury += s.CargoCost;
+                    Book(jd, $"{o.Charter.Charterer.Name} pays for its cargo lost aboard the {o.Name}", s.CargoCost);
+                    value -= s.CargoCost;
+                }
                 world.Log(jd, $"Your ship the {o.Name} {how}", WorldEventKind.Loss, s.Orbit?.Body ?? -1);
+                ShipLost?.Invoke(o, value, jd);
             }
             else Book(jd, $"The {o.Name} {how}", 0, earned: false);
             // Anyone escorting it stands down.
@@ -809,6 +868,7 @@ namespace Unity.SpaceGod.Core
             string what = abandoned ? " is lost with the abandoned " + p.Settlement.Name : " is seized";
             Book(jd, "The " + p.Name + what, -value, cash: false);
             world.Log(jd, "Your " + p.Name + what, WorldEventKind.Loss, p.Body);
+            PropertyLost?.Invoke(p, value, jd);
             return true;
         }
 
@@ -863,6 +923,7 @@ namespace Unity.SpaceGod.Core
                 case StandingOrderKind.Patrol: return NextWaypoint(o, here);
                 case StandingOrderKind.Mining: return NextForMining(o, here, jd);
                 case StandingOrderKind.Escort: return NextForEscort(o, here);
+                case StandingOrderKind.FreeTrade: return NextFreeTrade(o, here, jd);
                 default:
                     if (!ship.HasCargo) ship.Cargo = "Holding in port";
                     return here;
@@ -910,6 +971,18 @@ namespace Unity.SpaceGod.Core
             if (!ship.HasCargo) Economy.LoadFor(ship, here, to, jd);
             if (!ship.HasCargo) ship.Cargo = "Empty, on its route to " + world.Catalog[to].Name;
             return to;
+        }
+
+        /// <summary>A free trader's next port: the run that earns most a day from here, as any merchant captain picks it
+        /// (<see cref="Economy.PlanTrade"/>; with a load aboard nobody here took, where it sells best), else it waits for
+        /// work where it is.</summary>
+        int NextFreeTrade(OwnedShip o, int here, double jd)
+        {
+            var ship = o.Ship;
+            int to = Economy.PlanTrade(ship, here, jd);
+            if (to >= 0) return to;
+            if (!ship.HasCargo) ship.Cargo = o.OnCharter ? "On charter to " + o.Charter.Charterer.Name + ", looking for a cargo" : "Free trading, looking for a cargo";
+            return here;
         }
 
         int NextWaypoint(OwnedShip o, int here)

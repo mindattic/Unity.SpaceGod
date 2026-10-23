@@ -196,6 +196,9 @@ namespace Unity.SpaceGod
         /// <summary>The player's fleet and property (F10): buy hulls and property, hire captains, give standing orders, read the books.</summary>
         public bool ShowFleet { get; set; }
 
+        /// <summary>The trade desk (F12, U.SPC-T426): the trader's rank, runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
+        public bool ShowTrade { get; set; }
+
         /// <summary>The galaxy map (F11, U.SPC-T103): a full screen of every system, its holder, the gate traffic, fronts and raiders.</summary>
         public bool ShowGalaxyMap { get; set; }
 
@@ -231,7 +234,7 @@ namespace Unity.SpaceGod
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || ShowSaves || ShowGalaxyMap || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet)); // market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
+        bool ClickPanelOpen => ShowSpawn || ShowSaves || ShowGalaxyMap || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet || ShowTrade)); // market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -777,6 +780,7 @@ namespace Unity.SpaceGod
             if (i.ToggleBounties) ShowBounties = !ShowBounties;
             if (i.ToggleContracts) ShowContracts = !ShowContracts;
             if (i.ToggleFleet) ShowFleet = !ShowFleet;
+            if (i.ToggleTrade) ShowTrade = !ShowTrade;
             if (i.ToggleGalaxyMap) ShowGalaxyMap = !ShowGalaxyMap;
             if (i.HailPolity) HailPolity();
             // At the helm X rolls the hull (Z/X): the news feed would free the cursor and take the stick and guns.
@@ -825,7 +829,7 @@ namespace Unity.SpaceGod
             switch (EscapeKey.Route(ClickPanelOpen, AtControls, SpaceCamera.Mode != SpaceCamera.CameraMode.Free, !Selected.IsNone))
             {
                 case EscapeAction.ClosePanels:
-                    ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = ShowGalaxyMap = false;
+                    ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = ShowTrade = ShowGalaxyMap = false;
                     break;
                 case EscapeAction.LeaveFocus:
                     SpaceCamera.ExitFocus();
@@ -1168,6 +1172,9 @@ namespace Unity.SpaceGod
         {
             var notices = World.Law?.TakeNotices();
             if (notices != null && notices.Count > 0) ShowToast(string.Join("   ·   ", notices));
+            // The trade desk's news for the player: charters ending, claims paid, customs, a rank risen (U.SPC-T426).
+            var trade = World.Trade?.TakeNotices();
+            if (trade != null && trade.Count > 0) ShowToast(string.Join("   ·   ", trade));
         }
 
         /// <summary>
