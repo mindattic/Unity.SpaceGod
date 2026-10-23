@@ -957,7 +957,7 @@ namespace Unity.SpaceGod
             if (riding)
             {
                 BeginRide(ship, false);
-                ShowToast("Riding the " + ship.LaneLeg.Lane.Name + " lane at the helm of " + ship.Name + ", bound for " + Catalog[ship.LaneLeg.To].Name +
+                ShowToast("Riding the " + ship.LaneLeg.Lane.Name + " lane at the helm of " + ship.Name + ", bound for " + Fleet.Lanes.EndName(ship.LaneLeg.Lane, ship.LaneLeg.To) +
                           "  (number keys pick the off-ramp's exit, P to release)");
             }
         }

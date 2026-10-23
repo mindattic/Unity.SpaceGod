@@ -885,14 +885,18 @@ namespace Unity.SpaceGod.UI
             var ship = app.Piloted.Ship;
             var hop = ship.LaneLeg;
             double progress = Fleet.LaneProgress(ship, app.Clock.Jd);
-            string head = "HYPERLANE  ·  " + hop.Lane.Name.ToUpperInvariant() + "  ·  bound for " + app.Catalog[hop.To].Name +
+            var lanes = app.Fleet.Lanes;
+            // The ring chain flown through (U.SPC-T379): how many rings are behind the hull, and whether they are pushing it on or braking it.
+            int rings = app.RideRingCount(out int passed, out bool accelerating);
+            string head = (hop.Lane.IsGateSpur ? "GATE SPUR  ·  " : "HYPERLANE  ·  ") + hop.Lane.Name.ToUpperInvariant() + "  ·  bound for " + lanes.EndName(hop.Lane, hop.To) +
                           "  ·  " + Percent(progress) + "  ·  " + SpeedText(app.PilotSpeedKmS) +
+                          "  ·  ring " + passed + "/" + rings + (accelerating ? " accelerating" : " braking") +
                           "  ·  off-ramp in " + Mathf.CeilToInt((float)app.RideSecondsLeft) + " s";
-            var exits = new List<string> { (app.RideChoice < 0 ? "> " : "") + "1 come off at " + app.Catalog[hop.To].Name };
+            var exits = new List<string> { (app.RideChoice < 0 ? "> " : "") + "1 come off at " + lanes.EndName(hop.Lane, hop.To) };
             for (int i = 0; i < app.RideOnward.Count && i < 8; i++)
             {
                 var next = app.RideOnward[i];
-                exits.Add((app.RideChoice == i ? "> " : "") + (i + 2) + " on to " + app.Catalog[next.To].Name);
+                exits.Add((app.RideChoice == i ? "> " : "") + (i + 2) + " on to " + lanes.EndName(next.Lane, next.To));
             }
             string tail = "AT THE OFF-RAMP:  " + string.Join("    ", exits) + "    (P hands the ride to the crew)";
             var a = new GUIContent(head);
@@ -934,7 +938,8 @@ namespace Unity.SpaceGod.UI
             else if (app.CanRejoinLane)
             {
                 head = "BESIDE THE " + app.Piloted.Ship.LaneLeg.Lane.Name.ToUpperInvariant() + " LANE";
-                tail = "Y  back into the lane where you left it, on to " + app.Catalog[app.Piloted.Ship.LaneLeg.To].Name;
+                var leg = app.Piloted.Ship.LaneLeg;
+                tail = "Y  back into the lane where you left it, on to " + app.Fleet.Lanes.EndName(leg.Lane, leg.To);
             }
             if (head == null) return;
             var a = new GUIContent(head);

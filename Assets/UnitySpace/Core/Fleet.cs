@@ -853,8 +853,7 @@ namespace Unity.SpaceGod.Core
         {
             ship.Journey = new List<LaneHop> { hop };
             ship.JourneyIndex = 0;
-            ship.FinalBody = hop.To;
-            ship.DestinationBody = hop.To;
+            ship.FinalBody = ship.DestinationBody = RideDestination(hop);
             ship.Wander = false;
             ship.Ring = null;
             ship.HoldPoint = null;
@@ -862,6 +861,25 @@ namespace Unity.SpaceGod.Core
             ship.StrandedInFlight = false;
             ship.Orbit = FixedPoint(hop.From, helioKm - ephemeris.HelioAt(hop.From, jd));
             StartLane(ship, jd);
+        }
+
+        /// <summary>
+        /// Where a ride's crew make for if its pilot lets go of it: the far ramp's system, or, on a spur to a jump gate
+        /// (U.SPC-T379), which AI crews do not take on their own, back to the planetary system the spur leaves from.
+        /// </summary>
+        static int RideDestination(LaneHop hop) => hop.Lane.Gate != null && hop.To == hop.Lane.B ? hop.From : hop.To;
+
+        /// <summary>
+        /// The ring chain as a rider sees it (U.SPC-T379): how many rings its lane strings (<see cref="Hyperlanes.RingCount"/>),
+        /// how many it has flown through, and whether they are speeding it up or braking it for the far ramp.
+        /// </summary>
+        public static int RideRings(Ship ship, double jd, out int passed, out bool accelerating)
+        {
+            int count = Hyperlanes.RingCount(ship.LaneLengthKm);
+            passed = Hyperlanes.RingsPassed(LaneProgress(ship, jd), count);
+            double span = Math.Max(ship.PhaseEndJd - ship.PhaseStartJd, 1e-9);
+            accelerating = Hyperlanes.RingsAccelerate((jd - ship.PhaseStartJd) / span);
+            return count;
         }
 
         /// <summary>Whether a ride has reached the far ramp (a held rider waits there for its pilot's call).</summary>
@@ -881,8 +899,7 @@ namespace Unity.SpaceGod.Core
                 // A fresh list: a journey may be a planner's cached route, never to be added to.
                 ship.Journey = new List<LaneHop> { onward };
                 ship.JourneyIndex = 0;
-                ship.FinalBody = onward.To;
-                ship.DestinationBody = onward.To;
+                ship.FinalBody = ship.DestinationBody = RideDestination(onward);
                 StartLane(ship, jd);
                 return;
             }

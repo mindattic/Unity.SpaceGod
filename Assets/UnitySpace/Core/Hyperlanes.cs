@@ -20,6 +20,16 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public int Hub;
 
+        /// <summary>
+        /// The jump gate a gate spur leads to (U.SPC-T379), or null for an ordinary lane. A spur runs from
+        /// <see cref="A"/>, a planetary system on the network, to <see cref="B"/>, the system's root, where its
+        /// far ramp sits right at the gate (see <see cref="Hyperlanes.GateSpurs"/>).
+        /// </summary>
+        public JumpGate Gate;
+
+        /// <summary>Whether this is a spur to a jump gate rather than a lane between two planetary systems.</summary>
+        public bool IsGateSpur => Gate != null;
+
         public int Other(int system) => system == A ? B : A;
     }
 
@@ -44,6 +54,16 @@ namespace Unity.SpaceGod.Core
     /// and out, arriving at rest relative to the far ramp), then crosses from the far ramp to its
     /// destination, again under its own drive. Lanes bow gently to one side and swing wide of the
     /// Sun. Within one planet's system (Earth to the Moon, Io to Callisto) ships just fly.
+    ///
+    /// Flown at the helm (U.SPC-T41, U.SPC-T379) a lane is an X3 Rebirth highway: a chain of rings
+    /// (<see cref="RingCount"/>, about every <see cref="RingSpacingKm"/>) strung from ramp to ramp, which
+    /// speed a rider up through the first half of the ride and brake it through the second
+    /// (<see cref="Progress"/>). A pilot reaches a ramp under its own drive (thrusters, boost, then the
+    /// cruise drive), flies in through its ring gate and rides the same <see cref="Fleet.JoinLane"/> path
+    /// AI traffic does; there is no separate pilot-only lane. Each system's network also leads on to its
+    /// jump gates by a <see cref="GateSpurs">gate spur</see> per gate, joined by flying through either end's
+    /// ring, so a pilot can ride from a planet to a gate, jump, and pick up the far system's own network
+    /// at the gate it comes out of.
     /// </summary>
     public sealed class Hyperlanes
     {
@@ -114,6 +134,121 @@ namespace Unity.SpaceGod.Core
             };
             foreach (var (a, b, bend) in links) h.Add(a, b, bend);
             return h;
+        }
+
+        // ---------------------------------------------------------------- the ring chain (U.SPC-T379)
+
+        /// <summary>How far apart the rings strung along a lane are, km: a few dozen between Earth and Mars.</summary>
+        public const double RingSpacingKm = 2e6;
+
+        /// <summary>The fewest and most rings strung along any one lane.</summary>
+        public const int MinRings = 6, MaxRings = 240;
+
+        /// <summary>How many rings are strung along a lane of this length (between its two ramps' ring gates).</summary>
+        public static int RingCount(double lengthKm) =>
+            Math.Max(MinRings, Math.Min(MaxRings, (int)Math.Round(Math.Max(0, lengthKm) / RingSpacingKm)));
+
+        /// <summary>
+        /// Where ring <paramref name="k"/> (0 nearest whichever ramp the curve is measured from) of
+        /// <paramref name="count"/> sits, as a fraction along the lane: evenly spaced strictly between the ramps,
+        /// so the chain reads the same ridden either way.
+        /// </summary>
+        public static double RingFraction(int k, int count) => (k + 1.0) / (count + 1.0);
+
+        /// <summary>How many of a lane's <paramref name="count"/> rings a rider <paramref name="progress"/> of the way along has flown through.</summary>
+        public static int RingsPassed(double progress, int count) =>
+            Math.Max(0, Math.Min(count, (int)Math.Floor(Math.Max(0, progress) * (count + 1) + 1e-9)));
+
+        /// <summary>Whether the rings are speeding a rider up (the first half of its ride, by time) rather than braking it for the far ramp.</summary>
+        public static bool RingsAccelerate(double timeFraction) => timeFraction < 0.5;
+
+        // ---------------------------------------------------------------- gate spurs (U.SPC-T379)
+
+        /// <summary>
+        /// The spurs that lead the network on to the system's jump gates, one per gate (<see cref="AddGateSpur"/>).
+        /// Kept apart from <see cref="Lanes"/>: AI traffic's routes, tolls, law and raiders work the lanes between
+        /// planetary systems and reach the gates by their own in-system legs (see <see cref="InterstellarTraffic"/>),
+        /// so a spur is for the helm, ridden by the same <see cref="Fleet.JoinLane"/> as any lane.
+        /// </summary>
+        public readonly List<Lane> GateSpurs = new List<Lane>();
+
+        /// <summary>Spur ids start here, clear of the lanes' own (the length cache is keyed by id).</summary>
+        public const int GateSpurIdBase = 100000;
+
+        /// <summary>
+        /// How far in front of its gate (toward the network) a spur's far ramp sits, km: inside the gate's
+        /// <see cref="JumpGate.ActivationRangeKm"/>, so a ride to the gate ends where the gate can be opened.
+        /// </summary>
+        public const double GateRampInsetKm = 200;
+
+        /// <summary>Where a gate stands, in this system's coordinates (relative to its root, as <see cref="StarSystem.GateInRange"/> takes them).</summary>
+        public static DVec3 GateHelio(JumpGate gate) => gate.PositionKm;
+
+        /// <summary>
+        /// Strings a spur from the network to <paramref name="gate"/>: from whichever planetary system on a lane
+        /// lies nearest the gate at <paramref name="jd"/>, to a ramp just in front of the gate. Null when the system
+        /// has no lanes to lead on from (a frontier system, a Void Base). Adding the same gate again returns its spur.
+        /// </summary>
+        public Lane AddGateSpur(JumpGate gate, double jd)
+        {
+            if (gate == null || Lanes.Count == 0) return null;
+            foreach (var spur in GateSpurs)
+                if (spur.Gate == gate) return spur;
+            var at = GateHelio(gate);
+            int best = -1;
+            double bestKm = double.MaxValue;
+            foreach (var lane in Lanes)
+                for (int end = 0; end < 2; end++)
+                {
+                    int system = end == 0 ? lane.A : lane.B;
+                    double km = (ephemeris.HelioAt(system, jd) - at).Length;
+                    if (km >= bestKm) continue;
+                    bestKm = km;
+                    best = system;
+                }
+            if (best < 0) return null;
+            int root = catalog.Root.Index;
+            var made = new Lane
+            {
+                Id = GateSpurIdBase + GateSpurs.Count,
+                A = best,
+                B = root,
+                Bend = GateSpurs.Count % 2 == 0 ? 0.03 : -0.03,
+                Name = catalog[best].Name + "–" + gate.Name,
+                Hub = root,
+                Gate = gate,
+            };
+            GateSpurs.Add(made);
+            return made;
+        }
+
+        /// <summary>What a lane's end at <paramref name="at"/> is called: its planetary system, or a spur's gate.</summary>
+        public string EndName(Lane lane, int at) => lane.Gate != null && at == lane.B ? lane.Gate.Name : catalog[at].Name;
+
+        /// <summary>Where a lane's end at <paramref name="at"/> is anchored: its planet, or for a spur's far end, its gate.</summary>
+        DVec3 AnchorHelio(Lane lane, int at, double jd) =>
+            lane.Gate != null && at == lane.B ? GateHelio(lane.Gate) : ephemeris.HelioAt(at, jd);
+
+        /// <summary>
+        /// The gate spur whose ring (at either end) the segment from <paramref name="fromHelio"/> to
+        /// <paramref name="toHelio"/> (true km) flies through, heading along the spur, as the hop that rides it away
+        /// from that end, or null. A spur is joined by flying through its ring the way it runs, not by being
+        /// near it, so a hull just come out of the gate, or brought off at the ramp, is not swept back in.
+        /// </summary>
+        public LaneHop? GateSpurRingCrossed(DVec3 fromHelio, DVec3 toHelio, double jd)
+        {
+            foreach (var spur in GateSpurs)
+                for (int end = 0; end < 2; end++)
+                {
+                    int at = end == 0 ? spur.A : spur.B;
+                    var centre = RampHelio(spur, at, jd);
+                    var n = RampDirection(spur, at, jd);
+                    double d0 = DVec3.Dot(fromHelio - centre, n), d1 = DVec3.Dot(toHelio - centre, n);
+                    if (!(d0 < 0 && d1 >= 0)) continue;
+                    var hit = fromHelio + (toHelio - fromHelio) * (d0 / (d0 - d1));
+                    if ((hit - centre).Length <= GateRadiusKm) return new LaneHop(spur, at, spur.Other(at));
+                }
+            return null;
         }
 
         public Lane Add(string a, string b, double bend)
@@ -213,9 +348,16 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The ramp's direction from its planet: toward the system at the lane's other end.</summary>
         public DVec3 RampDirection(Lane lane, int at, double jd) =>
-            (ephemeris.HelioAt(lane.Other(at), jd) - ephemeris.HelioAt(at, jd)).Normalized;
+            (AnchorHelio(lane, lane.Other(at), jd) - AnchorHelio(lane, at, jd)).Normalized;
 
-        public DVec3 RampOffset(Lane lane, int at, double jd) => RampDirection(lane, at, jd) * RampRadiusKm(at);
+        /// <summary>
+        /// The ramp's offset from body <paramref name="at"/>: out past its moons toward the lane's other end, or for a
+        /// gate spur's far end, just in front of its gate (<see cref="GateRampInsetKm"/>).
+        /// </summary>
+        public DVec3 RampOffset(Lane lane, int at, double jd) =>
+            lane.Gate != null && at == lane.B
+                ? GateHelio(lane.Gate) + RampDirection(lane, at, jd) * GateRampInsetKm - ephemeris.HelioAt(at, jd)
+                : RampDirection(lane, at, jd) * RampRadiusKm(at);
 
         public DVec3 RampHelio(Lane lane, int at, double jd) => ephemeris.HelioAt(at, jd) + RampOffset(lane, at, jd);
 
@@ -247,13 +389,18 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// The lanes a rider coming off at <paramref name="system"/>'s ramp could carry on along (the
-        /// off-ramp's exit choice), never straight back down <paramref name="cameIn"/>.
+        /// off-ramp's exit choice), never straight back down <paramref name="cameIn"/>: the lanes on to other
+        /// planetary systems, then the spurs on to the system's jump gates. A spur's far end, at its gate,
+        /// leads on to nothing but the gate.
         /// </summary>
         public List<LaneHop> OnwardHops(int system, Lane cameIn)
         {
             var hops = new List<LaneHop>();
+            if (cameIn != null && cameIn.Gate != null && system == cameIn.B) return hops;
             foreach (var lane in Lanes)
                 if (lane != cameIn && (lane.A == system || lane.B == system)) hops.Add(new LaneHop(lane, system, lane.Other(system)));
+            foreach (var spur in GateSpurs)
+                if (spur != cameIn && spur.A == system) hops.Add(new LaneHop(spur, system, spur.B));
             return hops;
         }
 

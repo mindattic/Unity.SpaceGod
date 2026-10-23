@@ -29,6 +29,8 @@ namespace Unity.SpaceGod.Core
             gates.Add(gate);
             // Its world's raiders can lie in wait off it (U.SPC-T94).
             World.Gates.Add(gate);
+            // And its hyperlane network leads on to it, by a spur a pilot can ride (U.SPC-T379).
+            World.Fleet?.Lanes?.AddGateSpur(gate, Ephemeris.Jd);
         }
 
         /// <summary>This system's gate straight to <paramref name="other"/>, or null if they are not directly linked.</summary>

@@ -14,6 +14,12 @@ namespace Unity.SpaceGod
     /// there). Going in and coming out the gate flashes and the view kicks wide; on the lane, tunnel
     /// streaks stream past and the field of view opens with the ride's speed, closing again as it eases
     /// to rest at the off-ramp.
+    ///
+    /// The lane is a chain of rings the hull flies through (U.SPC-T379, drawn by <see cref="Views.LaneView"/> when
+    /// near enough to see), speeding it up through the first half and braking it through the second; each
+    /// system's network leads on to its jump gates by a spur per gate, joined by flying through the ring at
+    /// either end the way it runs, so a ride can end in range of a gate and, through it, pick up the far
+    /// system's own network at the spur beside its gate.
     /// </summary>
     public sealed partial class UnitySpaceApp
     {
@@ -23,6 +29,15 @@ namespace Unity.SpaceGod
         /// <summary>The lanes the ride's off-ramp leads on to (keys 2 and up), and the one picked (-1: come off, key 1).</summary>
         public List<LaneHop> RideOnward { get; } = new List<LaneHop>();
         public int RideChoice { get; private set; } = -1;
+
+        /// <summary>The ring chain of the lane ridden (U.SPC-T379): how many rings it strings, how many the hull has flown
+        /// through, and whether they are speeding it up or braking it; 0 rings when not riding.</summary>
+        public int RideRingCount(out int passed, out bool accelerating)
+        {
+            passed = 0;
+            accelerating = false;
+            return RidingLane ? Fleet.RideRings(Piloted.Ship, Clock.Jd, out passed, out accelerating) : 0;
+        }
 
         /// <summary>The ride's speed as a fraction of its peak (0 at either ramp, 1 midway).</summary>
         public float LaneRideSpeed { get; private set; }
@@ -163,7 +178,28 @@ namespace Unity.SpaceGod
             SalvageApproach = null;
             BeginRide(ship, false);
             fovKick = GateFovKick;
-            ShowToast("Back into the " + ship.LaneLeg.Lane.Name + " lane, bound for " + Catalog[ship.LaneLeg.To].Name);
+            ShowToast("Back into the " + ship.LaneLeg.Lane.Name + " lane, bound for " + Fleet.Lanes.EndName(ship.LaneLeg.Lane, ship.LaneLeg.To));
+        }
+
+        /// <summary>Where the hull was last frame, and in which system, for flying through a gate spur's ring (U.SPC-T379); null after a ride or a jump.</summary>
+        DVec3? lastSpurCheckHelio;
+        StarSystem lastSpurCheckSystem;
+
+        /// <summary>
+        /// The gate spur ring the hull has just flown through this frame, heading along the spur (U.SPC-T379), or null.
+        /// A spur is joined by threading its ring the way it runs rather than by being inside it, so a hull just come out
+        /// of a gate (right beside the spur's ring there) or just brought off at its ramp is not swept back in.
+        /// </summary>
+        LaneHop? SpurRingFlownThrough(Hyperlanes lanes, DVec3 helio)
+        {
+            var before = lastSpurCheckSystem == ActiveSystem ? lastSpurCheckHelio : null;
+            lastSpurCheckHelio = helio;
+            lastSpurCheckSystem = ActiveSystem;
+            if (!before.HasValue || lanes.GateSpurs.Count == 0) return null;
+            var from = before.Value;
+            // A jump across the system in one frame (a ride's end, a teleport) is not a flight through anything.
+            if ((helio - from).Length > Hyperlanes.GateRadiusKm * 4) return null;
+            return lanes.GateSpurRingCrossed(from, helio, Clock.Jd);
         }
 
         /// <summary>What the war has to say about the lane ridden (a pulse slipped, or one that caught the hull), as toasts.</summary>
@@ -181,14 +217,23 @@ namespace Unity.SpaceGod
             var helio = Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
             var hop = lanes.OnRampAt(helio, Clock.Jd);
             bool inside = hop.HasValue;
-            bool enter = inside && !insideRampGate && ship.Battle == null && Salvage == null;
+            bool enter = inside && !insideRampGate;
             insideRampGate = inside;
-            if (!enter) return;
+            // Not inside a lane's ramp: perhaps through the ring at either end of a spur to a jump gate (U.SPC-T379).
+            var spur = SpurRingFlownThrough(lanes, helio);
+            if (!enter && spur.HasValue)
+            {
+                hop = spur;
+                enter = true;
+            }
+            if (!enter || ship.Battle != null || Salvage != null) return;
             Fleet.JoinLane(ship, hop.Value, helio, Clock.Jd);
             SalvageApproach = null;
             BeginRide(ship, true);
-            ShowToast("Into the " + hop.Value.Lane.Name + " lane, bound for " + Catalog[hop.Value.To].Name +
-                      "  (number keys pick the off-ramp's exit, P hands the ride to the crew)");
+            var lane = hop.Value.Lane;
+            ShowToast("Into the " + lane.Name + (lane.IsGateSpur ? " spur" : " lane") + ", bound for " + lanes.EndName(lane, hop.Value.To) +
+                      (lane.IsGateSpur && hop.Value.To == lane.B ? "  (Y at the gate to jump, P hands the ride to the crew)"
+                          : "  (number keys pick the off-ramp's exit, P hands the ride to the crew)"));
         }
 
         /// <summary>Sets the helm up for a ride the hull has just joined (flying in, carrying on at a junction, or taken mid-ride).</summary>
@@ -210,6 +255,7 @@ namespace Unity.SpaceGod
             pilotCruise = default;
             pilotBoosting = false;
             nearGate = null;
+            lastSpurCheckHelio = null;
             if (throughGate) GateEffect(hop.Lane, hop.From);
         }
 
@@ -223,6 +269,7 @@ namespace Unity.SpaceGod
             LaneRideSpeed = 0;
             RideThreat = null;
             warnedOf = null;
+            lastSpurCheckHelio = null;
         }
 
         void GateEffect(Lane lane, int at)
@@ -269,13 +316,14 @@ namespace Unity.SpaceGod
             if (Input.NumberKey == 1 && RideChoice != -1)
             {
                 RideChoice = -1;
-                ShowToast("At the off-ramp: come off at " + Catalog[ship.LaneLeg.To].Name);
+                ShowToast("At the off-ramp: come off at " + Fleet.Lanes.EndName(ship.LaneLeg.Lane, ship.LaneLeg.To));
             }
             else if (Input.NumberKey >= 2 && Input.NumberKey - 2 < RideOnward.Count)
             {
                 RideChoice = Input.NumberKey - 2;
                 var next = RideOnward[RideChoice];
-                ShowToast("At the off-ramp: on along the " + next.Lane.Name + " lane to " + Catalog[next.To].Name + "  (1 to come off instead)");
+                ShowToast("At the off-ramp: on along the " + next.Lane.Name + (next.Lane.IsGateSpur ? " spur" : " lane") + " to " +
+                          Fleet.Lanes.EndName(next.Lane, next.To) + "  (1 to come off instead)");
             }
 
             if (Fleet.RideOver(ship, jd))
@@ -311,7 +359,8 @@ namespace Unity.SpaceGod
             if (next is LaneHop onward)
             {
                 BeginRide(ship, false);
-                ShowToast("On along the " + onward.Lane.Name + " lane, bound for " + Catalog[onward.To].Name);
+                ShowToast("On along the " + onward.Lane.Name + (onward.Lane.IsGateSpur ? " spur" : " lane") + ", bound for " +
+                          Fleet.Lanes.EndName(onward.Lane, onward.To));
                 return;
             }
             EndRide();
@@ -325,7 +374,11 @@ namespace Unity.SpaceGod
             ResetPilotAim();
             insideRampGate = true;
             LaneExitFade = 1;
-            ShowToast("Off the " + hop.Lane.Name + " lane at " + Catalog[hop.To].Name);
+            // A spur's far end is at its gate, in range to open it (U.SPC-T379).
+            if (hop.Lane.IsGateSpur && hop.To == hop.Lane.B)
+                ShowToast("Off the " + hop.Lane.Name + " spur at " + hop.Lane.Gate.Name.ToUpperInvariant() +
+                          (hop.Lane.Gate.Destination != null ? ", to " + hop.Lane.Gate.Destination.Name.ToUpperInvariant() + " (Y to jump)" : ""));
+            else ShowToast("Off the " + hop.Lane.Name + (hop.Lane.IsGateSpur ? " spur" : " lane") + " at " + Fleet.Lanes.EndName(hop.Lane, hop.To));
         }
     }
 }
