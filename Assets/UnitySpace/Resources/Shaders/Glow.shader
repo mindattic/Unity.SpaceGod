@@ -21,7 +21,7 @@ Shader "Unity.SpaceGod/Glow"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "PipelineCore.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _Color;

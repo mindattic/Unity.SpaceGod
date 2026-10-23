@@ -19,7 +19,7 @@ Shader "Unity.SpaceGod/Fx"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "PipelineCore.hlsl"
 
             struct Attributes
             {

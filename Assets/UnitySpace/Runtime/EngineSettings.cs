@@ -23,7 +23,7 @@ namespace Unity.SpaceGod
             "Anti-aliasing (MSAA 4x)", true, "Smooths the edges of hulls, rings and orbit lines, at some cost on a slow GPU.",
             "antialiasing jaggies edges multisample quality").Applying(on =>
             {
-                foreach (var cam in Camera.allCameras) cam.allowMSAA = on;
+                foreach (var cam in Camera.allCameras) Rendering.RenderBackend.Active.SetMsaa(cam, on);
             });
 
         public static readonly RangeSetting MasterVolume = new RangeSetting("audio.masterVolume", SettingGroups.Audio,

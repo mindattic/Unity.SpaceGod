@@ -1,32 +1,28 @@
+using Unity.SpaceGod.Core;
 using UnityEngine;
 
 namespace Unity.SpaceGod.Rendering
 {
-    /// <summary>Loads the project's shaders from Resources (which also guarantees they ship in builds).</summary>
+    /// <summary>
+    /// The game's shaders, as the active render pipeline supplies them (U.SPC-T429: <see cref="RenderBackend"/> loads
+    /// each from its pipeline's Resources folder, which also guarantees they ship in builds), and the materials made
+    /// from them.
+    /// </summary>
     public static class Materials
     {
-        public static Shader Planet => Load("Planet");
-        public static Shader Sun => Load("Sun");
-        public static Shader Glow => Load("Glow");
-        public static Shader Ring => Load("Ring");
-        public static Shader Ship => Load("Ship");
-        public static Shader Line => Load("Line");
-        public static Shader Stars => Load("Stars");
-        public static Shader GasGiant => Load("GasGiant");
-        public static Shader Asteroids => Load("Asteroids");
-        public static Shader Fx => Load("Fx");
-        public static Shader Points => Load("Points");
+        public static Shader Planet => Load(RenderShaders.Planet);
+        public static Shader Sun => Load(RenderShaders.Sun);
+        public static Shader Glow => Load(RenderShaders.Glow);
+        public static Shader Ring => Load(RenderShaders.Ring);
+        public static Shader Ship => Load(RenderShaders.Ship);
+        public static Shader Line => Load(RenderShaders.Line);
+        public static Shader Stars => Load(RenderShaders.Stars);
+        public static Shader GasGiant => Load(RenderShaders.GasGiant);
+        public static Shader Asteroids => Load(RenderShaders.Asteroids);
+        public static Shader Fx => Load(RenderShaders.Fx);
+        public static Shader Points => Load(RenderShaders.Points);
 
-        static Shader Load(string name)
-        {
-            var shader = Resources.Load<Shader>("Shaders/" + name);
-            if (shader == null)
-            {
-                Debug.LogError($"[Unity.SpaceGod] Missing shader Resources/Shaders/{name}");
-                shader = Shader.Find("Hidden/InternalErrorShader");
-            }
-            return shader;
-        }
+        static Shader Load(string name) => RenderBackend.Active.LoadShader(name);
 
         public static Material Create(Shader shader, string name)
         {

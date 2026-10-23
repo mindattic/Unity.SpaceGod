@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.Rendering.Universal;
 
 namespace Unity.SpaceGod
 {
@@ -140,10 +139,8 @@ namespace Unity.SpaceGod
                 var camGo = new GameObject("ModelViewerCamera");
                 camGo.transform.SetParent(transform, false);
                 viewCamera = camGo.AddComponent<Camera>();
-                // URP needs its own per-camera data component -- a camera added purely at runtime via
-                // AddComponent<Camera>() (unlike one placed in the scene through the Inspector) doesn't
-                // get one automatically, and without it URP may not render it correctly at all.
-                camGo.AddComponent<UniversalAdditionalCameraData>();
+                // Whatever the render pipeline needs of a camera added at runtime (URP: its per-camera data).
+                Rendering.RenderBackend.Active.SetupCamera(viewCamera, Rendering.CameraRole.Overlay);
                 viewCamera.clearFlags = CameraClearFlags.SolidColor;
                 viewCamera.backgroundColor = new Color(0.05f, 0.06f, 0.09f);
                 // Highest depth in the scene wins the screen regardless of how the game's own camera is
@@ -153,12 +150,8 @@ namespace Unity.SpaceGod
                 // viewer's), so restrict this camera to its own layer rather than relying on disabling
                 // other cameras to keep that content out of frame.
                 viewCamera.cullingMask = 1 << ModelViewerLayer;
-                var light = new GameObject("ModelViewerLight").AddComponent<Light>();
-                light.transform.SetParent(camGo.transform, false);
-                light.type = LightType.Directional;
-                light.transform.rotation = Quaternion.Euler(35f, -30f, 0f);
-                light.intensity = 1.2f;
-                light.cullingMask = 1 << ModelViewerLayer;
+                Rendering.RenderBackend.Active.AddKeyLight(camGo.transform, "ModelViewerLight", Quaternion.Euler(35f, -30f, 0f), 1.2f,
+                    1 << ModelViewerLayer);
             }
 
             disabledCameras.Clear();

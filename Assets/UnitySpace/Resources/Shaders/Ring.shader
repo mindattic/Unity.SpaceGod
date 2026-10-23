@@ -24,7 +24,7 @@ Shader "Unity.SpaceGod/Ring"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "PipelineCore.hlsl"
             #include "SolarCommon.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
@@ -51,9 +51,9 @@ Shader "Unity.SpaceGod/Ring"
             Varyings vert(Attributes v)
             {
                 Varyings o;
-                VertexPositionInputs p = GetVertexPositionInputs(v.positionOS.xyz);
-                o.positionCS = p.positionCS;
-                o.positionWS = p.positionWS;
+                float3 positionWS = TransformObjectToWorld(v.positionOS.xyz);
+                o.positionCS = TransformWorldToHClip(positionWS);
+                o.positionWS = positionWS;
                 o.normalWS = TransformObjectToWorldNormal(float3(0, 1, 0));
                 o.uv = v.uv;
                 return o;

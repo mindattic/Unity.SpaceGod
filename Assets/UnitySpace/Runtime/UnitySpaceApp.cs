@@ -490,8 +490,11 @@ namespace Unity.SpaceGod
             UnityCamera.fieldOfView = 60f;
             UnityCamera.nearClipPlane = 0.1f;
             UnityCamera.farClipPlane = 5e8f;
-            UnityCamera.allowHDR = false;
-            UnityCamera.allowMSAA = EngineSettings.Msaa.Value;
+            // Whatever the pipeline needs of its camera (HDR off, its per-camera data) and no post-processing yet.
+            var backend = RenderBackend.Active;
+            backend.SetupCamera(UnityCamera, CameraRole.Main);
+            backend.SetMsaa(UnityCamera, EngineSettings.Msaa.Value);
+            backend.SetPostProcessing(UnityCamera, PostProcessLook.None);
             var listener = UnityCamera.GetComponent<AudioListener>();
             if (listener != null) listener.enabled = true;
         }
@@ -2442,20 +2445,20 @@ namespace Unity.SpaceGod
                 }
             }
             if (first < 0) first = 0;
-            Shader.SetGlobalVector("_SunPositionWS", Relative(bodyScene[first]));
-            Shader.SetGlobalVector("_SunColor", LightColor(Catalog[first], 1));
+            var light = new StarLighting { SunPosition = Relative(bodyScene[first]), SunColor = LightColor(Catalog[first], 1) };
             if (second >= 0)
             {
                 // The square root keeps a companion's light a visible fill; the true ratio would hide it.
                 float strength = Mathf.Clamp01((float)Math.Sqrt(next / best)) * 0.9f;
-                Shader.SetGlobalVector("_Sun2PositionWS", Relative(bodyScene[second]));
-                Shader.SetGlobalVector("_Sun2Color", LightColor(Catalog[second], strength));
+                light.Sun2Position = Relative(bodyScene[second]);
+                light.Sun2Color = LightColor(Catalog[second], strength);
             }
             else
             {
-                Shader.SetGlobalVector("_Sun2PositionWS", Relative(bodyScene[first]));
-                Shader.SetGlobalVector("_Sun2Color", Vector4.zero);
+                light.Sun2Position = Relative(bodyScene[first]);
+                light.Sun2Color = Vector4.zero;
             }
+            RenderBackend.Active.Lighting = light;
         }
 
         static readonly Rgb SunLight = AlphaCentauri.StarColor(5772);

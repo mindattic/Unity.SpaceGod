@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Unity.SpaceGod.Core;
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
 
 namespace Unity.SpaceGod.Rendering
 {
@@ -20,8 +19,6 @@ namespace Unity.SpaceGod.Rendering
         static readonly int Layer = LayerMask.NameToLayer("ModelViewer");
 
         static Camera camera;
-        static readonly int SunPositionId = Shader.PropertyToID("_SunPositionWS"), SunColorId = Shader.PropertyToID("_SunColor");
-        static readonly int Sun2PositionId = Shader.PropertyToID("_Sun2PositionWS"), Sun2ColorId = Shader.PropertyToID("_Sun2Color");
         // Keyed by livery too: the spawn screen shows the same class in the home or the hostile colours.
         static readonly Dictionary<(ShipClass, Faction), RenderTexture> cache = new Dictionary<(ShipClass, Faction), RenderTexture>();
 
@@ -74,22 +71,17 @@ namespace Unity.SpaceGod.Rendering
             var rt = new RenderTexture(Size, Size, 16, RenderTextureFormat.ARGB32) { name = "ShipThumb_" + cls };
             // Ship.shader lights only from the scene's global star(s), not Unity lights: light the hull from
             // a fixed key direction for the snapshot, not from wherever the game's Sun happens to be just now.
-            var sunPos = Shader.GetGlobalVector(SunPositionId);
-            var sunColor = Shader.GetGlobalVector(SunColorId);
-            var sun2Pos = Shader.GetGlobalVector(Sun2PositionId);
-            var sun2Color = Shader.GetGlobalVector(Sun2ColorId);
+            var backend = RenderBackend.Active;
+            var gameLight = backend.Lighting;
             var key = bounds.center + Quaternion.Euler(35f, -30f, 0f) * Vector3.back * (radius * 1000f);
-            Shader.SetGlobalVector(SunPositionId, key);
-            Shader.SetGlobalVector(SunColorId, new Vector4(1.2f, 1.2f, 1.2f, 1f));
-            Shader.SetGlobalVector(Sun2PositionId, key);
-            Shader.SetGlobalVector(Sun2ColorId, Vector4.zero);
+            backend.Lighting = new StarLighting
+            {
+                SunPosition = key, SunColor = new Vector4(1.2f, 1.2f, 1.2f, 1f), Sun2Position = key, Sun2Color = Vector4.zero,
+            };
             camera.targetTexture = rt;
             camera.Render();
             camera.targetTexture = null;
-            Shader.SetGlobalVector(SunPositionId, sunPos);
-            Shader.SetGlobalVector(SunColorId, sunColor);
-            Shader.SetGlobalVector(Sun2PositionId, sun2Pos);
-            Shader.SetGlobalVector(Sun2ColorId, sun2Color);
+            backend.Lighting = gameLight;
 
             Object.DestroyImmediate(root);
             return rt;
@@ -100,19 +92,15 @@ namespace Unity.SpaceGod.Rendering
             if (camera != null) return;
             var go = new GameObject("ShipThumbnailCamera") { hideFlags = HideFlags.HideAndDontSave };
             camera = go.AddComponent<Camera>();
-            go.AddComponent<UniversalAdditionalCameraData>();
+            RenderBackend.Active.SetupCamera(camera, CameraRole.Offscreen);
             // Never auto-rendered into the normal camera stack -- only Render() called explicitly above.
             camera.enabled = false;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.05f, 0.06f, 0.09f, 1f);
             camera.cullingMask = 1 << Layer;
 
-            var light = new GameObject("ShipThumbnailLight") { hideFlags = HideFlags.HideAndDontSave }.AddComponent<Light>();
-            light.transform.SetParent(go.transform, false);
-            light.type = LightType.Directional;
-            light.transform.rotation = Quaternion.Euler(35f, -30f, 0f);
-            light.cullingMask = 1 << Layer;
-            light.intensity = 1.2f;
+            RenderBackend.Active.AddKeyLight(go.transform, "ShipThumbnailLight", Quaternion.Euler(35f, -30f, 0f), 1.2f, 1 << Layer,
+                HideFlags.HideAndDontSave);
         }
 
         static void SetLayerRecursively(GameObject root)

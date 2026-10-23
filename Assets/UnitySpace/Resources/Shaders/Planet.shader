@@ -34,7 +34,7 @@ Shader "Unity.SpaceGod/Planet"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "PipelineCore.hlsl"
             #include "SolarCommon.hlsl"
 
             TEXTURE2D(_MainTex);
@@ -80,9 +80,9 @@ Shader "Unity.SpaceGod/Planet"
             Varyings vert(Attributes v)
             {
                 Varyings o;
-                VertexPositionInputs p = GetVertexPositionInputs(v.positionOS.xyz);
-                o.positionCS = p.positionCS;
-                o.positionWS = p.positionWS;
+                float3 positionWS = TransformObjectToWorld(v.positionOS.xyz);
+                o.positionCS = TransformWorldToHClip(positionWS);
+                o.positionWS = positionWS;
                 o.normalWS = TransformObjectToWorldNormal(v.normalOS);
                 o.uv = v.uv;
                 o.positionOS = v.positionOS.xyz;
