@@ -221,13 +221,13 @@ namespace Unity.SpaceGod.Core.Tests
             int maxWrecks = 0;
             double lastJd = StartJd, firstWreckJd = double.NaN;
             // Most fights end in surrender or flight, so the first hull to die in one can take most of a year: run until
-            // one has, then on past that wreck's lifetime.
-            for (double jd = StartJd; jd <= StartJd + 400; jd += 0.25)
+            // one has, then on past that wreck's lifetime (the world starts with older wrecks from its seeded history, which do not count).
+            for (double jd = StartJd; jd <= StartJd + 400 + w.War.Wrecks.DefaultLifetimeDays + 2; jd += 0.25)
             {
                 eph.Update(jd);
                 w.Update(jd);
                 maxWrecks = Math.Max(maxWrecks, w.War.Wrecks.Items.Count);
-                if (double.IsNaN(firstWreckJd) && w.War.Wrecks.Items.Count > 0) firstWreckJd = w.War.Wrecks.Items[0].CreatedJd;
+                if (double.IsNaN(firstWreckJd) && w.War.Wrecks.Items.Any(x => x.CreatedJd >= StartJd)) firstWreckJd = w.War.Wrecks.Items.First(x => x.CreatedJd >= StartJd).CreatedJd;
                 lastJd = jd;
                 if (jd > firstWreckJd + w.War.Wrecks.DefaultLifetimeDays + 1) break;
             }
