@@ -140,6 +140,12 @@ namespace Unity.SpaceGod.Rendering
                         for (int c = 0; c < 2; c++)
                             b.Box(new Vector3(-0.007f + c * 0.014f, 0.004f + r * 0.009f, 0.026f), new Vector3(0.008f, 0.006f, 0.003f), b.Glow(new Color(1f, 0.55f, 0.3f)));
                     break;
+                case SubsystemKind.TorpedoTube:
+                    // A fixed tube (U.SPC-T377): an armoured breech housing with a wide muzzle and a glowing door rim.
+                    b.Box(new Vector3(0, 0.008f, -0.012f), new Vector3(0.03f, 0.016f, 0.04f), b.Hull);
+                    b.Cylinder(new Vector3(0, 0.008f, 0.018f), 0.009f, 0.03f, b.Dark);
+                    b.Cylinder(new Vector3(0, 0.008f, 0.034f), 0.0105f, 0.003f, b.Glow(new Color(1f, 0.45f, 0.25f)));
+                    break;
                 case SubsystemKind.ShieldGenerator:
                     b.Cylinder(new Vector3(0, 0.008f, 0), 0.008f, 0.016f, b.Dark);
                     b.Box(new Vector3(0, 0.018f, 0), new Vector3(0.03f, 0.004f, 0.03f), b.Glow(new Color(0.4f, 0.75f, 1f)));

@@ -1217,6 +1217,8 @@ namespace Unity.SpaceGod.Core
                 if (w.Missile)
                 {
                     if (s.Ammo <= 0) continue;
+                    // A capital torpedo tube's round flies as a torpedo: tougher for point defence to stop (U.SPC-T377).
+                    bool torpedo = s.Kind == SubsystemKind.Torpedo || s.Kind == SubsystemKind.TorpedoTube;
                     for (int k = 0; k < w.Salvo && s.Ammo > 0; k++)
                     {
                         s.Ammo--;
@@ -1225,8 +1227,8 @@ namespace Unity.SpaceGod.Core
                         {
                             Pos = origin, Vel = (u.Forward + spread + s.Aim).Normalized * (w.MissileSpeedKmS * 0.3) + u.Vel,
                             Target = target, TargetSub = sub, Damage = w.Damage, Speed = w.MissileSpeedKmS,
-                            Hp = s.Kind == SubsystemKind.Torpedo ? 25 : 12, Life = 90, Side = u.Side, Torpedo = s.Kind == SubsystemKind.Torpedo,
-                            Kind = w.EmpSeconds > 0 ? MissileKind.Emp : s.Kind == SubsystemKind.Torpedo ? MissileKind.Torpedo : MissileKind.Missile,
+                            Hp = s.Kind == SubsystemKind.TorpedoTube ? 40 : torpedo ? 25 : 12, Life = 90, Side = u.Side, Torpedo = torpedo,
+                            Kind = w.EmpSeconds > 0 ? MissileKind.Emp : torpedo ? MissileKind.Torpedo : MissileKind.Missile,
                             EmpSeconds = w.EmpSeconds, EmpRadiusKm = w.EmpRadiusKm,
                         });
                     }
@@ -1811,6 +1813,7 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.Autocannon:
                     case SubsystemKind.LightRailgun:
                     case SubsystemKind.AutoTurret:
+                    case SubsystemKind.TorpedoTube:
                     case SubsystemKind.MissileLauncher: w = 3; break;
                     case SubsystemKind.ShieldGenerator: w = s.Shield > 0 ? 2.5 : 0.5; break;
                     case SubsystemKind.Engine: w = 1.4; break;

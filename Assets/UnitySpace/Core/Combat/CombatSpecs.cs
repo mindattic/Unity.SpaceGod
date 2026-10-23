@@ -43,6 +43,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>An automated gun on its own turret mount (U.SPC-T278): it traverses, picks its targets and fires by
         /// itself, whoever is flying the hull and whether or not the trigger is held.</summary>
         AutoTurret,
+
+        /// <summary>A capital torpedo tube (U.SPC-T377): a fixed launcher that fires one heavy, slow, hard-to-stop
+        /// torpedo down the bow at a time. A carrier bomber's slung <see cref="Torpedo"/> is a different, smaller thing.</summary>
+        TorpedoTube,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
@@ -112,6 +116,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>An auto turret: a light, fast-traversing kinetic gun its own fire control lays on whatever hostile
         /// comes near, a fighter as readily as a hull (U.SPC-T278).</summary>
         public static readonly WeaponSpec AutoTurret = new WeaponSpec { RangeKm = 1.8, Damage = 9, Cooldown = 0.25, Accuracy = 0.6, MuzzleSpeedKmS = 3.5 };
+
+        /// <summary>A capital torpedo (U.SPC-T377): the hardest single hit in the game, slow enough that point defence
+        /// has time to work on it, and only six in the tube's magazine.</summary>
+        public static readonly WeaponSpec HeavyTorpedo = new WeaponSpec { RangeKm = 32, Damage = 900, Cooldown = 45, Accuracy = 1, Missile = true, MissileSpeedKmS = 1.0, Salvo = 1, Ammo = 6 };
 
         /// <summary>Boarding pods: slow, few, and stopped by shields; each carries a squad of marines.</summary>
         public static readonly WeaponSpec Pods = new WeaponSpec { RangeKm = 10, Damage = 60, Cooldown = 50, Accuracy = 1, Missile = true, MissileSpeedKmS = 0.8, Salvo = 2, Ammo = 6 };
@@ -190,6 +198,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.EmpLauncher:
                 case SubsystemKind.MineLayer: return 30;
                 case SubsystemKind.AutoTurret: return 50;
+                case SubsystemKind.TorpedoTube: return 280;
                 default: return 200;
             }
         }
@@ -211,6 +220,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.EmpLauncher: return WeaponSpec.Emp;
                 case SubsystemKind.MineLayer: return WeaponSpec.Mines;
                 case SubsystemKind.AutoTurret: return WeaponSpec.AutoTurret;
+                case SubsystemKind.TorpedoTube: return WeaponSpec.HeavyTorpedo;
                 default: return null;
             }
         }
@@ -237,6 +247,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.EmpLauncher: return "EMP launcher";
                 case SubsystemKind.MineLayer: return "Mine layer";
                 case SubsystemKind.AutoTurret: return "Auto turret";
+                case SubsystemKind.TorpedoTube: return "Torpedo tube";
                 default: return "Reactor";
             }
         }
@@ -384,6 +395,9 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.48),
                     new SubsystemDef(SubsystemKind.Engine, 0.042, 0, -0.48),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.22),
+                    // A pair of bow torpedo tubes under the forward heavy battery (U.SPC-T377).
+                    new SubsystemDef(SubsystemKind.TorpedoTube, 0.03, -0.025, 0.46, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.TorpedoTube, -0.03, -0.025, 0.46, arcCenterDeg: 0, arcWidthDeg: 60),
                 },
             } },
             [ShipClass.Cruiser] = new[] { new CombatSpec
@@ -415,6 +429,8 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, 0.1, 0, -0.225),
                     new SubsystemDef(SubsystemKind.Engine, -0.1, 0, -0.225),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
+                    // One bow torpedo tube in the keel (U.SPC-T377).
+                    new SubsystemDef(SubsystemKind.TorpedoTube, 0, -0.02, 0.45, arcCenterDeg: 0, arcWidthDeg: 60),
                 },
             } },
             [ShipClass.Destroyer] = new[] { new CombatSpec
@@ -567,6 +583,9 @@ namespace Unity.SpaceGod.Core
         }
 
         public static CombatSpec Of(ShipClass c) => Specs.TryGetValue(c, out var s) ? s[0] : Specs[ShipClass.Destroyer][0];
+
+        /// <summary>Every design of a class (the construction catalogue lists each as its own hull frame, U.SPC-T377).</summary>
+        public static IReadOnlyList<CombatSpec> DesignsOf(ShipClass c) => Specs.TryGetValue(c, out var s) ? s : Array.Empty<CombatSpec>();
 
         /// <summary>Picks one of this class's designs at random, for a ship that will keep it for its lifetime.</summary>
         public static CombatSpec RandomOf(ShipClass c, Random rng)

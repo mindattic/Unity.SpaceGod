@@ -95,7 +95,7 @@ namespace Unity.SpaceGod.Core
         /// <paramref name="changed"/> (its health, rounds and its share of shield charge); the part fitted at
         /// <paramref name="changed"/> is new, whole and loaded.
         /// </summary>
-        public ShipCombat Refitted(CombatSpec spec, ShipClass hull, int changed)
+        public ShipCombat Refitted(CombatSpec spec, ShipClass? hull, int changed)
         {
             var c = new ShipCombat(spec, hull, Interior)
             {

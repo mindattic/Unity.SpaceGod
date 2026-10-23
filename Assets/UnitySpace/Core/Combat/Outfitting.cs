@@ -43,13 +43,16 @@ namespace Unity.SpaceGod.Core
         EmpLauncher,
         MineLayer,
         AutoTurret,
+
+        /// <summary>A capital torpedo tube (U.SPC-T377), with its first six rounds.</summary>
+        TorpedoTube,
     }
 
     /// <summary>The kinds of slot a hull offers: its weapon hardpoints (light ones take point defence, a laser or an
-    /// autocannon, heavy ones any turret), its shield and engine mounts, its internal bays, and a small craft's gun
+    /// autocannon, heavy ones any turret), its shield and engine mounts, its internal bays, a small craft's gun
     /// mounts (an autocannon, a light railgun or a laser) and utility mount (missiles, an EMP launcher, mines or
-    /// an auto turret) (U.SPC-T271).</summary>
-    public enum SlotKind { LightMount, HeavyMount, ShieldMount, EngineMount, InternalBay, GunMount, UtilityMount }
+    /// an auto turret) (U.SPC-T271), and a capital hull's torpedo tubes (a tube or a missile launcher, U.SPC-T377).</summary>
+    public enum SlotKind { LightMount, HeavyMount, ShieldMount, EngineMount, InternalBay, GunMount, UtilityMount, TorpedoTube }
 
     /// <summary>One module: what it is called, what a yard builds it from (tonnes of alloys, electronics,
     /// machinery and munitions, scaled with the hull for plate, drives, generators and racks) and its mass.</summary>
@@ -97,6 +100,8 @@ namespace Unity.SpaceGod.Core
             new ModuleSpec(ModuleKind.EmpLauncher, "EMP launcher", 25, false, (Good.Alloys, 6), (Good.Electronics, 14), (Good.Munitions, 2)),
             new ModuleSpec(ModuleKind.MineLayer, "Mine layer", 40, false, (Good.Alloys, 10), (Good.Machinery, 4), (Good.Munitions, 9)),
             new ModuleSpec(ModuleKind.AutoTurret, "Auto turret", 30, false, (Good.Alloys, 10), (Good.Electronics, 9), (Good.Machinery, 4), (Good.Munitions, 2)),
+            // A tube comes with its six torpedoes at 6 t a round.
+            new ModuleSpec(ModuleKind.TorpedoTube, "Torpedo tube", 260, false, (Good.Alloys, 70), (Good.Electronics, 18), (Good.Machinery, 16), (Good.Munitions, 36)),
         };
 
         public static ModuleSpec Of(ModuleKind k) => All[(int)k];
@@ -116,7 +121,10 @@ namespace Unity.SpaceGod.Core
                 case SlotKind.LightMount: return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret || m == ModuleKind.Autocannon || m == ModuleKind.AutoTurret;
                 case SlotKind.HeavyMount:
                     return m == ModuleKind.LaserTurret || m == ModuleKind.HeavyLaser || m == ModuleKind.MissileLauncher ||
-                           m == ModuleKind.PointDefense || m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun || (m == ModuleKind.Railgun && bearsOnBow);
+                           m == ModuleKind.PointDefense || m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun ||
+                           ((m == ModuleKind.Railgun || m == ModuleKind.TorpedoTube) && bearsOnBow);
+                // A torpedo tube is a fixed launcher: it takes a tube or a missile launcher, nothing that traverses.
+                case SlotKind.TorpedoTube: return m == ModuleKind.TorpedoTube || m == ModuleKind.MissileLauncher;
                 case SlotKind.GunMount: return m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun || m == ModuleKind.LaserTurret;
                 case SlotKind.UtilityMount:
                     return m == ModuleKind.MissileLauncher || m == ModuleKind.EmpLauncher || m == ModuleKind.MineLayer || m == ModuleKind.AutoTurret;
@@ -141,6 +149,7 @@ namespace Unity.SpaceGod.Core
                 case ModuleKind.EmpLauncher: return SubsystemKind.EmpLauncher;
                 case ModuleKind.MineLayer: return SubsystemKind.MineLayer;
                 case ModuleKind.AutoTurret: return SubsystemKind.AutoTurret;
+                case ModuleKind.TorpedoTube: return SubsystemKind.TorpedoTube;
                 case ModuleKind.ShieldGenerator:
                 case ModuleKind.HardenedShield: return SubsystemKind.ShieldGenerator;
                 default: return SubsystemKind.Engine;
@@ -180,6 +189,7 @@ namespace Unity.SpaceGod.Core
                     case SlotKind.HeavyMount: return "Weapon mount";
                     case SlotKind.GunMount: return "Gun mount";
                     case SlotKind.UtilityMount: return "Utility mount";
+                    case SlotKind.TorpedoTube: return "Torpedo tube";
                     case SlotKind.ShieldMount: return "Shield mount";
                     case SlotKind.EngineMount: return "Engine mount";
                     default: return "Internal bay";
@@ -198,33 +208,47 @@ namespace Unity.SpaceGod.Core
     public sealed class Loadout
     {
         public readonly CombatSpec Base;
-        public readonly ShipClass Class;
+
+        /// <summary>The hull's class, or null for a station or satellite (U.SPC-T377), which has none.</summary>
+        public readonly ShipClass? Class;
         public readonly List<OutfitSlot> Slots = new List<OutfitSlot>();
         public readonly ModuleKind?[] Fitted;
 
         /// <summary>The trade hold the hull was built with, tonnes, before any racks.</summary>
         public readonly double BaseCapacityTonnes;
 
+        /// <summary>A small craft, whose missile rack is a utility mount rather than a turret mount.</summary>
+        public readonly bool SmallCraft;
+
         public Loadout(CombatSpec design, ShipClass cls, double baseCapacityTonnes)
+            : this(design, cls, baseCapacityTonnes, IsSmallCraft(cls), InternalBays(cls)) { }
+
+        /// <summary>A loadout for any built hull (U.SPC-T377): a ship of a class, or a station or satellite (no class)
+        /// with its own count of internal bays.</summary>
+        public Loadout(CombatSpec design, ShipClass? cls, double baseCapacityTonnes, bool smallCraft, int internalBays)
         {
             Base = design;
             Class = cls;
             BaseCapacityTonnes = baseCapacityTonnes;
+            SmallCraft = smallCraft;
             for (int i = 0; i < design.Layout.Length; i++)
             {
                 var d = design.Layout[i];
-                var slot = SlotOf(d.Kind, cls);
+                var slot = SlotOf(d.Kind, smallCraft);
                 if (slot == null) continue;
                 Slots.Add(new OutfitSlot(slot.Value, i, StockOf(d.Kind), d.ContainsYaw(0)));
             }
-            for (int i = 0; i < InternalBays(cls); i++) Slots.Add(new OutfitSlot(SlotKind.InternalBay, -1, null, false));
+            for (int i = 0; i < internalBays; i++) Slots.Add(new OutfitSlot(SlotKind.InternalBay, -1, null, false));
             Fitted = new ModuleKind?[Slots.Count];
             for (int i = 0; i < Slots.Count; i++) Fitted[i] = Slots[i].Stock;
         }
 
-        static SlotKind? SlotOf(SubsystemKind k, ShipClass cls)
+        /// <summary>The hulls flown as fighters, whose missile rack is a utility mount.</summary>
+        public static bool IsSmallCraft(ShipClass cls) => cls == ShipClass.Fighter || cls == ShipClass.Courier || cls == ShipClass.Breacher;
+
+        /// <summary>The kind of slot a hardpoint of the design becomes, or null if it is part of the hull (a bridge, a reactor).</summary>
+        public static SlotKind? SlotOf(SubsystemKind k, bool small)
         {
-            bool small = cls == ShipClass.Fighter || cls == ShipClass.Courier || cls == ShipClass.Breacher;
             switch (k)
             {
                 // A small craft's missile rack is its utility mount, not a warship's turret mount.
@@ -241,6 +265,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.Railgun: return SlotKind.HeavyMount;
                 case SubsystemKind.ShieldGenerator: return SlotKind.ShieldMount;
                 case SubsystemKind.Engine: return SlotKind.EngineMount;
+                case SubsystemKind.TorpedoTube: return SlotKind.TorpedoTube;
                 default: return null;
             }
         }
@@ -261,6 +286,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.EmpLauncher: return ModuleKind.EmpLauncher;
                 case SubsystemKind.MineLayer: return ModuleKind.MineLayer;
                 case SubsystemKind.AutoTurret: return ModuleKind.AutoTurret;
+                case SubsystemKind.TorpedoTube: return ModuleKind.TorpedoTube;
                 default: return null;
             }
         }
@@ -391,7 +417,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>A copy for a hull that is handed on (a jump gate's arrival).</summary>
         public Loadout Copy()
         {
-            var l = new Loadout(Base, Class, BaseCapacityTonnes);
+            int bays = 0;
+            foreach (var s in Slots) if (s.Kind == SlotKind.InternalBay) bays++;
+            var l = new Loadout(Base, Class, BaseCapacityTonnes, SmallCraft, bays);
             Array.Copy(Fitted, l.Fitted, Fitted.Length);
             return l;
         }

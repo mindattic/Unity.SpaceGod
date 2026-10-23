@@ -66,9 +66,10 @@ namespace Unity.SpaceGod.Core.Tests
             var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
             var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 7);
             var battleship = Hull(ShipClass.Battleship, blue, 0);
-            // Knock out the forward/aft spinal HeavyLasers so a broadside battery becomes the strongest arc.
+            // Knock out the forward/aft spinal HeavyLasers and the bow torpedo tubes (U.SPC-T377) so a broadside battery
+            // becomes the strongest arc.
             foreach (var s in battleship.Combat.Subsystems)
-                if (s.Kind == SubsystemKind.HeavyLaser) s.Hp = 0;
+                if (s.Kind == SubsystemKind.HeavyLaser || s.Kind == SubsystemKind.TorpedoTube) s.Hp = 0;
             var target = Hull(ShipClass.Destroyer, red, 1);
             var bu = b.AddShip(battleship, 0, DVec3.Zero, DVec3.UnitX);
             var tu = b.AddShip(target, 1, new DVec3(20, 0, 0), -DVec3.UnitX);
