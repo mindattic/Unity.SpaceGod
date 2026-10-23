@@ -33,6 +33,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A bounty hunter group gone after a pirate clan with a price on it in another system (U.SPC-T94).</summary>
         Hunt,
+
+        /// <summary>A raider band or a navy picket gone out under its own drive to lie in wait on an FTL route with a gravity
+        /// projector (U.SPC-T421, see <see cref="DeepSpace.LieInWait"/>).</summary>
+        Ambush,
     }
 
     /// <summary>
@@ -112,6 +116,11 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A plain star (one nobody simulates) this leg is bound for under the ship's own drive, by name; null for a system.</summary>
         public string StarName;
+
+        /// <summary>A point in open space this leg is bound for under the ship's own drive (an ambush's station, U.SPC-T421),
+        /// and what it is called; null for a star or a system.</summary>
+        public GalacticPosition? Station;
+        public string StationName;
 
         public JumpGate NextGate => Route != null && Leg < Route.Count ? Route[Leg] : null;
         public bool Homeward => Destination == Home;
@@ -211,6 +220,9 @@ namespace Unity.SpaceGod.Core
         /// stay as they were whenever no ship goes that way.</summary>
         readonly Random cruiseRng;
 
+        /// <summary>The bands sent to lie in wait on the routes (U.SPC-T421), on their own numbers too.</summary>
+        readonly Random ambushRng;
+
         /// <summary>Share of survey trips a survey hull with a drive of its own makes to a star off the gate network.</summary>
         public const double StarSurveyShare = 0.3;
 
@@ -290,6 +302,7 @@ namespace Unity.SpaceGod.Core
             this.galaxy = galaxy;
             rng = new Random(seed);
             cruiseRng = new Random(seed + 13);
+            ambushRng = new Random(seed + 29);
             nextDailyJd = jd + 0.5;
             News = new Newswire(galaxy, jd);
             Clans = new PirateClans(galaxy, this, seed + 7);
@@ -618,15 +631,27 @@ namespace Unity.SpaceGod.Core
             return SetOutByCruise(from, null, star.Name, ship, purpose, jd);
         }
 
-        Voyage SetOutByCruise(StarSystem from, StarSystem to, string star, Ship ship, VoyagePurpose purpose, double jd)
+        /// <summary>
+        /// Sends <paramref name="ship"/> (idle in <paramref name="from"/>, with a cruise drive, and its escorts) under its own
+        /// drive to <paramref name="station"/> in open space, to lie in wait there with a gravity projector (U.SPC-T421) and then
+        /// come home. Null if it cannot go.
+        /// </summary>
+        public Voyage SendToAmbush(Ship ship, StarSystem from, GalacticPosition station, string where, double jd)
         {
-            var target = to != null ? to.Origin : FindStar(star)?.Origin;
+            if (!Idle(from.World, ship) || !CanCruise(ship)) return null;
+            return SetOutByCruise(from, null, null, ship, VoyagePurpose.Ambush, jd, station, where);
+        }
+
+        Voyage SetOutByCruise(StarSystem from, StarSystem to, string star, Ship ship, VoyagePurpose purpose, double jd,
+            GalacticPosition? station = null, string stationName = null)
+        {
+            var target = station ?? (to != null ? to.Origin : FindStar(star)?.Origin);
             if (target == null) return null;
             ship.StakeoutKm = null;
             var v = new Voyage
             {
                 Purpose = purpose, Home = from, Destination = to, Route = new List<JumpGate>(), SetOutJd = jd, Faction = ship.Faction,
-                Ly = target.Value.DistanceLy(from.Origin), ByCruise = true, StarName = star,
+                Ly = target.Value.DistanceLy(from.Origin), ByCruise = true, StarName = star, Station = station, StationName = stationName,
                 HomeRole = ship.Role, HomeRoute = ship.Route, HomePorts = ship.Ports,
             };
             ship.Voyage = v;
@@ -643,6 +668,7 @@ namespace Unity.SpaceGod.Core
             v.Destination = to;
             v.ByCruise = true;
             v.StarName = null;
+            v.Station = null;
             v.Route = new List<JumpGate>();
             v.Leg = 0;
             v.AtGate = false;
@@ -671,7 +697,7 @@ namespace Unity.SpaceGod.Core
             var world = system.World;
             var drive = CruiseDrives.Of(leader);
             var star = v.StarName != null ? FindStar(v.StarName) : null;
-            if (drive == null || (v.Destination == null && star == null) || v.Destination == system)
+            if (drive == null || (v.Destination == null && star == null && v.Station == null) || v.Destination == system)
             {
                 CancelVoyage(system, leader, jd, system == v.Home);
                 return;
@@ -714,7 +740,9 @@ namespace Unity.SpaceGod.Core
             DepartLeader(world, leader, v);
 
             var news = News.Bundle(system, jd);
-            var c = star != null
+            var c = v.Station != null && v.Destination == null
+                ? galaxy.DeepSpace.LaunchToPoint(ships, system, at, v.Station.Value, v.StationName ?? "open space", drive, jd, news)
+                : star != null
                 ? galaxy.DeepSpace.LaunchToStar(ships, system, at, star.Value, drive, jd, news)
                 : galaxy.DeepSpace.Launch(ships, system, at, v.Destination, drive, jd, news);
             foreach (var h in hired) c.Hired.Add(h);
@@ -760,13 +788,85 @@ namespace Unity.SpaceGod.Core
             var v = leader.Voyage;
             if (v == null || v.Home == null) return;
             Arrivals[v.Purpose] = (Arrivals.TryGetValue(v.Purpose, out int n) ? n : 0) + 1;
+            if (v.Purpose == VoyagePurpose.Ambush && v.Station != null)
+            {
+                // At its station on the route: it lies in wait there a while, then goes home (U.SPC-T421).
+                double wait = AmbushDays + ambushRng.NextDouble() * AmbushDays;
+                string where = v.StationName ?? "in open space";
+                v.Station = null;
+                v.Destination = v.Home;
+                v.StayUntilJd = jd + wait;
+                galaxy.DeepSpace.Retarget(c, v.Home, jd + wait);
+                galaxy.DeepSpace.LieInWait(c, jd, wait, where);
+                return;
+            }
             double stay = 8 + cruiseRng.NextDouble() * 12;
             v.Home.World.Log(jd, $"{leader.Name} of {leader.Faction.Name} reports from {c.ToName}, {v.Ly.ToString("0.0", CultureInfo.InvariantCulture)} ly out under its own drive",
                 WorldEventKind.Info, v.Home.Catalog.Root.Index);
+            // The first survey of a star off the gate network pays for its charts (U.SPC-T421).
+            if (v.Purpose == VoyagePurpose.Survey && galaxy.DeepSpace.SurveyStar(c.ToName))
+            {
+                double pay = StarSurveyCredits * (1 + v.Ly / 10);
+                leader.Credits += pay;
+                leader.Faction.Treasury += pay;
+                galaxy.DeepSpace.Log(jd, $"Survey find: {leader.Name} of {leader.Faction.Name} is first to chart {c.ToName}, " +
+                                         $"for {pay.ToString("N0", CultureInfo.InvariantCulture)} cr", c.Target);
+            }
             v.StarName = null;
             v.Destination = v.Home;
             v.StayUntilJd = jd + stay;
             galaxy.DeepSpace.Retarget(c, v.Home, jd + stay);
+        }
+
+        /// <summary>What the first survey of a plain star pays, credits, plus as much again for every ten light-years out.</summary>
+        public const double StarSurveyCredits = 300000;
+
+        /// <summary>How long a band lies in wait on a route at least, days (up to twice as long).</summary>
+        public const double AmbushDays = 15;
+
+        /// <summary>Daily chance a settled system's pirates, or its navy at war, send a band out to lie in wait on an FTL route.</summary>
+        public const double AmbushChancePerDay = 0.01;
+
+        /// <summary>
+        /// Now and then a band goes out under its own drive to lie in wait on an FTL route with a gravity projector
+        /// (U.SPC-T421): a system's pirates on the line between it and another settled system, its navy, when at war, on the
+        /// approach from the enemy's. Only hulls with a drive of their own go; none goes while one from here is still out.
+        /// </summary>
+        void DispatchAmbush(StarSystem from, List<StarSystem> settled, double jd)
+        {
+            var world = from.World;
+            if (Out(from, VoyagePurpose.Ambush) > 0 || ambushRng.NextDouble() > AmbushChancePerDay) return;
+            var pirates = world.Pirates;
+            var navy = world.Sol != null && world.Sol.IsMilitary && galaxy.Polities.AtWar(world.Sol) ? world.Sol : null;
+            foreach (var side in new[] { pirates, navy })
+            {
+                if (side == null) continue;
+                StarSystem other = null;
+                foreach (var s in settled)
+                {
+                    if (s == from) continue;
+                    // A navy pickets the approach from an enemy's system; a clan works any run between settled systems.
+                    if (side == navy && (s.World.Sol == null || galaxy.Polities.Diplomacy.Get(side, s.World.Sol) != Relation.War)) continue;
+                    if (s.Origin.DistanceLy(from.Origin) > DeepSpaceFeatures.MaxRouteLy) continue;
+                    if (other == null || ambushRng.NextDouble() < 0.5) other = s;
+                }
+                if (other == null) continue;
+                foreach (var ship in world.Fleet.Ships)
+                {
+                    if (!Idle(world, ship) || ship.Faction != side || !CanCruise(ship) || ship.Phase != ShipPhase.Parked) continue;
+                    if (ship.Combat == null || ship.Combat.Damage > 0.2 || !ship.Combat.Armed || (side == navy && (ship.PatrolWing || world.War.IsHomeGuard(ship)))) continue;
+                    double t = side == navy ? 0.15 + 0.15 * ambushRng.NextDouble() : 0.3 + 0.4 * ambushRng.NextDouble();
+                    var station = GalacticPosition.Lerp(from.Origin, other.Origin, t);
+                    string where = side == navy ? $"on the approach from {other.Name}" : $"on the {from.Name}–{other.Name} run";
+                    var v = SendToAmbush(ship, from, station, where, jd);
+                    if (v == null) continue;
+                    world.Log(jd, side == navy
+                            ? $"{ship.Name} goes out under its own drive to picket the FTL approach from {other.Name}"
+                            : $"The {side.Name} raiders under {ship.Name} go out under their own drive to lie in wait {where}",
+                        WorldEventKind.Info, PortOf(ship));
+                    return;
+                }
+            }
         }
 
         /// <summary>Back where it belongs: takes up its old role, route and ports.</summary>
@@ -804,6 +904,7 @@ namespace Unity.SpaceGod.Core
             VoyagePurpose.Smuggle => "a smuggling run beyond the gates",
             VoyagePurpose.Hunt => "a hunt beyond the gates",
             VoyagePurpose.Relocate => "a move beyond the gates",
+            VoyagePurpose.Ambush => "lying in wait between the stars",
             _ => "a run beyond the gates",
         };
 
@@ -1048,6 +1149,7 @@ namespace Unity.SpaceGod.Core
             {
                 DispatchRaid(from, settled, jd);
                 DispatchSurvey(from, jd);
+                DispatchAmbush(from, settled, jd);
             }
             for (int i = expeditionsWanted.Count - 1; i >= 0; i--)
             {
@@ -1160,6 +1262,7 @@ namespace Unity.SpaceGod.Core
             v.Leg = 0;
             v.ByCruise = false;
             v.StarName = null;
+            v.Station = null;
             ship.GateKm = v.Route.Count > 0 ? v.Route[0].PositionKm : (DVec3?)null;
             if (ship.Battle == null) system.World.Fleet.ScheduleNext(ship, jd);
             return true;

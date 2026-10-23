@@ -15,6 +15,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>What a system knew of the others when the simulation began.</summary>
         Charts,
+
+        /// <summary>Beamed relay to relay through open space by a power's deep-space relays (U.SPC-T421), where the gates
+        /// cannot pass it.</summary>
+        DeepSpaceRelay,
     }
 
     /// <summary>
@@ -292,13 +296,20 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// How long the relay takes from <paramref name="from"/>'s markets to <paramref name="to"/>'s, days: light out to
         /// the gate, the quickest open way through the gates (<see cref="GateNetwork.RouteDays"/>, blockaded gates left
-        /// out), and light in from the far gate. Infinity when no way is open.
+        /// out), and light in from the far gate; or, where that is slower or shut, by a deep-space relay on the route between
+        /// the two (U.SPC-T421, <see cref="DeepSpace.RelayLagDays"/>). Infinity when no way is open.
         /// </summary>
-        public double RelayDays(StarSystem from, StarSystem to, double jd)
+        public double RelayDays(StarSystem from, StarSystem to, double jd) => RelayDays(from, to, jd, out _);
+
+        double RelayDays(StarSystem from, StarSystem to, double jd, out bool deepSpace)
         {
             var route = galaxy.Network?.Route(from, to, RelayTraffic, jd);
-            if (route == null) return double.PositiveInfinity;
-            return InnerLightDays(from) + GateNetwork.RouteDays(route) + InnerLightDays(to);
+            double gates = route == null ? double.PositiveInfinity : GateNetwork.RouteDays(route);
+            double relay = galaxy.DeepSpace?.RelayLagDays(from, to) ?? double.PositiveInfinity;
+            deepSpace = relay < gates;
+            double way = Math.Min(gates, relay);
+            if (double.IsInfinity(way)) return double.PositiveInfinity;
+            return InnerLightDays(from) + way + InnerLightDays(to);
         }
 
         /// <summary>Sends each settled system's relay report when one is due, and delivers the reports that have arrived.</summary>
@@ -332,9 +343,9 @@ namespace Unity.SpaceGod.Core
                 foreach (var to in galaxy.Systems)
                 {
                     if (to == from) continue;
-                    double lag = RelayDays(from, to, jd);
+                    double lag = RelayDays(from, to, jd, out bool deepSpace);
                     if (double.IsInfinity(lag)) continue;
-                    Send(report, to, jd + lag, NewsCarrier.Relay, null);
+                    Send(report, to, jd + lag, deepSpace ? NewsCarrier.DeepSpaceRelay : NewsCarrier.Relay, null);
                 }
             }
         }
@@ -391,6 +402,7 @@ namespace Unity.SpaceGod.Core
         {
             NewsCarrier.Ship => r.CarriedBy ?? "ship",
             NewsCarrier.Charts => "the charts",
+            NewsCarrier.DeepSpaceRelay => "deep-space relay",
             _ => "gate relay",
         };
 

@@ -156,6 +156,30 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A hull left drifting whole, its crew gone.</summary>
         Derelict,
+
+        /// <summary>A planet with no star, wandering between them (U.SPC-T421): its own small gravity well pulls a passing
+        /// group out of FTL like a star's does (<see cref="DeepSpace.RogueWells"/>).</summary>
+        RoguePlanet,
+
+        /// <summary>A cloud of gas and dust light-hours or more across (U.SPC-T421): inside it sensors see only a fraction as
+        /// far (<see cref="DeepSpace.SensorRangeKm"/>), so groups slip past each other and wrecks go unseen.</summary>
+        Nebula,
+
+        /// <summary>A comet or an iceball adrift between the stars (U.SPC-T421): water a group short of reaction mass can
+        /// drop out to mine (<see cref="IceRefuelling"/>).</summary>
+        IceBody,
+
+        /// <summary>A power's deep-space relay on the line between two systems (U.SPC-T421): it passes the news between them
+        /// when the gates cannot (<see cref="DeepSpace.RelayLagDays"/>).</summary>
+        Relay,
+
+        /// <summary>A power's listening post out on an approach (U.SPC-T421): it hears its enemies pass and tells home
+        /// (<see cref="DeepSpaceOutposts"/>).</summary>
+        ListeningPost,
+
+        /// <summary>A hull adrift calling for help, its crew still aboard (U.SPC-T421, <see cref="DistressCalls"/>), or a
+        /// pirate lure dressed up as one.</summary>
+        Distress,
     }
 
     /// <summary>Something in open space between the stars (U.SPC-T412): a wreck or a derelict, where it was left, and what is aboard.</summary>
@@ -173,6 +197,41 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>When it was left out here.</summary>
         public double SinceJd;
+
+        /// <summary>How far it reaches, km: a nebula's extent (0 for a point-like thing).</summary>
+        public double RadiusKm;
+
+        /// <summary>A rogue planet's gravitational parameter, km³/s² (its well is sized from it by <see cref="FtlRules"/>).</summary>
+        public double Gm;
+
+        /// <summary>Whose it is: a relay's or a listening post's power.</summary>
+        public Faction Owner;
+
+        /// <summary>The system at the end of its route that it reports to (a relay's or a listening post's home).</summary>
+        public string HomeName;
+
+        /// <summary>The two stars of the route it lies on (U.SPC-T421), in name order; null for what was left off any route.</summary>
+        public string RouteA, RouteB;
+
+        /// <summary>What the first survey of it pays its surveyor, credits (more for one off the gate network), and who made it.</summary>
+        public double SurveyCredits;
+        public Faction SurveyedBy;
+
+        /// <summary>Water an ice body still holds for a passing group's tanks, tonnes.</summary>
+        public double IceTonnes;
+
+        /// <summary>A distress call's crew still alive aboard, until it falls silent at <see cref="ExpiresJd"/>.</summary>
+        public int Survivors;
+        public double ExpiresJd = double.PositiveInfinity;
+
+        /// <summary>A false distress call: the pirate clan lying in wait at it.</summary>
+        public Faction LureBy;
+
+        /// <summary>The leaders a listening post has already heard pass.</summary>
+        public HashSet<Ship> Heard;
+
+        /// <summary>Lies off the gate network (on a route no gate link joins).</summary>
+        public bool OffNetwork;
 
         public override string ToString() => Name;
     }
@@ -206,7 +265,7 @@ namespace Unity.SpaceGod.Core
     /// Positions are <see cref="GalacticPosition"/>s, sector and offset, so a group a long way from Sol is placed as
     /// exactly as one next to it.
     /// </summary>
-    public sealed class DeepSpace
+    public sealed partial class DeepSpace
     {
         readonly Galaxy galaxy;
         readonly Random rng;
@@ -241,6 +300,12 @@ namespace Unity.SpaceGod.Core
             () => new FtlInterdiction(),
             () => new CruiseMeeting(),
             () => new WreckSalvage(),
+            // Life in deep space (U.SPC-T421): what lies out here, and who is out here with it.
+            () => new SurveyFinds(),
+            () => new IceRefuelling(),
+            () => new DistressCalls(),
+            () => new DeepSpaceOutposts(),
+            () => new RouteAmbushes(),
         };
 
         /// <summary>How often (days) the encounters are run: about every hour and a quarter, on a fixed grid, so what
@@ -314,6 +379,8 @@ namespace Unity.SpaceGod.Core
         {
             if (drive == null) throw new ArgumentNullException(nameof(drive), "A cruise needs a drive");
             var c = new Cruise { From = from, To = to, ToName = toName, Drive = drive, Target = target, SetOutJd = jd, News = news };
+            // What lies along the way is there before anyone flies it (U.SPC-T421): the same for every flight of this route.
+            if (TryStar(toName, out var star)) SeedRoute(from.Name, from.Origin, toName, star);
             c.Ships.AddRange(ships);
             if (c.Ships.Count == 0) throw new ArgumentException("A cruise needs a ship", nameof(ships));
             foreach (var s in c.Ships)
@@ -334,6 +401,7 @@ namespace Unity.SpaceGod.Core
         public void Retarget(Cruise c, StarSystem to, double jd)
         {
             var here = c.PositionAt(jd);
+            if (TryStar(c.ToName, out var was)) SeedRoute(c.ToName, was, to.Name, to.Origin);
             c.To = to;
             c.ToName = to.Name;
             c.Target = ArrivalPoint(to.Origin, here, CruiseDrives.WellLimitKm(to));
@@ -375,7 +443,7 @@ namespace Unity.SpaceGod.Core
         public delegate IEnumerable<GravityField> FieldSource(DeepSpace space, Cruise c, GalacticPosition near, double km);
 
         /// <summary>Where interdicting fields come from: the stars' own mass, and the gravity projectors.</summary>
-        public static readonly List<FieldSource> FieldSources = new List<FieldSource> { StarWells, ProjectorFields };
+        public static readonly List<FieldSource> FieldSources = new List<FieldSource> { StarWells, ProjectorFields, RogueWells };
 
         /// <summary>The wells of the stars (running systems and plain ones on the charts) within <paramref name="km"/> of <paramref name="near"/>.</summary>
         public static IEnumerable<GravityField> StarWells(DeepSpace space, Cruise c, GalacticPosition near, double km)
@@ -558,11 +626,21 @@ namespace Unity.SpaceGod.Core
             if (events.Count > MaxEvents) events.RemoveRange(0, events.Count - MaxEvents);
         }
 
-        /// <summary>Leaves <paramref name="o"/> out here (the oldest lost when there are too many).</summary>
+        /// <summary>Leaves <paramref name="o"/> out here (the oldest wrecks, derelicts and distress calls lost when there are
+        /// more than <see cref="MaxObjects"/> of them; what lies along the routes, U.SPC-T421, stays).</summary>
         public void Add(DeepSpaceObject o)
         {
             objects.Add(o);
-            if (objects.Count > MaxObjects) objects.RemoveRange(0, objects.Count - MaxObjects);
+            if (!DeepSpaceFeatures.Transient(o.Kind)) return;
+            int transient = 0;
+            foreach (var x in objects)
+                if (DeepSpaceFeatures.Transient(x.Kind)) transient++;
+            for (int i = 0; i < objects.Count && transient > MaxObjects; i++)
+                if (DeepSpaceFeatures.Transient(objects[i].Kind))
+                {
+                    objects.RemoveAt(i--);
+                    transient--;
+                }
         }
 
         /// <summary>Takes <paramref name="o"/> away (salvaged).</summary>
@@ -722,7 +800,10 @@ namespace Unity.SpaceGod.Core
                     if (done.Contains(a) || done.Contains(b) || a.Ships.Count == 0 || b.Ships.Count == 0) continue;
                     if (!(a.Engaged(toJd) || a.Engaged(fromJd)) && !(b.Engaged(toJd) || b.Engaged(fromJd))) continue;
                     if (!space.Hostile(a.Leader.Faction, b.Leader.Faction)) continue;
-                    if (DeepSpace.ClosestKm(a, b, fromJd, toJd) > RangeKm) continue;
+                    double closest = DeepSpace.ClosestKm(a, b, fromJd, toJd);
+                    if (closest > RangeKm) continue;
+                    // Inside a nebula sensors see only so far (U.SPC-T421).
+                    if (closest > Math.Min(space.SensorRangeKm(a.PositionAt(toJd), RangeKm), space.SensorRangeKm(b.PositionAt(toJd), RangeKm))) continue;
                     if (!Resolve(space, a, b, toJd, rng)) continue;
                     done.Add(a);
                     done.Add(b);
@@ -821,7 +902,11 @@ namespace Unity.SpaceGod.Core
                 if (leader.Voyage?.Purpose == VoyagePurpose.Campaign) continue;
                 foreach (var o in space.Objects)
                 {
-                    if (o.SinceJd >= toJd || DeepSpace.ClosestKm(c, o.Position, fromJd, toJd) > RangeKm) continue;
+                    // Only what is left of a hull is stripped (U.SPC-T421: not a rogue planet or a power's relay), and only one seen.
+                    if (o.Kind != DeepSpaceObjectKind.Wreck && o.Kind != DeepSpaceObjectKind.Derelict) continue;
+                    if (o.SinceJd >= toJd) continue;
+                    double closest = DeepSpace.ClosestKm(c, o.Position, fromJd, toJd);
+                    if (closest > RangeKm || closest > space.SensorRangeKm(o.Position, RangeKm)) continue;
                     leader.Credits += o.SalvageCredits;
                     leader.Faction.Treasury += o.SalvageCredits;
                     space.Remove(o);

@@ -441,6 +441,10 @@ namespace Unity.SpaceGod.Core
             foreach (var n in Neighbours())
                 if (!simulated.Contains(n.Name)) g.NearbyStars.Add(n);
             g.Connect(jd);
+            // The space between is not empty (U.SPC-T421): every route flown is seeded with what lies along it, and the
+            // routes between the running systems, where the powers' relays and listening posts stand, from the start.
+            g.DeepSpace.RouteLife = true;
+            g.DeepSpace.SeedSystemRoutes();
             return g;
         }
 

@@ -100,6 +100,8 @@ namespace Unity.SpaceGod.Core
                 c.Ly = here.At(fromKm).DistanceLy(target.Origin);
             if (c.Refusal != null) return c;
 
+            // What lies along the way is charted before the course is (U.SPC-T421): a rogue planet's well is plotted as the trip meets it.
+            galaxy?.DeepSpace?.SeedRoute(here.Name, here.Origin, target.Name, target.Origin);
             var drive = c.Drive = CruiseDrives.Of(ship);
             c.TanksTonnes = ship.Propellant;
             c.RangeLy = FtlRules.RangeLy(drive, ship);
