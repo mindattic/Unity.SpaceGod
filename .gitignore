@@ -30,3 +30,6 @@ Tests/**/obj/
 !Tests/**/*.csproj
 /artifacts/*
 !/artifacts/*.html
+
+# Local session handoff (quicksave), never shared
+.prose/agent-session.json*
