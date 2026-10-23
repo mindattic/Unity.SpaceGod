@@ -129,11 +129,14 @@ namespace Unity.SpaceGod.Core
         public double Collected;
         public int Takes;
 
-        public BountyHunter(Ship ship, double sinceJd)
+        readonly World world;
+
+        public BountyHunter(Ship ship, double sinceJd, World world)
         {
             Ship = ship;
             Faction = ship.Faction;
             SinceJd = sinceJd;
+            this.world = world;
         }
 
         public string Name => Ship.Name;
@@ -141,8 +144,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Handed on to another flagship (its own lost, or taken over by the player).</summary>
         public bool Retired;
 
-        /// <summary>Still hunting: not handed on, lost, cast adrift, gone through a gate or taken (flying other colours).</summary>
-        public bool Alive => !Retired && !Ship.Destroyed && !Ship.Derelict && !Ship.GateDeparted && Ship.Faction == Faction;
+        /// <summary>
+        /// Still hunting: not handed on, lost, cast adrift or taken (flying other colours). A flagship through a
+        /// gate or under its own cruise drive is the same live hull abroad (U.SPC-T453), never <see cref="Ship.Destroyed"/>
+        /// or <see cref="Ship.GateDeparted"/> for it, so this also checks it is still this world's own fleet's hull to
+        /// read a position from (<see cref="Fleet.IsPresent"/>) before anything here tries to.
+        /// </summary>
+        public bool Alive => !Retired && !Ship.Destroyed && !Ship.Derelict && !Ship.GateDeparted && Ship.Faction == Faction && world.Fleet.IsPresent(Ship);
 
         /// <summary>The colours it was commissioned under (the free traders').</summary>
         public readonly Faction Faction;
@@ -951,7 +959,9 @@ namespace Unity.SpaceGod.Core
             {
                 if (o.Fate != OutlawFate.Held || o.HeldBy == null) continue;
                 var h = o.HeldBy;
-                if (h.GateDeparted)
+                // The holder itself through a gate or under its own cruise drive (U.SPC-T453) is the same live hull,
+                // never flagged GateDeparted; it is simply no longer in this world's own fleet (Fleet.IsPresent).
+                if (h.GateDeparted || !world.Fleet.IsPresent(h))
                 {
                     End(o, OutlawFate.Captured, jd, "carried out of the system aboard the " + h.Name);
                     continue;
@@ -1165,7 +1175,7 @@ namespace Unity.SpaceGod.Core
             fleet.AddEscort(lead, escort, Fleet.SlotFor(0));
             // Out into a parking orbit of its own (not the yard's slip, where a new merchant may be sitting).
             fleet.Station(lead, yard.Body, jd);
-            var h = new BountyHunter(lead, jd);
+            var h = new BountyHunter(lead, jd, world);
             Hunters.Add(h);
             byHunter[lead] = h;
             world.NotifyAdded(lead);
@@ -1176,7 +1186,7 @@ namespace Unity.SpaceGod.Core
         public void OnSuccession(Ship dead, Ship heir)
         {
             if (dead == null || heir == null || !byHunter.TryGetValue(dead, out var h)) return;
-            var next = new BountyHunter(heir, h.SinceJd) { Contract = h.Contract, Collected = h.Collected, Takes = h.Takes };
+            var next = new BountyHunter(heir, h.SinceJd, world) { Contract = h.Contract, Collected = h.Collected, Takes = h.Takes };
             byHunter.Remove(dead);
             Hunters.Add(next);
             byHunter[heir] = next;
@@ -1352,9 +1362,9 @@ namespace Unity.SpaceGod.Core
             if (ship.Battle != null || !Law.Player.Wanted) return null;
             foreach (var h in Hunters)
             {
-                // A hunter off abroad through a gate or its own cruise drive (U.SPC-T453) is still the same, live
-                // Ship, just no longer in this world's own fleet: nothing here gives a position for it to engage from.
-                if (!h.Alive || h.Contract?.Target != Law.Player || h.Ship.Battle != null || h.Ship == ship || !world.Fleet.IsPresent(h.Ship)) continue;
+                // A hunter off abroad through a gate or its own cruise drive (U.SPC-T453) reads as not Alive here
+                // (Fleet.IsPresent): nothing here gives a position for it to engage from.
+                if (!h.Alive || h.Contract?.Target != Law.Player || h.Ship.Battle != null || h.Ship == ship) continue;
                 if ((world.Fleet.StateOf(h.Ship, jd).HelioKm - pilotHelio).Length > EngageKm) continue;
                 var b = world.War.TryStartHunt(ship, h.Ship, body, offsetKm, forward, jd);
                 if (b == null) continue;

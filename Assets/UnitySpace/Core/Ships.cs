@@ -618,16 +618,17 @@ namespace Unity.SpaceGod.Core
             LurkLane = null;
             LurkAt = 0;
             LurkDays = 0;
-            Derelict = false;
-            DerelictSinceJd = 0;
-            DerelictBy = null;
+            // Not Destroyed or Derelict: a hull crossing never carries those into this call (a cruise drops a lost
+            // or boarded hull from its group on the spot, see DeepSpace.Destroy, and Derelict is a system-combat
+            // outcome a gate's passage or a cruise never produces), so clearing them here would only ever be able to
+            // revive one, never settle it.
             Salvage.Clear();
             // The market it was loaded for (and the contract bonus it posted) belongs to the origin system's
-            // economy, so the goods arrive unbooked.
+            // economy, so the goods arrive unbooked. Captains in the brig (CaptainsHeld) are not: they are aboard,
+            // same as the hull's own crew, and cross with it.
             CargoDestination = null;
             CargoBonus = 0;
             CargoBonusPayer = null;
-            CaptainsHeld = 0;
             LoadedFrom = null;
             LoadedJd = 0;
             LoadedCredits = 0;
@@ -637,7 +638,6 @@ namespace Unity.SpaceGod.Core
             StrandedInFlight = false;
             LegPropellant = 0;
             StrandJd = double.NaN;
-            Destroyed = false;
             GateDeparted = false;
             GateKm = null;
             StakeoutKm = null;

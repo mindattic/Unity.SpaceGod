@@ -478,7 +478,7 @@ namespace Unity.SpaceGod.Core.Tests
             var ship = sol.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort);
             ship.Propellant = 1234;
 
-            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
+            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World, StartJd, out var arrived), Is.True);
 
             // The same hull crosses (U.SPC-T453, never a copy), tanks and all.
             Assert.That(arrived, Is.SameAs(ship));

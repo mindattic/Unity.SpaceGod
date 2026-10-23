@@ -1489,7 +1489,7 @@ namespace Unity.SpaceGod
             if (!gate.Link.Open(ActiveSystem, ship.Faction, Clock.Jd)) { ShowToast(gate.Name.ToUpperInvariant() + " is shut to " + ship.Faction.Name); return false; }
 
             var destination = gate.Destination;
-            if (!GateTransit.TryPerform(gate, shipHelioKm, ship, Fleet, Clock.Jd, out var arrived)) return false;
+            if (!GateTransit.TryPerform(gate, shipHelioKm, ship, World, Clock.Jd, out var arrived)) return false;
             // A charge is lost going through a gate (U.SPC-T417).
             StopFtl();
             EndSalvage(null);

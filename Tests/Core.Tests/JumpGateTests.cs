@@ -92,7 +92,7 @@ namespace Unity.SpaceGod.Core.Tests
             int acCountBefore = ac.World.Fleet.Ships.Count;
             int solCountBefore = sol.World.Fleet.Ships.Count;
 
-            bool ok = GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived);
+            bool ok = GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World, StartJd, out var arrived);
 
             Assert.That(ok, Is.True);
             // The same object comes out the far side (U.SPC-T453), never a copy.
@@ -129,7 +129,7 @@ namespace Unity.SpaceGod.Core.Tests
             bool announced = false;
             ac.World.ShipAdded += s => announced |= s.Name == ship.Name;
 
-            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
+            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World, StartJd, out var arrived), Is.True);
 
             Assert.That(announced, Is.True, "the far system was never told a ship came in");
             Assert.That(arrived.Company, Is.SameAs(company));
@@ -150,7 +150,7 @@ namespace Unity.SpaceGod.Core.Tests
             ship.CargoDestination = booked;
             ship.CargoBonus = 5000;
 
-            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World.Fleet, StartJd, out var arrived), Is.True);
+            Assert.That(GateTransit.TryPerform(sol.GateTo(ac), sol.GateTo(ac).PositionKm, ship, sol.World, StartJd, out var arrived), Is.True);
 
             Assert.That(arrived.HasCargo, Is.True, "the goods themselves come along");
             Assert.That(arrived.CargoTonnes, Is.EqualTo(100));
@@ -206,7 +206,7 @@ namespace Unity.SpaceGod.Core.Tests
             var hidden = sol.World.Economy.Settlements.Where(s => s.Hidden).Select(s => s.Body).ToList();
             Assert.That(hidden, Is.Not.Empty);
             var ship = ac.World.Fleet.Ships.First(s => !s.Destroyed && !s.IsEscort);
-            Assert.That(GateTransit.TryPerform(ac.GateTo(sol), ac.GateTo(sol).PositionKm, ship, ac.World.Fleet, StartJd, out var arrived), Is.True);
+            Assert.That(GateTransit.TryPerform(ac.GateTo(sol), ac.GateTo(sol).PositionKm, ship, ac.World, StartJd, out var arrived), Is.True);
             Assert.That(arrived.Ports.Intersect(hidden), Is.Empty);
         }
 
@@ -220,7 +220,7 @@ namespace Unity.SpaceGod.Core.Tests
             int solBefore = sol.World.Fleet.Ships.Count;
             int acBefore = ac.World.Fleet.Ships.Count;
 
-            bool ok = GateTransit.TryPerform(sol.GateTo(ac), DVec3.Zero, ship, sol.World.Fleet, StartJd, out var arrived);
+            bool ok = GateTransit.TryPerform(sol.GateTo(ac), DVec3.Zero, ship, sol.World, StartJd, out var arrived);
 
             Assert.That(ok, Is.False);
             Assert.That(arrived, Is.Null);

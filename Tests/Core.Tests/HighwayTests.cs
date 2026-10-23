@@ -180,7 +180,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That((at - arrival).Length, Is.LessThan(1), "brought off right where the ride ended");
             Assert.That(gate.CanActivate(at), Is.True, "and there the gate can be opened");
 
-            Assert.That(GateTransit.TryPerform(gate, at, ship, sol.World.Fleet, end, out var arrived), Is.True);
+            Assert.That(GateTransit.TryPerform(gate, at, ship, sol.World, end, out var arrived), Is.True);
             var far = gate.Destination;
             var farLanes = far.Lanes;
             var farSpur = farLanes.GateSpurs.Single(l => l.Gate == gate.Partner);

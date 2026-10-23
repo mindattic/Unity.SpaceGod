@@ -26,11 +26,28 @@ namespace Unity.SpaceGod.Core
         /// takes it out of <paramref name="origin"/> and hands back the same hull, now living in the destination
         /// system's fleet. Returns false (no-op, <paramref name="arrived"/> null) otherwise.
         /// </summary>
-        public static bool TryPerform(JumpGate gate, DVec3 shipHelioKm, Ship ship, Fleet origin, double jd, out Ship arrived)
+        public static bool TryPerform(JumpGate gate, DVec3 shipHelioKm, Ship ship, World origin, double jd, out Ship arrived)
         {
             arrived = null;
-            if (gate == null || ship == null || origin == null || !gate.CanActivate(shipHelioKm)) return false;
-            if (origin.LetGo(ship) == null) return false;
+            if (gate == null || ship == null || origin == null || !gate.CanActivate(shipHelioKm) || !origin.Fleet.IsPresent(ship)) return false;
+
+            // Its orders, cooldowns and bookings here are for a hull no longer here (U.SPC-T311): the ship goes on
+            // under its own steam, not a husk that stayed flagged for these books to read. Any band it led carries
+            // on under the strongest of its escorts left behind (U.SPC-T310), same as a jump under its own drive;
+            // the old flagship's hold goes with the hull that is actually leaving, not a stay-behind heir.
+            origin.War?.Forget(ship);
+            origin.Economy?.Release(ship);
+            if (!ship.IsEscort)
+            {
+                bool wasDestroyed = ship.Destroyed;
+                ship.Destroyed = true;
+                origin.War?.HandOverCommand(ship);
+                ship.Destroyed = wasDestroyed;
+            }
+            if (origin.Fleet.LetGo(ship) == null) return false;
+            ship.Leader = null;
+            ship.FormationSlot = default;
+            ship.Voyage = null;
 
             var destination = gate.Destination;
             ship.ResetForArrival();
