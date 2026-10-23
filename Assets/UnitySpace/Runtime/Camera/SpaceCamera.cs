@@ -298,10 +298,10 @@ namespace Unity.SpaceGod.Cameras
 
         public static double DefaultFraming(Target target)
         {
-            return target.IsShip ? 5.0 : 3.4;
+            return target.IsShip || target.IsUnit ? 5.0 : 3.4;
         }
 
-        static double MinZoom(Target target) => target.IsShip ? 1.6 : 1.12;
+        static double MinZoom(Target target) => target.IsShip || target.IsUnit ? 1.6 : 1.12;
 
         // ---------------------------------------------------------------- per frame
 

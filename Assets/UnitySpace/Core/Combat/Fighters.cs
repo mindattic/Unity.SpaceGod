@@ -34,6 +34,19 @@ namespace Unity.SpaceGod.Core
         public double Seed;
     }
 
+    /// <summary>The player's stick on a launched craft they have taken (U.SPC-T422, see <see cref="FighterSeat"/>).</summary>
+    public sealed class FighterControl
+    {
+        /// <summary>Where the player wants the nose (unit, ecliptic axes); zero holds the current heading.</summary>
+        public DVec3 Aim;
+
+        /// <summary>The share of the craft's top speed it holds along its nose, 0-1.</summary>
+        public double Throttle;
+
+        /// <summary>The torpedo trigger, held this step.</summary>
+        public bool Secondary;
+    }
+
     /// <summary>
     /// Carrier fighters. A carrier launches its squadrons (six craft each: two interceptor squadrons
     /// to one of bombers) as it enters a battle. Each squadron's lead flies attack runs on an enemy
@@ -291,20 +304,82 @@ namespace Unity.SpaceGod.Core
                 || !b.Hostile(u, u.Target) || u.Target.Surrendering || u.Target.Captured) return;
             var to = u.Target.Pos - u.Pos;
             double dist = to.Length;
-            if (dist > WeaponSpec.Torpedo.RangeKm || DVec3.Dot(u.Forward, to / dist) < 0.9) return;
+            if (dist > WeaponSpec.Torpedo.RangeKm || DVec3.Dot(u.Forward, to / dist) < TorpedoBoresightCos) return;
+            LaunchTorpedoes(b, u, u.Target);
+        }
+
+        /// <summary>How near the nose a torpedo's target must be (cosine): about 25 degrees.</summary>
+        public const double TorpedoBoresightCos = 0.9;
+
+        /// <summary>Every ready torpedo the craft carries, away at <paramref name="target"/>.</summary>
+        static void LaunchTorpedoes(Battle b, BattleUnit u, BattleUnit target)
+        {
             foreach (var s in u.Combat.Subsystems)
             {
                 if (s.Kind != SubsystemKind.Torpedo || s.Destroyed || s.Ammo <= 0 || s.Cooldown > 0) continue;
                 s.Ammo--;
                 s.Cooldown = s.Def.Weapon.Cooldown;
-                var sub = b.PickSubsystem(u.Target, u);
+                var sub = b.PickSubsystem(target, u);
                 b.Missiles.Add(new Missile
                 {
-                    Pos = u.Pos, Vel = u.Vel, Target = u.Target, TargetSub = sub, Damage = s.Def.Weapon.Damage,
+                    Pos = u.Pos, Vel = u.Vel, Target = target, TargetSub = sub, Damage = s.Def.Weapon.Damage,
                     Speed = s.Def.Weapon.MissileSpeedKmS + u.Vel.Length, Hp = 25, Life = 30, Side = u.Side, Torpedo = true,
                 });
                 b.Emit(FxKind.MissileLaunch, u.Pos, u.Pos + u.Forward, 0, u.Side, u, s.Index);
             }
+        }
+
+        // ---------------------------------------------------------------- flown by the player (U.SPC-T422)
+
+        /// <summary>
+        /// One step of a launched craft the player has taken (<see cref="FighterSeat"/>): the nose turns toward the stick at
+        /// the craft's own rate, the throttle sets the speed it holds along the nose (eased in at its own acceleration, so it
+        /// carves rather than slides), the guns fire down the crosshair through the battle's usual player path, and the
+        /// secondary trigger looses its torpedoes at the hostile hull nearest the nose. Its own drives knocked out, it drifts.
+        /// </summary>
+        public static void FlyManned(Battle b, BattleUnit u, FighterControl stick, double dt)
+        {
+            if (u.Stunned > 0)
+            {
+                u.Pos += u.Vel * dt;
+                return;
+            }
+            var spec = u.Combat.Spec;
+            if (stick.Aim.LengthSquared > 1e-12)
+            {
+                var want = stick.Aim.Normalized;
+                double turn = spec.TurnRateDegS * Astro.Deg2Rad * dt;
+                double angle = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(u.Forward, want))));
+                u.Forward = angle <= turn ? want : DVec3.TurnStep(u.Forward, want, turn / angle);
+            }
+            double throttle = Math.Max(0, Math.Min(1, stick.Throttle));
+            var dv = u.Forward * (spec.MaxSpeed * throttle) - u.Vel;
+            double step = spec.Accel * dt;
+            u.Vel += dv.Length > step ? dv.Normalized * step : dv;
+            u.Pos += u.Vel * dt;
+            if (stick.Secondary && TorpedoTarget(b, u) is BattleUnit target) LaunchTorpedoes(b, u, target);
+        }
+
+        /// <summary>The hostile hull (never a fighter, never one that has struck or been taken) nearest the nose, within
+        /// torpedo range and the torpedo's boresight; null if none.</summary>
+        public static BattleUnit TorpedoTarget(Battle b, BattleUnit u)
+        {
+            BattleUnit best = null;
+            double bestCos = TorpedoBoresightCos;
+            foreach (var o in b.Units)
+            {
+                if (!o.Present || o.Kind == UnitKind.Fighter || !b.Hostile(u, o) || o.Surrendering || o.Captured) continue;
+                var to = o.Pos - u.Pos;
+                double dist = to.Length;
+                if (dist < 1e-9 || dist - o.Radius > WeaponSpec.Torpedo.RangeKm) continue;
+                double cos = DVec3.Dot(u.Forward, to / dist);
+                if (cos >= bestCos)
+                {
+                    bestCos = cos;
+                    best = o;
+                }
+            }
+            return best;
         }
 
         /// <summary>Back to the carrier's hangar and aboard; each landing puts a craft back in its hangar.</summary>

@@ -13,6 +13,10 @@ namespace Unity.SpaceGod.Core
 
         public bool Active => Current != null;
 
+        /// <summary>Why the session last ended by itself (the thing held was shot down, the fight ended: its
+        /// <see cref="IEmbodiable.Blocker"/>), or null if the player let go or switched (U.SPC-T422).</summary>
+        public string EndedBecause { get; private set; }
+
         /// <summary>
         /// Hands back whatever is held and takes <paramref name="next"/>. Returns false (holding nothing new,
         /// and with the old thing still handed back) if <paramref name="next"/> cannot be embodied right now.
@@ -21,6 +25,7 @@ namespace Unity.SpaceGod.Core
         {
             if (next != null && Equals(next, Current) && Current.Embodied) return true;
             Release();
+            EndedBecause = null;
             if (next == null || !next.CanEmbody) return false;
             next.TakeCharge();
             Current = next;
@@ -50,6 +55,7 @@ namespace Unity.SpaceGod.Core
             if (Current == null) return false;
             if (!Current.CanEmbody)
             {
+                EndedBecause = Current.Blocker;
                 Release();
                 return false;
             }

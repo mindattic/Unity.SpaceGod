@@ -92,6 +92,14 @@ namespace Unity.SpaceGod.Input
         /// <summary>Takes or releases direct control of the selected/focused ship.</summary>
         public bool Pilot;
 
+        /// <summary>Take charge (U.SPC-T422): ' takes the next seat in the fight in view (a ship's helm or a launched
+        /// fighter's cockpit), ; the one before (0: neither).</summary>
+        public int CycleSeat;
+
+        /// <summary>Take charge (U.SPC-T422): / mans the next gun on the hull flown or selected, and past its last gun
+        /// goes back up to the helm.</summary>
+        public bool ManGun;
+
         /// <summary>While piloting: locks (or clears) the camera's tracking onto the hovered/selected
         /// ship. Shares its key with <see cref="ResetTime"/>, which is gated off while piloting so the
         /// two never fire together.</summary>
@@ -219,6 +227,8 @@ namespace Unity.SpaceGod.Input
             CycleBackward = CycleShips && Boost;
             Home = kb.homeKey.wasPressedThisFrame || kb.backspaceKey.wasPressedThisFrame;
             Pilot = kb.pKey.wasPressedThisFrame;
+            CycleSeat = kb.quoteKey.wasPressedThisFrame ? 1 : kb.semicolonKey.wasPressedThisFrame ? -1 : 0;
+            ManGun = kb.slashKey.wasPressedThisFrame;
             ActivateGate = kb.yKey.wasPressedThisFrame;
             EngageFtl = kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame;
             ToggleFtlAutopilot = kb.endKey.wasPressedThisFrame;
@@ -257,6 +267,8 @@ namespace Unity.SpaceGod.Input
             QuickSave = QuickLoad = ToggleSaves = false;
             ToggleFtlAutopilot = ClearFtlCourse = false;
             CycleFtlTarget = 0;
+            CycleSeat = 0;
+            ManGun = false;
             NumberKey = -1;
         }
 

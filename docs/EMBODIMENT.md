@@ -1,6 +1,7 @@
 # Universal embodiment
 
-> Ticket U.SPC-T18. Owner direction, 2026-10-13: "every thing man made you can 'embody'."
+> Tickets U.SPC-T18 (the extension point) and U.SPC-T422 (taking charge from the strategy view, fighters). Owner
+> direction, 2026-10-13: "every thing man made you can 'embody'."
 
 You can take charge of anything man-made: jump into the helm of any ship, a turret on a hull or a
 station, a satellite, then hand it back to its AI. Or you can leave it all to play out. This page sets
@@ -14,7 +15,7 @@ Everything the player can take charge of implements one interface, `IEmbodiable`
 
 | Member | What it is |
 | --- | --- |
-| `Name`, `Kind`, `Faction` | What it is and whose it is. `Kind` is an `EmbodimentKind`: `Ship`, `Turret`, `Station`, `Satellite`. It is used for display and grouping only. Code never branches on it to decide how control works. |
+| `Name`, `Kind`, `Faction` | What it is and whose it is. `Kind` is an `EmbodimentKind`: `Ship`, `Fighter`, `Turret`, `Station`, `Satellite`. It is used for display and grouping only. Code never branches on it to decide how control works. |
 | `Host` | The embodiable it is mounted on (a turret's ship or station), or null for a free hull. Hand-back and the "move up to the hull" control use it. |
 | `CanEmbody` / `Blocker` | Whether the player can take it now, and if not, why ("destroyed", "derelict", "taken as a prize", "not a gun mount"). The only real blockers are a wreck, a hull that has been taken, and a thing that has nothing to control. |
 | `PoseAt(jd)` | Where it is and which way it faces: an `EmbodimentPose` (frame body, km offset from that body's centre, forward, up). This is the same frame-body-plus-offset convention the pilot loop and the battles already use. |
@@ -52,14 +53,43 @@ builds its own list.
   what it passes through (`ResolveShot`, the same path the player's nose guns use). Every other mount
   on the hull goes on firing under its crew, and hand-back returns this one to them. Nothing else
   about the host changes. Its own AI (or the player at its helm) keeps flying it.
+* **`FighterSeat` (Kind `Fighter`, U.SPC-T422).** The cockpit of any fighter or bomber a carrier has
+  launched into a fight. While it is held, the battle's step flies that one craft through
+  `FighterAI.FlyManned` (on its entry in `Battle.Flown`) instead of its pilot's AI: the nose turns
+  toward the stick at the craft's own turn rate, the throttle sets the share of its top speed it holds
+  along the nose, its guns fire down the crosshair through the battle's usual player-gun path, and the
+  secondary trigger looses a bomber's torpedoes at the hostile hull nearest its nose. Every gunner on
+  the other side lays real aimed shots on it, as on any hull the player flies. If it led its squadron,
+  its wingmen keep flying on it. Handed back, its pilot starts a fresh approach from where it was left
+  on a target it picks then. A held craft never lands on its own, so it does not hold the fight open:
+  the fight ends when the rest have landed, and the war takes it back aboard with them.
+
+## Taking charge from the strategy view (U.SPC-T422)
+
+`Embodiables.SeatsIn(world, battle)` lists every seat in a fight that can be taken now (each ship's
+helm, each launched craft's cockpit) and `Embodiables.Cycle` steps through such a list. Gun mounts,
+many to a hull, are reached from their hull (`Embodiables.TurretsOn(world, battle, unit)`).
+
+In the game (`Runtime/UnitySpaceApp.Embodiment.cs`), from the strategy view, ' takes the seat in the
+fight in view that is nearest the middle of the screen. After that, ' and ; step to the next and
+previous seat in the same fight. / mans the next gun on the hull being flown or the one selected, and
+after the last gun it goes back up to the hull's helm. P hands any seat back to its AI and returns to
+command, restoring the commander's time warp and whatever the camera was following. A ship's helm is
+still flown by the pilot loop. Every other seat is held in one `EmbodimentSession`, with the mouse
+swinging the stick and the chase view following it. A seat that stops being embodiable (shot down,
+the fight over) returns the player to command, and the session's `EndedBecause` gives the reason.
+
+Nothing pauses and nothing loads. Taking a seat drops the clock to real time, which is a speed and
+not a pause. The camera glides from seat to seat. Every seat not held stays under its own AI the
+whole time. When the player takes nothing, the galaxy runs fully on its own.
 
 ## What follows (filed as `part-of U.SPC-T18`)
 
 * U.SPC-T445, a Runtime turret seat: pick a mount on the selected or flown hull, a turret camera at the mount, and
   aim and fire from it.
 * U.SPC-T446, a picker and switch UI: list embodiables near the camera or on the selected thing (from
-  `Embodiables`), and jump between seats. Seamless switching from the strategy view without pausing
-  is U.SPC-T422's to build on top of this.
+  `Embodiables`), and jump between seats. U.SPC-T422 has added keyboard switching from the strategy view
+  without pausing (above). A visible list to pick from is still to come.
 * U.SPC-T447, stations as embodiables: a station hull with its own pose. It does not move, but it can turn its
   guns and launch its craft.
 * U.SPC-T448, satellites as embodiables: an orbiting body you can turn and point (sensors, relays), with

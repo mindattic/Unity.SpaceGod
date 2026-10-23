@@ -251,6 +251,10 @@ namespace Unity.SpaceGod
         /// <summary>Lets go of everything the session held in the old galaxy, without touching it (it is about to be dropped).</summary>
         void DropSession()
         {
+            // A fighter or gun held in the world being left goes back to its AI there (U.SPC-T422); the loaded game starts in command.
+            seat.Release();
+            commandWarp = -1;
+            commandFocus = Target.None;
             Piloted = Target.None;
             pilotLockTarget = Target.None;
             pilotLockUnit = null;

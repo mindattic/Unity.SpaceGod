@@ -143,6 +143,7 @@ namespace Unity.SpaceGod.UI
             DrawHail();
             DrawLaneRide();
             DrawFtl();
+            DrawSeat();
             DrawCourseMarker();
             DrawInterdiction();
             if (!app.ShowMarket) DrawOpportunityBoard();
@@ -3301,6 +3302,8 @@ namespace Unity.SpaceGod.UI
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
                 "F11  galaxy map: every system, who holds it, gate traffic, war fronts, blockades and raiders, as far as the news goes; click a star to inspect, double-click to travel",
                 "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
+                "Take charge, any time   '  ;   jump into the next seat in the fight in view (a ship's helm, a fighter or bomber)   /   man the next gun on the hull",
+                "   in a fighter: mouse aims, W/S throttle, left mouse guns, right mouse torpedoes   P hands the seat back to its AI and returns you to command",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
                 "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
                 "Combat  (piloting)   left mouse: guns, down the crosshair (watch the heat)   T lock the hull under it, hold the crosshair on it to lock   right mouse: missiles",
@@ -3330,6 +3333,30 @@ namespace Unity.SpaceGod.UI
             if (!helpOpen) return;
             for (int i = 0; i < help.Length; i++)
                 GUI.Label(new Rect(r.x + 12, r.y + 34 + i * 17, w - 20, 17), help[i], small);
+        }
+
+        /// <summary>
+        /// At a seat taken from command (U.SPC-T422: a fighter's cockpit, a gun mount): a crosshair where the stick is
+        /// pointing (the middle of the screen, which the view follows) and a line saying what is held and how to leave it.
+        /// </summary>
+        void DrawSeat()
+        {
+            string line = app.SeatLine();
+            if (line == null) return;
+            var old = GUI.color;
+            GUI.color = new Color(0.6f, 0.95f, 1f, 0.9f);
+            float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
+            var tex = Texture2D.whiteTexture;
+            GUI.DrawTexture(new Rect(cx - 14, cy - 1, 9, 2), tex);
+            GUI.DrawTexture(new Rect(cx + 5, cy - 1, 9, 2), tex);
+            GUI.DrawTexture(new Rect(cx - 1, cy - 14, 2, 9), tex);
+            GUI.DrawTexture(new Rect(cx - 1, cy + 5, 2, 9), tex);
+            GUI.color = old;
+            var content = new GUIContent(line);
+            float w = toast.CalcSize(content).x + 40;
+            var r = new Rect((Screen.width - w) * 0.5f, Screen.height - 96, w, 34);
+            GUI.Box(r, GUIContent.none, panel);
+            GUI.Label(new Rect(r.x + 20, r.y + 7, w, 22), content, toast);
         }
 
         void DrawToast()

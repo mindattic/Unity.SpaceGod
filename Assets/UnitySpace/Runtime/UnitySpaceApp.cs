@@ -464,6 +464,7 @@ namespace Unity.SpaceGod
             // Already on the way somewhere under the hull's own drive (U.SPC-T417).
             if (InFtlCruise) { ShowToast("Under FTL for " + FtlCruise.ToName + ": the view goes where the hull goes"); return; }
             // The pilot session belongs to this system's ship and world: the gate is the way across while flying.
+            if (IsSeated) ReturnToCommand();
             if (IsPiloting) { ShowToast("Release the helm (P) before travelling to another system, or fly through the gate"); return; }
             Select(Target.None);
             Travel.Begin(system);
@@ -593,6 +594,7 @@ namespace Unity.SpaceGod
             Scale.Layout(Ephemeris, bodyScene);
             UpdateRadii();
             UpdatePiloting(dt);
+            UpdateSeat(dt);
             ShowLawNotices();
             UpdateShips(dt);
             Structures.Layout();
@@ -615,7 +617,7 @@ namespace Unity.SpaceGod
             HandleSelectionClicks();
 
             ToastAge += dt;
-            bool lockCursor = (Input.LookHeld || (IsPiloting && !ClickPanelOpen)) && !ModelViewer.CapturesInput;
+            bool lockCursor = (Input.LookHeld || (AtControls && !ClickPanelOpen)) && !ModelViewer.CapturesInput;
             Cursor.lockState = lockCursor ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !lockCursor;
         }
@@ -735,7 +737,7 @@ namespace Unity.SpaceGod
             if (i.TimeFaster) TimeFaster();
             if (i.TimeSlower) Clock.Slower();
             if (i.TogglePause) TogglePause();
-            if (i.ResetTime && !IsPiloting) ResetToNow();
+            if (i.ResetTime && !AtControls) ResetToNow();
             if (i.ToggleOrbits) ShowOrbits = !ShowOrbits;
             if (i.ToggleLabels) ShowLabels = !ShowLabels;
             if (i.ToggleHelp) ShowHelp = !ShowHelp;
@@ -748,7 +750,7 @@ namespace Unity.SpaceGod
             if (i.ToggleFleet) ShowFleet = !ShowFleet;
             if (i.ToggleGalaxyMap) ShowGalaxyMap = !ShowGalaxyMap;
             // At the helm X rolls the hull (Z/X): the news feed would free the cursor and take the stick and guns.
-            if (i.ToggleNews && !IsPiloting) ShowNews = !ShowNews;
+            if (i.ToggleNews && !AtControls) ShowNews = !ShowNews;
             if (i.ToggleSpawn) ShowSpawn = !ShowSpawn;
             if (i.ToggleLanes) ShowLanes = !ShowLanes;
             if (i.ToggleReorient) ToggleAutoReorient();
@@ -758,18 +760,21 @@ namespace Unity.SpaceGod
                 ShowToast(ShowSatellites ? "SATELLITES ON: constellations drawn" : "SATELLITES OFF  (K to show)");
             }
             // The chase camera belongs to the pilot: nothing re-aims it at something else mid-flight.
-            if (i.WatchBattle && !IsPiloting)
+            if (i.WatchBattle && !AtControls)
             {
                 var b = BiggestBattle();
                 if (b != null) WatchBattle(b);
                 else ShowToast("No battles under way");
             }
-            if (i.Home && !IsPiloting) FocusSystemOverview();
-            if (i.Focus && !IsPiloting) FocusSelected();
+            if (i.Home && !AtControls) FocusSystemOverview();
+            if (i.Focus && !AtControls) FocusSelected();
             if (i.Escape) BackOut();
-            if (i.CycleShips && !IsPiloting) CycleShips(i.CycleBackward ? -1 : 1);
-            if (i.NumberKey >= 0 && !IsPiloting) NumberHotkey(i.NumberKey);
+            if (i.CycleShips && !AtControls) CycleShips(i.CycleBackward ? -1 : 1);
+            if (i.NumberKey >= 0 && !AtControls) NumberHotkey(i.NumberKey);
             if (i.Pilot) TogglePiloting();
+            // Take charge of anything, any time (U.SPC-T422): the next seat in the fight in view, or the next gun on the hull.
+            if (i.CycleSeat != 0) CycleSeat(i.CycleSeat);
+            if (i.ManGun) ManNextGun();
         }
 
         /// <summary>Speeds time up a step (the key and the top bar's button alike), unless the ship at the helm is being
@@ -787,7 +792,7 @@ namespace Unity.SpaceGod
         /// </summary>
         void BackOut()
         {
-            switch (EscapeKey.Route(ClickPanelOpen, IsPiloting, SpaceCamera.Mode != SpaceCamera.CameraMode.Free, !Selected.IsNone))
+            switch (EscapeKey.Route(ClickPanelOpen, AtControls, SpaceCamera.Mode != SpaceCamera.CameraMode.Free, !Selected.IsNone))
             {
                 case EscapeAction.ClosePanels:
                     ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = ShowGalaxyMap = false;
@@ -856,8 +861,8 @@ namespace Unity.SpaceGod
 
         public void FocusSelected()
         {
-            // The chase camera belongs to the pilot (the HUD's Focus button lands here too).
-            if (IsPiloting) return;
+            // The chase camera belongs to the pilot (the HUD's Focus button lands here too), or whoever holds a seat.
+            if (AtControls) return;
             if (Selected.IsNone)
             {
                 if (SpaceCamera.Mode != SpaceCamera.CameraMode.Free) SpaceCamera.ExitFocus();
@@ -871,9 +876,10 @@ namespace Unity.SpaceGod
 
         public void TogglePiloting()
         {
-            if (IsPiloting)
+            // At any seat, P hands it back to its AI and returns to command, the view and time warp it was taken from (U.SPC-T422).
+            if (AtControls)
             {
-                ExitPiloting();
+                ReturnToCommand();
                 return;
             }
             var t = Selected.IsShip ? Selected : Hovered.IsShip ? Hovered : Target.None;
@@ -888,6 +894,7 @@ namespace Unity.SpaceGod
                 ShowToast("Can't take the helm of that ship right now");
                 return;
             }
+            RememberCommand();
             EnterPiloting(t);
         }
 
@@ -986,6 +993,8 @@ namespace Unity.SpaceGod
         /// </summary>
         public void SpawnShip(ShipClass cls, bool hostile)
         {
+            RememberCommand();
+            seat.Release();
             if (IsPiloting) ExitPiloting();
 
             // Where the camera is now: its free-flight frame goes stale while it is focused on something far off.
@@ -2330,6 +2339,7 @@ namespace Unity.SpaceGod
             if (target.IsShip) return shipScene[target.Ship.Id];
             if (target.IsStructure && Structures.Scenes.TryGetValue(target.Structure, out var s)) return s;
             if (target.IsRing && Structures.RingScenes.TryGetValue(target.Ring, out var r)) return r;
+            if (target.IsUnit) return BattleScene(target.Battle, target.Unit.Pos);
             return DVec3.Zero;
         }
 
@@ -2339,10 +2349,23 @@ namespace Unity.SpaceGod
             if (target.IsShip) return shipLength[target.Ship.Id] * 0.5;
             if (target.IsStructure && Structures.Sizes.TryGetValue(target.Structure, out var s)) return s * 0.5;
             if (target.IsRing && Structures.Sizes.TryGetValue(target.Ring, out var r)) return r * 0.5;
+            if (target.IsUnit) return Scale.ShipLength(target.Unit.LengthKm) * 0.5;
             return 1;
         }
 
-        public Quaternion TargetRotation(Target target) => target.IsShip ? shipRotation[target.Ship.Id] : Quaternion.identity;
+        public Quaternion TargetRotation(Target target)
+        {
+            if (target.IsShip) return shipRotation[target.Ship.Id];
+            if (target.IsUnit)
+            {
+                var u = target.Unit;
+                u.Basis(out _, out var up);
+                return Quaternion.LookRotation(ToVector(u.Forward.SwapYZ), ToVector(up.SwapYZ));
+            }
+            return Quaternion.identity;
+        }
+
+        static Vector3 ToVector(DVec3 v) => new Vector3((float)v.X, (float)v.Y, (float)v.Z);
 
         public double NearestSurface(DVec3 p)
         {
@@ -2790,7 +2813,7 @@ namespace Unity.SpaceGod
         {
             // The fire trigger shares the left button; a locked, centred cursor while piloting would
             // otherwise register every release as an in-place click and reselect something underfoot.
-            if (!Input.SelectClicked || Travel.Active || IsPiloting) return;
+            if (!Input.SelectClicked || Travel.Active || AtControls) return;
             Select(Hovered);
             if (Input.SelectDoubleClicked && !Hovered.IsNone) SpaceCamera.FocusOn(Hovered);
         }

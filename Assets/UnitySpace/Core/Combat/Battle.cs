@@ -414,6 +414,10 @@ namespace Unity.SpaceGod.Core
         /// <see cref="FireManned"/> instead of its crew. Kept on the battle, so nothing stays manned past the fight.</summary>
         public readonly Dictionary<Subsystem, MountControl> Manned = new Dictionary<Subsystem, MountControl>();
 
+        /// <summary>Launched small craft the player is flying (U.SPC-T422, see <see cref="FighterSeat"/>): each is flown by
+        /// <see cref="FighterAI.FlyManned"/> on its stick instead of by its pilot. Kept on the battle, like <see cref="Manned"/>.</summary>
+        public readonly Dictionary<BattleUnit, FighterControl> Flown = new Dictionary<BattleUnit, FighterControl>();
+
         /// <summary>Set for an ambush beside a hyperlane; null for a battle at a body.</summary>
         public LaneSite Site;
 
@@ -590,7 +594,9 @@ namespace Unity.SpaceGod.Core
                 if (!u.Present) continue;
                 if (u.Kind == UnitKind.Fighter)
                 {
-                    FighterStep?.Invoke(this, u, dt);
+                    // One the player has taken flies on their stick; the rest of its squadron flies on as before (U.SPC-T422).
+                    if (Flown.Count > 0 && Flown.TryGetValue(u, out var stick)) FighterAI.FlyManned(this, u, stick, dt);
+                    else FighterStep?.Invoke(this, u, dt);
                     continue;
                 }
                 Think(u, dt);
@@ -707,13 +713,14 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>Fighters still flying that have a carrier to land on.</summary>
+        /// <summary>Fighters still flying that have a carrier to land on. One the player is flying never lands on its own, so
+        /// it does not hold the fight open: it is taken back aboard with the rest when the fight ends (see War).</summary>
         bool FightersAloft
         {
             get
             {
                 foreach (var u in Units)
-                    if (u.Kind == UnitKind.Fighter && u.Present && u.Fighter.Carrier.Present && !u.Fighter.Carrier.Captured) return true;
+                    if (u.Kind == UnitKind.Fighter && u.Present && !Flown.ContainsKey(u) && u.Fighter.Carrier.Present && !u.Fighter.Carrier.Captured) return true;
                 return false;
             }
         }

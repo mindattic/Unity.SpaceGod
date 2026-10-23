@@ -7,6 +7,9 @@ namespace Unity.SpaceGod.Core
     public enum EmbodimentKind
     {
         Ship,
+
+        /// <summary>A launched fighter or bomber, one of a carrier's squadrons (U.SPC-T422).</summary>
+        Fighter,
         Turret,
         Station,
         Satellite,
