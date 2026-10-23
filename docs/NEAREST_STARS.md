@@ -215,7 +215,8 @@ SpaceGod can hold every star here without strain, but its stars never move: posi
 | --- | --- | --- |
 | Real stars | All 123 (U.SPC-T454): Alpha Centauri hand-built, 21 neighbours, 101 catalogue rows at the CSV's positions; void stations bridge every gap over 7 ly between them | `Galaxy.Neighbours()`, `CatalogueStars.Beyond()`, `VoidStations` |
 | Beyond the catalogue | Procedural stars from the galaxy seed, kept 3 ly clear of every real star | `ProceduralSystems`, `CatalogueStars.Claims` |
-| Load | Only stars inside the chart radius (default 20 ly, setting 5–60) are charted; systems inside 3 ly are built | `GalaxyStreaming.ChartRadius`, `SystemRadius` |
+| Start state | Every real system and void station is in the galaxy from the start (U.SPC-T456): within 21 ly of Sol charted and known, past 21 ly **Undiscovered** (off the charts, the galaxy map, the FTL targets and courses, and never a voyage's destination, though its well still pulls a group out) until the pilot or a group crossing open space comes within the discovery range (default 7 ly, setting 1–20) or falls into its well. Void stations past 21 ly start undiscovered like the stars about them | `Galaxy.SetUpNeighbourhood`, `StarDiscovery`, `Galaxy.Undiscovered` |
+| Load | Procedural stars inside the chart radius (default 20 ly, setting 5–60) are charted about the pilot; systems inside 3 ly are built | `GalaxyStreaming.ChartRadius`, `SystemRadius` |
 | Frame | J2000 ecliptic axes, Sol at the origin; input is J2000 equatorial RA/Dec, converted by `Astro.DirectionFromRaDec` | `StarEntry.PositionLy` |
 | Precision | Galactic sector (1e9 km cube, long index) plus a double km offset, good to ~0.1 mm anywhere in the galaxy | `GalacticPosition` |
 | Star motion | None: no velocity, no epoch | `StarEntry` |

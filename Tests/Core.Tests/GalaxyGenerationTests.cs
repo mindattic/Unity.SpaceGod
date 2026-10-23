@@ -244,7 +244,6 @@ namespace Unity.SpaceGod.Core.Tests
         public void TheDefaultGalaxyChartsTheRealStarsAboutSolWhenAPilotIsThere()
         {
             var g = Galaxy.CreateDefault(StartJd);
-            int before = g.NearbyStars.Count;
             int systems = g.Systems.Count;
             g.Explore(DVec3.Zero, StartJd);
             Assert.That(g.Systems.Count, Is.EqualTo(systems), "every system within reach of Sol is already simulated");
@@ -252,8 +251,9 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(names, Does.Contain("Kapteyn's Star").And.Contain("Altair").And.Contain("Procyon"));
             Assert.That(names.Distinct().Count(), Is.EqualTo(names.Count));
             Assert.That(names, Has.None.StartWith(ProceduralSystems.Prefix), "nothing made up within the real neighbourhood");
-            Assert.That(g.NearbyStars.Count, Is.GreaterThan(before));
             Assert.That(names, Has.None.AnyOf("Sirius", "Tau Ceti", "Barnard's Star"), "a simulated system is not charted again");
+            // Altair (16.7 ly) was charted from the start (U.SPC-T456); Sol's pilot finds nothing new past the known 21 ly.
+            Assert.That(names.Where(n => g.IsUndiscovered(n)), Is.Empty);
         }
 
         // ---------------------------------------------------------------- the extension point

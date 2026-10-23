@@ -591,7 +591,8 @@ namespace Unity.SpaceGod.Core
                 }
                 foreach (var spec in FrontierSystems.All())
                 {
-                    if (galaxy.Find(spec.Name) != null || Targeted(null, spec.Name)) continue;
+                    // Nobody surveys a gate to a star nobody has discovered (U.SPC-T456).
+                    if (galaxy.Find(spec.Name) != null || galaxy.IsUndiscovered(spec.NeighbourName ?? spec.Name) || Targeted(null, spec.Name)) continue;
                     double d = (spec.PositionLy - s.PositionLy).Length;
                     if (d > MaxLinkLy || !SiteClear(s, spec.PositionLy)) continue;
                     double score = FrontierWorthDays / d;

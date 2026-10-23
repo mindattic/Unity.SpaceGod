@@ -368,6 +368,8 @@ namespace Unity.SpaceGod.Core
             Traffic?.Update(jd);
             // Between the stars: groups under their own drives fly on, meet, find wrecks and drop out at their stars.
             DeepSpace.Update(jd);
+            // The pilot and the groups out there find the undiscovered stars they come near (U.SPC-T456).
+            LookForStars(jd);
             Construction?.Update(jd);
             Wars?.Update(jd);
             // The polities' standing directives: research accrues, and groups given objectives elsewhere are sent (U.SPC-T423).
@@ -387,6 +389,8 @@ namespace Unity.SpaceGod.Core
             Systems.Add(system);
             string shown = system.Spec?.NeighbourName ?? system.Name;
             NearbyStars.RemoveAll(n => string.Equals(n.Name, shown, StringComparison.OrdinalIgnoreCase));
+            // A system that runs is known (U.SPC-T456): one still undiscovered is found by being reached.
+            Unhide(shown);
             system.World.Coarse = !AtFullDetail(system);
             Traffic?.Register(system);
             SystemAdded?.Invoke(system, jd);
@@ -432,7 +436,9 @@ namespace Unity.SpaceGod.Core
         /// settled more thinly the farther out it is (<see cref="NearbySocieties"/>), all joined by the jump-gate
         /// lattice (<see cref="GateNetwork"/>) that the interstellar traffic flies; the rest of the
         /// nearest stars are shown, not simulated, until a faction's gate reaches one (<see cref="GateConstruction"/>,
-        /// <see cref="FrontierSystems"/>). Beyond them the rest of the galaxy, real catalogue stars and then stars made up
+        /// <see cref="FrontierSystems"/>). Every other real system out to 100 ly and the void stations between them are in the
+        /// galaxy from the start, charted within <see cref="StarDiscovery.KnownToLy"/> of Sol and undiscovered past it
+        /// (<see cref="SetUpNeighbourhood"/>). Beyond them the rest of the galaxy, real catalogue stars and then stars made up
         /// from <paramref name="seed"/>, is charted and built only as a pilot comes near (<see cref="Viewpoint"/>, <see cref="Explore"/>).
         /// </summary>
         public static Galaxy CreateDefault(double jd, int seed = DefaultSeed)
@@ -449,6 +455,9 @@ namespace Unity.SpaceGod.Core
                 if (s.Spec?.NeighbourName != null) simulated.Add(s.Spec.NeighbourName);
             foreach (var n in Neighbours())
                 if (!simulated.Contains(n.Name)) g.NearbyStars.Add(n);
+            // The rest of the real neighbourhood out to 100 ly, and the void stations between: charted within 21 ly of Sol,
+            // undiscovered past it until someone comes near (U.SPC-T456).
+            g.SetUpNeighbourhood();
             g.Connect(jd);
             // The space between is not empty (U.SPC-T421): every route flown is seeded with what lies along it, and the
             // routes between the running systems, where the powers' relays and listening posts stand, from the start.

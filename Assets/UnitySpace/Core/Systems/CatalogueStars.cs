@@ -31,6 +31,7 @@ namespace Unity.SpaceGod.Core
 
         public override string Name => SourceName;
         public override int Order => 100;
+        public override bool ChartedFromStart => true;
 
         static List<StarEntry> stars;
 

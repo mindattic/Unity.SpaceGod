@@ -280,7 +280,9 @@ namespace Unity.SpaceGod.Core.Tests
             // A simulated system replaces its plain star in the interstellar view; the rest stay.
             Assert.That(g.NearbyStars.Select(n => n.Name), Has.None.AnyOf("Sirius", "Barnard's Star", "Tau Ceti", "GJ 1061", "Luhman 16"));
             Assert.That(g.NearbyStars.Select(n => n.Name), Does.Contain("Procyon"));
-            Assert.That(g.NearbyStars.Count + 10, Is.EqualTo(Galaxy.Neighbours().Count()));
+            var unsimulated = Galaxy.Neighbours().Where(n => g.Find(n.Name) == null).Select(n => n.Name).ToList();
+            Assert.That(unsimulated.Count + 10, Is.EqualTo(Galaxy.Neighbours().Count()));
+            Assert.That(g.NearbyStars.Select(n => n.Name), Is.SupersetOf(unsimulated));
 
             // Every system is on the gate lattice (a Void Base's relay included), and every real one is settled (U.SPC-T90:
             // see NearbySocietiesTests; a Void Base never is, see VoidBaseTests).

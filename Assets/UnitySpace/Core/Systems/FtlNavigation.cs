@@ -115,7 +115,7 @@ namespace Unity.SpaceGod.Core
 
             // The jump, leg by leg: each star's well or projector on the line pulls it out to cross under the ordinary drive.
             c.SpoolDays = drive.SpoolDays;
-            var probe = new Cruise { Drive = drive, From = here, To = target.System, ToName = target.Name, Target = arrive };
+            var probe = new Cruise { Drive = drive, From = here, To = target.System, ToName = target.Name, Target = arrive, Plan = true };
             probe.Ships.Add(ship);
             var at = start;
             double crossSpeedKmS = Math.Max(1e-6, FtlRules.CrossingSpeedKmS.Value);

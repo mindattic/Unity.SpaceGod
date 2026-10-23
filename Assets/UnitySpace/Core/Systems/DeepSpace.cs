@@ -69,6 +69,10 @@ namespace Unity.SpaceGod.Core
         /// out nobody else sends it anywhere, the helm takes it on from there.</summary>
         public bool Piloted;
 
+        /// <summary>Not a group flying but a course being worked out for one (see <see cref="FtlNavigation"/>): it reckons with
+        /// only the stars on the charts, so a course never gives away a star nobody has discovered (U.SPC-T456).</summary>
+        public bool Plan;
+
         /// <summary>The hull's own velocity in normal space when it engaged (ecliptic, km/s): FTL carries momentum, so it
         /// comes out with the velocity it went in with (U.SPC-T418, see <see cref="FtlRules"/>).</summary>
         public DVec3 CarriedVelocityKmS;
@@ -462,6 +466,15 @@ namespace Unity.SpaceGod.Core
                 var f = FtlRules.StarWell(n);
                 if (f.Center.DistanceKm(near) < km + f.RadiusKm) yield return f;
             }
+            // A star nobody has discovered pulls a group out all the same (U.SPC-T456): it is there, charted or not. Only a
+            // course being planned cannot reckon with it.
+            if (c != null && c.Plan) yield break;
+            foreach (var n in g.Undiscovered)
+            {
+                if (n.Origin.DistanceKm(near) >= km + 200 * Astro.AuKm) continue;
+                var f = FtlRules.StarWell(n);
+                if (f.Center.DistanceKm(near) < km + f.RadiusKm) yield return f;
+            }
         }
 
         /// <summary>The fields of the projectors that would pull <paramref name="c"/> out (any but its own side's).</summary>
@@ -503,6 +516,8 @@ namespace Unity.SpaceGod.Core
             string what = field.Kind == GravityFieldKind.Projector ? "the gravity projector " + field.Name : field.Name + "'s gravity well";
             bool many = c.Ships.Count > 1;
             Log(jd, $"{c.Leader.Name}{More(c)} {(many ? "are" : "is")} pulled out of FTL by {what}, crossing it under {(many ? "their" : "its")} ordinary drive", entry);
+            // A star nobody knew was there is found by falling into its well (U.SPC-T456).
+            if (field.Kind != GravityFieldKind.Projector) galaxy?.Discover(field.Name, jd, "the " + c.Leader.Name);
         }
 
         // ---------------------------------------------------------------- the step

@@ -70,6 +70,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Whether this source holds the space at <paramref name="ly"/>, so that later sources chart nothing there.</summary>
         public virtual bool Claims(DVec3 ly) => false;
 
+        /// <summary>
+        /// Whether its stars are a fixed map put in the galaxy whole at the start (U.SPC-T456, see <see cref="Galaxy.SetUpNeighbourhood"/>),
+        /// known or undiscovered by their distance from Sol, rather than charted only as a pilot comes near: the real neighbourhood's
+        /// sources, not the procedural galaxy.
+        /// </summary>
+        public virtual bool ChartedFromStart => false;
+
         /// <summary>The stars it has within <paramref name="radiusLy"/> of <paramref name="centreLy"/>, in the galaxy of <paramref name="seed"/>.</summary>
         public abstract IEnumerable<StarEntry> StarsNear(DVec3 centreLy, double radiusLy, int seed);
 
@@ -95,8 +102,8 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// The registered <see cref="SystemSource"/>s, in order (U.SPC-T413): the hand-built systems first
-    /// (<see cref="HandBuiltSystems"/>), then the real catalogue stars near Sol (<see cref="CatalogueStars"/>) and the void
-    /// stations bridging the gaps between them (<see cref="VoidStations"/>), then the rest of the galaxy, generated from its seed (<see cref="ProceduralSystems"/>). Ask it for the stars near a place and
+    /// (<see cref="HandBuiltSystems"/>), then the void stations bridging the gaps between the real stars (<see cref="VoidStations"/>)
+    /// and the real catalogue stars near Sol (<see cref="CatalogueStars"/>), then the rest of the galaxy, generated from its seed (<see cref="ProceduralSystems"/>). Ask it for the stars near a place and
     /// it merges what every source charts there; ask it for one of them and the source that charted it builds it.
     /// </summary>
     public static class SystemSources
@@ -104,8 +111,8 @@ namespace Unity.SpaceGod.Core
         static readonly List<SystemSource> sources = new List<SystemSource>
         {
             new HandBuiltSystems(),
-            new CatalogueStars(),
             new VoidStations(),
+            new CatalogueStars(),
             new ProceduralSystems(),
         };
 
@@ -158,13 +165,20 @@ namespace Unity.SpaceGod.Core
         /// nearest first: each source's in turn, a name already charted by an earlier source left to it, and nothing from a
         /// source in space an earlier one claims. The same place and seed always give the same stars.
         /// </summary>
-        public static List<StarEntry> StarsNear(DVec3 centreLy, double radiusLy, int seed)
+        public static List<StarEntry> StarsNear(DVec3 centreLy, double radiusLy, int seed) => StarsNear(centreLy, radiusLy, seed, null);
+
+        /// <summary>
+        /// As <see cref="StarsNear(DVec3, double, int)"/>, from only the sources <paramref name="which"/> takes (all when null); a
+        /// source left out still claims its space from the later ones.
+        /// </summary>
+        public static List<StarEntry> StarsNear(DVec3 centreLy, double radiusLy, int seed, Func<SystemSource, bool> which)
         {
             var list = new List<StarEntry>();
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var order = All;
             for (int i = 0; i < order.Count; i++)
             {
+                if (which != null && !which(order[i])) continue;
                 foreach (var e in order[i].StarsNear(centreLy, radiusLy, seed))
                 {
                     if (e == null || (e.PositionLy - centreLy).Length > radiusLy || names.Contains(e.Name)) continue;
@@ -267,6 +281,7 @@ namespace Unity.SpaceGod.Core
         public const string SourceName = "Hand-built";
         public override string Name => SourceName;
         public override int Order => 0;
+        public override bool ChartedFromStart => true;
 
         static List<StarEntry> stars;
 

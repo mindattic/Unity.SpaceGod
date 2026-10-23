@@ -99,12 +99,15 @@ namespace Unity.SpaceGod.Core
                     changed = true;
                 }
 
+            // The pilot finds what is undiscovered about them first (U.SPC-T456); what is still undiscovered is charted and built by nobody.
+            if (DiscoverAbout(GalacticPosition.FromLy(atLy), jd, "you") > 0) changed = true;
+
             int count = 0;
             foreach (var n in NearbyStars)
                 if (charted.Contains(n.Name)) count++;
             foreach (var e in SystemSources.StarsNear(atLy, chartLy, Seed))
             {
-                if (SimulatedAs(e) != null) continue;
+                if (IsUndiscovered(e.Name) || SimulatedAs(e) != null) continue;
                 if ((e.PositionLy - atLy).Length <= systemLy)
                 {
                     if (Realize(e, jd) != null) changed = true;
@@ -171,6 +174,8 @@ namespace Unity.SpaceGod.Core
         {
             var existing = SimulatedAs(e);
             if (existing != null) return existing;
+            // Nobody builds or goes to a star nobody knows is there (U.SPC-T456).
+            if (IsUndiscovered(e.Name)) return null;
             var system = SystemSources.Build(e, jd, Seed, Polities);
             if (system == null) return null;
             streamed.Add(system.Name);

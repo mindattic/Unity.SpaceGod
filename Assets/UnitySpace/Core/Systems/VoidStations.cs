@@ -31,7 +31,15 @@ namespace Unity.SpaceGod.Core
         public const double ClearLy = 1;
 
         public override string Name => SourceName;
-        public override int Order => 150;
+        /// <summary>
+        /// Ahead of the catalogue (U.SPC-T456), whose claim on the 20 ly about Sol and the 3 ly about each of its stars is to keep
+        /// invented stars out, not the relays between real ones: after it, a station that near Sol or a star was never charted.
+        /// </summary>
+        public override int Order => 75;
+
+        /// <summary>In the galaxy from the start like the stars they join (U.SPC-T456): known within <see cref="StarDiscovery.KnownToLy"/>
+        /// of Sol, undiscovered past it, as the stars about them are.</summary>
+        public override bool ChartedFromStart => true;
 
         static List<StarEntry> stations;
         static Dictionary<string, (string a, string b)> bridges;
