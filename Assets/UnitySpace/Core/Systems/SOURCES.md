@@ -267,28 +267,73 @@ The stars of the interstellar view that nobody simulates until a faction builds 
 
 Past the hand-built systems every star comes from a registered source (`SystemSources.cs`), charted as a pilot comes near and built only when one comes nearer (`GalaxyStreaming.cs`).
 
-**Catalogue stars** (`CatalogueStars.cs`): the interstellar view's 21 neighbours (above), twelve more of the nearest systems out to 20 ly, and four bright landmarks beyond. Values are from each star's Wikipedia article (Hipparcos, Gaia DR3 and the papers it cites). Known planets of these stars are not modelled yet; each is built as its star alone with the habitat orbit the frontier stars have. The list is far from complete (there are some sixty systems between 12 and 20 ly); the sphere is kept free of invented stars all the same.
+**Catalogue stars** (`CatalogueStars.cs`, U.SPC-T454): every system of the owner's chart of the nearest stars out to 100 ly, by its 7 ly divisions (`docs/NEAREST_STARS.md`): the interstellar view's 21 neighbours (above) and 101 more, Alpha Centauri being hand-built. Positions are the chart's own (`docs/nearest_stars_2027.csv`): Sol-centric J2000 ecliptic light-years for 1 January 2027, from modern parallaxes (mostly Gaia DR3) and HYG v3.8 (Hipparcos) motions, not the list the owner pasted, which had stars at two distances (Gliese 176, Gliese 436) and in the wrong division (Gliese 581, Castor; HR 8799 and Polaris at 323 ly are not within 100 ly at all). The neighbours keep the J2000 places the interstellar view has always given them, within 0.1 ly of the chart's; Sirius's distance is the chart's 8.60 ly (parallax 379.21 mas) rather than the 8.71 ly it had. A hand-built entry of the same name wins its star. Known planets of these stars are not modelled yet; each is built as its star alone with the habitat orbit the frontier stars have. The chart is the notable systems only (some 14,000 lie within 100 ly); the 20 ly sphere is kept free of invented stars all the same, and past it the procedural galaxy keeps 3 ly clear of each.
 
-| Star | RA | Dec | ly | Type | V | Teff (K) | Mass (M☉) | Radius (R☉) | L (L☉) |
-|---|---|---|---|---|---|---|---|---|---|
-| Kapteyn's Star | 5h11m40.58s | −45°01′06.3″ | 12.83 | sdM1 | 8.85 | 3570 | 0.274 | 0.291 | 0.012 |
-| Lacaille 8760 | 21h17m15.27s | −38°52′02.5″ | 12.95 | M0Ve | 6.67 | 3800 | 0.60 | 0.51 | 0.072 |
-| Kruger 60 A | 22h27m59.47s | +57°41′45.1″ | 13.07 | M3V | 9.59 | 3180 | 0.271 | 0.35 | 0.010 |
-| Van Maanen's Star | 0h49m09.90s | +5°23′19.0″ | 14.07 | DZ7 | 12.37 | 6220 | 0.68 | 0.011 | 0.00017 |
-| Gliese 876 | 22h53m16.73s | −14°15′49.3″ | 15.24 | M4V | 10.19 | 3473 | 0.37 | 0.376 | 0.0122 |
-| 40 Eridani A | 4h15m16.32s | −7°39′10.3″ | 16.26 | K0.5V | 4.43 | 5072 | 0.78 | 0.81 | 0.46 |
-| 70 Ophiuchi A | 18h05m27.29s | +2°30′00.4″ | 16.71 | K0V | 4.03 | 5300 | 0.89 | 0.91 | 0.60 |
-| Altair | 19h50m47.00s | +8°52′06.0″ | 16.73 | A7V | 0.76 | 7550 | 1.86 | 1.79 | 10.6 |
-| Sigma Draconis | 19h32m21.59s | +69°39′40.2″ | 18.80 | G9V | 4.67 | 5297 | 0.87 | 0.78 | 0.43 |
-| Eta Cassiopeiae A | 0h49m06.29s | +57°48′54.7″ | 19.33 | F9V | 3.44 | 5973 | 0.97 | 1.04 | 1.23 |
-| 82 Eridani | 3h19m55.65s | −43°04′11.2″ | 19.71 | G8V | 4.25 | 5401 | 0.85 | 0.92 | 0.69 |
-| Delta Pavonis | 20h08m43.61s | −66°10′55.4″ | 19.89 | G8IV | 3.56 | 5604 | 0.99 | 1.22 | 1.22 |
-| Vega | 18h36m56.34s | +38°47′01.3″ | 25.04 | A0V | 0.03 | 9602 | 2.14 | 2.5 | 40.1 |
-| Fomalhaut | 22h57m39.05s | −29°37′20.1″ | 25.13 | A3V | 1.16 | 8590 | 1.92 | 1.84 | 16.6 |
-| Pollux | 7h45m18.95s | +28°01′34.3″ | 33.78 | K0III | 1.14 | 4586 | 1.91 | 9.06 | 32.7 |
-| Arcturus | 14h15m39.67s | +19°10′56.7″ | 36.7 | K1.5III | −0.05 | 4286 | 1.08 | 25.4 | 170 |
+The rows kept from before (each star's Wikipedia article: Hipparcos, Gaia DR3 and the papers it cites):
 
-- A neighbour with no hand-built entry (EZ Aquarii) has its mass read off the main-sequence temperature-mass table of Pecaut & Mamajek 2013 (ApJS 208, 9), its radius from M^0.8 (M^0.57 above a solar mass) and its luminosity from L = R²(T/5772 K)⁴: estimates, and its summary says so. Rotations are assumed.
+| Star | Type | V | Teff (K) | Mass (M☉) | Radius (R☉) | L (L☉) |
+|---|---|---|---|---|---|---|
+| Kapteyn's Star | sdM1 | 8.85 | 3570 | 0.274 | 0.291 | 0.012 |
+| Lacaille 8760 | M0Ve | 6.67 | 3800 | 0.60 | 0.51 | 0.072 |
+| Kruger 60 A | M3V | 9.59 | 3180 | 0.271 | 0.35 | 0.010 |
+| Van Maanen's Star | DZ7 | 12.37 | 6220 | 0.68 | 0.011 | 0.00017 |
+| Gliese 876 | M4V | 10.19 | 3473 | 0.37 | 0.376 | 0.0122 |
+| 40 Eridani A | K0.5V | 4.43 | 5072 | 0.78 | 0.81 | 0.46 |
+| 70 Ophiuchi A | K0V | 4.03 | 5300 | 0.89 | 0.91 | 0.60 |
+| Altair | A7V | 0.76 | 7550 | 1.86 | 1.79 | 10.6 |
+| Sigma Draconis | G9V | 4.67 | 5297 | 0.87 | 0.78 | 0.43 |
+| Eta Cassiopeiae A | F9V | 3.44 | 5973 | 0.97 | 1.04 | 1.23 |
+| 82 Eridani | G8V | 4.25 | 5401 | 0.85 | 0.92 | 0.69 |
+| Delta Pavonis | G8IV | 3.56 | 5604 | 0.99 | 1.22 | 1.22 |
+| Vega | A0V | 0.03 | 9602 | 2.14 | 2.5 | 40.1 |
+| Fomalhaut | A3V | 1.16 | 8590 | 1.92 | 1.84 | 16.6 |
+| Pollux | K0III | 1.14 | 4586 | 1.91 | 9.06 | 32.7 |
+| Arcturus | K1.5III | −0.05 | 4286 | 1.08 | 25.4 | 170 |
+
+The giants, subgiants, multiples and the one ultra-cool dwarf added from the chart, with values rounded from each star's Wikipedia article (for a multiple, the brightest member, or for Capella the giant pair as one): approximate, good for a star's look and its habitat orbit, not for science.
+
+| Star | Type | Teff (K) | Mass (M☉) | Radius (R☉) | L (L☉) |
+|---|---|---|---|---|---|
+| Beta Hydri | G2IV | 5870 | 1.08 | 1.81 | 3.5 |
+| Mu Herculis | G5IV | 5560 | 1.1 | 1.73 | 2.54 |
+| Delta Eridani | K0IV | 5020 | 1.19 | 2.35 | 3.2 |
+| Zeta Herculis | F9IV | 5800 | 1.45 | 2.56 | 6.6 |
+| Deneb Algedi | A7III | 7300 | 2.0 | 1.91 | 8.5 |
+| TRAPPIST-1 | M8V | 2566 | 0.0898 | 0.1192 | 0.000553 |
+| Capella | K0III + G1III | 4970 | 2.57 | 11.98 | 78.7 |
+| Errai | K1IV | 4800 | 1.4 | 4.74 | 11.7 |
+| Rasalhague | A5III | 8000 | 2.4 | 2.6 | 25 |
+| Alderamin | A8Vn | 7700 | 2.0 | 2.3 | 18 |
+| Castor | A1V + A2Vm | 10286 | 2.37 | 2.4 | 30 |
+| Caph | F2III | 6700 | 1.91 | 3.5 | 27 |
+| Zosma | A4V | 8300 | 2.2 | 2.1 | 23 |
+| Menkent | K0III | 4980 | 1.27 | 10.6 | 60 |
+| Mothallah | F6IV | 6290 | 1.7 | 3.0 | 14 |
+| Beta Pictoris | A6V | 8050 | 1.75 | 1.5 | 8.7 |
+| Aldebaran | K5III | 3900 | 1.16 | 45 | 440 |
+| Hamal | K2III | 4480 | 1.5 | 15 | 91 |
+| Unukalhai | K2III | 4500 | 1.66 | 12 | 71 |
+| Alphecca | A1IV | 9700 | 2.58 | 3.0 | 74 |
+| Zubenelgenubi | A3IV | 8000 | 2.0 | 2.2 | 31 |
+| Regulus | B8IVn | 12460 | 3.8 | 4.35 | 341 |
+| Merak | A1IV | 9377 | 2.7 | 3.0 | 63 |
+| Megrez | A3V | 9480 | 1.63 | 1.4 | 14 |
+| Delta Velorum | A1V | 9450 | 2.4 | 2.97 | 67 |
+| Alioth | A1III-IVp | 9020 | 2.91 | 4.14 | 102 |
+| Mizar | A1V | 9000 | 2.2 | 2.4 | 33 |
+| Phecda | A0Ve | 9355 | 2.94 | 3.04 | 71 |
+| Ankaa | K0.5III | 4436 | 2.5 | 15 | 86 |
+| Gacrux | M3.5III | 3626 | 1.5 | 84 | 820 |
+| Algol | B8V | 13000 | 3.17 | 2.73 | 182 |
+| Eta Draconis | G8III | 5055 | 2.55 | 11 | 60 |
+| Diphda | K0III | 4800 | 2.8 | 18 | 145 |
+| Ruchbah | A5IV | 8400 | 2.5 | 3.2 | 63 |
+
+- The rest are ordinary dwarfs, listed by type and temperature only, and built from the main-sequence estimate below: YZ Ceti (M4.5V, 3150 K), Luyten's Star (M3.5V, 3150 K), Teegarden's Star (M7.0V, 2900 K), Ross 614 (M4.5V, 3200 K), Wolf 1061 (M3V, 3340 K), Gliese 1 (M1.5V, 3600 K), Gliese 687 (M3V, 3400 K), Gliese 674 (M2.5V, 3400 K), Gliese 412 (M1V, 3700 K), Gliese 832 (M1.5V, 3600 K), AD Leonis (M3.5V, 3400 K), EV Lacertae (M3.5V, 3300 K), Gliese 229 (M1V, 3700 K), Gliese 570 (K4V, 4500 K), 36 Ophiuchi (K2V, 5100 K), Gliese 783 (K2.5V, 4900 K), Gliese 581 (M3V, 3480 K), Xi Boötis (G7V, 5550 K), Gliese 667 (K3V, 4600 K), 107 Piscium (K1V, 5240 K), Pi³ Orionis (F6V, 6500 K), Chara (G0V, 5930 K), 61 Virginis (G7V, 5530 K), Zeta Tucanae (F9.5V, 5960 K), Gliese 250 (K3V, 4600 K), Beta Comae Berenices (F9.5V, 5960 K), Kappa¹ Ceti (G5V, 5700 K), Gamma Pavonis (F9V, 6100 K), GJ 367 (M1V, 3520 K), Gliese 357 (M2.5V, 3500 K), Gliese 176 (M2V, 3680 K), Wolf 1069 (M5V, 3160 K), AU Microscopii (M1V, 3700 K), Gliese 436 (M2.5V, 3480 K), Gliese 86 (K1V, 5180 K), Denebola (A3V, 8500 K), 54 Piscium (K0V, 5250 K), HD 85512 (K6V, 4400 K), Porrima (F0V, 7100 K), Zeta Reticuli (G2V, 5720 K), 55 Cancri (K0IV-V, 5200 K), HD 40307 (K2.5V, 4980 K), Upsilon Andromedae (F8V, 6200 K), 47 Ursae Majoris (G1V, 5890 K), Gliese 1214 (M4.5V, 3100 K), 51 Pegasi (G2IV, 5790 K), Mu Arae (G3IV-V, 5800 K), Tau Boötis (F7V, 6400 K), Gliese 777 (G7IV-V, 5550 K), HD 10647 (F9V, 6150 K), HD 189733 (K1V, 5050 K).
+- A neighbour or dwarf with no mass in its row (EZ Aquarii among them) has its mass read off the main-sequence temperature-mass table of Pecaut & Mamajek 2013 (ApJS 208, 9), its radius from M^0.8 (M^0.57 above a solar mass) and its luminosity from L = R²(T/5772 K)⁴: estimates, and its summary says so. Rotations are assumed.
+- A catalogue star past 20 ly brighter than magnitude 2.5 is a landmark of Earth's sky (its summary says so).
+
+**Void stations** (`VoidStations.cs`, U.SPC-T454) are fiction placed by rule: the real systems out to 100 ly (Sol, the hand-built systems and the catalogue stars) are joined by their shortest links (a minimum spanning tree from Sol), and every link longer than 7 ly (one gate's reach) has void stations laid evenly along it, so no leg between charted destinations is longer than 7 ly. Each is built as a Void Base (`StarSystem.CreateVoidBase`), numbered outward from Sol, the same in every galaxy, with 1 ly kept clear of invented stars about it.
 
 **The procedural galaxy** (`ProceduralSystems.cs`) is fiction on a real shape:
 

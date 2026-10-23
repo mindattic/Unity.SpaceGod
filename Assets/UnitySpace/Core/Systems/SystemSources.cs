@@ -95,8 +95,8 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// The registered <see cref="SystemSource"/>s, in order (U.SPC-T413): the hand-built systems first
-    /// (<see cref="HandBuiltSystems"/>), then the real catalogue stars near Sol (<see cref="CatalogueStars"/>), then the
-    /// rest of the galaxy, generated from its seed (<see cref="ProceduralSystems"/>). Ask it for the stars near a place and
+    /// (<see cref="HandBuiltSystems"/>), then the real catalogue stars near Sol (<see cref="CatalogueStars"/>) and the void
+    /// stations bridging the gaps between them (<see cref="VoidStations"/>), then the rest of the galaxy, generated from its seed (<see cref="ProceduralSystems"/>). Ask it for the stars near a place and
     /// it merges what every source charts there; ask it for one of them and the source that charted it builds it.
     /// </summary>
     public static class SystemSources
@@ -105,6 +105,7 @@ namespace Unity.SpaceGod.Core
         {
             new HandBuiltSystems(),
             new CatalogueStars(),
+            new VoidStations(),
             new ProceduralSystems(),
         };
 
@@ -275,6 +276,9 @@ namespace Unity.SpaceGod.Core
             foreach (var s in NearbySystems.All()) yield return ("nearby", s);
             foreach (var s in FrontierSystems.All()) yield return ("frontier", s);
         }
+
+        /// <summary>Every hand-built system as it is charted.</summary>
+        public static IReadOnlyList<StarEntry> Charted() => Stars();
 
         static List<StarEntry> Stars()
         {

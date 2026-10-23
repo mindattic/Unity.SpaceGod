@@ -490,7 +490,7 @@ namespace Unity.SpaceGod.Core
             yield return S("WISE 0855−0714", 8, 55, 10.8, 7, 14, 43, true, 7.430, "Y4", double.NaN, 285);
             yield return S("Wolf 359", 10, 56, 29.2, 7, 0, 53, false, 7.856, "M6.0V", 13.44, 2800);
             yield return S("Lalande 21185", 11, 3, 20.2, 35, 58, 12, false, 8.3044, "M2.0V", 7.47, 3550);
-            yield return S("Sirius", 6, 45, 8.9, 16, 42, 58, true, 8.7094, "A1V + DA2", -1.46, 9940);
+            yield return S("Sirius", 6, 45, 8.9, 16, 42, 58, true, 8.599, "A1V + DA2", -1.46, 9940);
             yield return S("Gliese 65", 1, 39, 1.3, 17, 57, 1, true, 8.770, "M5.5Ve", 12.54, 2840);
             yield return S("Ross 154", 18, 49, 49.4, 23, 50, 10, true, 9.7063, "M3.5Ve", 10.43, 3250);
             yield return S("Ross 248", 23, 41, 54.7, 44, 10, 30, false, 10.3057, "M5.5Ve", 12.29, 2800);

@@ -213,7 +213,7 @@ SpaceGod can hold every star here without strain, but its stars never move: posi
 
 | Area | Today | Where |
 | --- | --- | --- |
-| Real stars | 38 of these 123: Alpha Centauri hand-built, 21 neighbours, 12 catalogue stars to 20 ly, 4 landmarks (Vega, Fomalhaut, Pollux, Arcturus) | `Galaxy.Neighbours()`, `CatalogueStars.Beyond()` |
+| Real stars | All 123 (U.SPC-T454): Alpha Centauri hand-built, 21 neighbours, 101 catalogue rows at the CSV's positions; void stations bridge every gap over 7 ly between them | `Galaxy.Neighbours()`, `CatalogueStars.Beyond()`, `VoidStations` |
 | Beyond the catalogue | Procedural stars from the galaxy seed, kept 3 ly clear of every real star | `ProceduralSystems`, `CatalogueStars.Claims` |
 | Load | Only stars inside the chart radius (default 20 ly, setting 5–60) are charted; systems inside 3 ly are built | `GalaxyStreaming.ChartRadius`, `SystemRadius` |
 | Frame | J2000 ecliptic axes, Sol at the origin; input is J2000 equatorial RA/Dec, converted by `Astro.DirectionFromRaDec` | `StarEntry.PositionLy` |
@@ -245,7 +245,7 @@ Give every star a 3D velocity and evaluate its position from the sim clock; the 
 4. **Streaming at the current date.** `GalaxyStreaming` charts and builds stars at `PositionAt(clock.Jd)`. `Claims` and `ClearLy` test positions at that date, so a procedural star never drifts into a real one. A built system's root moves with its star; everything inside stays in system-local km.
 5. **Settings, registered once.** A "Stellar motion" on/off toggle and deep-time warp levels (100, 1,000 and 10,000 yr/s, galaxy map only), registered like `streaming.chartRadiusLy` and remembered per profile.
 6. **Range of validity.** Straight-line motion holds for about 10 million years. Past that, stars follow curved galactic orbits; add a galactic potential then, still cheap at these star counts.
-7. **More real stars.** Add the 85 systems the game lacks as `CatalogueStars` rows from the CSV, then move their known exoplanets in once planets are modelled.
+7. **More real stars.** Done (U.SPC-T454): every system in the CSV is a `CatalogueStars` row. Next, move their known exoplanets in once planets are modelled.
 
 ## Sources and caveats
 

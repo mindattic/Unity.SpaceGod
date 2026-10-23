@@ -80,9 +80,9 @@ namespace Unity.SpaceGod.Core.Tests
                 foreach (var real in CatalogueStars.Stars())
                     Assert.That((real.PositionLy - s.PositionLy).Length, Is.GreaterThanOrEqualTo(CatalogueStars.ClearLy), s.Name + " by " + real.Name);
             }
-            // Altair is where its catalogue row puts it.
+            // Altair is where its catalogue row puts it (the chart's 2027 position, U.SPC-T454).
             var altair = near.First(s => s.Name == "Altair");
-            Assert.That(altair.PositionLy.Length, Is.EqualTo(16.73).Within(1e-9));
+            Assert.That(altair.PositionLy.Length, Is.EqualTo(16.698).Within(1e-3));
         }
 
         // ---------------------------------------------------------------- the shape of the galaxy
@@ -173,13 +173,13 @@ namespace Unity.SpaceGod.Core.Tests
             var spec = SystemSources.Define(e, 1);
             Assert.That(spec.Primary.Star.Spectral, Is.EqualTo("A7V"));
             Assert.That(spec.Primary.Star.LuminositySolar, Is.EqualTo(10.6));
-            Assert.That(spec.DistanceLy, Is.EqualTo(16.73).Within(1e-9));
+            Assert.That(spec.DistanceLy, Is.EqualTo(16.698).Within(1e-3));
             var ez = SystemSources.Define(SystemSources.StarsNear(DVec3.Zero, 20, 1).First(s => s.Name == "EZ Aquarii"), 1);
             Assert.That(ez.Primary.Star.MassSolar, Is.GreaterThan(0.08).And.LessThan(0.2), "estimated from its temperature");
             Assert.That(ez.Primary.Star.Summary, Does.Contain("estimated"));
             var system = StarSystem.Create(spec, StartJd);
             Assert.That(system.Settled, Is.False);
-            Assert.That(system.Origin.DistanceLy(GalacticPosition.Origin), Is.EqualTo(16.73).Within(1e-6));
+            Assert.That(system.Origin.DistanceLy(GalacticPosition.Origin), Is.EqualTo(16.698).Within(1e-3));
         }
 
         // ---------------------------------------------------------------- on demand
