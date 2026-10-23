@@ -1942,6 +1942,12 @@ namespace Unity.SpaceGod.Core
                     return new GroupOrder { Kind = OrderKind.Siege, Body = here };
 
             bool atWar = AtWar(f);
+            // Cut the enemy's lanes (U.SPC-T481): fall on a lane tender of a power it is at war with, if one is in reach.
+            if (atWar && !IsHomeGuard(leader) && world.LaneUpkeep != null)
+            {
+                int tender = world.LaneUpkeep.HuntTarget(leader, here, jd);
+                if (tender >= 0) return new GroupOrder { Kind = OrderKind.Hunt, Body = tender };
+            }
             if (atWar && !IsHomeGuard(leader))
             {
                 double strength = GroupStrength(leader);
@@ -2290,6 +2296,13 @@ namespace Unity.SpaceGod.Core
                     StakeOut(leader, gate, jd + days + 2 + rng.NextDouble() * 2);
                     return new GroupOrder { Kind = OrderKind.GateWatch, Body = root };
                 }
+            }
+
+            // Go after a lane tender in reach (U.SPC-T481): worth a fat purse to whoever wants the lanes cut.
+            if (world.LaneUpkeep != null && world.LaneUpkeep.RaidersHunt())
+            {
+                int tender = world.LaneUpkeep.HuntTarget(leader, here, jd);
+                if (tender >= 0) return new GroupOrder { Kind = OrderKind.Raid, Body = tender };
             }
 
             // Lie in wait beside a busy hyperlane.

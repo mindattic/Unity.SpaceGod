@@ -4,7 +4,13 @@ using System.Collections.Generic;
 namespace Unity.SpaceGod.Core
 {
     /// <summary>The broad kind of thing a hull frame builds (U.SPC-T377): everything that can be built in space.</summary>
-    public enum HullCategory { Fighter, SmallCraft, Freighter, Warship, Battleship, Carrier, Station, Satellite }
+    public enum HullCategory
+    {
+        Fighter, SmallCraft, Freighter, Warship, Battleship, Carrier, Station, Satellite,
+
+        /// <summary>A polity's unarmed service hulls: the lane tenders that keep its hyperlanes running (U.SPC-T481).</summary>
+        Support,
+    }
 
     /// <summary>How big a hardpoint's socket is, for the part a model library sets in it: a fighter's gun, a
     /// destroyer's turret, a battleship's or a station's.</summary>
@@ -250,6 +256,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.OreTug: return HullCategory.Freighter;
                 case ShipClass.Battleship: return HullCategory.Battleship;
                 case ShipClass.Carrier: return HullCategory.Carrier;
+                case ShipClass.LaneTender: return HullCategory.Support;
                 default: return HullCategory.Warship;
             }
         }

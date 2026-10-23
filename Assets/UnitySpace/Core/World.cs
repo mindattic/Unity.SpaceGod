@@ -92,6 +92,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>Factions founding new settlements as their people run out of room (U.SPC-T98).</summary>
         public Colonisation Colonisation { get; private set; }
 
+        /// <summary>The hyperlanes' upkeep and the lane tenders that keep them running (U.SPC-T481, see <see cref="Core.LaneUpkeep"/>).</summary>
+        public LaneUpkeep LaneUpkeep { get; private set; }
+
         /// <summary>The most bounty hunter groups the free traders keep in service.</summary>
         public int HunterCap = 3;
 
@@ -158,6 +161,7 @@ namespace Unity.SpaceGod.Core
             Economy.AdvanceTo(jd);
             Companies.Update(jd);
             War.Update(jd);
+            LaneUpkeep?.Update(jd);
             Sensors?.Update(jd);
             Shocks.Update(jd);
             Law.Update(jd);
@@ -257,16 +261,17 @@ namespace Unity.SpaceGod.Core
         /// hard by the star is a direct crossing of the whole system, far past any tank, flown on the gate network's
         /// own approach (it pays the gates' tolls instead) until fuel for it is modelled too.
         /// </summary>
-        public bool BurnsPropellant(Ship s) => !s.IsEscort && !s.Spec.IsMilitary && s.Voyage == null && !s.PatrolWing && s.Role != ShipRole.Commuter;
+        public bool BurnsPropellant(Ship s) => !s.IsEscort && !s.Spec.IsMilitary && s.Voyage == null && !s.PatrolWing && s.Role != ShipRole.Commuter &&
+                                               s.Role != ShipRole.Tender;
 
         /// <summary>
         /// A ship joins a hyperlane: civilian traffic pays the ride's toll (<see cref="Economy.LaneToll"/>, by its
         /// all-up mass) to whoever keeps the system's ramps, the owner of its biggest settlement. Navies and
-        /// raiders ride free; so does the player's ship (the helm is local flight, never a lane).
+        /// raiders ride free; so does the player's ship (the helm is local flight, never a lane), and a lane tender at its work.
         /// </summary>
         void PayToll(Ship ship, LaneHop hop, double jd)
         {
-            if (ship.Spec.IsMilitary || ship.PatrolWing || ship.Faction.IsPirate || ship == PilotedShip) return;
+            if (ship.Spec.IsMilitary || ship.PatrolWing || ship.Faction.IsPirate || ship == PilotedShip || ship.Role == ShipRole.Tender) return;
             double toll = Economy.LaneToll(ship.MassTonnes);
             ship.Faction.Treasury -= toll;
             ship.Credits -= toll;
@@ -462,6 +467,8 @@ namespace Unity.SpaceGod.Core
             fleet.Lands = IsTrader;
 
             fleet.Lanes = lanes;
+            // The lanes wear, and the tenders their keepers raise keep them up (U.SPC-T481).
+            LaneUpkeep = new LaneUpkeep(this, seed + 43);
             // Drive-appropriate trajectories: torches flip and burn, slow boats fall along transfer orbits.
             fleet.OrbitalTransfers = true;
             economy.EstimateTravelDays = fleet.EstimateTravelDays;
@@ -480,7 +487,12 @@ namespace Unity.SpaceGod.Core
                 ship.Credits -= fee;
                 Log(when, $"A tanker reaches {ship.Name} with {tonnes:N0} t of reaction mass", WorldEventKind.Info, ship.Orbit.Body);
             };
-            fleet.LaneJoined = PayToll;
+            fleet.LaneJoined = (ship, hop, when) =>
+            {
+                PayToll(ship, hop, when);
+                // A worn lane's rings may slip under the rider (U.SPC-T481).
+                LaneUpkeep.OnLaneJoined(ship, hop, when);
+            };
             // Now and then a tank is holed on the way: the ship runs dry and calls for help.
             fleet.LeakChance = PropellantLeakChance;
             fleet.Leaked = (ship, tonnes, when) =>
@@ -497,9 +509,10 @@ namespace Unity.SpaceGod.Core
             ShipAdded += Companies.OnShipAdded;
             // Each polity's production focus steers which of its industries grow (U.SPC-T423).
             economy.Priority = (s, kind) => Polities.Command.Priority(s.Owner, kind);
-            economy.ChooseBuild = yard => Companies.Enabled
+            // A lane short of its tenders comes first: everything else rides the lanes (U.SPC-T481).
+            economy.ChooseBuild = yard => LaneUpkeep.OrderAt(yard) ?? (Companies.Enabled
                 ? Requisition(yard) ?? Companies.OrderAt(yard) ?? war.ChooseWarship(yard)
-                : TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);
+                : TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard));
             economy.ShipBuilt = OnShipBuilt;
             economy.CanCrew = (yard, cls) => Crews.CanCrew(yard.Owner, cls);
             fleet.BeforeEvent = economy.AdvanceTo;
@@ -507,7 +520,8 @@ namespace Unity.SpaceGod.Core
             fleet.IsHeld = ship => ship.Battle != null || ship.Derelict || ship == PilotedShip || (ship.Voyage != null && ship.Voyage.AtGate) ||
                                    (Pursuit != null && Pursuit.Active && Pursuit.Of(ship) != null);
             // The player's captains keep their own time in port (mining a claim, waiting on a charge).
-            fleet.Dwell = (ship, normal) => Holdings.Owns(ship) ? Holdings.Dwell(ship, normal) : war.Dwell(ship, normal);
+            fleet.Dwell = (ship, normal) => Holdings.Owns(ship) ? Holdings.Dwell(ship, normal)
+                : ship.Role == ShipRole.Tender ? LaneUpkeep.Dwell(ship) : war.Dwell(ship, normal);
             fleet.Arrived = (ship, when) =>
             {
                 // At a jump gate, not a port: the interstellar traffic takes it from here.
@@ -546,6 +560,8 @@ namespace Unity.SpaceGod.Core
                     int ordered = VoyageOrders(ship, here, when);
                     if (ordered >= 0) return ordered;
                 }
+                // A lane tender works its lane (U.SPC-T481).
+                if (ship.Role == ShipRole.Tender && !Holdings.Owns(ship)) return LaneUpkeep.ChooseNext(ship, here, when);
                 // A clan's smuggler lies at its haven between runs (U.SPC-T94).
                 if (ship.Runner) return ship.Route != null && ship.Route.Length > 0 ? ship.Route[0] : here;
                 // The player's own ships go where their captains' standing orders take them.
@@ -1197,6 +1213,13 @@ namespace Unity.SpaceGod.Core
             {
                 ship = War.LaunchWarship(yard, cls, jd);
                 ShipAdded?.Invoke(ship);
+                return;
+            }
+            if (cls == ShipClass.LaneTender)
+            {
+                // A tender for one of its owner's lanes (U.SPC-T481).
+                ship = LaneUpkeep.Launch(yard, jd);
+                if (ship != null) ShipAdded?.Invoke(ship);
                 return;
             }
             builtCount++;

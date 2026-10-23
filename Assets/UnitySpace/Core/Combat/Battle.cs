@@ -855,6 +855,8 @@ namespace Unity.SpaceGod.Core
                 if (o.Kind == UnitKind.Fighter) score += u.Kind == UnitKind.Fighter ? 0 : 25;
                 else if (u.Kind == UnitKind.Fighter) score -= 4;
                 if (o.Ship != null && !o.Ship.Spec.IsMilitary) score += u.Faction.IsPirate ? -15 : 10;
+                // A lane tender is the prize of the fight (U.SPC-T481): sink it and its lane goes dark.
+                if (LaneUpkeep.IsTender(o.Ship)) score -= LaneUpkeep.TenderFocus.Value;
                 if (o.Kind == UnitKind.Platform) score += 6;
                 if (flagship != null && flagship != u && flagship.Target == o) score -= 6;
                 score *= 0.85 + rng.NextDouble() * 0.3;

@@ -66,6 +66,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.OreTug: BuildOreTug(b); break;
                 case ShipClass.Interceptor: BuildInterceptor(b); break;
                 case ShipClass.Bomber: BuildBomber(b); break;
+                case ShipClass.LaneTender: BuildLaneTender(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -650,6 +651,32 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0, -0.42f), new Vector3(0.22f, 0.1f, 0.05f), b.Dark);
             b.Nozzle(new Vector3(-0.07f, 0, -0.46f), 0.04f, 0.045f);
             b.Nozzle(new Vector3(0.07f, 0, -0.46f), 0.04f, 0.045f);
+        }
+
+        /// <summary>
+        /// A lane tender (U.SPC-T481): a stubby work hull with no guns, a glowing service ring held out ahead of its bow on
+        /// two booms (the rig it aligns a lane's accelerator rings with), and twin drives.
+        /// </summary>
+        static void BuildLaneTender(Builder b)
+        {
+            b.Box(new Vector3(0, 0, -0.08f), new Vector3(0.2f, 0.15f, 0.52f), b.Hull);
+            b.Box(new Vector3(0, 0.09f, 0.08f), new Vector3(0.1f, 0.04f, 0.14f), b.Dark);
+            b.Box(new Vector3(0, 0.1f, 0.12f), new Vector3(0.08f, 0.012f, 0.04f), b.Glow(new Color(0.6f, 0.85f, 1f)));
+            foreach (float side in new[] { -1f, 1f })
+            {
+                b.Box(new Vector3(side * 0.11f, 0, -0.1f), new Vector3(0.02f, 0.1f, 0.36f), b.Accent);
+                b.Box(new Vector3(side * 0.07f, 0, 0.3f), new Vector3(0.02f, 0.02f, 0.2f), b.Dark);
+            }
+            // The service ring: segments round the bow, lit along their faces.
+            var ringGlow = b.Glow(new Color(0.55f, 1f, 0.85f));
+            for (int k = 0; k < 12; k++)
+            {
+                float a = Mathf.PI * 2 * k / 12f;
+                b.BoxRotated(new Vector3(Mathf.Cos(a) * 0.16f, Mathf.Sin(a) * 0.16f, 0.42f), new Vector3(0.085f, 0.022f, 0.03f), a * Mathf.Rad2Deg + 90, k % 3 == 0 ? ringGlow : b.Dark);
+            }
+            b.Box(new Vector3(0, 0, -0.38f), new Vector3(0.18f, 0.12f, 0.08f), b.Dark);
+            b.Nozzle(new Vector3(-0.05f, 0, -0.44f), 0.035f, 0.05f);
+            b.Nozzle(new Vector3(0.05f, 0, -0.44f), 0.035f, 0.05f);
         }
 
         static void BuildCourier(Builder b)

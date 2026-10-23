@@ -256,6 +256,12 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bow, "Claw gantry", 0.35), new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.15, 0.05),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
+            // A work boat (U.SPC-T481): the bridge forward, the workshop that services a lane's rings, a big engine room.
+            [ShipClass.LaneTender] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.32, 0.05), new FacilitySite(FacilityKinds.Midships, "Ring workshop", 0.05),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
+            },
             // Multi-crew (U.SPC-T467): the flight deck, then the gun deck its turret crews work from.
             [ShipClass.Gunship] = new[]
             {
@@ -300,7 +306,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Freighter: return 4;
                 case ShipClass.Destroyer:
                 case ShipClass.Miner:
-                case ShipClass.Explorer: return 3;
+                case ShipClass.Explorer:
+                case ShipClass.LaneTender: return 3;
                 case ShipClass.Breacher:
                 case ShipClass.Gunship:
                 case ShipClass.Courier:

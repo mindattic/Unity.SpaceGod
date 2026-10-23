@@ -88,6 +88,43 @@ namespace Unity.SpaceGod.Core
             Danger[lane] = value;
             routeCache.Clear();
         }
+
+        // ---------------------------------------------------------------- upkeep (U.SPC-T481)
+
+        /// <summary>
+        /// Each lane's condition (U.SPC-T481), 1 fully tended to 0 dark: how well its accelerator rings are powered and
+        /// aligned. A lane not listed is in full repair. It runs down without tenders working it and is restored by them
+        /// (see <see cref="LaneUpkeep"/>); as it falls the lane rides slower (<see cref="SpeedFactor"/>) and less reliably
+        /// (<see cref="Reliability"/>), and at <see cref="LaneCondition.FailAt"/> it fails and carries nothing
+        /// (<see cref="Carries"/>), so routes go round it. Gate spurs are not tended and never wear.
+        /// </summary>
+        public readonly Dictionary<Lane, double> Condition = new Dictionary<Lane, double>();
+
+        /// <summary>The condition of <paramref name="lane"/> (see <see cref="Condition"/>), 1 when it has never worn.</summary>
+        public double ConditionOf(Lane lane) => lane != null && Condition.TryGetValue(lane, out double c) ? c : 1;
+
+        /// <summary>Sets a lane's condition (clamped to 0-1). Planners see a lane fail or come back at once (cached routes
+        /// are dropped); a lane merely slowing is seen at the next half day, as its changing length is.</summary>
+        public void SetCondition(Lane lane, double value)
+        {
+            if (lane == null) return;
+            bool carried = Carries(lane);
+            Condition[lane] = Math.Max(0, Math.Min(1, value));
+            if (Carries(lane) != carried) routeCache.Clear();
+        }
+
+        /// <summary>Whether <paramref name="lane"/> still carries traffic: not failed (<see cref="LaneCondition.Carries"/>).</summary>
+        public bool Carries(Lane lane) => lane != null && LaneCondition.Carries(ConditionOf(lane));
+
+        /// <summary>The share of its full pace <paramref name="lane"/> rides at, for its condition (<see cref="LaneCondition.SpeedFactor"/>).</summary>
+        public double SpeedFactor(Lane lane) => LaneCondition.SpeedFactor(ConditionOf(lane));
+
+        /// <summary>The chance a ride of <paramref name="lane"/> goes through without a stall (<see cref="LaneCondition.Reliability"/>).</summary>
+        public double Reliability(Lane lane) => LaneCondition.Reliability(ConditionOf(lane));
+
+        /// <summary>Days to ride a whole <paramref name="lane"/> of this length at its condition's pace (<see cref="RideDays(double)"/>
+        /// over <see cref="SpeedFactor"/>).</summary>
+        public double RideDays(Lane lane, double lengthKm) => RideDays(lengthKm) / Math.Max(1e-3, SpeedFactor(lane));
         readonly BodyCatalog catalog;
         readonly Ephemeris ephemeris;
 
@@ -419,6 +456,8 @@ namespace Unity.SpaceGod.Core
             foreach (var lane in Lanes)
                 for (int end = 0; end < 2; end++)
                 {
+                    // A failed lane's ring gates are dark (U.SPC-T481): flying through one joins nothing.
+                    if (!Carries(lane)) break;
                     int at = end == 0 ? lane.A : lane.B;
                     double km = (helioKm - RampHelio(lane, at, jd)).Length;
                     if (km > bestKm) continue;
@@ -432,14 +471,14 @@ namespace Unity.SpaceGod.Core
         /// The lanes a rider coming off at <paramref name="system"/>'s ramp could carry on along (the
         /// off-ramp's exit choice), never straight back down <paramref name="cameIn"/>: the lanes on to other
         /// planetary systems, then the spurs on to the system's jump gates. A spur's far end, at its gate,
-        /// leads on to nothing but the gate.
+        /// leads on to nothing but the gate. A failed lane (U.SPC-T481) is not offered.
         /// </summary>
         public List<LaneHop> OnwardHops(int system, Lane cameIn)
         {
             var hops = new List<LaneHop>();
             if (cameIn != null && cameIn.Gate != null && system == cameIn.B) return hops;
             foreach (var lane in Lanes)
-                if (lane != cameIn && (lane.A == system || lane.B == system)) hops.Add(new LaneHop(lane, system, lane.Other(system)));
+                if (lane != cameIn && (lane.A == system || lane.B == system) && Carries(lane)) hops.Add(new LaneHop(lane, system, lane.Other(system)));
             foreach (var spur in GateSpurs)
                 if (spur != cameIn && spur.A == system) hops.Add(new LaneHop(spur, system, spur.B));
             return hops;
@@ -568,7 +607,11 @@ namespace Unity.SpaceGod.Core
             return km;
         }
 
-        /// <summary>Fewest-hours route between two systems (Dijkstra on ride times at the given date), or null.</summary>
+        /// <summary>
+        /// Fewest-hours route between two systems (Dijkstra on ride times at the given date), or null. Each lane is priced at
+        /// its condition's pace plus the stalls its reliability promises (U.SPC-T481), and a failed lane is left out, so
+        /// traffic goes round it, or, with no way round, flies there under its own drive.
+        /// </summary>
         public List<LaneHop> Route(int fromSystem, int toSystem, double jd)
         {
             if (fromSystem == toSystem) return null;
@@ -596,10 +639,12 @@ namespace Unity.SpaceGod.Core
                 {
                     if (lane.A != here && lane.B != here) continue;
                     if (heavyOnly && !lane.Heavy) continue;
+                    if (!Carries(lane)) continue;
                     int next = lane.Other(here);
                     // Each hop also costs the crossing between ramps at a junction: about half a day.
                     Danger.TryGetValue(lane, out double danger);
-                    double cost = dist[here] + RideDays(LaneLengthKm(lane, jd)) + 0.5 + danger;
+                    double stalls = (1 - Reliability(lane)) * LaneCondition.StallDays.Value;
+                    double cost = dist[here] + RideDays(lane, LaneLengthKm(lane, jd)) + 0.5 + danger + stalls;
                     if (dist.TryGetValue(next, out double old) && old <= cost) continue;
                     dist[next] = cost;
                     via[next] = new LaneHop(lane, here, next);

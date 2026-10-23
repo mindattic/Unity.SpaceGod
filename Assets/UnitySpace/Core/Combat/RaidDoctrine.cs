@@ -80,6 +80,8 @@ namespace Unity.SpaceGod.Core
         {
             if (ship == null) return 0;
             double value = ship.HasCargo ? ship.CargoTonnes * GoodInfo.Of(ship.CargoGood).BasePrice : 0;
+            // A lane tender (U.SPC-T481): whoever wants a system's lanes cut pays well for one.
+            if (LaneUpkeep.IsTender(ship)) value += LaneUpkeep.TenderValue.Value;
             if (contracts != null)
                 foreach (var c in contracts.All)
                 {
@@ -121,9 +123,11 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>Whether a raider fights <paramref name="target"/> by this doctrine: an AI pirate against a merchant or
-        /// civilian hull, which it means to rob, not destroy.</summary>
+        /// civilian hull, which it means to rob, not destroy. Not a lane tender (U.SPC-T481): that it means to destroy, to cut
+        /// the lane it keeps.</summary>
         public static bool Robs(Faction raider, Ship target) =>
-            raider != null && raider.IsPirate && target != null && !target.Spec.IsMilitary && target.Faction != null && !target.Faction.IsPirate;
+            raider != null && raider.IsPirate && target != null && !target.Spec.IsMilitary && target.Faction != null && !target.Faction.IsPirate &&
+            !LaneUpkeep.IsTender(target);
 
         /// <summary>
         /// How much a raider's gunners favour <paramref name="kind"/> on a hull it means to rob: shields and engines first, to

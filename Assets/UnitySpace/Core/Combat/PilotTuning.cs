@@ -74,6 +74,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Explorer] = new PilotTuning(0.22, 60, 1.6, 26, 8, 3.0),
             // The ore tug (U.SPC-T483): flown like a hauler, a touch heavier on the stick.
             [ShipClass.OreTug] = new PilotTuning(0.14, 60, 1.5, 40, 8, 3.2),
+            // The lane tender (U.SPC-T481): a work boat, steadier than an explorer and slower to spool.
+            [ShipClass.LaneTender] = new PilotTuning(0.18, 55, 1.5, 30, 7, 3.5),
 
             // Capital ships: still weighty -- you're captaining a warship, not dogfighting in it --
             // but sharper than their AI-battle turn rates so they're not sluggish to the point of
@@ -105,6 +107,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Freighter:
                 case ShipClass.Miner:
                 case ShipClass.OreTug:
+                case ShipClass.LaneTender:
                     return PilotControl.Hauler;
                 default:
                     return PilotControl.Helm;

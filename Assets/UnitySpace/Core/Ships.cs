@@ -46,6 +46,11 @@ namespace Unity.SpaceGod.Core
         /// capital's shields are down; it needs an escort. Flies on its own flight model (<see cref="FlightFamily.Bomber"/>);
         /// carriers launch it as their bomber squadrons (<see cref="FighterRole.Bomber"/>).</summary>
         Bomber,
+
+        /// <summary>A lane tender (U.SPC-T481): an unarmed maintenance hull that keeps a hyperlane's accelerator rings powered
+        /// and aligned (see <see cref="LaneUpkeep"/>). A lane nobody tends slows, grows unreliable and in the end fails, so
+        /// tenders matter in peace and are a prime mark in war.</summary>
+        LaneTender,
     }
 
     public enum ShipRole
@@ -68,6 +73,12 @@ namespace Unity.SpaceGod.Core
         /// neighbourhood. Not a trader, not a combatant, and never sent through a gate.
         /// </summary>
         Commuter,
+
+        /// <summary>
+        /// A lane tender working its hyperlane (U.SPC-T481, see <see cref="LaneUpkeep"/>): it shuttles between the lane's two
+        /// ramps and lies over the rings at each end, its polity's upkeep, not a market's, deciding where it goes.
+        /// </summary>
+        Tender,
     }
 
     public enum ShipPhase
@@ -133,6 +144,7 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.OreTug, "Ore tug", 0.08, false),
             new ShipClassSpec(ShipClass.Interceptor, "Interceptor", 1.3, true),
             new ShipClassSpec(ShipClass.Bomber, "Bomber", 0.6, true),
+            new ShipClassSpec(ShipClass.LaneTender, "Lane tender", 0.2, false),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

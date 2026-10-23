@@ -375,6 +375,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.OreTug: return 6000;
                 case ShipClass.Interceptor: return 2200;
                 case ShipClass.Bomber: return 4500;
+                case ShipClass.LaneTender: return 6000;
                 default: return 3000;
             }
         }

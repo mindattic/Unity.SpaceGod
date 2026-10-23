@@ -586,7 +586,7 @@ namespace Unity.SpaceGod.Core
                 else BeginAscent(ship);
             }
             else if (ship.Phase == ShipPhase.Ascent) Depart(ship);
-            else if (ship.Journey != null && ship.JourneyIndex < ship.Journey.Count && ship.Orbit.Fixed) StartLane(ship, ship.PhaseEndJd);
+            else if (ship.Journey != null && ship.JourneyIndex < ship.Journey.Count && ship.Orbit.Fixed) ReachRamp(ship, ship.PhaseEndJd);
             else if (ship.Ring != null && ship.Orbit == ship.HoldPoint) JoinQueue(ship);
             else Arrive(ship);
         }
@@ -749,6 +749,46 @@ namespace Unity.SpaceGod.Core
             return new ParkingOrbit { Body = body, RadiusKm = offset.Length, U = u, V = v, RateRadPerDay = 0, Fixed = true };
         }
 
+        /// <summary>
+        /// At the ramp the burn has brought it to: joins the lane, or, when the lane has failed since the route was planned
+        /// (U.SPC-T481), goes round it by what is left of the network, or with no way round, on under its own drive.
+        /// </summary>
+        void ReachRamp(Ship ship, double jd)
+        {
+            var hop = ship.Journey[ship.JourneyIndex];
+            if (Lanes.Carries(hop.Lane))
+            {
+                StartLane(ship, jd);
+                return;
+            }
+            int to = ship.FinalBody;
+            int toSystem = Lanes.SystemOf(to);
+            var route = toSystem != hop.From ? Lanes.Route(hop.From, toSystem, jd) : null;
+            ship.Journey = route;
+            ship.JourneyIndex = 0;
+            if (route != null)
+            {
+                var next = route[0];
+                Burn(ship, jd, next.From, () => RampOrbit(next, next.From, jd), allowConic: true);
+            }
+            else Burn(ship, jd, to, () => ArrivalFor(ship, to), allowConic: true);
+        }
+
+        /// <summary>
+        /// A lane's rings slip out of alignment under a rider (U.SPC-T481, see <see cref="Hyperlanes.Reliability"/>): the ride
+        /// stalls <paramref name="at"/> of the way along, the hull easing to a stop just off the lane, and picks up again
+        /// <paramref name="days"/> later, from there. Only a ride just joined, not one already part-way or held at the helm.
+        /// </summary>
+        public bool StallRide(Ship ship, double at, double days)
+        {
+            if (ship.Phase != ShipPhase.Lane || ship.LaneStartProgress > 0 || ship.LaneEndProgress < 1) return false;
+            at = Math.Max(0.05, Math.Min(0.95, at));
+            ship.LaneEndProgress = at;
+            ship.PhaseEndJd = ship.PhaseStartJd + (ship.PhaseEndJd - ship.PhaseStartJd) * at;
+            ship.LurkDays = Math.Max(0.01, days);
+            return true;
+        }
+
         /// <summary>Joins the lane at its ramp (where the burn has just brought the ship).</summary>
         void StartLane(Ship ship, double jd)
         {
@@ -756,7 +796,7 @@ namespace Unity.SpaceGod.Core
             ship.LaneLeg = hop;
             ship.LaneFromOffset = ship.Orbit.OffsetAt(jd);
             var a = ephemeris.HelioAt(hop.From, jd) + ship.LaneFromOffset;
-            var estimate = Hyperlanes.RideDays(Lanes.LaneLengthKm(hop.Lane, jd));
+            var estimate = Lanes.RideDays(hop.Lane, Lanes.LaneLengthKm(hop.Lane, jd));
             ship.LaneToOffset = Lanes.RampOffset(hop.Lane, hop.To, jd + estimate);
             var b = ephemeris.HelioAt(hop.To, jd) + ship.LaneToOffset;
             ship.LaneStar = Lanes.KeepOutStar(a, b, jd);
@@ -775,7 +815,8 @@ namespace Unity.SpaceGod.Core
             ship.LaneStartProgress = 0;
             ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
             ship.PhaseStartJd = jd;
-            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm) * ship.LaneEndProgress;
+            // A worn lane (U.SPC-T481) rides at its condition's pace.
+            ship.PhaseEndJd = jd + Lanes.RideDays(hop.Lane, ship.LaneLengthKm) * ship.LaneEndProgress;
             LaneJoined?.Invoke(ship, hop, jd);
         }
 
@@ -788,7 +829,7 @@ namespace Unity.SpaceGod.Core
             ship.LaneEndProgress = 1;
             // LaneHoldSide is kept: the ship eases back in from beside the lane over the first hours.
             ship.PhaseStartJd = jd;
-            ship.PhaseEndJd = jd + Hyperlanes.RideDays(ship.LaneLengthKm) * Math.Max(1e-3, 1 - ship.LaneHold);
+            ship.PhaseEndJd = jd + Lanes.RideDays(ship.LaneLeg.Lane, ship.LaneLengthKm) * Math.Max(1e-3, 1 - ship.LaneHold);
         }
 
         /// <summary>Drops out of the lane where the ship is, a little to one side (an interdiction pulse).</summary>
@@ -2149,7 +2190,7 @@ namespace Unity.SpaceGod.Core
                     double rideDays = 0;
                     for (int i = 0; i < route.Count; i++)
                     {
-                        double ride = Hyperlanes.RideDays(Lanes.LaneLengthKm(route[i].Lane, jd));
+                        double ride = Lanes.RideDays(route[i].Lane, Lanes.LaneLengthKm(route[i].Lane, jd));
                         days += ride;
                         rideDays += ride;
                         if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5, route[i].To, RampEnd(route[i].To), RampEnd(route[i].To));

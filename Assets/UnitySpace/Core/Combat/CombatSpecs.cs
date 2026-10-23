@@ -745,6 +745,27 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
                 },
             } },
+            [ShipClass.LaneTender] = new[] { new CombatSpec
+            {
+                // The lane tender (U.SPC-T481): a maintenance hull that keeps a hyperlane's rings powered and aligned. No
+                // guns at all: a big reactor to feed the rings it works on, heavy shields and plate to ride out what comes for
+                // it, and a crew of engineers rather than gunners.
+                DesignName = "Lane tender", LengthKm = 0.26,
+                MassKt = 120, MainThrustMN = 3600, RetroThrustMN = 2700, LateralThrustMN = 1800, VerticalThrustMN = 1800, PitchYawTorqueMNKm = 2200, RollTorqueMNKm = 550,
+                Hull = 3400, Shield = 1500, ShieldRegen = 16, Armor = 3, MaxSpeed = 0.2, Accel = 0.008, Decel = 0.01,
+                BoostSpeedMultiplier = 1.3, BoostDurationS = 24, TurnRateDegS = 12,
+                Crew = 30, Marines = 0,
+                DryMassTonnes = 3600, PropellantTonnes = 3000, ExhaustVelocityKmS = 3500,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.06, 0.32),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.2, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, -0.25, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, -0.05, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Engine, 0.05, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.1),
+                },
+            } },
         };
 
         /// <summary>A copy to refit (U.SPC-T65): every figure the same, the hardpoint list its own array
