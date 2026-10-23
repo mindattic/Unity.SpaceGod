@@ -379,6 +379,8 @@ namespace Unity.SpaceGod.Core
                 // A destroyer's hull, dearer for the field projector and its reactors (U.SPC-T479).
                 case ShipClass.Interdictor: return 14000;
                 case ShipClass.GatePicket: return 2500;
+                // A battlecruiser's hull, its sensor array, communications suite and targeting computers dearer than guns (U.SPC-T477).
+                case ShipClass.CommandCruiser: return 52000;
                 default: return 3000;
             }
         }

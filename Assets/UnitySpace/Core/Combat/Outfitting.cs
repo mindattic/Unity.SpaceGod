@@ -974,7 +974,8 @@ namespace Unity.SpaceGod.Core
                 var kind = FacilityKinds.Of(id);
                 if (l.CanAdd(kind) == OutfitOutcome.Ok) yield return (-1, default, kind);
             }
-            bool big = ship.Spec.Class == ShipClass.Cruiser || ship.Spec.Class == ShipClass.Battleship || ship.Spec.Class == ShipClass.Carrier;
+            bool big = ship.Spec.Class == ShipClass.Cruiser || ship.Spec.Class == ShipClass.Battleship || ship.Spec.Class == ShipClass.Carrier
+                       || ship.Spec.Class == ShipClass.CommandCruiser;
             for (int i = 0; i < l.Slots.Count; i++)
                 if (l.Slots[i].Kind == SlotKind.ShieldMount && l.Fitted[i] == ModuleKind.ShieldGenerator) yield return (i, ModuleKind.HardenedShield, null);
             if (big)

@@ -152,6 +152,13 @@ namespace Unity.SpaceGod.Core
         /// shield regeneration all down until it comes back.</summary>
         public double Stunned;
 
+        /// <summary>The command ship on its side it fights coordinated under this step, or null (U.SPC-T477, see
+        /// <see cref="FleetCoordination"/>).</summary>
+        public BattleUnit CommandedBy;
+
+        /// <summary>Seconds left in the confusion after the command ship coordinating it was lost (U.SPC-T477).</summary>
+        public double Disrupted;
+
         public bool Present => !Dead && !Fled && !Docked;
         public double Radius => LengthKm * 0.5;
         public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : Fort != null ? Fort.Name + " fort" : "Fighter";
@@ -643,6 +650,8 @@ namespace Unity.SpaceGod.Core
         {
             Seconds += dt;
             TallySideStrength();
+            // Who fights under which command ship this step, and who has just lost theirs (U.SPC-T477).
+            FleetCoordination.Step(this, dt);
             for (int i = 0; i < Units.Count; i++)
             {
                 var u = Units[i];
@@ -830,7 +839,8 @@ namespace Unity.SpaceGod.Core
             if (u.Target == null || !u.Target.Present || u.RetargetIn <= 0)
             {
                 u.Target = PickTarget(u);
-                u.RetargetIn = (c.BridgeIntact ? 3 : 7) + rng.NextDouble() * 3;
+                // Under a command ship its staff has the next mark picked out already; with it lost, nobody has (U.SPC-T477).
+                u.RetargetIn = ((c.BridgeIntact ? 3 : 7) + rng.NextDouble() * 3) * FleetCoordination.RetargetFactor(u);
             }
         }
 
@@ -853,6 +863,8 @@ namespace Unity.SpaceGod.Core
             BattleUnit best = null;
             double bestScore = double.MaxValue;
             BattleUnit flagship = SideFlagship(u.Side);
+            // The hull its command ship is fighting, to concentrate on (U.SPC-T477).
+            var focus = FleetCoordination.FocusTarget(u);
             foreach (var o in Units)
             {
                 if (!Hostile(u, o) || o.Captured || o.Surrendering) continue;
@@ -871,8 +883,11 @@ namespace Unity.SpaceGod.Core
                 if (LaneUpkeep.IsTender(o.Ship)) score -= LaneUpkeep.TenderFocus.Value;
                 // Raiders kill a gate picket first, before it can warn its navy (U.SPC-T480).
                 if (o.Ship != null && !o.Combat.Disabled) score -= RaidDoctrine.TargetBias(u.Faction, o.Ship);
+                // A command ship is the priority target (U.SPC-T477): sink it and its whole fleet fights uncoordinated.
+                if (FleetCoordination.Coordinates(o)) score -= FleetCoordination.Priority.Value;
                 if (o.Kind == UnitKind.Platform) score += 6;
                 if (flagship != null && flagship != u && flagship.Target == o) score -= 6;
+                if (focus != null && focus == o) score -= FleetCoordination.Focus.Value;
                 score *= 0.85 + rng.NextDouble() * 0.3;
                 if (score < bestScore)
                 {
@@ -883,12 +898,22 @@ namespace Unity.SpaceGod.Core
             return best;
         }
 
+        /// <summary>The side's flagship: its working command ship if it has one, where the fleet's senior officers are
+        /// (U.SPC-T477), else its biggest hull.</summary>
         BattleUnit SideFlagship(int side)
         {
             BattleUnit best = null;
+            bool command = false;
             foreach (var u in Units)
-                if (u.Present && u.Side == side && u.Kind != UnitKind.Fighter && (best == null || u.Combat.Spec.Hull > best.Combat.Spec.Hull))
+            {
+                if (!u.Present || u.Side != side || u.Kind == UnitKind.Fighter) continue;
+                bool c = FleetCoordination.Coordinates(u);
+                if (best == null || (c && !command) || (c == command && u.Combat.Spec.Hull > best.Combat.Spec.Hull))
+                {
                     best = u;
+                    command = c;
+                }
+            }
             return best;
         }
 
@@ -1219,7 +1244,10 @@ namespace Unity.SpaceGod.Core
             var c = u.Combat;
             // Knocked out by a pulse or an EMP: no gun on the hull fires until its systems come back.
             if (u.Captured || u.Surrendering || u.Stunned > 0) return;
-            double accuracyScale = c.BridgeIntact ? 1 : 0.6;
+            // Surer under a command ship's targeting computers, worse in the confusion after losing it (U.SPC-T477).
+            double accuracyScale = (c.BridgeIntact ? 1 : 0.6) * FleetCoordination.AccuracyFactor(u);
+            // The shared sensor picture: gunners lay on the command ship's track, not their own (U.SPC-T477).
+            double picture = FleetCoordination.SharedPicture(u);
             // A small craft's weapons reload as fast as the power it gives them (U.SPC-T424).
             double weaponPower = PowerDistribution.FactorOf(u, PowerSystem.Weapons);
             foreach (var s in c.Subsystems)
@@ -1396,7 +1424,7 @@ namespace Unity.SpaceGod.Core
                 double size = Math.Max(0.15, Math.Min(1, target.LengthKm / 0.4));
                 if (target.Kind == UnitKind.Fighter) size *= w.AntiSmall ? 1.4 : 0.35;
                 // A tachyon lance's shot lands the instant it is fired, so it is as sure at the end of its reach as close in (U.SPC-T487).
-                double falloff = w.Lance ? 1 : 1 - 0.4 * dist / w.RangeKm;
+                double falloff = w.Lance ? 1 : 1 - 0.4 * dist / w.RangeKm * (1 - picture);
                 double chance = w.Accuracy * accuracyScale * size * falloff * (volley > 1 ? 1 + Broadsides.CrewVolleyAccuracyBonus : 1);
                 bool hit = rng.NextDouble() < chance;
                 var kind = EnergyWeapons.FxOf(s.Kind, hit) is FxKind energy ? energy
@@ -1557,7 +1585,8 @@ namespace Unity.SpaceGod.Core
             double skill = Math.Max(0, Math.Min(1, w.Accuracy * accuracyScale));
             // Where he sees it: carried on from a moment ago at the velocity he has read it as having, so a hull that
             // has just changed course is not where he thinks.
-            var seen = aimPoint - (target.Vel - target.SeenVel) * (Gunnery.TrackingLagS * (1 - 0.5 * skill));
+            // A coordinated gunner reads the course off the shared picture, and lags it less (U.SPC-T477).
+            var seen = aimPoint - (target.Vel - target.SeenVel) * (Gunnery.TrackingLagS * (1 - 0.5 * skill) * (1 - FleetCoordination.SharedPicture(u)));
             var point = w.MuzzleSpeedKmS > 0 ? Gunnery.LeadPoint(origin, u.Vel, seen, target.SeenVel, w.MuzzleSpeedKmS) : seen;
             var to = point - origin;
             var dir = to.LengthSquared > 1e-12 ? to.Normalized : u.Forward;

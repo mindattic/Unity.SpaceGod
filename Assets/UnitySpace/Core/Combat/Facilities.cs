@@ -140,6 +140,11 @@ namespace Unity.SpaceGod.Core
             HullCategory.Freighter, HullCategory.Warship, HullCategory.Battleship, HullCategory.Carrier, HullCategory.Station, HullCategory.Support,
         };
 
+        // What makes a hull a fleet's command ship (U.SPC-T477, see FleetCoordination): a capital's to fit.
+        public const string SensorArray = "sensor-array", CommsSuite = "comms-suite", TargetingComputers = "targeting-computers";
+
+        static readonly HullCategory[] Capitals = { HullCategory.Warship, HullCategory.Battleship, HullCategory.Carrier };
+
         static FacilityKinds()
         {
             Register(Structure(Bridge, "Bridge", 1, CompartmentKind.Bridge));
@@ -162,6 +167,14 @@ namespace Unity.SpaceGod.Core
             Register(new FacilityKind(MarineHabitat, "Marine habitat", 1, 220, true,
                 new[] { (Good.Alloys, 70.0), (Good.Machinery, 15.0), (Good.Electronics, 8.0) },
                 MarineHulls, true, CompartmentKind.Barracks, null, null, MarineHabitats.BerthsPerScale));
+            // The command ship's facilities (U.SPC-T477). Their effects are read by the systems that use them: the array by
+            // SensorSuite.Of and the battle's shared picture, the suite and the computers by FleetCoordination.
+            Register(new FacilityKind(SensorArray, "Sensor array", 2, 180, false,
+                new[] { (Good.Electronics, 90.0), (Good.Alloys, 40.0), (Good.Machinery, 15.0) }, Capitals));
+            Register(new FacilityKind(CommsSuite, "Communications suite", 1, 60, false,
+                new[] { (Good.Electronics, 50.0), (Good.Alloys, 10.0) }, Capitals));
+            Register(new FacilityKind(TargetingComputers, "Targeting computers", 1, 40, false,
+                new[] { (Good.Electronics, 40.0), (Good.Machinery, 5.0) }, Capitals));
         }
 
         static FacilityKind Structure(string id, string name, double size, CompartmentKind compartment) =>
@@ -284,6 +297,19 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.3), new FacilitySite(FacilityKinds.Midships, "Projector room", -0.05),
                 new FacilitySite(FacilityKinds.Engineering, "Reactor rooms", -0.3), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.18, 0.05, 1),
             },
+            // The command cruiser (U.SPC-T477): the sensor array forward under its mast, the flag bridge buried amidships with
+            // the communications suite and the fire-control centre's targeting computers either side of it, and the staff's
+            // quarters aft of them.
+            [ShipClass.CommandCruiser] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bow, "Bow", 0.36), new FacilitySite(FacilityKinds.SensorArray, "Sensor array", 0.24),
+                new FacilitySite(FacilityKinds.Quarters, "Staff quarters", 0.12), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), new FacilitySite(FacilityKinds.Bridge, "Flag bridge", 0.05, 0.05, 3),
+                new FacilitySite(FacilityKinds.CommsSuite, "Communications suite", 0.08),
+                new FacilitySite(FacilityKinds.TargetingComputers, "Fire-control centre", 0.0),
+                new FacilitySite(FacilityKinds.TargetingComputers, "Fire-control centre", -0.02),
+                new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.12, -0.05, 2, 120),
+            },
             [ShipClass.Freighter] = new[]
             {
                 new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.43), new FacilitySite(FacilityKinds.Hold, "Forward hold", 0.15),
@@ -385,6 +411,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Carrier:
                 case ShipClass.Battleship: return 6;
                 case ShipClass.Cruiser:
+                case ShipClass.CommandCruiser:
                 case ShipClass.Freighter: return 4;
                 case ShipClass.Destroyer:
                 case ShipClass.Miner:

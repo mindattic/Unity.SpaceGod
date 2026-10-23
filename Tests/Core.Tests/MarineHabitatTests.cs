@@ -25,6 +25,8 @@ namespace Unity.SpaceGod.Core.Tests
             {
                 (ShipClass.Carrier, 320), (ShipClass.Battleship, 260), (ShipClass.Cruiser, 140), (ShipClass.Destroyer, 50),
                 (ShipClass.Freighter, 4), (ShipClass.Breacher, 70),
+                // The command cruiser (U.SPC-T477) quarters a small marine guard for the flag.
+                (ShipClass.CommandCruiser, 120),
             };
             foreach (var (cls, marines) in expected)
                 Assert.That(CombatSpec.Of(cls).Marines, Is.EqualTo(marines), cls.ToString());

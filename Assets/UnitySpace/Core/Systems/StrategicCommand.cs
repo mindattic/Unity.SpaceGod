@@ -136,12 +136,12 @@ namespace Unity.SpaceGod.Core
 
         public static BuildPlan Find(string name) => all.Find(p => p.Name == name);
 
-        /// <summary>What every navy builds unless told otherwise.</summary>
-        public static readonly BuildPlan Balanced = Register("Balanced fleet", "Destroyers, cruisers, a battleship and a carrier in turn", 1,
-            ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Carrier);
+        /// <summary>What every navy builds unless told otherwise: a command cruiser among them to lead a group (U.SPC-T477).</summary>
+        public static readonly BuildPlan Balanced = Register("Balanced fleet", "Destroyers, cruisers, a battleship, a command cruiser and a carrier in turn", 1,
+            ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.CommandCruiser, ShipClass.Carrier);
 
-        public static readonly BuildPlan BattleLine = Register("Battle line", "Battleships and cruisers: the heaviest guns", 1,
-            ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Battleship, ShipClass.Destroyer);
+        public static readonly BuildPlan BattleLine = Register("Battle line", "Battleships and cruisers, with a command cruiser to lead them: the heaviest guns", 1,
+            ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.CommandCruiser);
 
         public static readonly BuildPlan Carriers = Register("Carrier groups", "Carriers and their screens", 1,
             ShipClass.Carrier, ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer);
@@ -155,7 +155,7 @@ namespace Unity.SpaceGod.Core
             ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Cruiser, ShipClass.Destroyer);
 
         public static readonly BuildPlan Mobilise = Register("Mobilise", "A balanced fleet half again as big", 1.5,
-            ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Carrier);
+            ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.CommandCruiser, ShipClass.Carrier);
 
         public static readonly BuildPlan Merchant = Register("Merchant marine", "No new warships: the slips go to freighters and haulers", 0);
 

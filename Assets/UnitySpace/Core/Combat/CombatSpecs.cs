@@ -862,6 +862,44 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.15),
                 },
             } },
+            [ShipClass.CommandCruiser] = new[] { new CombatSpec
+            {
+                // The command cruiser (U.SPC-T477): a battlecruiser's hull between a cruiser and a battleship, whose space and
+                // power go to the sensor array, the communications suite and the targeting computers inside it (see
+                // FacilityLayouts and FleetCoordination) rather than guns: a cruiser's battery, no torpedoes and no boarding
+                // pods, but heavy shields, two reactors and a big crew with the fleet's staff aboard.
+                DesignName = "Command cruiser", LengthKm = 1.6,
+                MassKt = 12000, MainThrustMN = 48000, RetroThrustMN = 36000, LateralThrustMN = 18000, VerticalThrustMN = 18000, PitchYawTorqueMNKm = 900000, RollTorqueMNKm = 225000,
+                Hull = 17000, Shield = 9000, ShieldRegen = 70, Armor = 7, MaxSpeed = 0.12, Accel = 0.0045, Decel = 0.005,
+                BoostSpeedMultiplier = 1.35, BoostDurationS = 30, TurnRateDegS = 7,
+                Crew = 1400,
+                DryMassTonnes = 70000, PropellantTonnes = 35000, ExhaustVelocityKmS = 4000,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.04, 0.22, arcCenterDeg: 0, arcWidthDeg: 120),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.04, -0.3, true, arcCenterDeg: 180, arcWidthDeg: 120),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.09, 0.02, 0.0, arcCenterDeg: 90, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.09, 0.02, 0.0, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0.05, 0.03, 0.3),
+                    new SubsystemDef(SubsystemKind.PointDefense, -0.05, 0.03, 0.3),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0.06, 0.03, -0.32),
+                    new SubsystemDef(SubsystemKind.PointDefense, -0.06, 0.03, -0.32),
+                    // The flag bridge, buried amidships under the array's mast.
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.05, 0.05),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.34, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0.08, 0.05, 0.12, arcCenterDeg: 60, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0.08, 0.05, -0.2, arcCenterDeg: 120, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, -0.42, arcCenterDeg: 180, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, -0.08, 0.05, -0.2, arcCenterDeg: 240, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, -0.08, 0.05, 0.12, arcCenterDeg: 300, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.Engine, -0.04, 0, -0.48),
+                    new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.48),
+                    new SubsystemDef(SubsystemKind.Engine, 0.04, 0, -0.48),
+                    // Two reactors: the array and the suite draw as much as a battery would.
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.1),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
+                },
+            } },
         };
 
         /// <summary>Every class's marines are what its design's habitats quarter (U.SPC-T465, <see cref="MarineHabitats"/>), not

@@ -1830,13 +1830,24 @@ namespace Unity.SpaceGod.Core
             if (gone != null) foreach (var s in gone) PriorOrders.Remove(s);
         }
 
-        void Succession(Ship dead, bool keepHunter = false)
+        /// <summary>The group <paramref name="dead"/> led goes on under an heir: <paramref name="chosen"/> if given (one of its
+        /// escorts), else a command ship among them (U.SPC-T477), else the biggest.</summary>
+        void Succession(Ship dead, bool keepHunter = false, Ship chosen = null)
         {
             if (dead.IsEscort) return;
-            Ship heir = null;
-            foreach (var s in Fleet.Ships)
-                if (s.Leader == dead && !s.Destroyed && (heir == null || s.Combat.Spec.Hull > heir.Combat.Spec.Hull))
-                    heir = s;
+            Ship heir = chosen != null && chosen.Leader == dead && !chosen.Destroyed ? chosen : null;
+            bool command = false;
+            if (heir == null)
+                foreach (var s in Fleet.Ships)
+                {
+                    if (s.Leader != dead || s.Destroyed) continue;
+                    bool c = FleetCoordination.IsCommandShip(s);
+                    if (heir == null || (c && !command) || (c == command && s.Combat.Spec.Hull > heir.Combat.Spec.Hull))
+                    {
+                        heir = s;
+                        command = c;
+                    }
+                }
             if (heir == null)
             {
                 Orders.Remove(dead);
@@ -3481,11 +3492,25 @@ namespace Unity.SpaceGod.Core
                     if (e.Leader == s && !e.Destroyed) escorts++;
                 if (escorts < 5 && s.Combat.Spec.Hull >= CombatSpec.Of(cls).Hull) group = s;
             }
+            // A new command ship (U.SPC-T477) goes to lead a group here that has none, whatever its flagship's size.
+            bool command = FleetCoordination.IsCommandClass(cls);
+            if (command)
+            {
+                Ship led = null;
+                foreach (var s in Fleet.Ships)
+                {
+                    if (s.Destroyed || s.IsEscort || s.Faction != yard.Owner || !s.Spec.IsMilitary || s.Battle != null || s == world.PilotedShip || s.PatrolWing) continue;
+                    if (s.Phase != ShipPhase.Parked || s.Orbit.Body != yard.Body || GroupHasCommandShip(s)) continue;
+                    if (led == null || s.Combat.Spec.Hull > led.Combat.Spec.Hull) led = s;
+                }
+                if (led != null) group = led;
+            }
             Ship ship;
             if (group != null)
             {
                 ship = Fleet.AddShip(name, cls, yard.Owner, ShipRole.Escort);
                 Fleet.AddEscort(group, ship, Fleet.SlotFor(FreeSlot(group)));
+                if (command && !GroupHasCommandShip(group, ship)) TakeCommand(group, ship);
             }
             else
             {
@@ -3496,8 +3521,35 @@ namespace Unity.SpaceGod.Core
                 ship.Route = own.ToArray();
                 world.Launch(ship, yard, jd);
             }
-            world.Log(jd, $"{yard.Name} commissions the {cls.ToString().ToLowerInvariant()} {ship.Name}" + (group != null ? $", joining {group.Name}" : ""), WorldEventKind.Launch, yard.Body);
+            string joins = group == null ? "" : ship.IsEscort ? $", joining {group.Name}" : $", taking command of {group.Name}'s group";
+            world.Log(jd, $"{yard.Name} commissions the {ShipClassSpec.Of(cls).DisplayName.ToLowerInvariant()} {ship.Name}" + joins, WorldEventKind.Launch, yard.Body);
             return ship;
+        }
+
+        /// <summary>Whether the group <paramref name="leader"/> leads carries a command ship (U.SPC-T477): the leader or a
+        /// living escort, but not <paramref name="except"/>.</summary>
+        bool GroupHasCommandShip(Ship leader, Ship except = null)
+        {
+            if (leader != except && FleetCoordination.IsCommandShip(leader)) return true;
+            foreach (var e in Fleet.Ships)
+                if (e.Leader == leader && e != except && !e.Destroyed && FleetCoordination.IsCommandShip(e)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// <paramref name="flag"/>, one of <paramref name="leader"/>'s escorts, takes command of its group (U.SPC-T477): the
+        /// fleet's senior officers go aboard the command ship, which takes over the group's schedule, orders and objective
+        /// as an heir does (see <see cref="Succession"/>), and the old flagship falls in as one of its escorts, in the
+        /// station the command ship held.
+        /// </summary>
+        public void TakeCommand(Ship leader, Ship flag)
+        {
+            if (leader == null || flag == null || flag.Leader != leader || leader.IsEscort || leader.Destroyed || flag.Destroyed) return;
+            var station = flag.FormationSlot;
+            Succession(leader, true, flag);
+            if (flag.Leader != null) return;
+            Fleet.AddEscort(flag, leader, station);
+            leader.Route = null;
         }
 
         // ---------------------------------------------------------------- helpers

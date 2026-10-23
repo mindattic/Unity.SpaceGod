@@ -90,6 +90,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Destroyer] = new PilotTuning(0.24, 28, 1.5, 25, 7, 3.5),
             // The lane interdictor (U.SPC-T479): a destroyer's hull with the projector's mass amidships, a touch heavier at the helm.
             [ShipClass.Interdictor] = new PilotTuning(0.2, 24, 1.4, 25, 7, 3.5),
+            // The command cruiser (U.SPC-T477): a battlecruiser, between the cruiser and the battleship at the helm.
+            [ShipClass.CommandCruiser] = new PilotTuning(0.12, 14, 1.35, 30, 5.5, 4.5),
         };
 
         public static PilotTuning Of(ShipClass c) =>

@@ -35,6 +35,7 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Destroyer] = new CargoHoldSpec(6, 5),
             [ShipClass.Interdictor] = new CargoHoldSpec(5, 4),
             [ShipClass.Cruiser] = new CargoHoldSpec(7, 6),
+            [ShipClass.CommandCruiser] = new CargoHoldSpec(8, 6),
             [ShipClass.Battleship] = new CargoHoldSpec(9, 7),
             [ShipClass.Carrier] = new CargoHoldSpec(10, 8),
         };

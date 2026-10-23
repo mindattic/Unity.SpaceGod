@@ -153,6 +153,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Destroyer] = Capital,
             // A destroyer-sized hull (U.SPC-T479): it crosses with its band, never left at the well's edge.
             [ShipClass.Interdictor] = Capital,
+            // A battlecruiser fitted with a drive, like a battleship (U.SPC-T477).
+            [ShipClass.CommandCruiser] = Capital,
             [ShipClass.Explorer] = Survey,
         };
 
@@ -204,6 +206,7 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Battleship] = 4,
             [ShipClass.Cruiser] = 3,
             [ShipClass.Destroyer] = 2,
+            [ShipClass.CommandCruiser] = 3,
         };
 
         /// <summary>How many berths a craft of each class takes up; a class not listed cannot be carried.</summary>

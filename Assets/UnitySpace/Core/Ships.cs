@@ -61,6 +61,12 @@ namespace Unity.SpaceGod.Core
         /// owner early warning of whatever comes through the gate or drops out of FTL nearby (see <see cref="GatePickets"/>).
         /// Lightly armed and no match for a raider band, which goes for it first.</summary>
         GatePicket,
+
+        /// <summary>A command cruiser, or battlecruiser (U.SPC-T477): a capital that gives up some guns for a large sensor
+        /// array, a communications suite and targeting computers, and carries the fleet's senior officers close to the
+        /// action. Every ship on its side within its reach fights coordinated (see <see cref="FleetCoordination"/>); losing
+        /// it throws them into confusion, so it is a priority target. Navies build it to lead their groups.</summary>
+        CommandCruiser,
     }
 
     public enum ShipRole
@@ -157,6 +163,7 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.LaneTender, "Lane tender", 0.2, false),
             new ShipClassSpec(ShipClass.Interdictor, "Lane interdictor", 0.35, true),
             new ShipClassSpec(ShipClass.GatePicket, "Gate picket", 0.8, true),
+            new ShipClassSpec(ShipClass.CommandCruiser, "Command cruiser", 0.3, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

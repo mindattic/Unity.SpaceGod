@@ -118,12 +118,17 @@ namespace Unity.SpaceGod.Core
         public static SensorSuite BaseOf(ShipClass cls, bool military) =>
             baseByClass.TryGetValue(cls, out var b) ? b : military ? Military : Civil;
 
-        /// <summary>The suite <paramref name="s"/> carries: its hull's base, more with each scanner fitted.</summary>
+        /// <summary>What a command ship's sensor array (<see cref="FacilityKinds.SensorArray"/>, U.SPC-T477) is worth in
+        /// scanner suites.</summary>
+        public const double ArrayScanners = 3;
+
+        /// <summary>The suite <paramref name="s"/> carries: its hull's base, more with each scanner fitted, and much more
+        /// with a sensor array inside it.</summary>
         public static SensorSuite Of(Ship s)
         {
             if (s == null) return Civil;
             var b = s.Spec == null ? Civil : BaseOf(s.Spec.Class, s.Spec.IsMilitary);
-            int n = s.Loadout?.Count(ModuleKind.Scanner) ?? 0;
+            double n = (s.Loadout?.Count(ModuleKind.Scanner) ?? 0) + ArrayScanners * FleetCoordination.Count(s, FacilityKinds.SensorArray);
             return new SensorSuite(b.RangeKm * (1 + ScannerRangeShare * n), b.Resolution + ScannerResolution * n);
         }
 

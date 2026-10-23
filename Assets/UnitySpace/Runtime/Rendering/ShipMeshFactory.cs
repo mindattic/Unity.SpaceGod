@@ -40,7 +40,8 @@ namespace Unity.SpaceGod.Rendering
             return f;
         }
 
-        public static bool IsWarship(ShipClass c) => c == ShipClass.Carrier || c == ShipClass.Battleship || c == ShipClass.Cruiser || c == ShipClass.Destroyer;
+        public static bool IsWarship(ShipClass c) => c == ShipClass.Carrier || c == ShipClass.Battleship || c == ShipClass.Cruiser || c == ShipClass.Destroyer
+                                                    || c == ShipClass.CommandCruiser;
 
         /// <summary>The whole hull (both sections).</summary>
         public static Mesh Get(ShipClass shipClass, Faction faction) => GetSection(shipClass, faction, WholeHull);
@@ -69,6 +70,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.LaneTender: BuildLaneTender(b); break;
                 case ShipClass.Interdictor: BuildInterdictor(b); break;
                 case ShipClass.GatePicket: BuildPicket(b); break;
+                case ShipClass.CommandCruiser: BuildCommandCruiser(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -565,6 +567,38 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0, -0.44f), new Vector3(0.09f, 0.05f, 0.05f), b.Dark);
             b.Nozzle(new Vector3(-0.025f, 0, -0.47f), 0.022f, 0.035f);
             b.Nozzle(new Vector3(0.025f, 0, -0.47f), 0.022f, 0.035f);
+        }
+
+        /// <summary>A command cruiser (U.SPC-T477): a long battlecruiser's hull with a light battery, the sensor array's big
+        /// dish on a dorsal mast forward, the communications suite's antenna spars along both beams and the targeting
+        /// computers' fire-control domes amidships, lit in the array's glow.</summary>
+        static void BuildCommandCruiser(Builder b)
+        {
+            b.Frustum(-0.44f, 0.28f, new Vector2(0.13f, 0.065f), new Vector2(0.11f, 0.055f), 0, b.Hull);
+            b.Frustum(0.28f, 0.50f, new Vector2(0.11f, 0.055f), new Vector2(0.035f, 0.022f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.036f, -0.05f), new Vector3(0.1f, 0.01f, 0.6f), b.Dark);
+            b.Box(new Vector3(0, 0.042f, -0.05f), new Vector3(0.006f, 0.002f, 0.55f), b.Accent);
+            // The array: a mast, and its dish facing forward with a glowing feed horn.
+            var glow = b.Glow(new Color(0.55f, 0.95f, 0.85f));
+            b.Box(new Vector3(0, 0.075f, 0.24f), new Vector3(0.016f, 0.07f, 0.03f), b.Hull);
+            b.Cylinder(new Vector3(0, 0.12f, 0.25f), 0.055f, 0.008f, b.Light, segments: 16);
+            b.Cylinder(new Vector3(0, 0.12f, 0.265f), 0.008f, 0.03f, glow);
+            // The flag bridge's tower amidships, and the fire-control domes either side of it.
+            b.Box(new Vector3(0, 0.06f, 0.05f), new Vector3(0.05f, 0.04f, 0.09f), b.Hull);
+            b.Box(new Vector3(0, 0.082f, 0.07f), new Vector3(0.052f, 0.006f, 0.02f), b.Dark);
+            foreach (float side in new[] { -1f, 1f })
+            {
+                b.Cylinder(new Vector3(side * 0.04f, 0.05f, -0.02f), 0.012f, 0.02f, glow);
+                // The communications suite's spars, long and thin along each beam.
+                b.Box(new Vector3(side * 0.085f, 0.01f, 0.0f), new Vector3(0.006f, 0.006f, 0.5f), b.Light);
+                b.Box(new Vector3(side * 0.085f, 0.01f, 0.27f), new Vector3(0.02f, 0.02f, 0.012f), b.Accent);
+                b.Box(new Vector3(side * 0.07f, 0, -0.2f), new Vector3(0.02f, 0.04f, 0.3f), b.Hull);
+            }
+            b.Box(new Vector3(0, 0.03f, 0.2f), new Vector3(0.032f, 0.006f, 0.032f), b.Dark);
+            b.Box(new Vector3(0, 0.03f, -0.3f), new Vector3(0.032f, 0.006f, 0.032f), b.Dark);
+            b.Box(new Vector3(0, 0, -0.45f), new Vector3(0.12f, 0.055f, 0.05f), b.Dark);
+            foreach (float x in new[] { -0.04f, 0f, 0.04f })
+                b.Nozzle(new Vector3(x, 0, -0.48f), 0.018f, 0.035f);
         }
 
         static void BuildDestroyer(Builder b)
