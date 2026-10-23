@@ -31,6 +31,10 @@ namespace Unity.SpaceGod.Core
         /// built to brawl and to take on corvettes. It flies the patrol and escort wings' heavy-fighter slots, in the
         /// <see cref="FlightFamily.HeavyFighter"/> family. Last in the list so saved class numbers keep their meaning.</summary>
         Gunship,
+        /// <summary>An ore tug (U.SPC-T483): no hold, just a big engine with claws that latches onto a captured asteroid or a
+        /// block of comet ice and pushes it, slowly, to a refinery or a depot (see <see cref="BeltMining"/>). The heavier the
+        /// load, the gentler the push: its acceleration is its drive's thrust over the tug and its load together.</summary>
+        OreTug,
     }
 
     public enum ShipRole
@@ -115,6 +119,7 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Fighter, "Fighter", 1.0, true),
             new ShipClassSpec(ShipClass.Explorer, "Explorer", 0.6, false),
             new ShipClassSpec(ShipClass.Gunship, "Gunship", 0.7, true),
+            new ShipClassSpec(ShipClass.OreTug, "Ore tug", 0.08, false),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

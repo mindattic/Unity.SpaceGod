@@ -320,7 +320,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Explorer: return 3;
                 case ShipClass.Breacher:
                 case ShipClass.Gunship:
-                case ShipClass.Courier: return 2;
+                case ShipClass.Courier:
+                case ShipClass.OreTug: return 2;
                 default: return 1;
             }
         }

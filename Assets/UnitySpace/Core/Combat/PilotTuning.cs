@@ -68,6 +68,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Miner] = new PilotTuning(0.16, 70, 1.6, 38, 8, 3.0),
             // The deep-space explorer (U.SPC-T419): handier than a hauler, nothing like a fighter.
             [ShipClass.Explorer] = new PilotTuning(0.22, 60, 1.6, 26, 8, 3.0),
+            // The ore tug (U.SPC-T483): flown like a hauler, a touch heavier on the stick.
+            [ShipClass.OreTug] = new PilotTuning(0.14, 60, 1.5, 40, 8, 3.2),
 
             // Capital ships: still weighty -- you're captaining a warship, not dogfighting in it --
             // but sharper than their AI-battle turn rates so they're not sluggish to the point of
@@ -96,6 +98,7 @@ namespace Unity.SpaceGod.Core
                     return PilotControl.DirectNose;
                 case ShipClass.Freighter:
                 case ShipClass.Miner:
+                case ShipClass.OreTug:
                     return PilotControl.Hauler;
                 default:
                     return PilotControl.Helm;

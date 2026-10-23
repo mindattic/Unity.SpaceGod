@@ -209,6 +209,10 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Miner:
                     i.Chain(("Cockpit", CompartmentKind.Bridge, 0.3, 0.05), ("Ore hold", CompartmentKind.Hold, 0, 0), ("Engineering", CompartmentKind.Engineering, -0.35, 0));
                     break;
+                case ShipClass.OreTug:
+                    // No hold: the claw gantry forward, the cockpit over it, then a long engine room for its big drive.
+                    i.Chain(("Claw gantry", CompartmentKind.Bow, 0.35, 0), ("Cockpit", CompartmentKind.Bridge, 0.15, 0.05), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
+                    break;
                 case ShipClass.Breacher:
                     i.Chain(("Assault bay", CompartmentKind.AssaultBay, 0.25, 0), ("Bridge", CompartmentKind.Bridge, 0, 0.03), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
                     break;

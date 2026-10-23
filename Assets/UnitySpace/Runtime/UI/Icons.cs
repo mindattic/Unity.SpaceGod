@@ -74,7 +74,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Battleship: return diamond ??= Draw(p => Mathf.Abs(p.x) * 1.25f + Mathf.Abs(p.y) - 0.85f);
                 case ShipClass.Cruiser: return triangle ??= Draw(p => Triangle(p, 0.8f));
                 case ShipClass.Destroyer: return chevron ??= Draw(Chevron);
-                case ShipClass.Miner: return hexagon ??= Draw(Hexagon);
+                case ShipClass.Miner:
+                case ShipClass.OreTug: return hexagon ??= Draw(Hexagon);
                 case ShipClass.Courier: return dot ??= Draw(p => Ring(p, 0.42f, 0.16f));
                 case ShipClass.Fighter: return dart ??= Draw(p => Triangle(new Vector2(p.x * 1.8f, p.y), 0.75f));
                 // The heavy fighter (U.SPC-T467): a broader, blunter dart than the light fighter's.

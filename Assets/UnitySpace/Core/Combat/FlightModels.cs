@@ -184,6 +184,7 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.Freighter, FlightFamily.Hauler);
             r.Assign(ShipClass.Miner, FlightFamily.Hauler);
             r.Assign(ShipClass.Explorer, FlightFamily.Hauler);
+            r.Assign(ShipClass.OreTug, FlightFamily.Hauler);
             r.Assign(ShipClass.Carrier, FlightFamily.Capital);
             r.Assign(ShipClass.Battleship, FlightFamily.Capital);
             r.Assign(ShipClass.Cruiser, FlightFamily.Capital);

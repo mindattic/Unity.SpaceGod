@@ -225,7 +225,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Courier:
                 case ShipClass.Breacher: return HullCategory.SmallCraft;
                 case ShipClass.Freighter:
-                case ShipClass.Miner: return HullCategory.Freighter;
+                case ShipClass.Miner:
+                case ShipClass.OreTug: return HullCategory.Freighter;
                 case ShipClass.Battleship: return HullCategory.Battleship;
                 case ShipClass.Carrier: return HullCategory.Carrier;
                 default: return HullCategory.Warship;

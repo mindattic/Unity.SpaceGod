@@ -43,6 +43,14 @@ namespace Unity.SpaceGod.Core
         public static readonly AsteroidClass Metallic = new AsteroidClass("M-type", 0.1, 5.0,
             (Good.NickelIron, 0.88), (Good.Copper, 0.0005), (Good.Zinc, 0.0003), (Good.RareEarths, 0.00001), (Good.Platinum, 0.00003));
 
+        /// <summary>
+        /// A block of comet ice (U.SPC-T483), cut from an icy body or a dead comet and pushed in by an ore tug: mostly water,
+        /// with frozen ammonia and organics, light and loose. Not one of the belt rocks <see cref="Pick"/> draws: only the
+        /// tugs bring ice, an operation's <see cref="MiningOperation.TugIceShare"/> of their loads.
+        /// </summary>
+        public static readonly AsteroidClass CometIce = new AsteroidClass("Comet ice", 0, 0.6,
+            (Good.Water, 0.8), (Good.Hydrocarbons, 0.06), (Good.Nitrogen, 0.03));
+
         static readonly List<AsteroidClass> registered = new List<AsteroidClass> { Carbonaceous, Stony, Metallic };
 
         public static IReadOnlyList<AsteroidClass> All => registered;
@@ -144,6 +152,54 @@ namespace Unity.SpaceGod.Core
         }
     }
 
+    /// <summary>The heavy lanes an ore tug's haul can take between two bodies (U.SPC-T483): km along the lanes, and km pushed to and from their ramps.</summary>
+    public readonly struct HeavyLanePath
+    {
+        public readonly double LaneKm, LegKm;
+        public readonly string Name;
+
+        public HeavyLanePath(double laneKm, double legKm, string name)
+        {
+            LaneKm = laneKm;
+            LegKm = legKm;
+            Name = name;
+        }
+    }
+
+    /// <summary>
+    /// One ore tug's haul (U.SPC-T483): latched onto a captured asteroid or a block of comet ice, pushing it from the
+    /// field to a refinery (where it joins the grinders' backlog) or, for ice, straight to a depot (melted there). Slow
+    /// in proportion to its load (see <see cref="BeltMining.TugAccel"/>), and a target for raiders the whole way.
+    /// </summary>
+    public sealed class TugHaul
+    {
+        public string Name;
+        public MiningOperation Operation;
+        public CapturedRock Load;
+        public int FromBody, ToBody;
+
+        /// <summary>The depot an ice block goes to; null for a load brought in to the refinery.</summary>
+        public MaterialWarehouse ToDepot;
+
+        /// <summary>The heavy lanes it rides, or null when it pushes the whole way through open space.</summary>
+        public string HeavyLane;
+
+        public bool ViaHeavyLane => HeavyLane != null;
+
+        /// <summary>The tug's acceleration with its load, m/s².</summary>
+        public double AccelMs2;
+
+        /// <summary>When it set out, when it arrives with its load, and when the tug is back for another (the empty run home).</summary>
+        public double DepartJd, ArriveJd, FreeJd;
+
+        public ConvoyState State;
+
+        /// <summary>The raiders who took the tug and its load, if they did.</summary>
+        public Faction TakenBy;
+
+        public override string ToString() => Name;
+    }
+
     /// <summary>
     /// One faction's belt works: capture tugs bringing asteroids in to a refinery, grinders reducing them to dust,
     /// separators splitting the dust into elements, and convoys hauling the elements to a warehouse.
@@ -180,6 +236,28 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Share of an escort's full protection its convoys sail with (0 for none, 1 for a full escort).</summary>
         public double EscortShare;
+
+        /// <summary>
+        /// Ore tugs (<see cref="ShipClass.OreTug"/>) at work (U.SPC-T483): each latches onto a far bigger load than a capture
+        /// tug's, a rock or a block of ice of <see cref="TugMinLoadM"/> to <see cref="TugMaxLoadM"/> across, and pushes it in,
+        /// slowly. Raiders who take one keep the tug too.
+        /// </summary>
+        public int OreTugs;
+
+        /// <summary>Where the tugs find their loads: the field around this body (-1: around the refinery).</summary>
+        public int TugSourceBody = -1;
+
+        /// <summary>Share of the tugs' loads that are blocks of comet ice rather than belt rock.</summary>
+        public double TugIceShare;
+
+        /// <summary>Where ice blocks go, melted there into water and volatiles; null: to the refinery with the rock.</summary>
+        public MaterialWarehouse IceDepot;
+
+        /// <summary>Smallest and largest load an ore tug latches onto, metres across (capped by what its route can carry).</summary>
+        public double TugMinLoadM = 120, TugMaxLoadM = 300;
+
+        public int TugHaulsSent, TugHaulsDelivered, TugsLost;
+        public double TugTonnesDelivered;
 
         public readonly List<CapturedRock> Backlog = new List<CapturedRock>();
 
@@ -321,14 +399,19 @@ namespace Unity.SpaceGod.Core
     /// The asteroid-belt mining pipeline that feeds every megastructure build (U.SPC-T330):
     ///  1. Capture: each <see cref="MiningOperation"/>'s tugs bring rocks of a few tens to a hundred-odd metres in from
     ///     the belt to its refinery, one every <see cref="MiningOperation.CaptureDays"/> or so each, of a kind drawn from
-    ///     the registered <see cref="AsteroidClass"/>es.
+    ///     the registered <see cref="AsteroidClass"/>es. Its ore tugs (<see cref="ShipClass.OreTug"/>, U.SPC-T483) latch
+    ///     onto far bigger loads, rock or blocks of <see cref="AsteroidClass.CometIce"/>, and push them in slowly (load
+    ///     mass governs their acceleration, <see cref="TugAccel"/>): rock to the refinery, ice to the refinery or straight
+    ///     to a depot. Through open space a tug takes at most <see cref="OpenSpaceMaxTonnes"/>; where a heavy lane
+    ///     (<see cref="Lane.Heavy"/>) joins the field and the destination it carries bigger loads, and far faster.
     ///  2. Grind: the grinders reduce the waiting rocks to dust, which carries the elements its rocks held.
     ///  3. Separate: the separators split the dust into elements (goods) and slag.
     ///  4. Ship: a convoy carries a load of elements to the operation's <see cref="MaterialWarehouse"/>, often on a
     ///     remote moon, taking days in proportion to the distance at the time it sails.
     ///  5. Build: each <see cref="MegastructureProject"/> draws what its bill needs from its builder's warehouses; when
     ///     every tonne is in, it is finished and its kind's <see cref="MegastructureSpec.Completed"/> handler runs.
-    /// Raiders prey on the chain where it is weakest: a convoy on the way is robbed far more often
+    /// Raiders prey on the chain where it is weakest: a convoy or a tug and its load (<see cref="TugTheftPerDay"/>) on
+    /// the way is robbed far more often
     /// (<see cref="ConvoyTheftPerDay"/>) than a warehouse is raided (<see cref="WarehouseRaidPerDay"/>), both in
     /// proportion to how many raiders are about (<see cref="PiratePressure"/>), less for an escorted convoy or a
     /// warehouse its owner guards.
@@ -340,7 +423,7 @@ namespace Unity.SpaceGod.Core
     {
         readonly Random rng;
         double nextDayJd = double.NaN;
-        int rockSerial, convoySerial;
+        int rockSerial, convoySerial, haulSerial;
 
         public readonly List<MiningOperation> Operations = new List<MiningOperation>();
         public readonly List<MaterialWarehouse> Warehouses = new List<MaterialWarehouse>();
@@ -389,10 +472,61 @@ namespace Unity.SpaceGod.Core
         public event Action<MaterialWarehouse, double> WarehouseRaided;
         public event Action<MegastructureProject> ProjectCompleted;
 
-        /// <summary>Tonnes of each good raiders have taken, convoys and warehouses together.</summary>
+        /// <summary>Tonnes of each good raiders have taken, convoys, tugs' loads and warehouses together.</summary>
         public readonly double[] Plundered = new double[GoodInfo.Count];
 
         public int ConvoysStolen, ConvoysDelivered, WarehouseRaids;
+
+        // ---------------------------------------------------------------- ore tugs (U.SPC-T483)
+
+        /// <summary>Every ore tug's haul, under way or done (trimmed to the latest few hundred finished ones).</summary>
+        public readonly List<TugHaul> Hauls = new List<TugHaul>();
+
+        /// <summary>Chance a day, at full <see cref="PiratePressure"/>, that raiders take a tug and its load on the way.</summary>
+        public const double TugTheftPerDay = 0.002;
+
+        /// <summary>How far out in the field a tug finds its load, km, before it is pushed to the source body's neighbourhood.</summary>
+        public const double TugLocalHaulKm = 0.05 * Astro.AuKm;
+
+        /// <summary>The biggest load a tug will push through open space, tonnes; a heavy lane carries up to <see cref="Hyperlanes.HeavyLaneMaxTonnes"/>.</summary>
+        public const double OpenSpaceMaxTonnes = 20e6;
+
+        /// <summary>The heavy lanes between two bodies on a date, or null for none. Null: no heavy lanes anywhere.</summary>
+        public Func<int, int, double, HeavyLanePath?> HeavyLane;
+
+        public event Action<TugHaul> TugTaken;
+
+        public int TugsTaken, TugHaulsDelivered;
+
+        /// <summary>An ore tug's own mass, tonnes: its stock design, dry, with full tanks.</summary>
+        public static double TugMassTonnes
+        {
+            get
+            {
+                var spec = CombatSpec.Of(ShipClass.OreTug);
+                return spec.DryMassTonnes + spec.PropellantTonnes;
+            }
+        }
+
+        /// <summary>
+        /// An ore tug's acceleration pushing <paramref name="loadTonnes"/>, m/s²: its drive's thrust (its class's unladen
+        /// acceleration times its own mass) over the tug and its load together.
+        /// </summary>
+        public static double TugAccel(double loadTonnes)
+        {
+            double tug = TugMassTonnes;
+            return ShipClassSpec.Of(ShipClass.OreTug).AccelG * 9.80665 * tug / (tug + Math.Max(0, loadTonnes));
+        }
+
+        /// <summary>Days to push <paramref name="loadTonnes"/> over <paramref name="km"/>: accelerate half way, brake the rest.</summary>
+        public static double PushDays(double km, double loadTonnes)
+        {
+            if (km <= 0) return 0;
+            return 2 * Math.Sqrt(km * 1000 / TugAccel(loadTonnes)) / Astro.SecondsPerDay;
+        }
+
+        /// <summary>Metres across of a sphere of <paramref name="tonnes"/> at <paramref name="density"/>.</summary>
+        static double RockDiameter(double tonnes, double density) => Math.Pow(6 * tonnes / (Math.PI * density), 1.0 / 3);
 
         public BeltMining(int seed)
         {
@@ -449,8 +583,10 @@ namespace Unity.SpaceGod.Core
                 Grind(op);
                 Separate(op);
                 Ship(op, jd);
+                SendTugs(op, jd);
             }
             MoveConvoys(jd, pressure);
+            MoveHauls(jd, pressure);
             RaidWarehouses(jd, pressure);
             Build(jd);
         }
@@ -585,6 +721,157 @@ namespace Unity.SpaceGod.Core
             {
                 if (Convoys[i].State == ConvoyState.EnRoute) continue;
                 Convoys.RemoveAt(i--);
+                finished--;
+            }
+        }
+
+        // ---------------------------------------------------------------- ore tugs (U.SPC-T483)
+
+        /// <summary>Km a tug pushes through open space from the field around <paramref name="from"/> to <paramref name="to"/>.</summary>
+        double OpenKm(int from, int to, double jd)
+        {
+            double km = TugLocalHaulKm;
+            if (Position != null && from != to) km += (Position(to, jd) - Position(from, jd)).Length;
+            return km;
+        }
+
+        /// <summary>
+        /// Days an ore tug takes to push <paramref name="tonnes"/> from the field around <paramref name="from"/> to
+        /// <paramref name="to"/> setting out on <paramref name="jd"/>: by heavy lane where one joins them and it is the
+        /// quicker (or the only) way, else through open space. <paramref name="heavy"/> is the heavy lanes taken, if any;
+        /// infinite when the load is too big for every way open to it.
+        /// </summary>
+        public double HaulDays(int from, int to, double tonnes, double jd, out HeavyLanePath? heavy)
+        {
+            heavy = null;
+            double open = tonnes <= OpenSpaceMaxTonnes ? PushDays(OpenKm(from, to, jd), tonnes) : double.PositiveInfinity;
+            var lane = from == to ? null : HeavyLane?.Invoke(from, to, jd);
+            if (lane is HeavyLanePath h && tonnes <= Hyperlanes.HeavyLaneMaxTonnes)
+            {
+                double byLane = PushDays(TugLocalHaulKm, tonnes) + 2 * PushDays(h.LegKm / 2, tonnes) + Hyperlanes.HeavyRideDays(h.LaneKm);
+                if (byLane <= open)
+                {
+                    heavy = h;
+                    return byLane;
+                }
+            }
+            return open;
+        }
+
+        /// <summary>The biggest load a tug can take from <paramref name="from"/> to <paramref name="to"/>: a heavy lane's, where one joins them.</summary>
+        public double MaxLoadTonnes(int from, int to, double jd) =>
+            from != to && HeavyLane?.Invoke(from, to, jd) != null ? Hyperlanes.HeavyLaneMaxTonnes : OpenSpaceMaxTonnes;
+
+        /// <summary>Sends every idle ore tug of <paramref name="op"/> out to latch onto a load and push it in.</summary>
+        void SendTugs(MiningOperation op, double jd)
+        {
+            if (op.OreTugs <= 0) return;
+            int busy = 0, inbound = 0;
+            foreach (var h in Hauls)
+            {
+                if (h.Operation != op || h.State == ConvoyState.Stolen) continue;
+                if (jd < h.FreeJd) busy++;
+                if (h.State == ConvoyState.EnRoute && h.ToDepot == null) inbound++;
+            }
+            for (; busy < op.OreTugs; busy++)
+            {
+                bool ice = op.TugIceShare > 0 && rng.NextDouble() < op.TugIceShare;
+                var kind = ice ? AsteroidClass.CometIce : AsteroidClass.Pick(rng);
+                var depot = ice ? op.IceDepot : null;
+                if (depot == null)
+                {
+                    // The grinders' yard is full (counting what is on the way): the tugs stand down.
+                    if (op.Backlog.Count + inbound >= op.MaxBacklog) return;
+                }
+                else if (depot.StoredTonnes >= depot.CapacityTonnes) return;
+
+                int from = op.TugSourceBody >= 0 ? op.TugSourceBody : op.RefineryBody;
+                int to = depot?.Body ?? op.RefineryBody;
+                double d = op.TugMinLoadM + (op.TugMaxLoadM - op.TugMinLoadM) * rng.NextDouble();
+                double t = RockTonnes(d, kind.Density), cap = MaxLoadTonnes(from, to, jd);
+                if (t > cap)
+                {
+                    // Too big for any way in: the tug cuts (or picks) one that is not.
+                    t = cap;
+                    d = RockDiameter(t, kind.Density);
+                }
+                double days = HaulDays(from, to, t, jd, out var heavy);
+                if (double.IsInfinity(days)) return;
+                // Home again empty, the same way, at its unladen acceleration.
+                double back = HaulDays(from, to, 0, jd, out _);
+                var haul = new TugHaul
+                {
+                    Name = $"{op.Name} tug haul {++haulSerial}", Operation = op, FromBody = from, ToBody = to, ToDepot = depot,
+                    HeavyLane = heavy?.Name, AccelMs2 = TugAccel(t), DepartJd = jd, ArriveJd = jd + Math.Max(1, days),
+                    Load = new CapturedRock
+                    {
+                        Designation = ice ? $"{op.Name} ice block {haulSerial}" : $"{op.Name} rock {++rockSerial}",
+                        Class = kind, DiameterM = d, Tonnes = t, Remaining = t,
+                    },
+                };
+                haul.FreeJd = haul.ArriveJd + Math.Max(1, back);
+                Hauls.Add(haul);
+                op.TugHaulsSent++;
+                if (depot == null) inbound++;
+            }
+        }
+
+        void MoveHauls(double jd, double pressure)
+        {
+            foreach (var h in Hauls)
+            {
+                if (h.State != ConvoyState.EnRoute) continue;
+                var op = h.Operation;
+                double risk = TugTheftPerDay * pressure * (1 - EscortCut * Clamp01(op?.EscortShare ?? 0));
+                if (risk > 0 && rng.NextDouble() < risk)
+                {
+                    // Raiders take the tug and what it holds: the load is theirs, the hull lost to its operation.
+                    h.State = ConvoyState.Stolen;
+                    h.TakenBy = Raiders?.Invoke();
+                    foreach (var (g, f) in h.Load.Class.Yield) Plundered[(int)g] += h.Load.Tonnes * f;
+                    if (op != null)
+                    {
+                        op.OreTugs = Math.Max(0, op.OreTugs - 1);
+                        op.TugsLost++;
+                    }
+                    TugsTaken++;
+                    Log?.Invoke(jd, $"Raiders{By(h.TakenBy)} seized an ore tug of the {op?.Name} and the {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()} it was pushing", h.ToBody);
+                    TugTaken?.Invoke(h);
+                    continue;
+                }
+                if (jd < h.ArriveJd) continue;
+                h.State = ConvoyState.Delivered;
+                TugHaulsDelivered++;
+                if (op == null) continue;
+                op.TugHaulsDelivered++;
+                op.TugTonnesDelivered += h.Load.Tonnes;
+                if (h.ToDepot != null)
+                {
+                    // Ice is melted at the depot: its water and volatiles go into stock, the grit is dumped. Never past its room.
+                    var w = h.ToDepot;
+                    double room = Math.Max(0, w.CapacityTonnes - w.StoredTonnes), got = 0;
+                    foreach (var (_, f) in h.Load.Class.Yield) got += h.Load.Tonnes * f * op.SeparationEfficiency;
+                    double share = got > room ? room / got : 1;
+                    foreach (var (g, f) in h.Load.Class.Yield) w.Stock[(int)g] += h.Load.Tonnes * f * op.SeparationEfficiency * share;
+                }
+                else
+                {
+                    // Parked at the refinery for the grinders, like a capture tug's catch.
+                    h.Load.CapturedJd = jd;
+                    op.Backlog.Add(h.Load);
+                    op.RocksCaptured++;
+                    op.TonnesCaptured += h.Load.Tonnes;
+                }
+            }
+            // Keep the history bounded: drop the oldest finished hauls whose tugs are home (or gone).
+            int finished = 0;
+            foreach (var h in Hauls)
+                if (h.State == ConvoyState.Stolen || (h.State == ConvoyState.Delivered && jd >= h.FreeJd)) finished++;
+            for (int i = 0; i < Hauls.Count && finished > 300; i++)
+            {
+                var h = Hauls[i];
+                if (!(h.State == ConvoyState.Stolen || (h.State == ConvoyState.Delivered && jd >= h.FreeJd))) continue;
+                Hauls.RemoveAt(i--);
                 finished--;
             }
         }

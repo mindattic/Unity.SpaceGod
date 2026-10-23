@@ -30,6 +30,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Whether this is a spur to a jump gate rather than a lane between two planetary systems.</summary>
         public bool IsGateSpur => Gate != null;
 
+        /// <summary>
+        /// A heavy lane (U.SPC-T483): built wide and slow to carry what no ordinary lane will take, an ore tug pushing a
+        /// captured asteroid or a block of comet ice of up to <see cref="Hyperlanes.HeavyLaneMaxTonnes"/>, at
+        /// <see cref="Hyperlanes.HeavyLaneKmS"/>. Ordinary traffic rides it like any other lane.
+        /// </summary>
+        public bool Heavy;
+
         public int Other(int system) => system == A ? B : A;
     }
 
@@ -116,8 +123,42 @@ namespace Unity.SpaceGod.Core
                 ("Jupiter", "Hektor", 0.04), ("Hektor", "Eurybates", -0.05),
             };
             foreach (var (a, b, bend) in links) h.Add(a, b, bend);
+            // The belt's freight road (U.SPC-T483): the Ceres-Jupiter lane is built heavy, so the Belt Consortium's tugs can
+            // push ice and rock from the belt out to its depot at Callisto.
+            h.MarkHeavy("Ceres", "Jupiter");
             return h;
         }
+
+        // ---------------------------------------------------------------- heavy lanes (U.SPC-T483)
+
+        /// <summary>How fast a heavy lane carries a tug and its load at its peak, km/s: a twentieth of an ordinary lane's cruise.</summary>
+        public const double HeavyLaneKmS = 600;
+
+        /// <summary>The biggest load a heavy lane will carry, tonnes: a rock a few hundred metres across.</summary>
+        public const double HeavyLaneMaxTonnes = 150e6;
+
+        /// <summary>Makes the lane between <paramref name="a"/> and <paramref name="b"/> a heavy lane; returns it, or null if there is none.</summary>
+        public Lane MarkHeavy(string a, string b)
+        {
+            int ia = catalog[a].Index, ib = catalog[b].Index;
+            foreach (var lane in Lanes)
+                if ((lane.A == ia && lane.B == ib) || (lane.A == ib && lane.B == ia))
+                {
+                    lane.Heavy = true;
+                    return lane;
+                }
+            return null;
+        }
+
+        /// <summary>Days to ride a whole heavy lane of this length with a load, eased in and out like any ride but at <see cref="HeavyLaneKmS"/>.</summary>
+        public static double HeavyRideDays(double lengthKm) => 2 * Math.Max(0, lengthKm) / HeavyLaneKmS / Astro.SecondsPerDay;
+
+        /// <summary>
+        /// The quickest route between two systems over heavy lanes alone (what a tug with a big load can take), or null
+        /// when they are not joined by heavy lanes (or are the same system).
+        /// </summary>
+        public List<LaneHop> HeavyRoute(int fromSystem, int toSystem, double jd) =>
+            fromSystem == toSystem ? null : FindRoute(fromSystem, toSystem, jd, heavyOnly: true);
 
         /// <summary>
         /// Alpha Centauri's network: short lanes inside each star's system, and two long trunk lanes
@@ -538,7 +579,7 @@ namespace Unity.SpaceGod.Core
             return route;
         }
 
-        List<LaneHop> FindRoute(int fromSystem, int toSystem, double jd)
+        List<LaneHop> FindRoute(int fromSystem, int toSystem, double jd, bool heavyOnly = false)
         {
             var dist = new Dictionary<int, double> { [fromSystem] = 0 };
             var via = new Dictionary<int, LaneHop>();
@@ -554,6 +595,7 @@ namespace Unity.SpaceGod.Core
                 foreach (var lane in Lanes)
                 {
                     if (lane.A != here && lane.B != here) continue;
+                    if (heavyOnly && !lane.Heavy) continue;
                     int next = lane.Other(here);
                     // Each hop also costs the crossing between ramps at a junction: about half a day.
                     Danger.TryGetValue(lane, out double danger);

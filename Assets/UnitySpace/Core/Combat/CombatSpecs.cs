@@ -651,6 +651,28 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
                 },
             } },
+            [ShipClass.OreTug] = new[] { new CombatSpec
+            {
+                // The ore tug (U.SPC-T483): a big engine with claws and almost nothing else. Unladen it is quick for its size
+                // (three main drives on a short frame); latched onto a rock of millions of tonnes it barely creeps (see
+                // BeltMining.TugAccel). No hold, no guns: a skeleton crew, plate over the reactor, and shields for the grit.
+                DesignName = "Ore tug", LengthKm = 0.2,
+                MassKt = 200, MainThrustMN = 12000, RetroThrustMN = 6000, LateralThrustMN = 2400, VerticalThrustMN = 2400, PitchYawTorqueMNKm = 2000, RollTorqueMNKm = 500,
+                Hull = 5000, Shield = 400, ShieldRegen = 5, Armor = 6, MaxSpeed = 0.05, Accel = 0.0016, Decel = 0.0012,
+                BoostSpeedMultiplier = 1.2, BoostDurationS = 30, TurnRateDegS = 4,
+                Crew = 12, Marines = 0,
+                DryMassTonnes = 3000, PropellantTonnes = 2500, ExhaustVelocityKmS = 3000,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.08, 0.2),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.07, 0.25, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.07, -0.3, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, -0.08, 0, -0.45),
+                    new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.47),
+                    new SubsystemDef(SubsystemKind.Engine, 0.08, 0, -0.45),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
+                },
+            } },
         };
 
         /// <summary>A copy to refit (U.SPC-T65): every figure the same, the hardpoint list its own array
