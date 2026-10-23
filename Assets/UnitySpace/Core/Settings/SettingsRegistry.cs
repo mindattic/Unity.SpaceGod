@@ -73,9 +73,21 @@ namespace Unity.SpaceGod.Core
             if (s != null) Load(setting, s);
         }
 
+        int discovered;
+
+        /// <summary>The setting declared under <paramref name="key"/>, or null. The first miss in the default registry runs
+        /// every marked class's declarations (<see cref="DiscoverLoadedDeclarations"/>), so a setting whose class nothing has
+        /// touched yet is still found, whatever order the lookups come in.</summary>
         public GameSetting Find(string key)
         {
-            lock (gate) return key != null && byKey.TryGetValue(key, out var s) ? s : null;
+            if (key == null) return null;
+            lock (gate) { if (byKey.TryGetValue(key, out var s)) return s; }
+            if (this == Default && System.Threading.Interlocked.Exchange(ref discovered, 1) == 0)
+            {
+                DiscoverLoadedDeclarations();
+                lock (gate) { if (byKey.TryGetValue(key, out var s)) return s; }
+            }
+            return null;
         }
 
         /// <summary>The groups that hold settings: those of <see cref="SettingGroups.Order"/> first, in that order, then the rest by name.</summary>
