@@ -112,7 +112,7 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 | Frigate, corvette, command cruiser, gate breaker | Not yet classes | U.SPC-T475 to U.SPC-T478 |
 | Lane interdictor, gate picket, lane tender and lane upkeep | Not yet classes (an interdiction pulse exists) | U.SPC-T479 to U.SPC-T481 |
 | Truss-and-pod freighters; ice hauler / ore tug | Not yet | U.SPC-T482, U.SPC-T483 |
-| Strike craft as hulls of their own; recon / EW fighter; boarding shuttle | Three fighter classes (interceptor, heavy fighter, bomber) | U.SPC-T484 to U.SPC-T486 |
+| Recon / EW fighter; boarding shuttle | Not yet classes (the interceptor, space superiority fighter and bomber are hulls of their own since U.SPC-T484) | U.SPC-T485, U.SPC-T486 |
 | Phaser arrays, plasma cannons | Not yet weapons | U.SPC-T488 |
 | Antimatter / photon torpedoes, flak, interceptor missiles | Not yet | U.SPC-T489 |
 | Dreadnought spinal mounts and rear-line doctrine | Not yet | U.SPC-T490 |

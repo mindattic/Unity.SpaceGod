@@ -27,7 +27,7 @@ namespace Unity.SpaceGod.Core
             Unit = unit;
         }
 
-        /// <summary>What it is: "fighter", "heavy fighter" or "bomber".</summary>
+        /// <summary>What it is: "interceptor", "fighter", "heavy fighter" or "bomber".</summary>
         public string Craft
         {
             get

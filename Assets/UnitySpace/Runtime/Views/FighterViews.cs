@@ -118,9 +118,11 @@ namespace Unity.SpaceGod.Views
         View Create(BattleUnit u)
         {
             var v = new View();
-            v.Hull = new GameObject(u.Fighter.Bomber ? "Bomber" : "Fighter");
+            // Drawn as its own hull class (U.SPC-T484): interceptor, fighter, bomber.
+            var cls = FighterCraft.Of(u.Fighter.Role).Class;
+            v.Hull = new GameObject(cls.ToString());
             v.Hull.transform.SetParent(root, false);
-            v.Hull.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetFighter(u.Faction, u.Fighter.Bomber);
+            v.Hull.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetFighter(u.Faction, cls);
             var mr = v.Hull.AddComponent<MeshRenderer>();
             mr.sharedMaterial = shipMaterial;
             mr.shadowCastingMode = ShadowCastingMode.Off;

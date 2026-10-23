@@ -74,13 +74,13 @@ namespace Unity.SpaceGod.Core.Tests
         // ------------------------------------------------------------ craft classes and their flight models
 
         [Test]
-        public void ACarrierLaunchesInterceptorsHeavyFightersAndBombersEachItsOwnClass()
+        public void ACarrierLaunchesInterceptorsFightersAndBombersEachItsOwnClass()
         {
             var (b, _, _) = Fight();
             var aloft = b.Units.Where(u => u.Kind == UnitKind.Fighter).ToList();
             Assert.That(aloft.Count, Is.EqualTo(18));
             Assert.That(aloft.Where(u => u.Fighter.Squadron == 0).All(u => u.Fighter.Role == FighterRole.Interceptor), Is.True);
-            Assert.That(aloft.Where(u => u.Fighter.Squadron == 1).All(u => u.Fighter.Role == FighterRole.HeavyFighter), Is.True);
+            Assert.That(aloft.Where(u => u.Fighter.Squadron == 1).All(u => u.Fighter.Role == FighterRole.SpaceSuperiority), Is.True);
             Assert.That(aloft.Where(u => u.Fighter.Squadron == 2).All(u => u.Fighter.Role == FighterRole.Bomber && u.Fighter.Bomber), Is.True);
             foreach (var u in aloft)
             {
@@ -91,14 +91,17 @@ namespace Unity.SpaceGod.Core.Tests
                 // A real hull: its main drive pushes it at its design acceleration.
                 Assert.That(HullDynamics.Of(craft.Spec).MainAccel, Is.EqualTo(craft.Spec.Accel).Within(1e-9));
             }
-            Assert.That(FighterCraft.Interceptor.Model, Is.InstanceOf<LightFighterFlightModel>(), "a light fighter flies Star Conflict style");
+            Assert.That(FighterCraft.Interceptor.Model, Is.InstanceOf<LightFighterFlightModel>(), "an interceptor flies Star Conflict style");
+            Assert.That(FighterCraft.Interceptor.Family, Is.EqualTo(FlightFamily.Interceptor));
+            Assert.That(FighterCraft.SpaceSuperiority.Family, Is.EqualTo(FlightFamily.LightFighter));
             Assert.That(FighterCraft.HeavyFighter.Family, Is.EqualTo(FlightFamily.HeavyFighter));
-            Assert.That(FighterCraft.Bomber.Family, Is.EqualTo(FlightFamily.HeavyFighter));
+            Assert.That(FighterCraft.Bomber.Family, Is.EqualTo(FlightFamily.Bomber));
+            Assert.That(FighterCraft.Bomber.Model, Is.InstanceOf<BomberFlightModel>());
             Assert.That(FighterCraft.HeavyFighter.Model, Is.SameAs(FlightModelRegistry.Default.ModelOf(FlightFamily.HeavyFighter)));
         }
 
         [Test]
-        public void AtTheStickAnInterceptorOutTurnsAHeavyFighterAndCarriesItsRollAndStrafe()
+        public void AtTheStickAnInterceptorOutTurnsAFighterAndCarriesItsRollAndStrafe()
         {
             double Turned(int squadron)
             {
@@ -112,8 +115,8 @@ namespace Unity.SpaceGod.Core.Tests
                 return AngleDeg(craft.Forward, start);
             }
             double light = Turned(0), heavy = Turned(1);
-            TestContext.Out.WriteLine($"half a second: interceptor {light:0.0} deg, heavy fighter {heavy:0.0} deg");
-            Assert.That(light, Is.GreaterThan(heavy + 5), "the light fighter turns the tighter");
+            TestContext.Out.WriteLine($"half a second: interceptor {light:0.0} deg, fighter {heavy:0.0} deg");
+            Assert.That(light, Is.GreaterThan(heavy + 5), "the interceptor turns the tighter");
 
             var (fb, _, _) = Fight();
             var fighter = LeadOf(fb, 0);
@@ -296,7 +299,7 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void AiHeavyFightersFireTheirMissilesAtEnemyFighters()
+        public void AiFightersFireTheirMissilesAtEnemyFighters()
         {
             var (b, _, _) = Fight(seed: 7, enemyCarrier: true);
             bool atFighter = false;
@@ -390,10 +393,12 @@ namespace Unity.SpaceGod.Core.Tests
         /// <summary>A lone bomber under a battleship's stern, shields down on its side, its lock on the reactor.</summary>
         static bool LoneBomberRun(double weakPointDamage)
         {
-            double saved = WeakPoints.Damage.Value;
+            double saved = WeakPoints.Damage.Value, bare = StrikeTorpedoes.BareHullDamage.Value;
             try
             {
                 WeakPoints.Damage.Set(weakPointDamage);
+                // The weak point alone (the bare-hull warhead, U.SPC-T484, is StrikeCraftTests').
+                StrikeTorpedoes.BareHullDamage.Set(1);
                 var (b, _, battleship) = Fight();
                 var bomber = LeadOf(b, 2);
                 Duel(b, bomber);
@@ -418,6 +423,7 @@ namespace Unity.SpaceGod.Core.Tests
             finally
             {
                 WeakPoints.Damage.Set(saved);
+                StrikeTorpedoes.BareHullDamage.Set(bare);
             }
         }
 

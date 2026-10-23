@@ -25,9 +25,11 @@ namespace Unity.SpaceGod.Core.Tests
             // the full World.BuildMilitary roster, not this standalone Core.Tests fixture) -- adding
             // either here would also perturb this fixture's own chaotic N-body simulation used by other
             // tests, the same way it does World.CreateDefault's (see AvoidanceTests). Ore tugs work the belt pipeline
-            // (BeltMining's hauls, U.SPC-T483), not the fleet's trade.
+            // (BeltMining's hauls, U.SPC-T483), not the fleet's trade. The interceptor and bomber (U.SPC-T484) are strike craft
+            // that fly from carriers' hangars as squadrons.
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
-                if (c != ShipClass.Breacher && c != ShipClass.Fighter && c != ShipClass.Explorer && c != ShipClass.Gunship && c != ShipClass.OreTug) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
+                if (c != ShipClass.Breacher && c != ShipClass.Fighter && c != ShipClass.Explorer && c != ShipClass.Gunship && c != ShipClass.OreTug
+                    && c != ShipClass.Interceptor && c != ShipClass.Bomber) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
             Assert.That(fleet.Ships.Count >= 40, Is.True);
             Assert.That((fleet.Ships).Any(s => !s.IsEscort && s.Phase == ShipPhase.Transit), Is.True);
             Assert.That((fleet.Ships).Any(s => !s.IsEscort && s.Phase == ShipPhase.Parked), Is.True);

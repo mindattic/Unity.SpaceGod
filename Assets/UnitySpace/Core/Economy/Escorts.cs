@@ -82,7 +82,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The hulls a wing is made of. A Breacher hired as the heavy fighter before the gunship took the slot
         /// (U.SPC-T467) still counts, so a saved game's wing is still tallied and paid off.</summary>
-        static bool IsFighter(ShipClass c) => c == ShipClass.Fighter || c == ShipClass.Courier || c == ShipClass.Gunship || c == ShipClass.Breacher;
+        static bool IsFighter(ShipClass c) => c == ShipClass.Fighter || c == ShipClass.Interceptor || c == ShipClass.Courier || c == ShipClass.Gunship || c == ShipClass.Breacher;
 
         public static double HireFee(ShipClass c) => c == ShipClass.Gunship ? HeavyHireFee : LightHireFee;
 

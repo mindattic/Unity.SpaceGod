@@ -673,6 +673,53 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
                 },
             } },
+            [ShipClass.Interceptor] = new[] { new CombatSpec
+            {
+                // The interceptor (U.SPC-T484): smaller, faster and quicker to turn than the Fighter, one pilot, light twin
+                // guns and a missile rack, and thin plating: it hunts craft and screens bombers, it does not trade blows.
+                DesignName = "Interceptor", LengthKm = 0.07,
+                MassKt = 2.5, MainThrustMN = 175, RetroThrustMN = 130, LateralThrustMN = 95, VerticalThrustMN = 95, PitchYawTorqueMNKm = 60, RollTorqueMNKm = 15,
+                Hull = 1100, Shield = 450, ShieldRegen = 10, Armor = 0, MaxSpeed = 0.36, Accel = 0.024, Decel = 0.026,
+                BoostSpeedMultiplier = 1.8, BoostDurationS = 12, TurnRateDegS = 32,
+                Crew = 1, Marines = 0,
+                DryMassTonnes = 35, PropellantTonnes = 25, ExhaustVelocityKmS = 3200,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Autocannon, -0.07, 0, 0.12, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0.07, 0, 0.12, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.03, 0),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.03, 0.08),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, 0.03, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.44),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
+                },
+            } },
+            [ShipClass.Bomber] = new[] { new CombatSpec
+            {
+                // The bomber (U.SPC-T484): slow, heavily plated and shielded, a pilot, a bombardier and a tail gunner, with
+                // a pair of torpedo tubes for capital ships (they hit hardest once a capital's shields are down, see
+                // StrikeTorpedoes), a defensive gun and point defence astern. It needs an escort.
+                DesignName = "Bomber", LengthKm = 0.14,
+                MassKt = 9, MainThrustMN = 300, RetroThrustMN = 225, LateralThrustMN = 110, VerticalThrustMN = 110, PitchYawTorqueMNKm = 380, RollTorqueMNKm = 95,
+                Hull = 3200, Shield = 1100, ShieldRegen = 14, Armor = 3, MaxSpeed = 0.26, Accel = 0.012, Decel = 0.013,
+                BoostSpeedMultiplier = 1.5, BoostDurationS = 12, TurnRateDegS = 18,
+                Crew = 3, Marines = 0,
+                DryMassTonnes = 160, PropellantTonnes = 70, ExhaustVelocityKmS = 3000,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.TorpedoTube, -0.08, -0.03, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.TorpedoTube, 0.08, -0.03, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.3, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0, 0.04, -0.3),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.04, 0.15),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, 0.05, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, -0.05, 0, -0.45),
+                    new SubsystemDef(SubsystemKind.Engine, 0.05, 0, -0.45),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
+                },
+            } },
         };
 
         /// <summary>A copy to refit (U.SPC-T65): every figure the same, the hardpoint list its own array

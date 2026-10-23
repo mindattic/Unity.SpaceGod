@@ -61,9 +61,13 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Breacher] = new PilotTuning(0.4, 110, 2.0, 22, 9, 2.2),
             // The heavy fighter (U.SPC-T467): a light fighter's pace less a little, stiffer in the turn, a longer boost.
             [ShipClass.Gunship] = new PilotTuning(0.4, 115, 2.0, 20, 9, 2.2),
-            // The dedicated dogfighter: trades a hair of the Courier's top speed for the tightest turn
-            // in the game -- built to out-turn everything else in a fight.
+            // The space superiority fighter, the dedicated dogfighter: trades a hair of the Courier's top
+            // speed for a turn only the interceptor beats.
             [ShipClass.Fighter] = new PilotTuning(0.42, 165, 2.3, 15, 9, 1.8),
+            // The interceptor (U.SPC-T484): the fastest strike craft and the tightest turn in the game, on a
+            // short boost -- it runs fighters down. The bomber: slow, steady, a short boost to get clear.
+            [ShipClass.Interceptor] = new PilotTuning(0.48, 180, 2.4, 12, 9, 1.6),
+            [ShipClass.Bomber] = new PilotTuning(0.3, 85, 1.6, 12, 8, 2.4),
             [ShipClass.Freighter] = new PilotTuning(0.18, 75, 1.6, 36, 8, 3.0),
             [ShipClass.Miner] = new PilotTuning(0.16, 70, 1.6, 38, 8, 3.0),
             // The deep-space explorer (U.SPC-T419): handier than a hauler, nothing like a fighter.
@@ -91,10 +95,12 @@ namespace Unity.SpaceGod.Core
             switch (c)
             {
                 case ShipClass.Fighter:
+                case ShipClass.Interceptor:
                 case ShipClass.Courier:
                     return PilotControl.FreeAim;
                 case ShipClass.Breacher:
                 case ShipClass.Gunship:
+                case ShipClass.Bomber:
                     return PilotControl.DirectNose;
                 case ShipClass.Freighter:
                 case ShipClass.Miner:

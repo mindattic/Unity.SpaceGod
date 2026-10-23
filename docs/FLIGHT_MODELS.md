@@ -14,7 +14,7 @@ This covers handling: how the stick, throttle and keys become motion. Weapons, l
 
 `Core/Combat/FlightModels.cs`:
 
-- **`FlightFamily`**: `LightFighter`, `HeavyFighter`, `Hauler`, `Capital`. A family describes a way of flying, not a particular hull.
+- **`FlightFamily`**: `LightFighter`, `HeavyFighter`, `Hauler`, `Capital`, and since U.SPC-T484 `Interceptor` and `Bomber`. A family describes a way of flying, not a particular hull.
 - **`IFlightModel`**: one `Step` that takes the same arguments `PilotFlight.Step` always took (state, combat, hull dynamics, class tuning, input, gravity, dt). A model is stateless: anything that carries over between frames lives on `PilotState` or `ShipCombat`, so a single instance flies every hull in its family, and saves need no changes.
 - **`FlightModelRegistry`**: two data tables, class to family and family to model. `FlightModelRegistry.Default` is the game's own. A family with no model registered flies `Fallback`, which is `NewtonianFlightModel`: the pre-T17 behaviour, unchanged.
 - **`PilotFlight`'s stages** (`Rotate`, `DriveMultiplier`, `AssistThrust`, `RawThrust`, `Integrate`) are public. A new model is assembled from these stages plus rules of its own, so it never needs a branch inside `PilotFlight`.
@@ -28,7 +28,9 @@ To add a way of flying: write an `IFlightModel` and its handling struct, then ca
 
 | Class | Family | Model today |
 | --- | --- | --- |
-| Fighter | Light fighter | `LightFighterFlightModel` (new) |
+| Interceptor | Interceptor | `LightFighterFlightModel` on `LightFighterHandling.Interceptor` (see [Strike craft](#strike-craft-interceptors-fighters-and-bombers)) |
+| Fighter (space superiority) | Light fighter | `LightFighterFlightModel` |
+| Bomber | Bomber | `BomberFlightModel` (see [Strike craft](#strike-craft-interceptors-fighters-and-bombers)) |
 | Courier | Light fighter | `LightFighterFlightModel` (new; see [Couriers](#couriers)) |
 | Gunship | Heavy fighter | Newtonian, until its own model lands |
 | Breacher | Heavy fighter (until U.SPC-T466) | Newtonian |
@@ -51,6 +53,27 @@ The reference is Star Conflict's interceptors and fighters: fast, twitchy, arcad
 First-pass numbers (`LightFighterHandling.Default`): grip 1.0, strafe 0.5, corner 0.6, overspeed turn 0.6. They are tuned for feel, and the review ticket is where they get tuned.
 
 Open for the review: whether the boost's turn penalty should apply only while boost is held (as a Star Conflict afterburner) instead of being based on speed alone, and whether AI dogfighters (`Battle`'s dogfight, U.SPC-T274) should fly through the same model so their behaviour matches what the player flies.
+
+## Strike craft: interceptors, fighters and bombers
+
+**Implemented** (U.SPC-T484, `ShipClass.Interceptor`, `ShipClass.Bomber`, tests in `Tests/Core.Tests/StrikeCraftTests.cs`).
+
+The owner's roster ([docs/SHIP_ROSTER.md](SHIP_ROSTER.md)) has three strike craft, and each is now a `ShipClass` of its own with its own frame, mesh, crew, cost, carrier berth and flight model. Before this, a carrier's interceptors, heavy fighters and bombers were squadron roles (`FighterRole`) launched on a shared Courier hull, and the bomber flew the heavy fighter family.
+
+- **Today's `Fighter` is the space superiority fighter.** It was already the dedicated dogfighter on the light fighter model, so it keeps its class, its design, its family and its numbers, and saves and tests stay as they were. Carriers launch it as their `FighterRole.SpaceSuperiority` squadrons.
+- **The interceptor** (`FlightFamily.Interceptor`) flies the light fighter's rules pushed further, on `LightFighterHandling.Interceptor`: grip 1.25 (against 1.0), strafe 0.6 (against 0.5), corner speed 0.75 of top speed (against 0.6), and 0.75 of the turn left at full boost (against 0.6). It holds a tight turn to a higher speed, so it can run a fighter down and still turn with it. Its helm tuning is the fastest and the most agile of any strike craft (top speed 0.48 km/s, 180°/s), and its hull the lightest.
+- **The bomber** (`FlightFamily.Bomber`, `BomberFlightModel` on `BomberHandling`) is a steady torpedo platform with its own rules when flight assist is on:
+  1. **One turn rate at any speed.** It has no corner speed, so a run in is flown at one steady rate.
+  2. **A wide carve.** Assist pushes across the nose only up to `Grip` (0.6) of the push that would hold the track to the nose through its tightest turn at top speed, so a hard turn swings wide.
+  3. **A weak strafe.** The strafe set point is 0.25 of the forward one.
+  4. **A throttle with heft.** Assist uses only `ThrottleAuthority` (0.6) of the drive and retros to change speed along the nose, so a bomber is slow to gather way and slow to shed it.
+  5. **Assist off is Newtonian**, as for every family.
+
+  It is steered nose-on with the mouse (`PilotControl.DirectNose`).
+
+Carriers launch and recover them as squadrons (`FighterCraft.SquadronMix`): interceptors, space superiority fighters and bombers, then heavy fighters on a carrier with a fourth squadron. Each launched craft is a hull of its own class (`FighterCraft.Class`), drawn as that class and flown in a player's hands by that class's model (`FlightModelRegistry.For`). The heavy fighter flies on the gunship's hull (U.SPC-T467). The launched craft keep their own small dogfight specs (`FighterCraft.Spec`), while the class's `CombatSpec` is the hull a yard builds and a pilot flies at the helm.
+
+Their pilots also pick their fights by class. An interceptor goes for enemy craft before hulls (`HuntsFightersKm`), and first for one closing on its own side's bombers (`ScreensBombers`). A bomber never picks a fighter, and goes first for a capital whose shield toward it is already down. A shield soaks a torpedo like any other hit, but a bomber's torpedo (`StrikeTorpedoes`) that arrives where the capital's shield is already down does `dogfight.torpedoBareHull` times its damage (3 by default, in Settings > Dogfighting). That is the roster's rule that bombers knock the shields down first and then torpedo.
 
 ## Heavy fighters: Everspace 2
 

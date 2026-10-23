@@ -107,7 +107,7 @@ namespace Unity.SpaceGod.Core
                     // Out of the bow and side bays, fanning ahead of the carrier.
                     var pos = carrier.PointOf(carrier.Combat.Subsystems.Find(s => s.Kind == SubsystemKind.Hangar && !s.Destroyed).Def)
                               + carrier.Forward * (0.3 + 0.15 * k) + right * ((q - 1) * 0.6 + (k % 2 == 0 ? 0.1 : -0.1) * k) + up * (0.05 * k);
-                    var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(craft.Spec, ShipClass.Courier), craft.LengthKm, pos, carrier.Forward);
+                    var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(craft.Spec, craft.Class), craft.LengthKm, pos, carrier.Forward);
                     u.Vel = carrier.Vel + carrier.Forward * 0.25;
                     u.Power = new PowerDistribution();
                     u.Fighter = new FighterState
@@ -287,9 +287,17 @@ namespace Unity.SpaceGod.Core
             Torpedo(b, u);
         }
 
-        static BattleUnit ChooseTarget(Battle b, BattleUnit u)
+        /// <summary>
+        /// What a pilot goes after (U.SPC-T484): the nearest worthwhile hostile, weighed by its craft's class. Fighters are
+        /// preferred by <see cref="FighterCraft.HuntsFightersKm"/> (an interceptor's hunt), and more so when one is closing
+        /// on a bomber of its own side (<see cref="FighterCraft.ScreensBombers"/>); a bomber never picks a fighter, and goes
+        /// first for a capital whose shields facing it are already down, where its torpedoes do their work
+        /// (<see cref="StrikeTorpedoes"/>).
+        /// </summary>
+        public static BattleUnit ChooseTarget(Battle b, BattleUnit u)
         {
             bool bomber = u.Fighter.Bomber;
+            var craft = FighterCraft.Of(u.Fighter.Role);
             BattleUnit best = null;
             double bestScore = double.MaxValue;
             foreach (var o in b.Units)
@@ -298,9 +306,18 @@ namespace Unity.SpaceGod.Core
                 if (o.Kind == UnitKind.Fighter && bomber) continue;
                 double d = (o.Pos - u.Pos).Length;
                 double score = d;
-                if (o.Kind == UnitKind.Fighter) score = d < 15 ? d - 6 : d + 10;
+                if (o.Kind == UnitKind.Fighter)
+                {
+                    double hunt = craft.HuntsFightersKm;
+                    score = d < 9 + hunt ? d - hunt : d + 10;
+                    if (craft.ScreensBombers && OnABomber(b, u, o)) score -= ScreenBonusKm;
+                }
                 else if (o.Ship != null && !o.Ship.Spec.IsMilitary) score += 8;
-                else score -= o.Combat.Spec.Hull / 3000.0;
+                else
+                {
+                    score -= o.Combat.Spec.Hull / 3000.0;
+                    if (bomber && WeakPoints.IsCapital(o) && StrikeTorpedoes.ShieldDownToward(o, u.Pos)) score -= BareHullBonusKm;
+                }
                 score *= 0.8 + b.Rng.NextDouble() * 0.4;
                 if (score < bestScore)
                 {
@@ -309,6 +326,21 @@ namespace Unity.SpaceGod.Core
                 }
             }
             return best;
+        }
+
+        /// <summary>How much nearer than it is an enemy fighter on one of its own bombers counts for an interceptor, and a
+        /// capital with its shields down toward it for a bomber, km.</summary>
+        public const double ScreenBonusKm = 8, BareHullBonusKm = 8;
+
+        /// <summary>How near one of <paramref name="u"/>'s side's bombers an enemy fighter must be to count as on it, km.</summary>
+        public const double ScreenKm = 4;
+
+        /// <summary>Whether hostile craft <paramref name="o"/> is within <see cref="ScreenKm"/> of a bomber on <paramref name="u"/>'s side.</summary>
+        static bool OnABomber(Battle b, BattleUnit u, BattleUnit o)
+        {
+            foreach (var f in b.Units)
+                if (f.Present && f.Kind == UnitKind.Fighter && f.Side == u.Side && f.Fighter.Bomber && (f.Pos - o.Pos).Length < ScreenKm) return true;
+            return false;
         }
 
         /// <summary>A run starts 5-7 km off the target, from a side the squadron picks for itself.</summary>

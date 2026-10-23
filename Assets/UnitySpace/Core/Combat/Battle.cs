@@ -964,10 +964,12 @@ namespace Unity.SpaceGod.Core
         /// <summary>How far off a dogfighter goes for the player in preference to whatever else it was after, km.</summary>
         public const double HuntPlayerKm = 8;
 
-        /// <summary>The small craft that dogfight: the light fighters. A heavy fighter (the gunship) brawls on the ordinary
-        /// circling approach, its crewed turrets firing all round; a Breacher closes to board.</summary>
+        /// <summary>The small craft that dogfight: the light fighters and interceptors. A heavy fighter (the gunship) brawls
+        /// on the ordinary circling approach, its crewed turrets firing all round; a Breacher closes to board, and a bomber
+        /// flies at the hulls.</summary>
         static bool Dogfights(BattleUnit u) =>
-            u.Kind == UnitKind.Ship && u.Ship != null && (u.Ship.Spec.Class == ShipClass.Fighter || u.Ship.Spec.Class == ShipClass.Courier);
+            u.Kind == UnitKind.Ship && u.Ship != null
+            && (u.Ship.Spec.Class == ShipClass.Fighter || u.Ship.Spec.Class == ShipClass.Interceptor || u.Ship.Spec.Class == ShipClass.Courier);
 
         /// <summary>
         /// A light fighter flown by its crew in a dogfight: on the same airframe the player flies (its helm turn rate,
@@ -2000,15 +2002,18 @@ namespace Unity.SpaceGod.Core
         /// Shields soak damage first; armour blunts each hit (small guns most); what gets through is
         /// split between the struck hardpoint and the hull. A lost reactor takes the ship with it. What gets through the
         /// shields is multiplied by <paramref name="exposed"/>: a small craft's hit on an open weak point (U.SPC-T424, see
-        /// <see cref="WeakPoints.Factor"/>).
+        /// <see cref="WeakPoints.Factor"/>). A <paramref name="strikeTorpedo"/> (a bomber's) that arrives where the shield
+        /// is already down hits a capital's bare hull harder (U.SPC-T484, see <see cref="StrikeTorpedoes"/>).
         /// </summary>
-        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at, DVec3? shieldAt = null, double exposed = 1, DVec3? incoming = null)
+        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at, DVec3? shieldAt = null, double exposed = 1, DVec3? incoming = null,
+            bool strikeTorpedo = false)
         {
             if (!target.Present) return;
             var c = target.Combat;
             // Guided munitions are judged against the arc on the side they came in from, not the hardpoint's (U.SPC-T380).
             var shieldPoint = shieldAt ?? at;
             var generator = c.GeneratorFor(target.YawDegOf(shieldPoint));
+            if (strikeTorpedo) damage *= StrikeTorpedoes.Factor(target, generator == null || generator.Shield <= 0);
             if (generator != null)
             {
                 generator.LastHitSeconds = Seconds;
@@ -2144,7 +2149,8 @@ namespace Unity.SpaceGod.Core
                     else
                     {
                         var sub = m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t);
-                        ApplyDamage(t, sub, m.Damage, aim, entry, m.SmallCraft ? WeakPoints.Factor(t, sub, m.Vel - t.Vel) : 1, m.Vel - t.Vel);
+                        ApplyDamage(t, sub, m.Damage, aim, entry, m.SmallCraft ? WeakPoints.Factor(t, sub, m.Vel - t.Vel) : 1, m.Vel - t.Vel,
+                            StrikeTorpedoes.IsStrike(m));
                     }
                 }
             }

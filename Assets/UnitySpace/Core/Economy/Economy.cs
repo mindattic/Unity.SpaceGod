@@ -373,6 +373,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Courier: return 1500;
                 case ShipClass.Explorer: return 5000;
                 case ShipClass.OreTug: return 6000;
+                case ShipClass.Interceptor: return 2200;
+                case ShipClass.Bomber: return 4500;
                 default: return 3000;
             }
         }

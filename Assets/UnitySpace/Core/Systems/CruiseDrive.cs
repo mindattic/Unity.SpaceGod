@@ -208,6 +208,8 @@ namespace Unity.SpaceGod.Core
         static readonly Dictionary<ShipClass, int> sizes = new Dictionary<ShipClass, int>
         {
             [ShipClass.Fighter] = 1,
+            [ShipClass.Interceptor] = 1,
+            [ShipClass.Bomber] = 2,
             [ShipClass.Courier] = 2,
             [ShipClass.Breacher] = 2,
             [ShipClass.Gunship] = 2,

@@ -9,58 +9,82 @@ namespace Unity.SpaceGod.Core
     // engines, wingmen who take orders, and capital-ship weak points a lone small craft can bring a battle down on.
     // Every part is data a new craft, weak point or order joins by a table entry, not by an edit to the battle loop.
 
-    /// <summary>What a launched small craft is for (U.SPC-T424): each is its own class with its own handling.</summary>
+    /// <summary>What a launched small craft is for (U.SPC-T424): each is a <see cref="ShipClass"/> of its own (U.SPC-T484)
+    /// with its own handling.</summary>
     public enum FighterRole
     {
-        /// <summary>A light fighter: fast, the tightest turn, guns and a pair of missiles, for killing other craft.</summary>
+        /// <summary>An interceptor (<see cref="ShipClass.Interceptor"/>): the fastest, the tightest turn, light guns and a
+        /// missile, for hunting other craft and screening its own bombers.</summary>
         Interceptor,
 
-        /// <summary>A heavy fighter: tougher and slower to turn, guns and a full missile load, for fighting anything.</summary>
+        /// <summary>A heavy fighter: tougher and slower to turn, guns and a full missile load, for fighting anything. Flown on
+        /// the gunship's hull (U.SPC-T467).</summary>
         HeavyFighter,
 
-        /// <summary>A bomber: slow and armoured, slung torpedoes for capital ships.</summary>
+        /// <summary>A bomber (<see cref="ShipClass.Bomber"/>): slow and armoured, slung torpedoes for capital ships.</summary>
         Bomber,
+
+        /// <summary>A space superiority fighter (<see cref="ShipClass.Fighter"/>, U.SPC-T484): the balanced workhorse, guns
+        /// and a pair of missile racks, as ready to fight craft as to strafe a hull.</summary>
+        SpaceSuperiority,
     }
 
     /// <summary>
-    /// One class of launched small craft (U.SPC-T424): its fighting qualities and hull (<see cref="Spec"/>, with a real
-    /// mass, thrust and torque so it flies through <see cref="HullDynamics"/>), the <see cref="FlightFamily"/> whose
-    /// <see cref="IFlightModel"/> flies it in a player's hands (U.SPC-T17), and the handling numbers flight assist works
-    /// to. A new class is a new entry here (<see cref="Register"/>) and a place in <see cref="SquadronMix"/>.
+    /// One class of launched small craft (U.SPC-T424): the <see cref="ShipClass"/> it is a hull of (U.SPC-T484), its
+    /// fighting qualities and hull (<see cref="Spec"/>, with a real mass, thrust and torque so it flies through
+    /// <see cref="HullDynamics"/>), the <see cref="IFlightModel"/> its class flies on in a player's hands (U.SPC-T17), the
+    /// handling numbers flight assist works to, and how its pilots pick their fights. A new class is a new entry here
+    /// (<see cref="Register"/>) and a place in <see cref="SquadronMix"/>.
     /// </summary>
     public sealed class FighterCraft
     {
         public readonly FighterRole Role;
         public readonly string Name;
+
+        /// <summary>The hull class it is (U.SPC-T484): what the carrier launches, what it is drawn as, and whose flight
+        /// model flies it (<see cref="FlightModelRegistry.For"/>).</summary>
+        public readonly ShipClass Class;
+
         public readonly CombatSpec Spec;
         public readonly double LengthKm;
-        public readonly FlightFamily Family;
 
         /// <summary>The afterburner: top speed times this while the charge lasts, over this many seconds.</summary>
         public readonly double BoostMultiplier, BoostSeconds;
 
-        public FighterCraft(FighterRole role, string name, CombatSpec spec, double lengthKm, FlightFamily family, double boostMultiplier, double boostSeconds)
+        /// <summary>How much further its pilots go after an enemy fighter than after a hull, km (an interceptor hunts craft;
+        /// a bomber never picks a fighter at all, see <see cref="FighterState.Bomber"/>).</summary>
+        public double HuntsFightersKm = 6;
+
+        /// <summary>Whether its pilots go first for an enemy fighter closing on one of their own side's bombers (U.SPC-T484):
+        /// the interceptor's screen.</summary>
+        public bool ScreensBombers;
+
+        public FighterCraft(FighterRole role, string name, ShipClass cls, CombatSpec spec, double lengthKm, double boostMultiplier, double boostSeconds)
         {
             Role = role;
             Name = name;
+            Class = cls;
             Spec = spec;
             LengthKm = lengthKm;
-            Family = family;
             BoostMultiplier = boostMultiplier;
             BoostSeconds = boostSeconds;
         }
+
+        /// <summary>The flight family its class flies in.</summary>
+        public FlightFamily Family => FlightModelRegistry.Default.FamilyOf(Class);
 
         /// <summary>How flight assist flies it at <paramref name="engines"/> times its own power (see <see cref="PowerDistribution"/>).</summary>
         public PilotTuning Tuning(double engines = 1) =>
             new PilotTuning(Spec.MaxSpeed * engines, Spec.TurnRateDegS, BoostMultiplier, BoostSeconds, 1, 0);
 
-        /// <summary>The flight model a player flies it on.</summary>
-        public IFlightModel Model => FlightModelRegistry.Default.ModelOf(Family);
+        /// <summary>The flight model a player flies it on: its class's.</summary>
+        public IFlightModel Model => FlightModelRegistry.Default.For(Class);
 
         static readonly Dictionary<FighterRole, FighterCraft> Crafts = new Dictionary<FighterRole, FighterCraft>();
 
-        /// <summary>A carrier's squadrons in launch order, one role each, repeating: interceptors, heavy fighters, bombers.</summary>
-        public static FighterRole[] SquadronMix = { FighterRole.Interceptor, FighterRole.HeavyFighter, FighterRole.Bomber };
+        /// <summary>A carrier's squadrons in launch order, one role each, repeating: interceptors, space superiority fighters,
+        /// bombers, then (on a carrier with a fourth squadron) heavy fighters.</summary>
+        public static FighterRole[] SquadronMix = { FighterRole.Interceptor, FighterRole.SpaceSuperiority, FighterRole.Bomber, FighterRole.HeavyFighter };
 
         public static FighterRole RoleOfSquadron(int squadron) => SquadronMix[((squadron % SquadronMix.Length) + SquadronMix.Length) % SquadronMix.Length];
 
@@ -68,7 +92,7 @@ namespace Unity.SpaceGod.Core
 
         public static FighterCraft Of(FighterRole role) => Crafts[role];
 
-        public static readonly FighterCraft Interceptor = Add(FighterRole.Interceptor, "fighter", 0.016, 0.012, 400, FlightFamily.LightFighter, 1.6, 6, new CombatSpec
+        public static readonly FighterCraft Interceptor = Add(FighterRole.Interceptor, "interceptor", ShipClass.Interceptor, 0.016, 0.012, 400, 1.6, 6, new CombatSpec
         {
             Hull = 70, Shield = 30, ShieldRegen = 2, Armor = 0, MaxSpeed = 0.35, Accel = 0.25, TurnRateDegS = 120,
             Layout = new[]
@@ -79,9 +103,25 @@ namespace Unity.SpaceGod.Core
                 new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },
+        }, huntsFightersKm: 14, screensBombers: true);
+
+        /// <summary>The balanced workhorse (U.SPC-T484): a little slower and wider in the turn than the interceptor, tougher,
+        /// and with twice its missiles, as ready to strafe a hull as to fight a craft.</summary>
+        public static readonly FighterCraft SpaceSuperiority = Add(FighterRole.SpaceSuperiority, "fighter", ShipClass.Fighter, 0.018, 0.018, 260, 1.55, 5.5, new CombatSpec
+        {
+            Hull = 100, Shield = 45, ShieldRegen = 2.5, Armor = 0.5, MaxSpeed = 0.32, Accel = 0.22, TurnRateDegS = 100,
+            Layout = new[]
+            {
+                new SubsystemDef(SubsystemKind.FighterGuns, 0.22, 0, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.FighterGuns, -0.22, 0, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.MissileLauncher, 0.12, -0.1, 0.1, arcWidthDeg: 40) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
+                new SubsystemDef(SubsystemKind.MissileLauncher, -0.12, -0.1, 0.1, arcWidthDeg: 40) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
+                new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
+            },
         });
 
-        public static readonly FighterCraft HeavyFighter = Add(FighterRole.HeavyFighter, "heavy fighter", 0.02, 0.025, 160, FlightFamily.HeavyFighter, 1.5, 5, new CombatSpec
+        public static readonly FighterCraft HeavyFighter = Add(FighterRole.HeavyFighter, "heavy fighter", ShipClass.Gunship, 0.02, 0.025, 160, 1.5, 5, new CombatSpec
         {
             Hull = 140, Shield = 60, ShieldRegen = 3, Armor = 1, MaxSpeed = 0.3, Accel = 0.2, TurnRateDegS = 90,
             Layout = new[]
@@ -95,7 +135,7 @@ namespace Unity.SpaceGod.Core
             },
         });
 
-        public static readonly FighterCraft Bomber = Add(FighterRole.Bomber, "bomber", 0.024, 0.03, 120, FlightFamily.HeavyFighter, 1.4, 5, new CombatSpec
+        public static readonly FighterCraft Bomber = Add(FighterRole.Bomber, "bomber", ShipClass.Bomber, 0.024, 0.03, 120, 1.4, 5, new CombatSpec
         {
             Hull = 130, Shield = 50, ShieldRegen = 2, Armor = 1, MaxSpeed = 0.26, Accel = 0.15, TurnRateDegS = 80,
             Layout = new[]
@@ -113,7 +153,8 @@ namespace Unity.SpaceGod.Core
         /// thrusters half, and attitude torque that spins it up at <paramref name="angularAccel"/> rad/s² (rolling twice as
         /// readily), and registers it.
         /// </summary>
-        static FighterCraft Add(FighterRole role, string name, double lengthKm, double massKt, double angularAccel, FlightFamily family, double boost, double boostSeconds, CombatSpec spec)
+        static FighterCraft Add(FighterRole role, string name, ShipClass cls, double lengthKm, double massKt, double angularAccel, double boost, double boostSeconds, CombatSpec spec,
+            double huntsFightersKm = 6, bool screensBombers = false)
         {
             spec.DesignName = name;
             spec.LengthKm = lengthKm;
@@ -125,9 +166,17 @@ namespace Unity.SpaceGod.Core
             spec.BoostDurationS = boostSeconds;
             spec.PitchYawTorqueMNKm = angularAccel * spec.PitchYawInertia * 1000;
             spec.RollTorqueMNKm = angularAccel * 2 * spec.RollInertia * 1000;
-            var craft = new FighterCraft(role, name, spec, lengthKm, family, boost, boostSeconds);
+            var craft = new FighterCraft(role, name, cls, spec, lengthKm, boost, boostSeconds) { HuntsFightersKm = huntsFightersKm, ScreensBombers = screensBombers };
             Register(craft);
             return craft;
+        }
+
+        /// <summary>The craft a carrier launches as hulls of <paramref name="cls"/>, or null if none is.</summary>
+        public static FighterCraft OfClass(ShipClass cls)
+        {
+            foreach (var c in Crafts.Values)
+                if (c.Class == cls) return c;
+            return null;
         }
     }
 
@@ -439,6 +488,39 @@ namespace Unity.SpaceGod.Core
         }
 
         public static string Label(Subsystem s) => s == null ? null : SpecOf(s.Kind)?.Label ?? SubsystemDef.Name(s.Kind).ToLowerInvariant();
+    }
+
+    // ---------------------------------------------------------------- strike torpedoes
+
+    /// <summary>
+    /// A bomber's torpedoes against a capital ship (U.SPC-T484, docs/SHIP_ROSTER.md: "bombers knock the shields down first
+    /// and then torpedo"). A shield soaks a torpedo like any other hit, but one that arrives where the capital's shield
+    /// on that side is already down meets bare hull with a shaped warhead and does <see cref="BareHullDamage"/> times its
+    /// damage. Small craft only (a capital's own torpedo tubes are not strike torpedoes), and only on a capital.
+    /// </summary>
+    [SettingsSource]
+    public static class StrikeTorpedoes
+    {
+        public static readonly RangeSetting BareHullDamage = new RangeSetting("dogfight.torpedoBareHull", SettingGroups.Dogfighting,
+            "Torpedoes on a bare hull", 3, 1, 6, 0.25,
+            "How much harder a bomber's torpedo hits a capital ship whose shield on that side is already down: bombers knock the shields down, then torpedo. 1 takes the bonus away.",
+            v => v.ToString("0.##", CultureInfo.InvariantCulture) + "x", "bomber torpedo shields capital dogfight");
+
+        /// <summary>Whether <paramref name="m"/> is a strike craft's torpedo.</summary>
+        public static bool IsStrike(Missile m) => m != null && m.Kind == MissileKind.Torpedo && m.SmallCraft;
+
+        /// <summary>The warhead's factor on <paramref name="target"/> when the shield it came in through is
+        /// <paramref name="shieldDown"/>: <see cref="BareHullDamage"/> on a capital's bare hull, else 1.</summary>
+        public static double Factor(BattleUnit target, bool shieldDown) =>
+            shieldDown && WeakPoints.IsCapital(target) ? Math.Max(1, BareHullDamage.Value) : 1;
+
+        /// <summary>Whether <paramref name="target"/>'s shield facing a craft at <paramref name="from"/> is down (or it has none
+        /// on that side): where a bomber's torpedo does its work.</summary>
+        public static bool ShieldDownToward(BattleUnit target, DVec3 from)
+        {
+            var g = target.Combat.GeneratorFor(target.YawDegOf(from));
+            return g == null || g.Shield <= 0;
+        }
     }
 
     // ---------------------------------------------------------------- wingmen

@@ -11,8 +11,8 @@ namespace Unity.SpaceGod.Core
     /// </summary>
     public enum FlightFamily
     {
-        /// <summary>Star Conflict-style dogfighters (the Fighter, and for now the Courier): the track
-        /// carves after the nose, strafing is strong, and a turn is tightest at the corner speed.</summary>
+        /// <summary>Star Conflict-style dogfighters (the Fighter, the space superiority workhorse, and for now the
+        /// Courier): the track carves after the nose, strafing is strong, and a turn is tightest at the corner speed.</summary>
         LightFighter,
 
         /// <summary>Everspace 2-style heavy fighters: the Gunship (U.SPC-T467), and for now the Breacher, an assault
@@ -24,6 +24,14 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Capital ships (Carrier, Battleship, Cruiser, Destroyer): naval broadside handling.</summary>
         Capital,
+
+        /// <summary>Interceptors (U.SPC-T484): the light fighter's rules pushed further, with more grip, harder strafing
+        /// and a turn that holds up at higher speed, so it can run a fighter down and still turn with it.</summary>
+        Interceptor,
+
+        /// <summary>Bombers (U.SPC-T484): a steady, heavy torpedo platform, with a wide carve, a weak strafe and a
+        /// throttle with heft.</summary>
+        Bomber,
     }
 
     /// <summary>
@@ -97,6 +105,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>The first-pass numbers, for the owner's review (docs/FLIGHT_MODELS.md).</summary>
         public static readonly LightFighterHandling Default = new LightFighterHandling(
             grip: 1.0, strafeSpeedFraction: 0.5, cornerSpeedFraction: 0.6, overspeedTurnFactor: 0.6);
+
+        /// <summary>The interceptor's numbers (U.SPC-T484, docs/FLIGHT_MODELS.md): more grip, the hardest strafe in the
+        /// game, a higher corner speed and less of the turn lost past it, so it turns with what it runs down.</summary>
+        public static readonly LightFighterHandling Interceptor = new LightFighterHandling(
+            grip: 1.25, strafeSpeedFraction: 0.6, cornerSpeedFraction: 0.75, overspeedTurnFactor: 0.75);
     }
 
     /// <summary>
@@ -115,9 +128,13 @@ namespace Unity.SpaceGod.Core
 
         public LightFighterFlightModel() : this(LightFighterHandling.Default) { }
 
-        public LightFighterFlightModel(LightFighterHandling handling) => Handling = handling;
+        public LightFighterFlightModel(LightFighterHandling handling, string name = "Light fighter")
+        {
+            Handling = handling;
+            Name = name;
+        }
 
-        public string Name => "Light fighter";
+        public string Name { get; }
 
         /// <summary>The fastest the nose may swing at <paramref name="speedKmS"/>, deg/s (see the class remarks).</summary>
         public double TurnRateAt(double speedKmS, in PilotTuning tuning)
@@ -157,6 +174,78 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
+    /// The bomber's handling numbers (U.SPC-T484): data, not code, like <see cref="LightFighterHandling"/>.
+    /// </summary>
+    public readonly struct BomberHandling
+    {
+        /// <summary>With flight assist on, how hard the flight computer may push across the nose, as a fraction of the
+        /// push that holds the track to the nose through its tightest turn at top speed (top speed times turn rate):
+        /// below 1 the track swings wide of the nose in a hard turn, a carve with a slide in it.</summary>
+        public readonly double Grip;
+
+        /// <summary>Flight assist's strafe set point as a fraction of the forward one: a bomber barely sidesteps.</summary>
+        public readonly double StrafeSpeedFraction;
+
+        /// <summary>The share of its drive (and retros) flight assist may use to change speed along the nose: the heft
+        /// on the throttle, so a bomber gathers and sheds way slowly.</summary>
+        public readonly double ThrottleAuthority;
+
+        public BomberHandling(double grip, double strafeSpeedFraction, double throttleAuthority)
+        {
+            Grip = grip;
+            StrafeSpeedFraction = strafeSpeedFraction;
+            ThrottleAuthority = throttleAuthority;
+        }
+
+        /// <summary>The first-pass numbers, for the owner's review (docs/FLIGHT_MODELS.md).</summary>
+        public static readonly BomberHandling Default = new BomberHandling(grip: 0.6, strafeSpeedFraction: 0.25, throttleAuthority: 0.6);
+    }
+
+    /// <summary>
+    /// Bombers (U.SPC-T484): a steady torpedo platform, not a dogfighter. With flight assist on, (1) the nose turns at
+    /// the class's own rate at any speed (no corner speed, so a run in is flown at one steady rate), (2) the track
+    /// carves after it only as hard as <see cref="BomberHandling.Grip"/> allows, so a hard turn swings wide, (3) the
+    /// strafe is weak (<see cref="BomberHandling.StrafeSpeedFraction"/>) and (4) assist changes speed with only
+    /// <see cref="BomberHandling.ThrottleAuthority"/> of the drive, so a bomber is slow to gather way and slow to shed
+    /// it. With flight assist off the hull is the Newtonian one, unchanged.
+    /// </summary>
+    public sealed class BomberFlightModel : IFlightModel
+    {
+        public BomberHandling Handling { get; }
+
+        public BomberFlightModel() : this(BomberHandling.Default) { }
+
+        public BomberFlightModel(BomberHandling handling) => Handling = handling;
+
+        public string Name => "Bomber";
+
+        /// <summary>The most the flight computer pushes across the nose with assist on, km/s² (see <see cref="BomberHandling.Grip"/>).</summary>
+        public double GripAccel(in PilotTuning tuning) => Handling.Grip * tuning.MaxSpeed * tuning.TurnRateDegS * Astro.Deg2Rad;
+
+        public void Step(ref PilotState s, ShipCombat combat, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, DVec3 gravityKmS2, double dt)
+        {
+            if (input.FlightAssistOff)
+            {
+                PilotFlight.Step(ref s, combat, hull, tuning, input, gravityKmS2, dt);
+                return;
+            }
+            if (dt <= 0) return;
+
+            var forwardBeforeTurn = s.Forward;
+            PilotFlight.Rotate(ref s, hull, tuning, input, dt);
+            double driveMult = PilotFlight.DriveMultiplier(ref s, combat, tuning, input, forwardBeforeTurn, dt);
+
+            double grip = GripAccel(tuning);
+            double authority = Math.Max(0, Math.Min(1, Handling.ThrottleAuthority));
+            var heavy = new HullDynamics(hull.MassKt, hull.MainAccel * authority, hull.RetroAccel * authority, hull.LateralAccel, hull.VerticalAccel,
+                hull.PitchYawAngularAccel, hull.RollAngularAccel);
+            var thrust = PilotFlight.AssistThrust(s, heavy, tuning, input, gravityKmS2, driveMult, dt, Handling.StrafeSpeedFraction,
+                Math.Max(hull.LateralAccel, grip), Math.Max(hull.VerticalAccel, grip));
+            PilotFlight.Integrate(ref s, thrust, gravityKmS2, dt);
+        }
+    }
+
+    /// <summary>
     /// Which family each <see cref="ShipClass"/> flies as, and which model flies each family (U.SPC-T17):
     /// the one extension point for per-class handling. Both tables are data: a new class is assigned a
     /// family, and a new way of flying is a model registered for its family, without touching the code
@@ -170,14 +259,16 @@ namespace Unity.SpaceGod.Core
         /// <summary>The model a family with none registered flies: the shared Newtonian one.</summary>
         public IFlightModel Fallback { get; set; } = NewtonianFlightModel.Instance;
 
-        /// <summary>The game's registry: every class in its family, and the light fighters on their own
-        /// model; the other families fly the Newtonian model until theirs land (docs/FLIGHT_MODELS.md).</summary>
+        /// <summary>The game's registry: every class in its family, and the light fighters, interceptors and
+        /// bombers on models of their own; the other families fly the Newtonian model until theirs land (docs/FLIGHT_MODELS.md).</summary>
         public static FlightModelRegistry Default { get; } = CreateDefault();
 
         public static FlightModelRegistry CreateDefault()
         {
             var r = new FlightModelRegistry();
             r.Assign(ShipClass.Fighter, FlightFamily.LightFighter);
+            r.Assign(ShipClass.Interceptor, FlightFamily.Interceptor);
+            r.Assign(ShipClass.Bomber, FlightFamily.Bomber);
             r.Assign(ShipClass.Courier, FlightFamily.LightFighter);
             r.Assign(ShipClass.Gunship, FlightFamily.HeavyFighter);
             r.Assign(ShipClass.Breacher, FlightFamily.HeavyFighter);
@@ -190,6 +281,8 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.Cruiser, FlightFamily.Capital);
             r.Assign(ShipClass.Destroyer, FlightFamily.Capital);
             r.Register(FlightFamily.LightFighter, new LightFighterFlightModel());
+            r.Register(FlightFamily.Interceptor, new LightFighterFlightModel(LightFighterHandling.Interceptor, "Interceptor"));
+            r.Register(FlightFamily.Bomber, new BomberFlightModel());
             return r;
         }
 

@@ -64,6 +64,8 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Fighter: BuildFighter(b); break;
                 case ShipClass.Gunship: BuildGunship(b); break;
                 case ShipClass.OreTug: BuildOreTug(b); break;
+                case ShipClass.Interceptor: BuildInterceptor(b); break;
+                case ShipClass.Bomber: BuildBomber(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -203,34 +205,33 @@ namespace Unity.SpaceGod.Rendering
             return mesh;
         }
 
-        static readonly Dictionary<(Faction, bool), Mesh> FighterCache = new Dictionary<(Faction, bool), Mesh>();
+        static readonly Dictionary<(Faction, ShipClass), Mesh> FighterCache = new Dictionary<(Faction, ShipClass), Mesh>();
 
-        /// <summary>A carrier fighter (swept wings, twin guns) or bomber (heavier, torpedo slung under).</summary>
-        public static Mesh GetFighter(Faction faction, bool bomber)
+        /// <summary>A carrier's launched craft, drawn as its own hull class (U.SPC-T484): an interceptor, a space
+        /// superiority fighter, a bomber or a gunship as the hull of that class; anything else as a swept-wing
+        /// carrier fighter with twin guns.</summary>
+        public static Mesh GetFighter(Faction faction, ShipClass cls)
         {
             faction = Canon(faction);
-            if (FighterCache.TryGetValue((faction, bomber), out var mesh)) return mesh;
+            if (FighterCache.TryGetValue((faction, cls), out var mesh)) return mesh;
             var b = new Builder(faction, WholeHull);
-            if (bomber)
+            switch (cls)
             {
-                b.Frustum(-0.45f, 0.45f, new Vector2(0.22f, 0.16f), new Vector2(0.08f, 0.07f), 0, b.Hull);
-                b.Box(new Vector3(0, -0.02f, -0.05f), new Vector3(0.9f, 0.03f, 0.25f), b.Accent);
-                b.Box(new Vector3(0, -0.12f, 0.05f), new Vector3(0.07f, 0.07f, 0.55f), b.Dark);
-                b.Box(new Vector3(0, 0.07f, 0.15f), new Vector3(0.09f, 0.04f, 0.18f), b.Glow(new Color(0.6f, 0.85f, 1f)));
-                b.Nozzle(new Vector3(-0.07f, 0, -0.47f), 0.05f, 0.06f);
-                b.Nozzle(new Vector3(0.07f, 0, -0.47f), 0.05f, 0.06f);
+                case ShipClass.Interceptor: BuildInterceptor(b); break;
+                case ShipClass.Fighter: BuildFighter(b); break;
+                case ShipClass.Bomber: BuildBomber(b); break;
+                case ShipClass.Gunship: BuildGunship(b); break;
+                default:
+                    b.Frustum(-0.45f, 0.5f, new Vector2(0.16f, 0.12f), new Vector2(0.02f, 0.02f), 0, b.Hull);
+                    b.Frustum(-0.35f, 0.05f, new Vector2(0.95f, 0.025f), new Vector2(0.12f, 0.02f), 0, b.Accent);
+                    b.Box(new Vector3(0.22f, 0, 0.15f), new Vector3(0.02f, 0.02f, 0.4f), b.Dark);
+                    b.Box(new Vector3(-0.22f, 0, 0.15f), new Vector3(0.02f, 0.02f, 0.4f), b.Dark);
+                    b.Box(new Vector3(0, 0.06f, 0.12f), new Vector3(0.07f, 0.04f, 0.16f), b.Glow(new Color(0.6f, 0.85f, 1f)));
+                    b.Nozzle(new Vector3(0, 0, -0.47f), 0.06f, 0.06f);
+                    break;
             }
-            else
-            {
-                b.Frustum(-0.45f, 0.5f, new Vector2(0.16f, 0.12f), new Vector2(0.02f, 0.02f), 0, b.Hull);
-                b.Frustum(-0.35f, 0.05f, new Vector2(0.95f, 0.025f), new Vector2(0.12f, 0.02f), 0, b.Accent);
-                b.Box(new Vector3(0.22f, 0, 0.15f), new Vector3(0.02f, 0.02f, 0.4f), b.Dark);
-                b.Box(new Vector3(-0.22f, 0, 0.15f), new Vector3(0.02f, 0.02f, 0.4f), b.Dark);
-                b.Box(new Vector3(0, 0.06f, 0.12f), new Vector3(0.07f, 0.04f, 0.16f), b.Glow(new Color(0.6f, 0.85f, 1f)));
-                b.Nozzle(new Vector3(0, 0, -0.47f), 0.06f, 0.06f);
-            }
-            mesh = b.ToMesh((bomber ? "Bomber_" : "Fighter_") + faction.Prefix);
-            FighterCache[(faction, bomber)] = mesh;
+            mesh = b.ToMesh("Craft_" + cls + "_" + faction.Prefix);
+            FighterCache[(faction, cls)] = mesh;
             return mesh;
         }
 
@@ -647,6 +648,33 @@ namespace Unity.SpaceGod.Rendering
                 b.Box(new Vector3(side * 0.24f, 0, 0.1f), new Vector3(0.018f, 0.018f, 0.09f), b.Dark);
             }
             b.Nozzle(new Vector3(0, 0, -0.44f), 0.04f, 0.055f);
+        }
+
+        /// <summary>An interceptor (U.SPC-T484): a needle of a hull on a small delta, a bubble canopy well forward and
+        /// light guns at the wing roots -- slimmer and sharper than the Fighter.</summary>
+        static void BuildInterceptor(Builder b)
+        {
+            b.Frustum(-0.44f, 0.5f, new Vector2(0.1f, 0.07f), new Vector2(0.01f, 0.01f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.05f, 0.1f), new Vector3(0.04f, 0.025f, 0.12f), b.Glow(new Color(0.55f, 0.85f, 1f)));
+            b.Frustum(-0.4f, -0.02f, new Vector2(0.62f, 0.014f), new Vector2(0.08f, 0.014f), 0, b.Accent);
+            foreach (float side in new[] { -1f, 1f })
+            {
+                b.Box(new Vector3(side * 0.07f, -0.01f, 0.14f), new Vector3(0.012f, 0.012f, 0.14f), b.Dark);
+                b.Box(new Vector3(side * 0.28f, 0.03f, -0.3f), new Vector3(0.01f, 0.07f, 0.08f), b.Accent);
+            }
+            b.Nozzle(new Vector3(0, 0, -0.44f), 0.035f, 0.05f);
+        }
+
+        /// <summary>A bomber (U.SPC-T484): a deep, broad hull on straight wings, a torpedo slung under the keel, a glazed
+        /// nose and twin engines.</summary>
+        static void BuildBomber(Builder b)
+        {
+            b.Frustum(-0.45f, 0.45f, new Vector2(0.22f, 0.16f), new Vector2(0.08f, 0.07f), 0, b.Hull);
+            b.Box(new Vector3(0, -0.02f, -0.05f), new Vector3(0.9f, 0.03f, 0.25f), b.Accent);
+            b.Box(new Vector3(0, -0.12f, 0.05f), new Vector3(0.07f, 0.07f, 0.55f), b.Dark);
+            b.Box(new Vector3(0, 0.07f, 0.15f), new Vector3(0.09f, 0.04f, 0.18f), b.Glow(new Color(0.6f, 0.85f, 1f)));
+            b.Nozzle(new Vector3(-0.07f, 0, -0.47f), 0.05f, 0.06f);
+            b.Nozzle(new Vector3(0.07f, 0, -0.47f), 0.05f, 0.06f);
         }
 
         /// <summary>

@@ -17,9 +17,10 @@ namespace Unity.SpaceGod.Core
         /// fighter: the heavy fighter's roles are the <see cref="Gunship"/>'s (U.SPC-T467).</summary>
         Breacher,
 
-        /// <summary>A dedicated star fighter: twin forward guns, no cargo to speak of, built to escort
-        /// capital ships and freighters and to dogfight -- the light fighter, beside the Courier, a trade
-        /// hull that doubles as one.</summary>
+        /// <summary>The space superiority fighter (docs/SHIP_ROSTER.md, U.SPC-T484): the balanced all-round workhorse
+        /// of the strike craft, twin forward guns and a missile rack, built to escort capital ships and freighters
+        /// and to dogfight -- the light fighter, beside the Courier, a trade hull that doubles as one. Carriers launch
+        /// it as their fighter squadrons (<see cref="FighterRole.SpaceSuperiority"/>).</summary>
         Fighter,
 
         /// <summary>A deep-space explorer (U.SPC-T419): a long-legged survey hull built to leave the gate network under its
@@ -35,6 +36,16 @@ namespace Unity.SpaceGod.Core
         /// block of comet ice and pushes it, slowly, to a refinery or a depot (see <see cref="BeltMining"/>). The heavier the
         /// load, the gentler the push: its acceleration is its drive's thrust over the tug and its load together.</summary>
         OreTug,
+
+        /// <summary>The interceptor (U.SPC-T484): the fastest, most agile strike craft, light guns and a missile, built to
+        /// hunt enemy fighters and screen its own bombers. Flies on its own flight model (<see cref="FlightFamily.Interceptor"/>);
+        /// carriers launch it as their interceptor squadrons (<see cref="FighterRole.Interceptor"/>).</summary>
+        Interceptor,
+
+        /// <summary>The bomber (U.SPC-T484): slow and tough, with torpedoes for anti-capital strikes that hit hardest once a
+        /// capital's shields are down; it needs an escort. Flies on its own flight model (<see cref="FlightFamily.Bomber"/>);
+        /// carriers launch it as their bomber squadrons (<see cref="FighterRole.Bomber"/>).</summary>
+        Bomber,
     }
 
     public enum ShipRole
@@ -120,6 +131,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Explorer, "Explorer", 0.6, false),
             new ShipClassSpec(ShipClass.Gunship, "Gunship", 0.7, true),
             new ShipClassSpec(ShipClass.OreTug, "Ore tug", 0.08, false),
+            new ShipClassSpec(ShipClass.Interceptor, "Interceptor", 1.3, true),
+            new ShipClassSpec(ShipClass.Bomber, "Bomber", 0.6, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];
