@@ -178,87 +178,49 @@ namespace Unity.SpaceGod.Core
 
         // ---------------------------------------------------------------- building
 
-        public static Interior For(ShipClass cls, double crew, double marines)
+        /// <summary>The inside of a ship of the class as designed: its facilities' spaces (<see cref="FacilityLayouts.For"/>).</summary>
+        public static Interior For(ShipClass cls, double crew, double marines) => For(FacilityLayouts.For(cls), crew, marines);
+
+        /// <summary>A defence platform (or any station or satellite): a gun deck around a control room and its reactor.</summary>
+        public static Interior ForPlatform(double crew, double marines) => For(FacilityLayouts.Platform, crew, marines);
+
+        /// <summary>
+        /// The inside of a hull built from its facilities (U.SPC-T470): each facility that is a space of its own
+        /// (<see cref="FacilityKind.Compartment"/>) is a compartment, named and placed as its site says, joined on to the
+        /// one before it along the keel or branching off the facility its site links to. A facility fitted later with no
+        /// place of its own opens off midships (or the middle of the ship). Plate, racks and the like are no space.
+        /// </summary>
+        public static Interior For(IReadOnlyList<FacilitySite> facilities, double crew, double marines)
         {
             var i = new Interior();
-            switch (cls)
+            var made = new Compartment[facilities?.Count ?? 0];
+            Compartment last = null;
+            for (int f = 0; f < made.Length; f++)
             {
-                case ShipClass.Carrier:
-                    i.Chain(("Bow", CompartmentKind.Bow, 0.4, 0), ("Hangar deck", CompartmentKind.Hangar, 0.15, 0), ("Crew quarters", CompartmentKind.Quarters, -0.02, 0),
-                        ("Midships", CompartmentKind.Midships, -0.18, 0), ("Engineering", CompartmentKind.Engineering, -0.4, 0));
-                    i.Branch("Island bridge", CompartmentKind.Bridge, -0.11, 0.14, CompartmentKind.Midships);
-                    break;
-                case ShipClass.Battleship:
-                    i.Chain(("Bow", CompartmentKind.Bow, 0.38, 0), ("Forward battery", CompartmentKind.Battery, 0.16, 0), ("Crew quarters", CompartmentKind.Quarters, 0.0, 0),
-                        ("Midships", CompartmentKind.Midships, -0.16, 0), ("Aft battery", CompartmentKind.Battery, -0.28, 0), ("Engineering", CompartmentKind.Engineering, -0.42, 0));
-                    i.Branch("Bridge", CompartmentKind.Bridge, -0.11, 0.1, CompartmentKind.Midships);
-                    break;
-                case ShipClass.Cruiser:
-                    i.Chain(("Bow", CompartmentKind.Bow, 0.3, 0), ("Crew quarters", CompartmentKind.Quarters, 0.05, 0), ("Midships", CompartmentKind.Midships, -0.12, 0),
-                        ("Engineering", CompartmentKind.Engineering, -0.38, 0));
-                    i.Branch("Bridge", CompartmentKind.Bridge, -0.17, 0.06, CompartmentKind.Midships);
-                    break;
-                case ShipClass.Destroyer:
-                    i.Chain(("Bow", CompartmentKind.Bow, 0.25, 0), ("Midships", CompartmentKind.Midships, -0.05, 0), ("Engineering", CompartmentKind.Engineering, -0.36, 0));
-                    i.Branch("Bridge", CompartmentKind.Bridge, -0.08, 0.05, CompartmentKind.Midships);
-                    break;
-                case ShipClass.Freighter:
-                    i.Chain(("Cockpit", CompartmentKind.Bridge, 0.43, 0), ("Forward hold", CompartmentKind.Hold, 0.15, 0), ("Aft hold", CompartmentKind.Hold, -0.15, 0),
-                        ("Engineering", CompartmentKind.Engineering, -0.42, 0));
-                    break;
-                case ShipClass.Miner:
-                    i.Chain(("Cockpit", CompartmentKind.Bridge, 0.3, 0.05), ("Ore hold", CompartmentKind.Hold, 0, 0), ("Engineering", CompartmentKind.Engineering, -0.35, 0));
-                    break;
-                case ShipClass.OreTug:
-                    // No hold: the claw gantry forward, the cockpit over it, then a long engine room for its big drive.
-                    i.Chain(("Claw gantry", CompartmentKind.Bow, 0.35, 0), ("Cockpit", CompartmentKind.Bridge, 0.15, 0.05), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
-                    break;
-                case ShipClass.Breacher:
-                    i.Chain(("Assault bay", CompartmentKind.AssaultBay, 0.25, 0), ("Bridge", CompartmentKind.Bridge, 0, 0.03), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
-                    break;
-                case ShipClass.Gunship:
-                    // Multi-crew (U.SPC-T467): the flight deck, then the gun deck its turret crews work from.
-                    i.Chain(("Flight deck", CompartmentKind.Bridge, 0.2, 0.03), ("Gun deck", CompartmentKind.Battery, 0, 0), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
-                    break;
-                default:
-                    i.Chain(("Cockpit", CompartmentKind.Bridge, 0.1, 0), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
-                    break;
-            }
-            i.Crew0(crew, marines);
-            return i;
-        }
-
-        /// <summary>A defence platform: a gun deck around a control room and its reactor.</summary>
-        public static Interior ForPlatform(double crew, double marines)
-        {
-            var i = new Interior();
-            i.Chain(("Gun deck", CompartmentKind.Battery, 0.15, 0.15), ("Control", CompartmentKind.Bridge, 0, 0), ("Reactor", CompartmentKind.Engineering, -0.15, -0.15));
-            i.Crew0(crew, marines);
-            return i;
-        }
-
-        void Chain(params (string name, CompartmentKind kind, double z, double y)[] spaces)
-        {
-            foreach (var (name, kind, z, y) in spaces)
-            {
-                var c = new Compartment { Index = Compartments.Count, Name = name, Kind = kind, Z = z, Y = y };
-                if (Compartments.Count > 0)
+                var site = facilities[f];
+                if (!(site.Def?.Compartment is CompartmentKind kind)) continue;
+                var c = new Compartment { Index = i.Compartments.Count, Name = site.Name, Kind = kind, Z = site.Z, Y = site.Y };
+                var parent = site.Link == FacilitySite.Keel ? last
+                    : site.Link >= 0 && site.Link < made.Length ? made[site.Link]
+                    : i.Of(CompartmentKind.Midships) ?? (i.Compartments.Count > 0 ? i.Compartments[i.Compartments.Count / 2] : null);
+                if (site.Link == FacilitySite.Amidships && parent != null)
                 {
-                    var prev = Compartments[Compartments.Count - 1];
-                    prev.Links.Add(c.Index);
-                    c.Links.Add(prev.Index);
+                    c.Z = parent.Z;
+                    c.Y = parent.Y - 0.05;
                 }
-                Compartments.Add(c);
+                if (parent != null)
+                {
+                    parent.Links.Add(c.Index);
+                    c.Links.Add(parent.Index);
+                }
+                i.Compartments.Add(c);
+                made[f] = c;
+                if (site.Link == FacilitySite.Keel) last = c;
             }
-        }
-
-        void Branch(string name, CompartmentKind kind, double z, double y, CompartmentKind from)
-        {
-            var parent = Of(from);
-            var c = new Compartment { Index = Compartments.Count, Name = name, Kind = kind, Z = z, Y = y };
-            c.Links.Add(parent.Index);
-            parent.Links.Add(c.Index);
-            Compartments.Add(c);
+            if (i.Compartments.Count == 0)
+                i.Compartments.Add(new Compartment { Index = 0, Name = "Hull", Kind = CompartmentKind.Midships });
+            i.Crew0(crew, marines);
+            return i;
         }
 
         /// <summary>Crew spread through the ship; marines quartered amidships (or wherever there is room).</summary>

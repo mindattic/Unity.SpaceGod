@@ -11,17 +11,18 @@ namespace Unity.SpaceGod.Core
     public enum HardpointSize { Small, Medium, Large }
 
     /// <summary>
-    /// One socket of a hull frame (U.SPC-T377): where on the hull it sits (hull lengths, nose +Z, up +Y), which way
-    /// it faces and fires (its yaw arc), how big it is, what kind of slot it is and what the design builds into it.
-    /// The positions are the same ones the battle fires from, so a model library that sets a turret, launcher or
-    /// tube on each socket puts it exactly where the fight thinks it is.
+    /// One hardpoint of a hull frame (U.SPC-T377): a place on the hull's surface -- where it sits (hull lengths, nose +Z,
+    /// up +Y), which way it faces and fires (its yaw arc), how big it is, what kind of mount it is and what the design
+    /// builds onto it. The positions are the same ones the battle fires from, so a model library that sets a turret,
+    /// launcher or tube on each socket puts it exactly where the fight thinks it is. What is inside the hull is not a
+    /// hardpoint but a facility (<see cref="FacilitySite"/>, U.SPC-T470), with a size and no arc.
     /// </summary>
     public sealed class Hardpoint
     {
         /// <summary>The slot's index in the frame's <see cref="Loadout.Slots"/>.</summary>
         public readonly int SlotIndex;
 
-        /// <summary>The hardpoint's index in the design's <see cref="CombatSpec.Layout"/>, or -1 for an internal bay.</summary>
+        /// <summary>The hardpoint's index in the design's <see cref="CombatSpec.Layout"/>.</summary>
         public readonly int LayoutIndex;
 
         public readonly SlotKind Slot;
@@ -33,11 +34,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>A mount that bears on the bow (it can take a spinal railgun or a torpedo tube).</summary>
         public readonly bool BearsOnBow;
 
-        /// <summary>What the design builds here (null for a bay, which starts empty).</summary>
+        /// <summary>What the design builds here.</summary>
         public readonly ModuleKind? Stock;
 
-        /// <summary>A stable name for the socket within its frame ("heavy-2", "tube-0", "bay-1"), for a model library's
-        /// prefab bindings and for saves.</summary>
+        /// <summary>A stable name for the socket within its frame ("heavy-2", "tube-0"), for a model library's prefab
+        /// bindings and for saves.</summary>
         public readonly string Socket;
 
         public Hardpoint(int slotIndex, int layoutIndex, SlotKind slot, HardpointSize size, SubsystemDef def, ModuleKind? stock, bool bearsOnBow, string socket)
@@ -61,21 +62,24 @@ namespace Unity.SpaceGod.Core
             else ArcWidthDeg = 360;
         }
 
-        /// <summary>Whether a gun, launcher or tube goes here (not a shield, an engine or a bay).</summary>
+        /// <summary>Whether a gun, launcher or tube goes here (not a shield or an engine).</summary>
         public bool IsWeaponMount => Slot == SlotKind.LightMount || Slot == SlotKind.HeavyMount || Slot == SlotKind.GunMount ||
                                      Slot == SlotKind.UtilityMount || Slot == SlotKind.TorpedoTube;
 
         /// <summary>The key a model library binds a part to: what is fitted (or the slot, when empty) and the socket's size,
-        /// e.g. "TorpedoTube/Large" or "InternalBay/Medium".</summary>
+        /// e.g. "TorpedoTube/Large" or "HeavyMount/Medium".</summary>
         public static string ArtKey(Hardpoint h, ModuleKind? fitted) => (fitted?.ToString() ?? h.Slot.ToString()) + "/" + h.Size;
     }
 
     /// <summary>
-    /// A buildable hull (U.SPC-T377): a design and the sockets it offers, for anything built in space -- each ship class's
+    /// A buildable hull (U.SPC-T377): a design and the parts it offers, for anything built in space -- each ship class's
     /// designs (fighters, couriers and breachers, freighters and ore haulers, destroyers and cruisers, battleships and
-    /// carriers), stations and satellites alike. A frame's sockets are its design's refittable hardpoints (guns, launchers,
-    /// torpedo tubes, point defence, shields, engines) plus its internal bays, so a yard fits them exactly as it refits
-    /// a ship (<see cref="Outfitting"/>), and a <see cref="ConstructionPlan"/> builds one from scratch.
+    /// carriers), stations and satellites alike. A frame has two kinds of part (U.SPC-T470): its hardpoints on the hull's
+    /// surface (<see cref="Hardpoints"/>: guns, launchers, torpedo tubes, point defence, shields, engines, each with a
+    /// position and an arc) and its facilities inside the body (<see cref="Facilities"/>: bridge, engineering, quarters,
+    /// hangar, holds), with the free internal space beyond them (<see cref="SpareSpace"/>) for the facilities a yard fits.
+    /// A yard fits them exactly as it refits a ship (<see cref="Outfitting"/>), and a <see cref="ConstructionPlan"/>
+    /// builds one from scratch.
     /// </summary>
     public sealed class HullFrame
     {
@@ -87,7 +91,13 @@ namespace Unity.SpaceGod.Core
         public readonly ShipClass? Class;
 
         public readonly CombatSpec Design;
-        public readonly int InternalBays;
+
+        /// <summary>The facilities the hull is designed with, laid out as its interior has them.</summary>
+        public readonly IReadOnlyList<FacilitySite> Facilities;
+
+        /// <summary>Free internal space beyond its own facilities, sections, for the facilities a yard fits.</summary>
+        public readonly double SpareSpace;
+
         public readonly bool SmallCraft;
 
         /// <summary>Build points (tonnes of alloys through a yard) to lay the hull down as designed.</summary>
@@ -98,15 +108,18 @@ namespace Unity.SpaceGod.Core
 
         IReadOnlyList<Hardpoint> hardpoints;
 
-        public HullFrame(string id, string name, HullCategory category, ShipClass? cls, CombatSpec design, int internalBays, bool smallCraft,
-                         double buildPoints, double capacityTonnes = 0)
+        /// <param name="facilities">The facilities it is designed with; null for its class's (<see cref="FacilityLayouts.For"/>),
+        /// or a platform's for a station or satellite.</param>
+        public HullFrame(string id, string name, HullCategory category, ShipClass? cls, CombatSpec design, double spareSpace, bool smallCraft,
+                         double buildPoints, double capacityTonnes = 0, IReadOnlyList<FacilitySite> facilities = null)
         {
             Id = id ?? throw new ArgumentNullException(nameof(id));
             Name = name;
             Category = category;
             Class = cls;
             Design = design ?? throw new ArgumentNullException(nameof(design));
-            InternalBays = Math.Max(0, internalBays);
+            SpareSpace = Math.Max(0, spareSpace);
+            Facilities = facilities ?? (cls is ShipClass c ? FacilityLayouts.For(c) : FacilityLayouts.Platform);
             SmallCraft = smallCraft;
             BuildPoints = buildPoints;
             CapacityTonnes = capacityTonnes;
@@ -116,9 +129,16 @@ namespace Unity.SpaceGod.Core
         public bool Static => Design.MaxSpeed <= 0;
 
         /// <summary>A fresh loadout of this frame as designed.</summary>
-        public Loadout NewLoadout() => new Loadout(Design, Class, CapacityTonnes, SmallCraft, InternalBays);
+        public Loadout NewLoadout() => new Loadout(Design, Class, Category, CapacityTonnes, SmallCraft, Facilities, SpareSpace);
 
-        /// <summary>Every socket the frame offers, in its loadout's slot order.</summary>
+        /// <summary>The hull's whole internal space, sections: its own facilities and the free space beyond them.</summary>
+        public double InternalSpace => FacilityLayouts.SpaceOf(Facilities) + SpareSpace;
+
+        /// <summary>Whether a facility of <paramref name="kind"/> could ever go into this hull: one a yard fits, allowed on
+        /// its category, and no bigger than its free space.</summary>
+        public bool CanCarry(FacilityKind kind) => kind != null && kind.Fittable && kind.AllowedOn(Category) && kind.Size <= SpareSpace + 1e-9;
+
+        /// <summary>Every hardpoint the frame offers, in its loadout's slot order.</summary>
         public IReadOnlyList<Hardpoint> Hardpoints => hardpoints ??= MakeHardpoints();
 
         IReadOnlyList<Hardpoint> MakeHardpoints()
@@ -131,8 +151,7 @@ namespace Unity.SpaceGod.Core
                 var s = l.Slots[i];
                 counts.TryGetValue(s.Kind, out int n);
                 counts[s.Kind] = n + 1;
-                var def = s.LayoutIndex >= 0 ? Design.Layout[s.LayoutIndex] : null;
-                list.Add(new Hardpoint(i, s.LayoutIndex, s.Kind, SizeOf(s.Kind), def, s.Stock, s.BearsOnBow, SocketPrefix(s.Kind) + "-" + n));
+                list.Add(new Hardpoint(i, s.LayoutIndex, s.Kind, SizeOf(s.Kind), Design.Layout[s.LayoutIndex], s.Stock, s.BearsOnBow, SocketPrefix(s.Kind) + "-" + n));
             }
             return list;
         }
@@ -156,7 +175,7 @@ namespace Unity.SpaceGod.Core
                 case SlotKind.GunMount: return "gun";
                 case SlotKind.UtilityMount: return "utility";
                 case SlotKind.TorpedoTube: return "tube";
-                default: return "bay";
+                default: return k.ToString().ToLowerInvariant();
             }
         }
     }
@@ -177,7 +196,7 @@ namespace Unity.SpaceGod.Core
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
                 foreach (var design in CombatSpec.DesignsOf(c))
                     Register(new HullFrame("ship/" + c + "/" + design.DesignName, design.DesignName, CategoryOf(c), c, design,
-                        Loadout.InternalBays(c), Loadout.IsSmallCraft(c), Economy.HullCost(c), Economy.CapacityOf(c)));
+                        FacilityLayouts.SpareSpace(c), Loadout.IsSmallCraft(c), Economy.HullCost(c), Economy.CapacityOf(c)));
 
             Register(new HullFrame("station/defence-platform", CombatSpec.Platform.DesignName, HullCategory.Station, null, CombatSpec.Platform,
                 2, false, War.PlatformPrice / PricePerBuildPoint));
@@ -238,7 +257,7 @@ namespace Unity.SpaceGod.Core
         // ---------------------------------------------------------------- stations and satellites
 
         /// <summary>A trade and habitat station's armed hub: heavy turrets about its ring, launchers, torpedo tubes
-        /// facing out along its axis, point defence all round and room for eight bays of plate, racks and scanners.</summary>
+        /// facing out along its axis, point defence all round and room for eight sections of plate, racks and scanners.</summary>
         public static readonly CombatSpec OrbitalStation = new CombatSpec
         {
             DesignName = "Orbital station", LengthKm = 2.0,
@@ -285,7 +304,7 @@ namespace Unity.SpaceGod.Core
             },
         };
 
-        /// <summary>A sensor satellite: point defence for its own protection and a bay for a scanner suite.</summary>
+        /// <summary>A sensor satellite: point defence for its own protection and room for a scanner suite.</summary>
         public static readonly CombatSpec SensorSatellite = new CombatSpec
         {
             DesignName = "Sensor satellite", LengthKm = 0.03,
@@ -300,14 +319,16 @@ namespace Unity.SpaceGod.Core
         };
     }
 
-    /// <summary>Why a construction plan's fitting did or did not go through.</summary>
-    public enum ConstructionOutcome { Ok, NoSuchSocket, WontFit }
+    /// <summary>Why a construction plan's fitting did or did not go through (<see cref="NoRoom"/>: the facility is bigger
+    /// than the hull's free internal space).</summary>
+    public enum ConstructionOutcome { Ok, NoSuchSocket, WontFit, NoRoom }
 
     /// <summary>
-    /// Building a hull from scratch (U.SPC-T377): pick a <see cref="HullFrame"/>, fit what goes in each of its sockets
-    /// (a torpedo tube in a bow mount, a heavy laser for a turret, plate and racks in the bays), and the plan gives the
-    /// hull's fighting spec, its bill of materials and its price. A plan launches as a new ship's loadout
-    /// (<see cref="Apply"/>) or as a station's or satellite's combat state (<see cref="BuildCombat"/>).
+    /// Building a hull from scratch (U.SPC-T377): pick a <see cref="HullFrame"/>, fit what goes on each of its hardpoints
+    /// (a torpedo tube in a bow mount, a heavy laser for a turret) and the facilities that go into its free internal space
+    /// (plate, racks, a scanner suite, a brig, U.SPC-T470), and the plan gives the hull's fighting spec, its bill of
+    /// materials and its price. A plan launches as a new ship's loadout (<see cref="Apply"/>) or as a station's or
+    /// satellite's combat state (<see cref="BuildCombat"/>), its interior built from its facilities.
     /// </summary>
     public sealed class ConstructionPlan
     {
@@ -322,10 +343,16 @@ namespace Unity.SpaceGod.Core
 
         public IReadOnlyList<Hardpoint> Hardpoints => Frame.Hardpoints;
 
-        /// <summary>What is fitted in a socket now.</summary>
+        /// <summary>The facilities inside the hull as planned: the frame's own, then those fitted.</summary>
+        public IReadOnlyList<FacilitySite> Facilities => Loadout.Facilities;
+
+        /// <summary>Internal space still free for another facility, sections.</summary>
+        public double FreeSpace => Loadout.FreeSpace;
+
+        /// <summary>What is fitted on a hardpoint now.</summary>
         public ModuleKind? FittedAt(int socket) => socket >= 0 && socket < Loadout.Fitted.Length ? Loadout.Fitted[socket] : null;
 
-        /// <summary>Fits <paramref name="module"/> (null: leaves a bay empty) into socket <paramref name="socket"/>.</summary>
+        /// <summary>Fits <paramref name="module"/> onto hardpoint <paramref name="socket"/>.</summary>
         public ConstructionOutcome Fit(int socket, ModuleKind? module)
         {
             if (socket < 0 || socket >= Loadout.Slots.Count) return ConstructionOutcome.NoSuchSocket;
@@ -334,10 +361,32 @@ namespace Unity.SpaceGod.Core
             return ConstructionOutcome.Ok;
         }
 
-        /// <summary>Fits <paramref name="module"/> into the first socket that takes it and is still as designed (or empty);
-        /// returns the socket, or -1.</summary>
+        /// <summary>Fits a facility of <paramref name="kind"/> into the hull's free internal space.</summary>
+        public ConstructionOutcome FitFacility(FacilityKind kind)
+        {
+            var can = Loadout.CanAdd(kind);
+            if (can == OutfitOutcome.NoRoom) return ConstructionOutcome.NoRoom;
+            if (can != OutfitOutcome.Ok) return ConstructionOutcome.WontFit;
+            Loadout.Facilities.Add(FacilitySite.Fitted(kind));
+            return ConstructionOutcome.Ok;
+        }
+
+        /// <summary>Takes facility number <paramref name="index"/> out of the plan (a fitted one, not the frame's structure).</summary>
+        public ConstructionOutcome RemoveFacility(int index)
+        {
+            if (index < 0 || index >= Loadout.Facilities.Count) return ConstructionOutcome.NoSuchSocket;
+            if (!Loadout.CanRemove(index)) return ConstructionOutcome.WontFit;
+            Loadout.Facilities.RemoveAt(index);
+            return ConstructionOutcome.Ok;
+        }
+
+        /// <summary>Fits <paramref name="module"/> where it goes: a facility module (plate, racks, a scanner, a brig) into
+        /// the free space, any other onto the first hardpoint that takes it and is still as designed. Returns the
+        /// hardpoint's socket or the facility's index, or -1.</summary>
         public int FitFirst(ModuleKind module)
         {
+            if (FacilityKinds.ForModule(module) is FacilityKind kind)
+                return FitFacility(kind) == ConstructionOutcome.Ok ? Loadout.Facilities.Count - 1 : -1;
             for (int i = 0; i < Loadout.Slots.Count; i++)
                 if (Loadout.Fitted[i] == Loadout.Slots[i].Stock && Loadout.Fitted[i] != module && Outfitting.CanFit(Loadout, i, module))
                 {
@@ -350,6 +399,21 @@ namespace Unity.SpaceGod.Core
         /// <summary>The hull's fighting spec as planned.</summary>
         public CombatSpec Build() => Loadout.Build();
 
+        /// <summary>The parts fitted over the design (+1) and the design's own taken out (-1).</summary>
+        IEnumerable<(IPartSpec part, double sign)> Changes()
+        {
+            for (int i = 0; i < Loadout.Slots.Count; i++)
+            {
+                var stock = Loadout.Slots[i].Stock;
+                var now = Loadout.Fitted[i];
+                if (now == stock) continue;
+                if (now is ModuleKind m) yield return (ModuleSpec.Of(m), 1);
+                if (stock is ModuleKind was) yield return (ModuleSpec.Of(was), -1);
+            }
+            foreach (var f in Loadout.AddedFacilities) if (f.Def != null) yield return (f.Def, 1);
+            foreach (var f in Loadout.RemovedFacilities) if (f.Def != null) yield return (f.Def, -1);
+        }
+
         /// <summary>
         /// The materials the build takes, tonnes by good: the frame's alloys (its build points, which cover the design
         /// as drawn), plus every part fitted over the design, less what the design's own parts taken out would have used.
@@ -358,27 +422,16 @@ namespace Unity.SpaceGod.Core
         {
             var bill = new Dictionary<Good, double> { [Good.Alloys] = Frame.BuildPoints };
             double scale = Loadout.Scale;
-            for (int i = 0; i < Loadout.Slots.Count; i++)
-            {
-                var stock = Loadout.Slots[i].Stock;
-                var now = Loadout.Fitted[i];
-                if (now == stock) continue;
-                if (now is ModuleKind m) Add(bill, ModuleSpec.Of(m), scale, 1);
-                if (stock is ModuleKind was) Add(bill, ModuleSpec.Of(was), scale, -1);
-            }
+            foreach (var (part, sign) in Changes())
+                for (int i = 0; i < part.Bill.Length; i++)
+                {
+                    var g = part.Bill[i].good;
+                    bill.TryGetValue(g, out double t);
+                    bill[g] = t + sign * part.Tonnes(i, scale);
+                }
             var goods = new List<Good>(bill.Keys);
             foreach (var g in goods) if (bill[g] < 0) bill[g] = 0;
             return bill;
-        }
-
-        static void Add(Dictionary<Good, double> bill, ModuleSpec spec, double scale, double sign)
-        {
-            for (int i = 0; i < spec.Bill.Length; i++)
-            {
-                var g = spec.Bill[i].good;
-                bill.TryGetValue(g, out double t);
-                bill[g] = t + sign * spec.Tonnes(i, scale);
-            }
         }
 
         /// <summary>The build's price at base prices: the frame's yard price plus the base worth of the parts fitted over
@@ -387,26 +440,27 @@ namespace Unity.SpaceGod.Core
         {
             double price = Frame.BuildPoints * HullFrames.PricePerBuildPoint;
             double scale = Loadout.Scale;
-            for (int i = 0; i < Loadout.Slots.Count; i++)
-            {
-                var stock = Loadout.Slots[i].Stock;
-                var now = Loadout.Fitted[i];
-                if (now == stock) continue;
-                if (now is ModuleKind m) price += Worth(ModuleSpec.Of(m), scale) * (1 + Outfitting.LabourShare);
-                if (stock is ModuleKind was) price -= Worth(ModuleSpec.Of(was), scale);
-            }
+            foreach (var (part, sign) in Changes())
+                price += sign > 0 ? Worth(part, scale) * (1 + Outfitting.LabourShare) : -Worth(part, scale);
             return Math.Max(0, price);
         }
 
-        static double Worth(ModuleSpec spec, double scale)
+        static double Worth(IPartSpec spec, double scale)
         {
             double w = 0;
             for (int i = 0; i < spec.Bill.Length; i++) w += spec.Tonnes(i, scale) * GoodInfo.Of(spec.Bill[i].good).BasePrice;
             return w;
         }
 
+        /// <summary>The hull's inside as planned: its facilities' compartments, with the design's crew and marines.</summary>
+        Interior InteriorOf(CombatSpec spec) => Interior.For(Loadout.Facilities, spec.Crew, spec.Marines);
+
         /// <summary>A static structure's (or any hull's) combat state as planned, whole and loaded.</summary>
-        public ShipCombat BuildCombat() => new ShipCombat(Build(), Frame.Class);
+        public ShipCombat BuildCombat()
+        {
+            var spec = Build();
+            return new ShipCombat(spec, Frame.Class, InteriorOf(spec));
+        }
 
         /// <summary>Makes a newly built ship this plan: its loadout, its combat state and its hold. False if the frame
         /// builds no ship (a station or satellite) or not one of this ship's class.</summary>
@@ -414,7 +468,8 @@ namespace Unity.SpaceGod.Core
         {
             if (ship == null || Frame.Class == null || ship.Spec == null || ship.Spec.Class != Frame.Class) return false;
             ship.Loadout = Loadout.Copy();
-            ship.Combat = new ShipCombat(ship.Loadout.Build(), Frame.Class);
+            var spec = ship.Loadout.Build();
+            ship.Combat = new ShipCombat(spec, Frame.Class, InteriorOf(spec));
             int racks = ship.Loadout.Count(ModuleKind.CargoRack);
             if (Frame.CapacityTonnes > 0) ship.CapacityTonnes = Frame.CapacityTonnes + Outfitting.RackTonnes(ship.Loadout, racks);
             if (racks > 0 && ship.ResizedHold(racks * Loadout.RackRows) is CargoHold hold) ship.SetHold(hold);

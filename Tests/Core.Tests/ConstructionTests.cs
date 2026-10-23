@@ -7,7 +7,8 @@ namespace Unity.SpaceGod.Core.Tests
     /// <summary>
     /// The construction catalogue (U.SPC-T377): every buildable hull -- each ship class's designs, stations and
     /// satellites -- is a frame whose sockets are its real hardpoints (turrets, missile launchers, torpedo tubes, point
-    /// defence, shields, engines, bays), placed where the battle fires from; a construction plan fits parts into them
+    /// defence, shields, engines), placed where the battle fires from, with facilities inside it (U.SPC-T470); a
+    /// construction plan fits parts into them
     /// and gives the hull's spec, bill and price; and capital torpedo tubes are a real weapon that fires torpedoes.
     /// </summary>
     [TestFixture]
@@ -43,7 +44,8 @@ namespace Unity.SpaceGod.Core.Tests
                     Assert.That((h.X, h.Y, h.Z), Is.EqualTo((d.X, d.Y, d.Z)), f.Id + " " + h.Socket);
                     Assert.That(h.ArcWidthDeg, Is.EqualTo(d.ArcWidthDeg));
                 }
-                Assert.That(f.Hardpoints.Count(h => h.Slot == SlotKind.InternalBay), Is.EqualTo(f.InternalBays), f.Id);
+                Assert.That(f.Hardpoints.All(h => h.LayoutIndex >= 0), Is.True, f.Id + ": every hardpoint is a place on the hull");
+                Assert.That(f.NewLoadout().FreeSpace, Is.EqualTo(f.SpareSpace), f.Id);
             }
             // Every armed hull has weapon sockets, a fighter's small and a battleship's large.
             Assert.That(HullFrames.ForClass(ShipClass.Fighter).Hardpoints.Where(h => h.IsWeaponMount).All(h => h.Size == HardpointSize.Small), Is.True);
@@ -83,9 +85,8 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(plan.BasePrice(), Is.EqualTo(Economy.HullPrice(ShipClass.Destroyer)));
             int bow = plan.Hardpoints.First(h => h.Slot == SlotKind.HeavyMount && h.BearsOnBow && h.Stock == ModuleKind.MissileLauncher).SlotIndex;
             Assert.That(plan.Fit(bow, ModuleKind.TorpedoTube), Is.EqualTo(ConstructionOutcome.Ok));
-            int bay = plan.Hardpoints.First(h => h.Slot == SlotKind.InternalBay).SlotIndex;
-            Assert.That(plan.Fit(bay, ModuleKind.ArmourPlating), Is.EqualTo(ConstructionOutcome.Ok));
-            Assert.That(plan.Fit(bay, ModuleKind.Engine), Is.EqualTo(ConstructionOutcome.WontFit));
+            Assert.That(plan.FitFacility(FacilityKinds.Of(FacilityKinds.ArmourPlating)), Is.EqualTo(ConstructionOutcome.Ok));
+            Assert.That(plan.Fit(bow, ModuleKind.ArmourPlating), Is.EqualTo(ConstructionOutcome.WontFit), "plate goes inside the hull, not on a mount");
             Assert.That(plan.Fit(999, ModuleKind.Brig), Is.EqualTo(ConstructionOutcome.NoSuchSocket));
 
             var spec = plan.Build();
@@ -103,8 +104,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void APlanAppliedToANewShipBecomesItsLoadoutAndCombatSpec()
         {
             var plan = new ConstructionPlan(HullFrames.ForClass(ShipClass.Battleship));
-            int bay = plan.Hardpoints.First(h => h.Slot == SlotKind.InternalBay).SlotIndex;
-            plan.Fit(bay, ModuleKind.Scanner);
+            Assert.That(plan.FitFacility(FacilityKinds.Of(FacilityKinds.Scanner)), Is.EqualTo(ConstructionOutcome.Ok));
             var ship = new Ship { Id = 1, Name = "BB", Spec = ShipClassSpec.Of(ShipClass.Battleship), Faction = Navy };
             Assert.That(plan.Apply(ship), Is.True);
             Assert.That(ship.Loadout.Count(ModuleKind.Scanner), Is.EqualTo(1));
@@ -120,8 +120,8 @@ namespace Unity.SpaceGod.Core.Tests
         public void ASatelliteOrStationPlanBuildsAStaticCombatState()
         {
             var plan = new ConstructionPlan(HullFrames.Of("satellite/sensor"));
-            int bay = plan.Hardpoints.First(h => h.Slot == SlotKind.InternalBay).SlotIndex;
-            Assert.That(plan.Fit(bay, ModuleKind.Scanner), Is.EqualTo(ConstructionOutcome.Ok));
+            Assert.That(plan.FitFirst(ModuleKind.Scanner), Is.GreaterThanOrEqualTo(0));
+            Assert.That(plan.FitFirst(ModuleKind.Scanner), Is.EqualTo(-1), "a sensor satellite has room for one suite");
             var c = plan.BuildCombat();
             Assert.That(c.Spec.MaxSpeed, Is.EqualTo(0));
             Assert.That(c.Subsystems.Any(s => s.Kind == SubsystemKind.PointDefense), Is.True);
@@ -138,7 +138,8 @@ namespace Unity.SpaceGod.Core.Tests
             HullFrames.Register(frame);
             Assert.That(HullFrames.Of("test/picket"), Is.SameAs(frame));
             Assert.That(HullFrames.InCategory(HullCategory.Satellite), Does.Contain(frame));
-            Assert.That(frame.Hardpoints.Count(h => h.Slot == SlotKind.InternalBay), Is.EqualTo(2));
+            Assert.That(frame.SpareSpace, Is.EqualTo(2));
+            Assert.That(frame.Facilities, Is.SameAs(FacilityLayouts.Platform), "a satellite is laid out as a platform");
         }
 
         [Test]

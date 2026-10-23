@@ -82,7 +82,9 @@ namespace Unity.SpaceGod.Core
         /// <param name="hull">The ship class, or null for a defence platform.</param>
         public ShipCombat(CombatSpec spec, ShipClass? hull = null) : this(spec, hull, null) { }
 
-        ShipCombat(CombatSpec spec, ShipClass? hull, Interior interior)
+        /// <param name="interior">The hull's inside, built from its facilities (<see cref="Interior.For(IReadOnlyList{FacilitySite}, double, double)"/>);
+        /// null for its class's (or a platform's) as designed.</param>
+        public ShipCombat(CombatSpec spec, ShipClass? hull, Interior interior)
         {
             Spec = spec;
             Hull = spec.Hull;
@@ -100,11 +102,12 @@ namespace Unity.SpaceGod.Core
         /// with the old one slot for slot: its people (the same <see cref="Interior"/>), the share of its hull
         /// still standing, its fighters and boost carry over, and so does every hardpoint but
         /// <paramref name="changed"/> (its health, rounds and its share of shield charge); the part fitted at
-        /// <paramref name="changed"/> is new, whole and loaded.
+        /// <paramref name="changed"/> is new, whole and loaded. A refit that changes the hull's spaces (a facility that is a
+        /// compartment of its own, U.SPC-T470) passes the new <paramref name="interior"/>.
         /// </summary>
-        public ShipCombat Refitted(CombatSpec spec, ShipClass? hull, int changed)
+        public ShipCombat Refitted(CombatSpec spec, ShipClass? hull, int changed, Interior interior = null)
         {
-            var c = new ShipCombat(spec, hull, Interior)
+            var c = new ShipCombat(spec, hull, interior ?? Interior)
             {
                 Hull = spec.Hull * HullFraction,
                 Fighters = Math.Min(spec.Squadrons * 6, Fighters),

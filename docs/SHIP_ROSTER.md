@@ -89,6 +89,13 @@ The game keeps the feel of real space and drops what would get in the way of pla
 
 Hardpoints are places on the hull's surface. Facilities are things inside the body of the ship. Each hull has limited internal space for facilities (U.SPC-T470).
 
+- **Hardpoints** (`Hardpoint`, `OutfitSlot`, `SlotKind` in `Core/Combat/Construction.cs` and `Outfitting.cs`) are gun and turret mounts, launchers, torpedo tubes, shield emitters and engine mounts. Each is one entry of the design's layout, with a position on the hull and a firing arc, and is never empty.
+- **Facilities** (`FacilityKind`, `FacilitySite` in `Core/Combat/Facilities.cs`) have no arc, only a size: the share of internal space they take, in sections. A hull's internal space is its design's own facilities plus its free space (`FacilityLayouts.SpareSpace`: one to six sections by class, as many as it had internal bays before). A design is a trade-off: whatever goes in uses room something else could have had, and a hull with less free space than a facility's size cannot fit it at all.
+- **The registry.** Every facility kind is data registered with `FacilityKinds.Register`: its size, mass and bill of materials (scaled with the hull or fixed), the hull categories that may fit it (null for any), whether a yard fits and strips it, the boarding compartment it is (`CompartmentKind`, or none), the module it stands for if any, and an optional `Effect` on the hull's fighting spec, applied by `Loadout.Build` with +1 for each one fitted and -1 for each of the design's own taken out. A new facility (a Marine Habitat, an Assault Bay, an FTL drive room, radiators, a buried bridge, a sensor suite, pods on a truss) is a new registered kind, plus any system that reads `Loadout.CountFacility`. Fitting code, prices, the yard, the outfitting screen and the boarding interior need no change.
+- **What is registered today.** Structure that comes with the frame and is not fitted: bridge, engineering, crew quarters, hangar deck, hold, battery magazine, bow section, midships, assault bay. Fittable, each one section on any hull: armour plating, cargo racks, scanner suite, brig. These four were the internal-bay modules before, and they keep the same effects, mass, bill and price.
+- **Layouts.** Each class's facilities (`FacilityLayouts.For`), and a platform's for stations and satellites, list its spaces from bow to stern with their names and places, and say where a branch such as the bridge leaves the keel. `Interior.For` builds the boarding compartments from them, so a hull's interior is its facilities. A facility fitted later that is a space of its own opens off midships, and the interior is rebuilt with its people carried over. A `HullFrame` may bring its own layout.
+- **Who reads it.** The yard (`Outfitting.FitFacility`, `StripFacility`, `QuoteFacility`), the construction plan (`ConstructionPlan.FitFacility`, its bill and price), the outfitting screen (F2: the hardpoints, then the facilities, then the free space), the AI's designs (`Outfitting.NavyFacilities` and `RaiderFacilities`, lists of kind ids filled as far as the free space goes) and the boarding interior.
+
 ## Two doctrines
 
 - **Gate fleet.** Large, but predictable, because it must come through a chokepoint.
@@ -108,7 +115,6 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 | The Breacher is a fired marine round | A flown assault craft that rams its drill prow home | U.SPC-T466 |
 | Marines live in a Marine Habitat | A flat marine figure per class | U.SPC-T465 |
 | Boarding the player takes part in | Boarding only resolves on its own | U.SPC-T468 |
-| Hardpoints outside, facilities inside, limited internal space | Not split this way | U.SPC-T470 |
 | Frigate, corvette, command cruiser, gate breaker | Not yet classes | U.SPC-T475 to U.SPC-T478 |
 | Lane interdictor, gate picket, lane tender and lane upkeep | Not yet classes (an interdiction pulse exists) | U.SPC-T479 to U.SPC-T481 |
 | Truss-and-pod freighters; ice hauler / ore tug | Not yet | U.SPC-T482, U.SPC-T483 |

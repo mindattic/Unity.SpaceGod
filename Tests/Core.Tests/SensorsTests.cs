@@ -60,9 +60,7 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (var g in new[] { Good.Alloys, Good.Electronics, Good.Machinery, Good.Munitions }) yard.Stock[(int)g] = 1e6;
             yard.RefreshPrices();
             ship.Faction.Treasury = 1e12;
-            var l = Outfitting.LoadoutOf(ship);
-            int bay = Enumerable.Range(0, l.Slots.Count).First(i => l.Slots[i].Kind == SlotKind.InternalBay && l.Fitted[i] == null);
-            Assert.That(Outfitting.Fit(economy, ship, yard, bay, ModuleKind.Scanner, out _), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(Outfitting.FitFacility(economy, ship, yard, FacilityKinds.Of(FacilityKinds.Scanner), out _), Is.EqualTo(OutfitOutcome.Ok));
             return ship;
         }
 

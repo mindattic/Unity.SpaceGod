@@ -2740,9 +2740,11 @@ namespace Unity.SpaceGod.UI
         // ---------------------------------------------------------------- outfitting (U.SPC-T65)
 
         /// <summary>
-        /// The yard's outfitting panel: the piloted hull's slots and what is in each, and for the chosen slot every
-        /// module that fits with its price at this yard's market (materials at its prices, labour, less what the
-        /// old part fetches). Prisoners in the brig are handed over here too, at any port the ship may dock at.
+        /// The yard's outfitting panel: the piloted hull's hardpoints and what is on each, then its facilities inside the
+        /// hull and the internal space left (U.SPC-T470). For a chosen hardpoint every module that fits it, for a fitted
+        /// facility stripping it, and for the free space every facility the hull has room for, each with its price at
+        /// this yard's market (materials at its prices, labour, less what the old part fetches). Prisoners in the brig
+        /// are handed over here too, at any port the ship may dock at.
         /// </summary>
         void DrawOutfit()
         {
@@ -2765,14 +2767,12 @@ namespace Unity.SpaceGod.UI
             var loadout = Outfitting.LoadoutOf(ship);
             var spec = ship.Combat.Spec;
             const float rowH = 18;
+            // Rows: the hardpoints, then the facilities, then the free space.
+            int hardpoints = loadout.Slots.Count, facilities = loadout.Facilities.Count, rows = hardpoints + facilities + 1;
             int options = 0;
-            if (yard != null && outfitSlot >= 0 && outfitSlot < loadout.Slots.Count)
-            {
-                foreach (var m in ModuleSpec.Catalogue) if (Outfitting.CanFit(loadout, outfitSlot, m.Kind)) options++;
-                if (Outfitting.CanFit(loadout, outfitSlot, null)) options++;
-            }
+            if (yard != null && outfitSlot >= 0 && outfitSlot < rows) options = OutfitOptions(loadout, outfitSlot).Count;
             else outfitSlot = -1;
-            float listH = Mathf.Min(loadout.Slots.Count * rowH, 230);
+            float listH = Mathf.Min(rows * rowH, 230);
             float h = 112 + listH + (options > 0 ? 26 + options * rowH : 0);
             var r = Panel(new Rect((Screen.width - w) * 0.5f, 190, w, h));
             GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 22), "OUTFITTING  ·  " + ship.Name + "  ·  " + (yard != null ? yard.Name : port != null ? port.Name + " (no yard)" : "not alongside a port"), title);
@@ -2796,26 +2796,37 @@ namespace Unity.SpaceGod.UI
             }
             GUI.contentColor = Dim;
             GUI.Label(new Rect(r.x + 12, r.y + 64, w - 24, 18), yard != null
-                ? "Pick a slot, then a module to fit.   Prices are this yard's market.   F2 to close"
+                ? "Pick a hardpoint, a facility or the free space, then what to fit.   Prices are this yard's market.   F2 to close"
                 : "Bring the ship alongside a shipyard (or a haven) to refit.   F2 to close", small);
 
-            // The slots and what is in them.
+            // The hardpoints and what is on them, the facilities inside the hull, and the space left.
             var view = new Rect(r.x + 8, r.y + 84, w - 16, listH);
-            var content = new Rect(0, 0, w - 36, loadout.Slots.Count * rowH);
+            var content = new Rect(0, 0, w - 36, rows * rowH);
             outfitScroll = GUI.BeginScrollView(view, outfitScroll, content);
-            for (int i = 0; i < loadout.Slots.Count; i++)
+            for (int i = 0; i < rows; i++)
             {
-                var slot = loadout.Slots[i];
-                string fitted = loadout.Fitted[i] is ModuleKind m ? ModuleSpec.Of(m).Name : "(empty)";
-                if (slot.LayoutIndex >= 0 && slot.LayoutIndex < ship.Combat.Subsystems.Count)
+                string label;
+                if (i < hardpoints)
                 {
-                    var sub = ship.Combat.Subsystems[slot.LayoutIndex];
-                    fitted += sub.Destroyed ? "  (shot away)" : sub.Health < 0.99 ? "  (" + Percent(sub.Health) + ")" : "";
+                    var slot = loadout.Slots[i];
+                    string fitted = loadout.Fitted[i] is ModuleKind m ? ModuleSpec.Of(m).Name : "(empty)";
+                    if (slot.LayoutIndex >= 0 && slot.LayoutIndex < ship.Combat.Subsystems.Count)
+                    {
+                        var sub = ship.Combat.Subsystems[slot.LayoutIndex];
+                        fitted += sub.Destroyed ? "  (shot away)" : sub.Health < 0.99 ? "  (" + Percent(sub.Health) + ")" : "";
+                    }
+                    if (slot.Stock != null && loadout.Fitted[i] != slot.Stock) fitted += "   was " + ModuleSpec.Of(slot.Stock.Value).Name.ToLowerInvariant();
+                    string where = slot.BearsOnBow && slot.Kind == SlotKind.HeavyMount ? " (bow)" : "";
+                    label = "  " + slot.Name + where + "   " + fitted;
                 }
-                if (slot.Stock != null && loadout.Fitted[i] != slot.Stock) fitted += "   was " + ModuleSpec.Of(slot.Stock.Value).Name.ToLowerInvariant();
+                else if (i < hardpoints + facilities)
+                {
+                    var f = loadout.Facilities[i - hardpoints];
+                    label = "  Facility   " + f.Name + "   " + Sections(f.Size) + (loadout.IsStockFacility(f) ? "" : "   fitted");
+                }
+                else label = "  Free internal space   " + Sections(loadout.FreeSpace) + " of " + Sections(loadout.InternalSpace);
                 var rr = new Rect(0, i * rowH, content.width, rowH - 1);
-                string where = slot.BearsOnBow && slot.Kind == SlotKind.HeavyMount ? " (bow)" : "";
-                if (GUI.Button(rr, "  " + slot.Name + where + "   " + fitted, i == outfitSlot ? rowSelected : row))
+                if (GUI.Button(rr, label, i == outfitSlot ? rowSelected : row))
                     outfitSlot = i == outfitSlot ? -1 : i;
             }
             GUI.EndScrollView();
@@ -2823,27 +2834,53 @@ namespace Unity.SpaceGod.UI
             if (options == 0) { GUI.contentColor = old; return; }
             float y = r.y + 92 + listH;
             GUI.contentColor = Accent;
-            GUI.Label(new Rect(r.x + 12, y, w - 24, 18), "Fit into " + loadout.Slots[outfitSlot].Name.ToLowerInvariant() + ":", small);
+            string into = outfitSlot < hardpoints ? "Fit onto " + loadout.Slots[outfitSlot].Name.ToLowerInvariant() + ":"
+                : outfitSlot < hardpoints + facilities ? loadout.Facilities[outfitSlot - hardpoints].Name + ":" : "Fit into the free space:";
+            GUI.Label(new Rect(r.x + 12, y, w - 24, 18), into, small);
             y += 22;
-            foreach (var m in ModuleSpec.Catalogue)
-                if (Outfitting.CanFit(loadout, outfitSlot, m.Kind))
-                {
-                    OutfitOption(ship, yard, loadout, m.Kind, m.Name, r.x, y, w, rowH);
-                    y += rowH;
-                }
-            if (Outfitting.CanFit(loadout, outfitSlot, null)) OutfitOption(ship, yard, loadout, null, "Empty the bay", r.x, y, w, rowH);
+            foreach (var option in OutfitOptions(loadout, outfitSlot))
+            {
+                OutfitOption(ship, yard, loadout, option, r.x, y, w, rowH);
+                y += rowH;
+            }
             GUI.contentColor = old;
         }
 
-        void OutfitOption(Ship ship, Settlement yard, Loadout loadout, ModuleKind? module, string name, float x, float y, float w, float rowH)
+        static string Sections(double n) => n.ToString("0.#", CultureInfo.InvariantCulture) + (Math.Abs(n - 1) < 1e-9 ? " section" : " sections");
+
+        /// <summary>What the chosen row offers: the modules a hardpoint takes, stripping a fitted facility, or the
+        /// facilities the free space has room for.</summary>
+        static List<(ModuleKind? module, FacilityKind facility, string name)> OutfitOptions(Loadout loadout, int row)
         {
-            bool current = loadout.Fitted[outfitSlot] == module;
-            var q = Outfitting.Quote(ship, yard, outfitSlot, module);
+            var list = new List<(ModuleKind?, FacilityKind, string)>();
+            int hardpoints = loadout.Slots.Count, facilities = loadout.Facilities.Count;
+            if (row < hardpoints)
+            {
+                foreach (var m in ModuleSpec.Catalogue) if (Outfitting.CanFit(loadout, row, m.Kind)) list.Add((m.Kind, null, m.Name));
+            }
+            else if (row < hardpoints + facilities)
+            {
+                if (loadout.CanRemove(row - hardpoints)) list.Add((null, null, "Strip it out"));
+            }
+            else
+                foreach (var k in FacilityKinds.Catalogue)
+                    if (loadout.CanAdd(k) == OutfitOutcome.Ok) list.Add((null, k, k.Name + "  (" + Sections(k.Size) + ")"));
+            return list;
+        }
+
+        void OutfitOption(Ship ship, Settlement yard, Loadout loadout, (ModuleKind? module, FacilityKind facility, string name) option, float x, float y, float w, float rowH)
+        {
+            int hardpoints = loadout.Slots.Count;
+            bool onHardpoint = outfitSlot < hardpoints, strip = !onHardpoint && option.facility == null;
+            bool current = onHardpoint && loadout.Fitted[outfitSlot] == option.module;
+            var q = onHardpoint ? Outfitting.Quote(ship, yard, outfitSlot, option.module)
+                : strip ? Outfitting.QuoteStrip(ship, yard, outfitSlot - hardpoints)
+                : Outfitting.QuoteFacility(ship, yard, option.facility);
             GUI.contentColor = current ? Accent : Color.white;
-            GUI.Label(new Rect(x + 20, y, 200, rowH), name, small);
+            GUI.Label(new Rect(x + 20, y, 200, rowH), option.name, small);
             GUI.contentColor = Dim;
             // Only the greatest yards build a tachyon lance (U.SPC-T487).
-            bool builds = module == null || ModuleSpec.YardBuilds(module.Value, yard);
+            bool builds = option.module == null || ModuleSpec.YardBuilds(option.module.Value, yard);
             string price = current ? "fitted"
                 : !builds ? "this yard cannot build it"
                 : !q.InStock ? "yard is short of " + GoodInfo.Of(q.Short).Name.ToLowerInvariant()
@@ -2851,13 +2888,19 @@ namespace Unity.SpaceGod.UI
             GUI.Label(new Rect(x + 220, y, 250, rowH), price, small);
             GUI.contentColor = Color.white;
             if (current || !q.InStock || !builds) return;
-            if (!GUI.Button(new Rect(x + w - 100, y - 1, 84, rowH - 1), module == null ? "Strip" : "Fit", button)) return;
-            var outcome = Outfitting.Fit(app.Economy, ship, yard, outfitSlot, module, out var paid);
+            if (!GUI.Button(new Rect(x + w - 100, y - 1, 84, rowH - 1), strip ? "Strip" : "Fit", button)) return;
+            string what = strip ? loadout.Facilities[outfitSlot - hardpoints].Name : option.name;
+            OutfitQuote paid;
+            var outcome = onHardpoint ? Outfitting.Fit(app.Economy, ship, yard, outfitSlot, option.module, out paid)
+                : strip ? Outfitting.StripFacility(app.Economy, ship, yard, outfitSlot - hardpoints, out paid)
+                : Outfitting.FitFacility(app.Economy, ship, yard, option.facility, out paid);
+            if (outcome == OutfitOutcome.Ok && strip) outfitSlot = -1;
             app.ShowToast(outcome switch
             {
-                OutfitOutcome.Ok => (module == null ? "Bay emptied" : name + " fitted") + (paid.Net >= 0 ? " for " + Credits(paid.Net) : ", " + Credits(-paid.Net) + " back"),
+                OutfitOutcome.Ok => (strip ? what + " stripped out" : (onHardpoint ? option.name : option.facility.Name) + " fitted") + (paid.Net >= 0 ? " for " + Credits(paid.Net) : ", " + Credits(-paid.Net) + " back"),
                 OutfitOutcome.CantAfford => "Not enough credits",
                 OutfitOutcome.NoStock => yard.Name + " is short of the materials",
+                OutfitOutcome.NoRoom => "Not enough internal space: strip something out first",
                 OutfitOutcome.HoldTooFull => "Empty the hold before taking the racks out",
                 OutfitOutcome.BrigOccupied => "Hand over the prisoners before taking the brig out",
                 OutfitOutcome.Busy => "Not while fighting or boarded",
@@ -3373,7 +3416,7 @@ namespace Unity.SpaceGod.UI
                 "   PgDn/PgUp plot a course to the next star or beacon (nearest first), or pick one on the galaxy map (F11): ETA, fuel, wells on the way   Del clear",
                 "   End  FTL autopilot: flies out beyond the rim, turns onto the star, spools and engages, time compressed (Settings > FTL)   End again takes the helm back",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
-                "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
+                "F2  outfitting at a shipyard (or Outfit on the market): guns, shields and drives on the hardpoints; plate, racks, scanners, a brig in the internal space",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
                 "F7  contracts board of the port in view: freight, passengers, colonists, escorts, patrols, surveys, bounties",
                 "F10  your fleet: buy hulls, warehouses, station shares and claims; hire captains and give them standing orders",

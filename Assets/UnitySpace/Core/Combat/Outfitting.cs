@@ -27,7 +27,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>Plate bolted over the hull: more hull points and armour, and mass to push.</summary>
         ArmourPlating,
 
-        /// <summary>Racks in a bay: more trade hold and two more rows in the grid hold.</summary>
+        /// <summary>Racks in the hull's free space (a facility, U.SPC-T470): more trade hold and two more rows in the grid hold.</summary>
         CargoRack,
 
         /// <summary>A sensor suite: half the hull's base scanner range again and finer resolution (see <see cref="SensorSuite.Of"/>),
@@ -52,15 +52,16 @@ namespace Unity.SpaceGod.Core
         TachyonLance,
     }
 
-    /// <summary>The kinds of slot a hull offers: its weapon hardpoints (light ones take point defence, a laser or an
-    /// autocannon, heavy ones any turret), its shield and engine mounts, its internal bays, a small craft's gun
-    /// mounts (an autocannon, a light railgun or a laser) and utility mount (missiles, an EMP launcher, mines or
-    /// an auto turret) (U.SPC-T271), and a capital hull's torpedo tubes (a tube or a missile launcher, U.SPC-T377).</summary>
-    public enum SlotKind { LightMount, HeavyMount, ShieldMount, EngineMount, InternalBay, GunMount, UtilityMount, TorpedoTube }
+    /// <summary>The kinds of hardpoint a hull offers on its surface: its weapon hardpoints (light ones take point defence, a
+    /// laser or an autocannon, heavy ones any turret), its shield and engine mounts, a small craft's gun mounts (an
+    /// autocannon, a light railgun or a laser) and utility mount (missiles, an EMP launcher, mines or an auto turret)
+    /// (U.SPC-T271), and a capital hull's torpedo tubes (a tube or a missile launcher, U.SPC-T377). What is inside the
+    /// hull is not a slot but a facility (<see cref="FacilityKind"/>, U.SPC-T470).</summary>
+    public enum SlotKind { LightMount, HeavyMount, ShieldMount, EngineMount, GunMount, UtilityMount, TorpedoTube }
 
     /// <summary>One module: what it is called, what a yard builds it from (tonnes of alloys, electronics,
     /// machinery and munitions, scaled with the hull for plate, drives, generators and racks) and its mass.</summary>
-    public sealed class ModuleSpec
+    public sealed class ModuleSpec : IPartSpec
     {
         public readonly ModuleKind Kind;
         public readonly string Name;
@@ -124,6 +125,13 @@ namespace Unity.SpaceGod.Core
 
         public double Mass(double scale) => MassTonnes * (Scaled ? scale : 1);
 
+        string IPartSpec.Name => Name;
+        (Good good, double tonnes)[] IPartSpec.Bill => Bill;
+
+        /// <summary>The facility this module is (plate, racks, a scanner suite, a brig: they go inside the hull, not on a
+        /// hardpoint), or null.</summary>
+        public FacilityKind Facility => FacilityKinds.ForModule(Kind);
+
         /// <summary>Whether a module goes in a slot (a railgun is spinal: only a mount that bears on the bow takes one).</summary>
         public static bool Fits(ModuleKind m, SlotKind slot, bool bearsOnBow)
         {
@@ -141,7 +149,7 @@ namespace Unity.SpaceGod.Core
                     return m == ModuleKind.MissileLauncher || m == ModuleKind.EmpLauncher || m == ModuleKind.MineLayer || m == ModuleKind.AutoTurret;
                 case SlotKind.ShieldMount: return m == ModuleKind.ShieldGenerator || m == ModuleKind.HardenedShield;
                 case SlotKind.EngineMount: return m == ModuleKind.Engine || m == ModuleKind.TorchEngine;
-                default: return m == ModuleKind.ArmourPlating || m == ModuleKind.CargoRack || m == ModuleKind.Scanner || m == ModuleKind.Brig;
+                default: return false;
             }
         }
 
@@ -169,15 +177,15 @@ namespace Unity.SpaceGod.Core
         }
     }
 
-    /// <summary>One slot of a hull: its kind, and (for a mount) which hardpoint of the layout it is and what the design put there.</summary>
+    /// <summary>One hardpoint slot of a hull: its kind, which hardpoint of the layout it is and what the design put there.</summary>
     public sealed class OutfitSlot
     {
         public readonly SlotKind Kind;
 
-        /// <summary>The hardpoint's index in <see cref="CombatSpec.Layout"/>, or -1 for an internal bay.</summary>
+        /// <summary>The hardpoint's index in <see cref="CombatSpec.Layout"/>.</summary>
         public readonly int LayoutIndex;
 
-        /// <summary>What the design was built with here (null for a bay, which starts empty).</summary>
+        /// <summary>What the design was built with here.</summary>
         public readonly ModuleKind? Stock;
 
         /// <summary>A mount that bears on the bow, so it can take a spinal railgun.</summary>
@@ -204,18 +212,22 @@ namespace Unity.SpaceGod.Core
                     case SlotKind.TorpedoTube: return "Torpedo tube";
                     case SlotKind.ShieldMount: return "Shield mount";
                     case SlotKind.EngineMount: return "Engine mount";
-                    default: return "Internal bay";
+                    default: return Kind.ToString();
                 }
             }
         }
     }
 
     /// <summary>
-    /// What is fitted into each of a hull's slots (U.SPC-T65), over the design it was built as. The slots come
-    /// from the design: each refittable hardpoint (guns and launchers, point defence, shield generators,
-    /// engines) plus a number of internal bays by class. Bridges, reactors, hangars, drills, pod launchers and
-    /// a fighter's guns are part of the hull and are not refitted. <see cref="Build"/> turns the loadout into
-    /// the hull's <see cref="CombatSpec"/>: its hardpoints, shield, hull, armour, drive and mass.
+    /// What is fitted into a hull (U.SPC-T65), over the design it was built as, in two kinds of part (U.SPC-T470).
+    /// Its hardpoints (<see cref="Slots"/>) are places on the hull's surface with a position and an arc: each refittable
+    /// mount of the design (guns and launchers, point defence, torpedo tubes, shield generators, engines). Its
+    /// facilities (<see cref="Facilities"/>) are inside the body of the ship and have only a size: the structure the
+    /// hull is designed with (bridge, engineering, quarters, hangar, holds) and whatever a yard fits into the free
+    /// space left over (plate, racks, a scanner suite, a brig, and any facility kind registered later), each taking a
+    /// share of the hull's limited <see cref="InternalSpace"/>. Bridges, reactors, hangars, drills, pod launchers and a
+    /// fighter's guns are part of the hull and are not refitted. <see cref="Build"/> turns the loadout into the hull's
+    /// <see cref="CombatSpec"/>: its hardpoints, shield, hull, armour, drive and mass.
     /// </summary>
     public sealed class Loadout
     {
@@ -223,8 +235,23 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The hull's class, or null for a station or satellite (U.SPC-T377), which has none.</summary>
         public readonly ShipClass? Class;
+
+        /// <summary>What the hull is (U.SPC-T470), for the facilities only some hulls may fit.</summary>
+        public readonly HullCategory Category;
+
+        /// <summary>The hull's hardpoints.</summary>
         public readonly List<OutfitSlot> Slots = new List<OutfitSlot>();
         public readonly ModuleKind?[] Fitted;
+
+        /// <summary>The facilities inside the hull now (U.SPC-T470): the design's own first, in its layout's order, then
+        /// those fitted since.</summary>
+        public readonly List<FacilitySite> Facilities = new List<FacilitySite>();
+
+        /// <summary>The facilities the hull was designed with.</summary>
+        public readonly IReadOnlyList<FacilitySite> StockFacilities;
+
+        /// <summary>The hull's whole internal space, sections: its design's facilities and the free space beyond them.</summary>
+        public readonly double InternalSpace;
 
         /// <summary>The trade hold the hull was built with, tonnes, before any racks.</summary>
         public readonly double BaseCapacityTonnes;
@@ -233,14 +260,16 @@ namespace Unity.SpaceGod.Core
         public readonly bool SmallCraft;
 
         public Loadout(CombatSpec design, ShipClass cls, double baseCapacityTonnes)
-            : this(design, cls, baseCapacityTonnes, IsSmallCraft(cls), InternalBays(cls)) { }
+            : this(design, cls, HullFrames.CategoryOf(cls), baseCapacityTonnes, IsSmallCraft(cls), FacilityLayouts.For(cls), FacilityLayouts.SpareSpace(cls)) { }
 
-        /// <summary>A loadout for any built hull (U.SPC-T377): a ship of a class, or a station or satellite (no class)
-        /// with its own count of internal bays.</summary>
-        public Loadout(CombatSpec design, ShipClass? cls, double baseCapacityTonnes, bool smallCraft, int internalBays)
+        /// <summary>A loadout for any built hull (U.SPC-T377): a ship of a class, or a station or satellite (no class),
+        /// with the facilities it is designed with and the free space it has beyond them (sections).</summary>
+        public Loadout(CombatSpec design, ShipClass? cls, HullCategory category, double baseCapacityTonnes, bool smallCraft,
+                       IReadOnlyList<FacilitySite> facilities, double spareSpace)
         {
             Base = design;
             Class = cls;
+            Category = category;
             BaseCapacityTonnes = baseCapacityTonnes;
             SmallCraft = smallCraft;
             for (int i = 0; i < design.Layout.Length; i++)
@@ -250,9 +279,11 @@ namespace Unity.SpaceGod.Core
                 if (slot == null) continue;
                 Slots.Add(new OutfitSlot(slot.Value, i, StockOf(d.Kind), d.ContainsYaw(0)));
             }
-            for (int i = 0; i < internalBays; i++) Slots.Add(new OutfitSlot(SlotKind.InternalBay, -1, null, false));
             Fitted = new ModuleKind?[Slots.Count];
             for (int i = 0; i < Slots.Count; i++) Fitted[i] = Slots[i].Stock;
+            StockFacilities = facilities ?? Array.Empty<FacilitySite>();
+            Facilities.AddRange(StockFacilities);
+            InternalSpace = FacilityLayouts.SpaceOf(StockFacilities) + Math.Max(0, spareSpace);
         }
 
         /// <summary>The hulls flown as fighters, whose missile rack is a utility mount.</summary>
@@ -307,37 +338,59 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>Internal bays a hull of each class has room for.</summary>
-        public static int InternalBays(ShipClass c)
-        {
-            switch (c)
-            {
-                case ShipClass.Carrier:
-                case ShipClass.Battleship: return 6;
-                case ShipClass.Cruiser:
-                case ShipClass.Freighter: return 4;
-                case ShipClass.Destroyer:
-                case ShipClass.Miner:
-                case ShipClass.Explorer: return 3;
-                case ShipClass.Breacher:
-                case ShipClass.Gunship:
-                case ShipClass.Courier:
-                case ShipClass.OreTug: return 2;
-                default: return 1;
-            }
-        }
-
         /// <summary>How big the hull is for plate, drives, generators and racks: 1 for a destroyer (9,000 t dry),
         /// about 4 for a carrier, a sixth for a courier.</summary>
         public double Scale => HullScale(Base);
 
         public static double HullScale(CombatSpec design) => Math.Max(0.05, Math.Sqrt(Math.Max(0, design.DryMassTonnes) / 9000));
 
+        /// <summary>Internal space the facilities take now, sections.</summary>
+        public double UsedSpace => FacilityLayouts.SpaceOf(Facilities);
+
+        /// <summary>Internal space left for another facility, sections.</summary>
+        public double FreeSpace => Math.Max(0, InternalSpace - UsedSpace);
+
+        /// <summary>Hardpoints fitted with <paramref name="k"/>, plus facilities that are that module (plate, racks, a
+        /// scanner suite, a brig).</summary>
         public int Count(ModuleKind k)
         {
             int n = 0;
             foreach (var f in Fitted) if (f == k) n++;
+            foreach (var f in Facilities) if (f.Def?.Module == k) n++;
             return n;
+        }
+
+        /// <summary>Facilities of kind <paramref name="id"/> in the hull.</summary>
+        public int CountFacility(string id)
+        {
+            int n = 0;
+            foreach (var f in Facilities) if (string.Equals(f.Kind, id, StringComparison.OrdinalIgnoreCase)) n++;
+            return n;
+        }
+
+        /// <summary>The design's own facilities no longer in the hull.</summary>
+        public IEnumerable<FacilitySite> RemovedFacilities
+        {
+            get
+            {
+                foreach (var s in StockFacilities) if (!Facilities.Contains(s)) yield return s;
+            }
+        }
+
+        /// <summary>The facilities fitted over the design.</summary>
+        public IEnumerable<FacilitySite> AddedFacilities
+        {
+            get
+            {
+                foreach (var s in Facilities) if (!IsStockFacility(s)) yield return s;
+            }
+        }
+
+        /// <summary>Whether a facility in the hull is one of the design's own.</summary>
+        public bool IsStockFacility(FacilitySite s)
+        {
+            foreach (var x in StockFacilities) if (ReferenceEquals(x, s)) return true;
+            return false;
         }
 
         /// <summary>Whether anything differs from the design as built.</summary>
@@ -346,6 +399,8 @@ namespace Unity.SpaceGod.Core
             get
             {
                 for (int i = 0; i < Slots.Count; i++) if (Fitted[i] != Slots[i].Stock) return false;
+                if (Facilities.Count != StockFacilities.Count) return false;
+                for (int i = 0; i < Facilities.Count; i++) if (!ReferenceEquals(Facilities[i], StockFacilities[i])) return false;
                 return true;
             }
         }
@@ -379,14 +434,17 @@ namespace Unity.SpaceGod.Core
                     if (Fitted[i] is ModuleKind now) mass += ModuleSpec.Of(now).Mass(scale);
                     if (Slots[i].Stock is ModuleKind was) mass -= ModuleSpec.Of(was).Mass(scale);
                 }
+                foreach (var f in AddedFacilities) mass += f.Def?.Mass(scale) ?? 0;
+                foreach (var f in RemovedFacilities) mass -= f.Def?.Mass(scale) ?? 0;
                 return mass;
             }
         }
 
         /// <summary>
         /// The hull's fighting spec with this loadout: each refitted hardpoint swapped in place (same position and
-        /// arc), shield and regen shared by the generators' grades, hull and armour raised by plate, the drive's
-        /// thrust by its engines' mean grade, and every added tonne of dry mass slowing it.
+        /// arc), shield and regen shared by the generators' grades, hull and armour raised by plate, each facility's own
+        /// <see cref="FacilityKind.Effect"/>, the drive's thrust by its engines' mean grade, and every added tonne of dry
+        /// mass slowing it.
         /// </summary>
         public CombatSpec Build()
         {
@@ -399,7 +457,7 @@ namespace Unity.SpaceGod.Core
             for (int i = 0; i < Slots.Count; i++)
             {
                 var slot = Slots[i];
-                if (slot.LayoutIndex < 0 || !(Fitted[i] is ModuleKind m)) continue;
+                if (!(Fitted[i] is ModuleKind m)) continue;
                 double rating = m == ModuleKind.HardenedShield ? HardenedRating : m == ModuleKind.TorchEngine ? TorchRating : 1;
                 if (slot.Kind == SlotKind.ShieldMount) ratings += rating;
                 if (slot.Kind == SlotKind.EngineMount) { engines++; thrust += rating; }
@@ -420,6 +478,8 @@ namespace Unity.SpaceGod.Core
             int plates = Count(ModuleKind.ArmourPlating);
             spec.Armor = Base.Armor + plates * ArmourPerPlate;
             spec.Hull = Base.Hull * (1 + plates * HullPerPlate);
+            foreach (var f in AddedFacilities) f.Def?.Effect?.Invoke(spec, this, 1);
+            foreach (var f in RemovedFacilities) f.Def?.Effect?.Invoke(spec, this, -1);
 
             double dry = Math.Max(1, Base.DryMassTonnes + AddedMassTonnes);
             double heavier = Base.DryMassTonnes > 0 ? dry / Base.DryMassTonnes : 1;
@@ -435,19 +495,31 @@ namespace Unity.SpaceGod.Core
             return spec;
         }
 
+        /// <summary>Why <paramref name="kind"/> could or could not go into this hull's free space now.</summary>
+        public OutfitOutcome CanAdd(FacilityKind kind)
+        {
+            if (kind == null || !kind.Fittable || !kind.AllowedOn(Category)) return OutfitOutcome.WontFit;
+            if (kind.Size > FreeSpace + 1e-9) return OutfitOutcome.NoRoom;
+            return OutfitOutcome.Ok;
+        }
+
+        /// <summary>Whether the facility at <paramref name="index"/> may be taken out (a fittable one; never the
+        /// structure the hull is built around).</summary>
+        public bool CanRemove(int index) => index >= 0 && index < Facilities.Count && Facilities[index].Def?.Fittable == true;
+
         /// <summary>An independent copy, fitted the same way (a newly built hull's own loadout).</summary>
         public Loadout Copy()
         {
-            int bays = 0;
-            foreach (var s in Slots) if (s.Kind == SlotKind.InternalBay) bays++;
-            var l = new Loadout(Base, Class, BaseCapacityTonnes, SmallCraft, bays);
+            var l = new Loadout(Base, Class, Category, BaseCapacityTonnes, SmallCraft, StockFacilities, InternalSpace - FacilityLayouts.SpaceOf(StockFacilities));
             Array.Copy(Fitted, l.Fitted, Fitted.Length);
+            l.Facilities.Clear();
+            l.Facilities.AddRange(Facilities);
             return l;
         }
     }
 
-    /// <summary>Why a refit did or did not go through.</summary>
-    public enum OutfitOutcome { Ok, NotAYard, CannotDock, Busy, NoSuchSlot, WontFit, AlreadyFitted, NoStock, CantAfford, HoldTooFull, BrigOccupied, YardCannotBuild }
+    /// <summary>Why a refit did or did not go through (<see cref="NoRoom"/>: the facility is bigger than the hull's free space).</summary>
+    public enum OutfitOutcome { Ok, NotAYard, CannotDock, Busy, NoSuchSlot, WontFit, AlreadyFitted, NoStock, CantAfford, HoldTooFull, BrigOccupied, YardCannotBuild, NoRoom }
 
     /// <summary>What a refit costs at a yard: the new module's materials bought from its market, the yard's labour,
     /// and what the part taken out fetches sold back into it.</summary>
@@ -475,16 +547,17 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
-    /// Ship outfitting at yards (U.SPC-T65). At a shipyard (or, for raiders, a haven) a ship's owner buys a
-    /// module and has it fitted into one of the hull's slots: a gun or launcher into a weapon hardpoint,
-    /// a hardened generator into a shield mount, a torch drive into an engine mount, or armour plate, cargo
-    /// racks, a scanner suite or a brig into an internal bay. The module's alloys, electronics, machinery and
-    /// munitions come out of that yard's own market at its prices (so a yard short of electronics cannot fit
-    /// shields, and one where they are dear charges for it), the yard's labour is a quarter of the materials'
-    /// worth, and the part taken out is sold back into the market for half its materials. The hull's
-    /// <see cref="CombatSpec"/> is rebuilt from the loadout (<see cref="Loadout.Build"/>), carrying its damage,
-    /// people and stores over. The player does this at the helm; navies and raiders upgrade their warships
-    /// while they refit at their own yards (<see cref="AiRefit"/>).
+    /// Ship outfitting at yards (U.SPC-T65). At a shipyard (or, for raiders, a haven) a ship's owner buys a part and has
+    /// it fitted: on one of the hull's hardpoints a gun or launcher, a hardened generator on a shield mount, a torch drive
+    /// on an engine mount (<see cref="Fit"/>); or, into the hull's free internal space, a facility (U.SPC-T470): armour
+    /// plate, cargo racks, a scanner suite, a brig or any other registered <see cref="FacilityKind"/> the hull has room
+    /// for (<see cref="FitFacility"/>, and <see cref="StripFacility"/> to take one out). The part's alloys, electronics,
+    /// machinery and munitions come out of that yard's own market at its prices (so a yard short of electronics cannot
+    /// fit shields, and one where they are dear charges for it), the yard's labour is a quarter of the materials' worth,
+    /// and the part taken out is sold back into the market for half its materials. The hull's <see cref="CombatSpec"/>
+    /// is rebuilt from the loadout (<see cref="Loadout.Build"/>), carrying its damage, people and stores over. The player
+    /// does this at the helm; navies and raiders upgrade their warships while they refit at their own yards
+    /// (<see cref="AiRefit"/>).
     /// </summary>
     public static class Outfitting
     {
@@ -522,11 +595,14 @@ namespace Unity.SpaceGod.Core
         public static double BrigRoom(Ship ship) => ship == null ? 0 : Math.Max(0, BrigCapacity(ship) - ship.Prisoners - ship.CaptainsHeld);
 
         /// <summary>
-        /// Fits <paramref name="module"/> into the first empty slot that takes it, as part of a new hull's build (no
-        /// yard bill: the hull's price covers it). False if no slot is free for it.
+        /// Fits <paramref name="module"/> as part of a new hull's build (no yard bill: the hull's price covers it): a
+        /// facility module (a brig, plate, racks, a scanner) into the hull's free space, any other into the first empty
+        /// hardpoint that takes it. False if there is no room for it.
         /// </summary>
         public static bool Install(Ship ship, ModuleKind module)
         {
+            var facility = FacilityKinds.ForModule(module);
+            if (facility != null) return Install(ship, facility);
             var l = LoadoutOf(ship);
             if (l == null) return false;
             for (int i = 0; i < l.Slots.Count; i++)
@@ -539,40 +615,66 @@ namespace Unity.SpaceGod.Core
             return false;
         }
 
+        /// <summary>Fits a facility into the hull's free space as part of its build (no yard bill). False if it has no room
+        /// for it or may not carry it.</summary>
+        public static bool Install(Ship ship, FacilityKind kind)
+        {
+            var l = LoadoutOf(ship);
+            if (l == null || l.CanAdd(kind) != OutfitOutcome.Ok) return false;
+            l.Facilities.Add(FacilitySite.Fitted(kind));
+            var spec = l.Build();
+            ship.Combat = ship.Combat.Refitted(spec, l.Class, -1, InteriorAfter(ship, l, kind, spec));
+            return true;
+        }
+
         /// <summary>Extra trade hold this ship's racks give, tonnes.</summary>
         public static double RackTonnes(Loadout l, int racks) => l.BaseCapacityTonnes * Loadout.RackCapacityShare * racks;
 
         /// <summary>
-        /// What fitting <paramref name="module"/> (null: emptying an internal bay) into slot <paramref name="slot"/> of
-        /// the ship costs at <paramref name="yard"/>, at that market's prices and stock now.
+        /// What fitting <paramref name="module"/> onto hardpoint <paramref name="slot"/> of the ship costs at
+        /// <paramref name="yard"/>, at that market's prices and stock now.
         /// </summary>
         public static OutfitQuote Quote(Ship ship, Settlement yard, int slot, ModuleKind? module)
         {
             var l = LoadoutOf(ship);
             if (l == null || yard == null || slot < 0 || slot >= l.Slots.Count) return default;
-            double scale = l.Scale;
+            return Price(yard, l.Scale, module is ModuleKind m ? ModuleSpec.Of(m) : null,
+                l.Fitted[slot] is ModuleKind old ? ModuleSpec.Of(old) : null, PartHealth(ship, l.Slots[slot]));
+        }
+
+        /// <summary>What fitting a facility of <paramref name="kind"/> into the ship's free space costs at <paramref name="yard"/>.</summary>
+        public static OutfitQuote QuoteFacility(Ship ship, Settlement yard, FacilityKind kind)
+        {
+            var l = LoadoutOf(ship);
+            if (l == null || yard == null || kind == null) return default;
+            return Price(yard, l.Scale, kind, null, 1);
+        }
+
+        /// <summary>What taking out the ship's facility number <paramref name="index"/> fetches (or costs) at <paramref name="yard"/>.</summary>
+        public static OutfitQuote QuoteStrip(Ship ship, Settlement yard, int index)
+        {
+            var l = LoadoutOf(ship);
+            if (l == null || yard == null || index < 0 || index >= l.Facilities.Count) return default;
+            return Price(yard, l.Scale, null, l.Facilities[index].Def, 1);
+        }
+
+        static OutfitQuote Price(Settlement yard, double scale, IPartSpec add, IPartSpec remove, double health)
+        {
             double materials = 0, labour = 0, tradeIn = 0;
             bool inStock = true;
             Good shortOf = Good.Alloys;
-            if (module is ModuleKind m)
-            {
-                var spec = ModuleSpec.Of(m);
-                for (int i = 0; i < spec.Bill.Length; i++)
+            if (add != null)
+                for (int i = 0; i < add.Bill.Length; i++)
                 {
-                    var g = spec.Bill[i].good;
-                    double t = spec.Tonnes(i, scale);
+                    var g = add.Bill[i].good;
+                    double t = add.Tonnes(i, scale);
                     materials += yard.PurchaseCost(g, t) * (1 + Economy.PortTax);
                     labour += t * GoodInfo.Of(g).BasePrice * LabourShare;
                     if (inStock && yard.Available(g) < t) { inStock = false; shortOf = g; }
                 }
-            }
-            if (l.Fitted[slot] is ModuleKind old)
-            {
-                var spec = ModuleSpec.Of(old);
-                double health = PartHealth(ship, l.Slots[slot]);
-                for (int i = 0; i < spec.Bill.Length; i++)
-                    tradeIn += yard.SaleValue(spec.Bill[i].good, spec.Tonnes(i, scale) * TradeInShare * health) * (1 - Economy.PortTax);
-            }
+            if (remove != null)
+                for (int i = 0; i < remove.Bill.Length; i++)
+                    tradeIn += yard.SaleValue(remove.Bill[i].good, remove.Tonnes(i, scale) * TradeInShare * health) * (1 - Economy.PortTax);
             return new OutfitQuote(materials, labour, tradeIn, inStock, shortOf);
         }
 
@@ -583,92 +685,167 @@ namespace Unity.SpaceGod.Core
             return ship.Combat.Subsystems[slot.LayoutIndex].Health;
         }
 
-        /// <summary>Whether <paramref name="module"/> may go in slot <paramref name="slot"/> (null only into a bay).</summary>
+        /// <summary>Whether <paramref name="module"/> may go on hardpoint <paramref name="slot"/> (a hardpoint is never left
+        /// empty; a facility goes into free space, <see cref="Loadout.CanAdd"/>).</summary>
         public static bool CanFit(Loadout l, int slot, ModuleKind? module)
         {
-            if (l == null || slot < 0 || slot >= l.Slots.Count) return false;
+            if (l == null || slot < 0 || slot >= l.Slots.Count || !(module is ModuleKind m)) return false;
             var s = l.Slots[slot];
             // A tachyon lance goes only into a capital hull (U.SPC-T487).
-            if (module == ModuleKind.TachyonLance && !TachyonLances.CanCarry(l.Class)) return false;
-            if (module is ModuleKind m) return ModuleSpec.Fits(m, s.Kind, s.BearsOnBow);
-            return s.Kind == SlotKind.InternalBay;
+            if (m == ModuleKind.TachyonLance && !TachyonLances.CanCarry(l.Class)) return false;
+            return ModuleSpec.Fits(m, s.Kind, s.BearsOnBow);
         }
 
-        /// <summary>
-        /// Fits <paramref name="module"/> (null: strips an internal bay) into slot <paramref name="slot"/> of
-        /// <paramref name="ship"/> at <paramref name="yard"/>: buys the materials from its market (they leave its
-        /// stock and count as demand there), pays the yard's labour and the port's tax, sells the old part back,
-        /// and rebuilds the hull's combat spec. Nothing changes unless it returns <see cref="OutfitOutcome.Ok"/>.
-        /// The ship must be out of battle; the caller checks it is alongside the yard.
-        /// </summary>
-        public static OutfitOutcome Fit(Economy economy, Ship ship, Settlement yard, int slot, ModuleKind? module, out OutfitQuote quote)
+        /// <summary>Whether the ship can be refitted at the yard now: a yard that lets it dock, out of battle and not boarded.</summary>
+        static OutfitOutcome Ready(Economy economy, Ship ship, Settlement yard)
         {
-            quote = default;
             if (!IsYard(yard)) return OutfitOutcome.NotAYard;
             if (ship == null || ship.Combat == null || ship.Destroyed || ship.Derelict) return OutfitOutcome.Busy;
             if (economy != null && !economy.CanTrade(ship, yard)) return OutfitOutcome.CannotDock;
             if (ship.Battle != null || ship.Combat.Interior.UnderBoarding) return OutfitOutcome.Busy;
+            return OutfitOutcome.Ok;
+        }
+
+        /// <summary>
+        /// Fits <paramref name="module"/> onto hardpoint <paramref name="slot"/> of <paramref name="ship"/> at
+        /// <paramref name="yard"/>: buys the materials from its market (they leave its stock and count as demand there),
+        /// pays the yard's labour and the port's tax, sells the old part back, and rebuilds the hull's combat spec.
+        /// Nothing changes unless it returns <see cref="OutfitOutcome.Ok"/>. The ship must be out of battle; the caller
+        /// checks it is alongside the yard.
+        /// </summary>
+        public static OutfitOutcome Fit(Economy economy, Ship ship, Settlement yard, int slot, ModuleKind? module, out OutfitQuote quote)
+        {
+            quote = default;
+            var ready = Ready(economy, ship, yard);
+            if (ready != OutfitOutcome.Ok) return ready;
             var l = LoadoutOf(ship);
             if (slot < 0 || slot >= l.Slots.Count) return OutfitOutcome.NoSuchSlot;
             if (!CanFit(l, slot, module)) return OutfitOutcome.WontFit;
             if (l.Fitted[slot] == module) return OutfitOutcome.AlreadyFitted;
             if (module is ModuleKind built && !ModuleSpec.YardBuilds(built, yard)) return OutfitOutcome.YardCannotBuild;
 
+            quote = Quote(ship, yard, slot, module);
+            var add = ModuleSpec.Of(module.Value);
+            var remove = l.Fitted[slot] is ModuleKind old ? ModuleSpec.Of(old) : null;
+            var paid = Charge(ship, yard, l.Scale, add, remove, PartHealth(ship, l.Slots[slot]), quote);
+            if (paid != OutfitOutcome.Ok) return paid;
+
+            l.Fitted[slot] = module;
+            ship.Combat = ship.Combat.Refitted(l.Build(), l.Class, l.Slots[slot].LayoutIndex);
+            return OutfitOutcome.Ok;
+        }
+
+        /// <summary>
+        /// Fits a facility of <paramref name="kind"/> into the free internal space of <paramref name="ship"/> at
+        /// <paramref name="yard"/> (U.SPC-T470), bought from the yard's market as <see cref="Fit"/> buys a gun. It must be
+        /// a kind the hull may carry (<see cref="OutfitOutcome.WontFit"/>) and fit in the space left
+        /// (<see cref="OutfitOutcome.NoRoom"/>: strip something else first).
+        /// </summary>
+        public static OutfitOutcome FitFacility(Economy economy, Ship ship, Settlement yard, FacilityKind kind, out OutfitQuote quote)
+        {
+            quote = default;
+            var ready = Ready(economy, ship, yard);
+            if (ready != OutfitOutcome.Ok) return ready;
+            var l = LoadoutOf(ship);
+            var can = l.CanAdd(kind);
+            if (can != OutfitOutcome.Ok) return can;
+
+            quote = QuoteFacility(ship, yard, kind);
+            var paid = Charge(ship, yard, l.Scale, kind, null, 1, quote);
+            if (paid != OutfitOutcome.Ok) return paid;
+
+            l.Facilities.Add(FacilitySite.Fitted(kind));
+            Rebuild(ship, l, kind, null);
+            return OutfitOutcome.Ok;
+        }
+
+        /// <summary>
+        /// Takes facility number <paramref name="index"/> out of <paramref name="ship"/> at <paramref name="yard"/>, sold
+        /// back for half its materials. Only a fitted facility comes out (never the hull's own structure), racks only
+        /// when what is in them fits the hold that is left, and a brig only when it is empty.
+        /// </summary>
+        public static OutfitOutcome StripFacility(Economy economy, Ship ship, Settlement yard, int index, out OutfitQuote quote)
+        {
+            quote = default;
+            var ready = Ready(economy, ship, yard);
+            if (ready != OutfitOutcome.Ok) return ready;
+            var l = LoadoutOf(ship);
+            if (index < 0 || index >= l.Facilities.Count) return OutfitOutcome.NoSuchSlot;
+            if (!l.CanRemove(index)) return OutfitOutcome.WontFit;
+            var kind = l.Facilities[index].Def;
+
             // What the hull would carry afterwards: racks and brig cells taken out must leave room for what is in them.
-            int racks = l.Count(ModuleKind.CargoRack) + (module == ModuleKind.CargoRack ? 1 : 0) - (l.Fitted[slot] == ModuleKind.CargoRack ? 1 : 0);
-            int brigs = l.Count(ModuleKind.Brig) + (module == ModuleKind.Brig ? 1 : 0) - (l.Fitted[slot] == ModuleKind.Brig ? 1 : 0);
-            double capacity = l.BaseCapacityTonnes + RackTonnes(l, racks);
             CargoHold resized = null;
-            if (l.Fitted[slot] == ModuleKind.CargoRack)
+            if (kind.Module == ModuleKind.CargoRack)
             {
-                if (ship.HasCargo && ship.CargoTonnes > capacity + 1e-9) return OutfitOutcome.HoldTooFull;
+                int racks = l.Count(ModuleKind.CargoRack) - 1;
+                if (ship.HasCargo && ship.CargoTonnes > l.BaseCapacityTonnes + RackTonnes(l, racks) + 1e-9) return OutfitOutcome.HoldTooFull;
                 resized = ship.ResizedHold(racks * Loadout.RackRows);
                 if (resized == null) return OutfitOutcome.HoldTooFull;
             }
-            if (ship.Prisoners + ship.CaptainsHeld > brigs * l.BrigBerthsEach + 1e-9) return OutfitOutcome.BrigOccupied;
+            if (kind.Module == ModuleKind.Brig && ship.Prisoners + ship.CaptainsHeld > (l.Count(ModuleKind.Brig) - 1) * l.BrigBerthsEach + 1e-9)
+                return OutfitOutcome.BrigOccupied;
 
-            quote = Quote(ship, yard, slot, module);
+            quote = QuoteStrip(ship, yard, index);
+            var paid = Charge(ship, yard, l.Scale, null, kind, 1, quote);
+            if (paid != OutfitOutcome.Ok) return paid;
+
+            l.Facilities.RemoveAt(index);
+            Rebuild(ship, l, kind, resized);
+            return OutfitOutcome.Ok;
+        }
+
+        /// <summary>Settles a refit's bill with the yard: buys the new part's materials out of its market, sells the old
+        /// part's back into it, pays labour and tax. Nothing is paid unless it returns <see cref="OutfitOutcome.Ok"/>.</summary>
+        static OutfitOutcome Charge(Ship ship, Settlement yard, double scale, IPartSpec add, IPartSpec remove, double health, OutfitQuote quote)
+        {
             if (!quote.InStock) return OutfitOutcome.NoStock;
             if (quote.Net > 0 && ship.Faction.Treasury < quote.Net) return OutfitOutcome.CantAfford;
-
-            double scale = l.Scale;
-            if (module is ModuleKind m)
-            {
-                var spec = ModuleSpec.Of(m);
-                for (int i = 0; i < spec.Bill.Length; i++)
+            if (add != null)
+                for (int i = 0; i < add.Bill.Length; i++)
                 {
-                    var g = spec.Bill[i].good;
-                    double t = spec.Tonnes(i, scale);
+                    var g = add.Bill[i].good;
+                    double t = add.Tonnes(i, scale);
                     double price = yard.PurchaseCost(g, t);
                     yard.Stock[(int)g] = Math.Max(0, yard.Stock[(int)g] - t);
                     yard.ExtraDemand[(int)g] += t;
                     yard.TradeVolumeCredits += price;
                     yard.Owner.Treasury += price * Economy.PortTax;
                 }
-            }
-            if (l.Fitted[slot] is ModuleKind old)
-            {
-                var spec = ModuleSpec.Of(old);
-                double health = PartHealth(ship, l.Slots[slot]);
-                for (int i = 0; i < spec.Bill.Length; i++)
+            if (remove != null)
+                for (int i = 0; i < remove.Bill.Length; i++)
                 {
-                    var g = spec.Bill[i].good;
-                    double t = spec.Tonnes(i, scale) * TradeInShare * health;
+                    var g = remove.Bill[i].good;
+                    double t = remove.Tonnes(i, scale) * TradeInShare * health;
                     double value = yard.SaleValue(g, t);
                     yard.Stock[(int)g] += t;
                     yard.Owner.Treasury += value * Economy.PortTax;
                 }
-            }
             yard.Owner.Treasury += quote.Labour;
             ship.Faction.Treasury -= quote.Net;
             yard.RefreshPrices();
-
-            l.Fitted[slot] = module;
-            int changed = l.Slots[slot].LayoutIndex;
-            ship.Combat = ship.Combat.Refitted(l.Build(), l.Class, changed);
-            ship.CapacityTonnes = capacity;
-            if (resized != null || module == ModuleKind.CargoRack) ship.SetHold(resized ?? ship.ResizedHold(racks * Loadout.RackRows));
             return OutfitOutcome.Ok;
+        }
+
+        /// <summary>The hull after a facility of <paramref name="kind"/> went in or came out: its combat spec, its interior
+        /// (when the facility is a space of its own) and, for racks, both its holds.</summary>
+        static void Rebuild(Ship ship, Loadout l, FacilityKind kind, CargoHold resized)
+        {
+            var spec = l.Build();
+            ship.Combat = ship.Combat.Refitted(spec, l.Class, -1, InteriorAfter(ship, l, kind, spec));
+            if (kind.Module != ModuleKind.CargoRack) return;
+            int racks = l.Count(ModuleKind.CargoRack);
+            ship.CapacityTonnes = l.BaseCapacityTonnes + RackTonnes(l, racks);
+            ship.SetHold(resized ?? ship.ResizedHold(racks * Loadout.RackRows));
+        }
+
+        /// <summary>A new interior for the hull when a facility that is a compartment went in or came out (its people
+        /// carried over, and any marines the new <paramref name="spec"/> adds or loses), or null to keep the one it has.</summary>
+        static Interior InteriorAfter(Ship ship, Loadout l, FacilityKind kind, CombatSpec spec)
+        {
+            if (kind?.Compartment == null || ship.Combat == null) return null;
+            var was = ship.Combat.Interior;
+            return Interior.For(l.Facilities, was.Crew, Math.Max(0, was.Marines + spec.Marines - ship.Combat.Spec.Marines));
         }
 
         // ---------------------------------------------------------------- the AI's refits
@@ -676,20 +853,23 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// A navy's or raiders' warship refitting at its own yard takes one upgrade a visit, when the owner is
         /// flush (<see cref="AiFlush"/> times its price, and two new hulls' worth besides) and the yard has the
-        /// materials to spare (<see cref="AiStockMargin"/>): plate first
-        /// (navies want a scanner and a brig too; raiders a brig and racks for plunder), then hardened shields,
-        /// heavier guns on a big hull, then torch drives. Returns what was fitted, or null.
+        /// materials to spare (<see cref="AiStockMargin"/>): the facilities it wants first, as far as its free space goes
+        /// (<see cref="NavyFacilities"/>: plate, a scanner and a brig; <see cref="RaiderFacilities"/>: plate, a brig and
+        /// racks for plunder), then hardened shields, heavier guns on a big hull, then torch drives. Returns what was
+        /// fitted (a <see cref="ModuleSpec"/> or a <see cref="FacilityKind"/>), or null.
         /// </summary>
-        public static ModuleKind? AiRefit(Economy economy, Ship ship, Settlement yard)
+        public static IPartSpec AiRefit(Economy economy, Ship ship, Settlement yard)
         {
             var l = LoadoutOf(ship);
             if (l == null) return null;
-            foreach (var (slot, module) in AiWishes(ship, l))
+            foreach (var (slot, module, facility) in AiWishes(ship, l))
             {
-                var q = Quote(ship, yard, slot, module);
-                if (!q.InStock || !Surplus(yard, module, l.Scale)) continue;
+                IPartSpec part = facility != null ? (IPartSpec)facility : ModuleSpec.Of(module);
+                var q = facility != null ? QuoteFacility(ship, yard, facility) : Quote(ship, yard, slot, module);
+                if (!q.InStock || !Surplus(yard, part, l.Scale)) continue;
                 if (ship.Faction.Treasury < q.Net * AiFlush + 2 * Economy.HullPrice(ship.Spec.Class)) continue;
-                if (Fit(economy, ship, yard, slot, module, out _) == OutfitOutcome.Ok) return module;
+                var outcome = facility != null ? FitFacility(economy, ship, yard, facility, out _) : Fit(economy, ship, yard, slot, module, out _);
+                if (outcome == OutfitOutcome.Ok) return part;
             }
             return null;
         }
@@ -701,41 +881,56 @@ namespace Unity.SpaceGod.Core
         /// materials on the shelves, so its upgrades never starve the yard's own industry, repairs or new hulls.</summary>
         public const double AiStockMargin = 4;
 
-        static bool Surplus(Settlement yard, ModuleKind module, double scale)
+        /// <summary>The facilities a navy's warship wants in its free space, in order (facility kind ids; a new kind joins
+        /// the AI's designs by being added here).</summary>
+        public static readonly List<string> NavyFacilities = new List<string>
         {
-            var spec = ModuleSpec.Of(module);
-            for (int i = 0; i < spec.Bill.Length; i++)
-                if (yard.Available(spec.Bill[i].good) < spec.Tonnes(i, scale) * AiStockMargin) return false;
+            FacilityKinds.ArmourPlating, FacilityKinds.Scanner, FacilityKinds.ArmourPlating, FacilityKinds.Brig, FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating,
+        };
+
+        /// <summary>The facilities a raider wants in its free space, in order.</summary>
+        public static readonly List<string> RaiderFacilities = new List<string>
+        {
+            FacilityKinds.ArmourPlating, FacilityKinds.Brig, FacilityKinds.CargoRacks, FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating,
+        };
+
+        static bool Surplus(Settlement yard, IPartSpec part, double scale)
+        {
+            for (int i = 0; i < part.Bill.Length; i++)
+                if (yard.Available(part.Bill[i].good) < part.Tonnes(i, scale) * AiStockMargin) return false;
             return true;
         }
 
-        static IEnumerable<(int slot, ModuleKind module)> AiWishes(Ship ship, Loadout l)
+        static IEnumerable<(int slot, ModuleKind module, FacilityKind facility)> AiWishes(Ship ship, Loadout l)
         {
-            var bays = ship.Faction.IsPirate
-                ? new[] { ModuleKind.ArmourPlating, ModuleKind.Brig, ModuleKind.CargoRack, ModuleKind.ArmourPlating, ModuleKind.ArmourPlating, ModuleKind.ArmourPlating }
-                : new[] { ModuleKind.ArmourPlating, ModuleKind.Scanner, ModuleKind.ArmourPlating, ModuleKind.Brig, ModuleKind.ArmourPlating, ModuleKind.ArmourPlating };
-            int bay = 0;
-            for (int i = 0; i < l.Slots.Count; i++)
+            // The facilities it wants that it has not got yet, in order, so far as each still fits.
+            var have = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in l.AddedFacilities)
             {
-                if (l.Slots[i].Kind != SlotKind.InternalBay) continue;
-                if (l.Fitted[i] == null && bay < bays.Length) yield return (i, bays[bay]);
-                bay++;
+                have.TryGetValue(f.Kind, out int n);
+                have[f.Kind] = n + 1;
+            }
+            foreach (var id in ship.Faction.IsPirate ? RaiderFacilities : NavyFacilities)
+            {
+                if (have.TryGetValue(id, out int n) && n > 0) { have[id] = n - 1; continue; }
+                var kind = FacilityKinds.Of(id);
+                if (l.CanAdd(kind) == OutfitOutcome.Ok) yield return (-1, default, kind);
             }
             bool big = ship.Spec.Class == ShipClass.Cruiser || ship.Spec.Class == ShipClass.Battleship || ship.Spec.Class == ShipClass.Carrier;
             for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == SlotKind.ShieldMount && l.Fitted[i] == ModuleKind.ShieldGenerator) yield return (i, ModuleKind.HardenedShield);
+                if (l.Slots[i].Kind == SlotKind.ShieldMount && l.Fitted[i] == ModuleKind.ShieldGenerator) yield return (i, ModuleKind.HardenedShield, null);
             if (big)
                 for (int i = 0; i < l.Slots.Count; i++)
-                    if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Fitted[i] == ModuleKind.LaserTurret) yield return (i, ModuleKind.HeavyLaser);
+                    if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Fitted[i] == ModuleKind.LaserTurret) yield return (i, ModuleKind.HeavyLaser, null);
             for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == SlotKind.EngineMount && l.Fitted[i] == ModuleKind.Engine) yield return (i, ModuleKind.TorchEngine);
+                if (l.Slots[i].Kind == SlotKind.EngineMount && l.Fitted[i] == ModuleKind.Engine) yield return (i, ModuleKind.TorchEngine, null);
             // Last of all, once everything else is fitted: one tachyon lance for a capital hull, in place of a bow heavy
             // laser, where the yard can build one and the navy is flush enough for it (U.SPC-T487).
             if (TachyonLances.CanCarry(l.Class) && l.Count(ModuleKind.TachyonLance) == 0)
                 for (int i = 0; i < l.Slots.Count; i++)
                     if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Slots[i].BearsOnBow && l.Fitted[i] == ModuleKind.HeavyLaser)
                     {
-                        yield return (i, ModuleKind.TachyonLance);
+                        yield return (i, ModuleKind.TachyonLance, null);
                         break;
                     }
         }

@@ -5,9 +5,10 @@ using NUnit.Framework;
 namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
-    /// Ship outfitting at yards (U.SPC-T65): a hull's slots come from its design (weapon hardpoints, shield and
-    /// engine mounts, internal bays); a yard fits guns, hardened shields, torch drives, armour plate, cargo racks,
-    /// scanners and brigs into them, buying the materials from its own market at its prices; and the loadout
+    /// Ship outfitting at yards (U.SPC-T65): a hull's hardpoints come from its design (weapon mounts, shield and
+    /// engine mounts) and its facilities fill its internal space (U.SPC-T470); a yard fits guns, hardened shields and
+    /// torch drives onto the hardpoints and armour plate, cargo racks, scanners and brigs into the free space, buying
+    /// the materials from its own market at its prices; and the loadout
     /// rebuilds the hull's CombatSpec, carrying its damage and people over. Navies and raiders upgrade their own
     /// warships while they refit, and prisoners taken into a brig are handed over in port for bounty.
     /// </summary>
@@ -43,20 +44,19 @@ namespace Unity.SpaceGod.Core.Tests
             return -1;
         }
 
-        static int EmptyBay(Ship ship)
-        {
-            var l = Outfitting.LoadoutOf(ship);
-            for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == SlotKind.InternalBay && l.Fitted[i] == null) return i;
-            return -1;
-        }
-
         static OutfitOutcome Fit(Economy e, Ship ship, Settlement yard, int slot, ModuleKind? m) => Outfitting.Fit(e, ship, yard, slot, m, out _);
+
+        /// <summary>Fits a facility module (plate, racks, a scanner, a brig) into the hull's free space.</summary>
+        static OutfitOutcome FitIn(Economy e, Ship ship, Settlement yard, ModuleKind m) => Outfitting.FitFacility(e, ship, yard, FacilityKinds.ForModule(m), out _);
+
+        /// <summary>Takes the first fitted facility that is <paramref name="m"/> out again.</summary>
+        static OutfitOutcome StripOut(Economy e, Ship ship, Settlement yard, ModuleKind m) =>
+            Outfitting.StripFacility(e, ship, yard, Outfitting.LoadoutOf(ship).Facilities.FindIndex(f => f.Def.Module == m), out _);
 
         // ---------------------------------------------------------------- slots
 
         [Test]
-        public void AHullsSlotsAreItsRefittableHardpointsAndItsInternalBays()
+        public void AHullsSlotsAreItsRefittableHardpointsAndItsFacilitiesFillItsInternalSpace()
         {
             var ship = Hull(ShipClass.Cruiser, Navy);
             var l = Outfitting.LoadoutOf(ship);
@@ -64,7 +64,8 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(l.Slots.Count(s => s.Kind == SlotKind.ShieldMount), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.ShieldGenerator)));
             Assert.That(l.Slots.Count(s => s.Kind == SlotKind.EngineMount), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.Engine)));
             Assert.That(l.Slots.Count(s => s.Kind == SlotKind.LightMount), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.PointDefense)));
-            Assert.That(l.Slots.Count(s => s.Kind == SlotKind.InternalBay), Is.EqualTo(Loadout.InternalBays(ShipClass.Cruiser)));
+            Assert.That(l.Facilities, Is.EqualTo(FacilityLayouts.For(ShipClass.Cruiser)), "the design's own facilities");
+            Assert.That(l.FreeSpace, Is.EqualTo(FacilityLayouts.SpareSpace(ShipClass.Cruiser)), "and the free space beyond them, as many sections as it had bays");
             Assert.That(l.Slots.Any(s => s.LayoutIndex >= 0 && (spec.Layout[s.LayoutIndex].Kind == SubsystemKind.Bridge || spec.Layout[s.LayoutIndex].Kind == SubsystemKind.Reactor
                 || spec.Layout[s.LayoutIndex].Kind == SubsystemKind.BoardingPods)), Is.False, "bridge, reactor and pod launcher are part of the hull");
             Assert.That(l.IsStock, Is.True);
@@ -84,9 +85,11 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(Outfitting.CanFit(l, broadside, ModuleKind.Railgun), Is.False, "a railgun is spinal: only a mount bearing on the bow takes one");
             Assert.That(Outfitting.CanFit(l, bow, ModuleKind.Railgun), Is.True);
             Assert.That(Outfitting.CanFit(l, SlotOf(ship, SlotKind.ShieldMount), ModuleKind.ArmourPlating), Is.False);
-            Assert.That(Outfitting.CanFit(l, EmptyBay(ship), ModuleKind.HeavyLaser), Is.False);
-            Assert.That(Outfitting.CanFit(l, light, null), Is.False, "only a bay can be left empty");
-            Assert.That(Outfitting.CanFit(l, EmptyBay(ship), null), Is.True);
+            Assert.That(Outfitting.CanFit(l, light, ModuleKind.Scanner), Is.False, "a scanner suite goes inside the hull, not on a mount");
+            Assert.That(Outfitting.CanFit(l, light, null), Is.False, "a hardpoint is never left empty");
+            Assert.That(l.CanAdd(FacilityKinds.Of(FacilityKinds.Scanner)), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(l.CanAdd(FacilityKinds.Of(FacilityKinds.Bridge)), Is.EqualTo(OutfitOutcome.WontFit), "the hull's structure is not fitted");
+            Assert.That(l.CanRemove(0), Is.False, "nor stripped");
         }
 
         // ---------------------------------------------------------------- buying from the yard's market
@@ -133,7 +136,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(Fit(economy, ship, yard, slot, ModuleKind.HardenedShield), Is.EqualTo(OutfitOutcome.NoStock));
             Assert.That(ship.Combat, Is.SameAs(before));
             Assert.That(yard.Stock[(int)Good.Electronics], Is.EqualTo(5));
-            Assert.That(Fit(economy, ship, yard, EmptyBay(ship), ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Ok), "plate needs no electronics");
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Ok), "plate needs no electronics");
         }
 
         [Test]
@@ -147,8 +150,8 @@ namespace Unity.SpaceGod.Core.Tests
             scarce.RefreshPrices();
             plenty.RefreshPrices();
             var ship = Hull(ShipClass.Destroyer, Navy);
-            int bay = EmptyBay(ship);
-            Assert.That(Outfitting.Quote(ship, scarce, bay, ModuleKind.Scanner).Materials, Is.GreaterThan(Outfitting.Quote(ship, plenty, bay, ModuleKind.Scanner).Materials * 1.5),
+            var scanner = FacilityKinds.Of(FacilityKinds.Scanner);
+            Assert.That(Outfitting.QuoteFacility(ship, scarce, scanner).Materials, Is.GreaterThan(Outfitting.QuoteFacility(ship, plenty, scanner).Materials * 1.5),
                 "electronics are dear where they are short");
         }
 
@@ -157,7 +160,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (economy, yard) = Yard(Navy);
             var ship = Hull(ShipClass.Destroyer, Navy, treasury: 1000);
-            Assert.That(Fit(economy, ship, yard, EmptyBay(ship), ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.CantAfford));
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.CantAfford));
             Assert.That(Outfitting.LoadoutOf(ship).IsStock, Is.True);
         }
 
@@ -167,12 +170,11 @@ namespace Unity.SpaceGod.Core.Tests
             var (economy, yard) = Yard(Navy);
             var colony = economy.Add("No yard", 3, SettlementKind.Colony, Navy, 0);
             var ship = Hull(ShipClass.Destroyer, Navy);
-            int bay = EmptyBay(ship);
-            Assert.That(Fit(economy, ship, colony, bay, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.NotAYard));
+            Assert.That(FitIn(economy, ship, colony, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.NotAYard));
             var raider = Hull(ShipClass.Destroyer, Raiders);
-            Assert.That(Fit(economy, raider, yard, EmptyBay(raider), ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.CannotDock), "a navy yard does not refit raiders");
+            Assert.That(FitIn(economy, raider, yard, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.CannotDock), "a navy yard does not refit raiders");
             ship.Battle = new Battle(1, 3, "test", DVec3.Zero, 0, 1);
-            Assert.That(Fit(economy, ship, yard, bay, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Busy));
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Busy));
         }
 
         // ---------------------------------------------------------------- the loadout changes the hull
@@ -202,8 +204,8 @@ namespace Unity.SpaceGod.Core.Tests
             var ship = Hull(ShipClass.Destroyer, Navy);
             var stock = CombatSpec.Of(ShipClass.Destroyer);
             double dv = ship.DeltaVBudgetKmS;
-            Assert.That(Fit(economy, ship, yard, EmptyBay(ship), ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Ok));
-            Assert.That(Fit(economy, ship, yard, EmptyBay(ship), ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.ArmourPlating), Is.EqualTo(OutfitOutcome.Ok));
             var spec = ship.Combat.Spec;
             Assert.That(spec.Armor, Is.EqualTo(stock.Armor + 2 * Loadout.ArmourPerPlate));
             Assert.That(spec.Hull, Is.EqualTo(stock.Hull * (1 + 2 * Loadout.HullPerPlate)).Within(1e-6));
@@ -270,18 +272,17 @@ namespace Unity.SpaceGod.Core.Tests
             var ship = Hull(ShipClass.Freighter, Navy);
             double capacity = ship.CapacityTonnes;
             int rows = ship.PersonalHold.Height;
-            int bay = EmptyBay(ship);
-            Assert.That(Fit(economy, ship, yard, bay, ModuleKind.CargoRack), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.CargoRack), Is.EqualTo(OutfitOutcome.Ok));
             Assert.That(ship.CapacityTonnes, Is.EqualTo(capacity * (1 + Loadout.RackCapacityShare)).Within(1e-6));
             Assert.That(ship.PersonalHold.Height, Is.EqualTo(rows + Loadout.RackRows));
             while (ship.PersonalHold.AddFirstFit(Good.Electronics) != null) { }
-            Assert.That(Fit(economy, ship, yard, bay, null), Is.EqualTo(OutfitOutcome.HoldTooFull));
+            Assert.That(StripOut(economy, ship, yard, ModuleKind.CargoRack), Is.EqualTo(OutfitOutcome.HoldTooFull));
             foreach (var item in ship.PersonalHold.Items.ToList()) ship.PersonalHold.Remove(item);
             ship.HasCargo = true;
             ship.CargoTonnes = capacity * 1.1;
-            Assert.That(Fit(economy, ship, yard, bay, null), Is.EqualTo(OutfitOutcome.HoldTooFull));
+            Assert.That(StripOut(economy, ship, yard, ModuleKind.CargoRack), Is.EqualTo(OutfitOutcome.HoldTooFull));
             ship.CargoTonnes = capacity * 0.5;
-            Assert.That(Fit(economy, ship, yard, bay, null), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(StripOut(economy, ship, yard, ModuleKind.CargoRack), Is.EqualTo(OutfitOutcome.Ok));
             Assert.That(ship.CapacityTonnes, Is.EqualTo(capacity).Within(1e-6));
             Assert.That(ship.PersonalHold.Height, Is.EqualTo(rows));
         }
@@ -292,7 +293,7 @@ namespace Unity.SpaceGod.Core.Tests
             var (economy, yard) = Yard(Navy);
             var ship = Hull(ShipClass.Destroyer, Navy);
             Assert.That(Outfitting.ScanRangeKm(ship), Is.EqualTo(War.ScanRangeKm));
-            Assert.That(Fit(economy, ship, yard, EmptyBay(ship), ModuleKind.Scanner), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.Scanner), Is.EqualTo(OutfitOutcome.Ok));
             Assert.That(Outfitting.ScanRangeKm(ship), Is.EqualTo(War.ScanRangeKm + Loadout.ScannerRangeKm));
         }
 
@@ -303,8 +304,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (economy, yard) = Yard(Navy);
             var ship = Hull(ShipClass.Cruiser, Navy, 1e9);
-            int bay = EmptyBay(ship);
-            Assert.That(Fit(economy, ship, yard, bay, ModuleKind.Brig), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(FitIn(economy, ship, yard, ModuleKind.Brig), Is.EqualTo(OutfitOutcome.Ok));
             double berths = Outfitting.BrigCapacity(ship);
             Assert.That(berths, Is.GreaterThan(0));
 
@@ -318,12 +318,12 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(prize.Combat.Interior.Crew, Is.EqualTo(crew - taken).Within(1e-6));
             Assert.That(ship.PrisonerBounty, Is.EqualTo(taken * Outfitting.PirateBounty));
 
-            Assert.That(Fit(economy, ship, yard, bay, null), Is.EqualTo(OutfitOutcome.BrigOccupied));
+            Assert.That(StripOut(economy, ship, yard, ModuleKind.Brig), Is.EqualTo(OutfitOutcome.BrigOccupied));
             double before = Navy.Treasury;
             Assert.That(Outfitting.HandOverPrisoners(economy, ship, yard), Is.EqualTo(taken * Outfitting.PirateBounty));
             Assert.That(Navy.Treasury, Is.EqualTo(before + taken * Outfitting.PirateBounty).Within(1e-6));
             Assert.That(ship.Prisoners, Is.EqualTo(0));
-            Assert.That(Fit(economy, ship, yard, bay, null), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(StripOut(economy, ship, yard, ModuleKind.Brig), Is.EqualTo(OutfitOutcome.Ok));
         }
 
         // ---------------------------------------------------------------- the AI
@@ -333,8 +333,8 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (economy, yard) = Yard(Navy);
             var ship = Hull(ShipClass.Cruiser, Navy, 1e12);
-            Assert.That(Outfitting.AiRefit(economy, ship, yard), Is.EqualTo(ModuleKind.ArmourPlating));
-            Assert.That(Outfitting.AiRefit(economy, ship, yard), Is.EqualTo(ModuleKind.Scanner));
+            Assert.That(Outfitting.AiRefit(economy, ship, yard), Is.SameAs(FacilityKinds.ForModule(ModuleKind.ArmourPlating)));
+            Assert.That(Outfitting.AiRefit(economy, ship, yard), Is.SameAs(FacilityKinds.ForModule(ModuleKind.Scanner)));
             var fitted = Enumerable.Range(0, 40).Select(_ => Outfitting.AiRefit(economy, ship, yard)).Where(m => m != null).ToList();
             var l = Outfitting.LoadoutOf(ship);
             Assert.That(l.Count(ModuleKind.Brig), Is.EqualTo(1));
@@ -355,9 +355,9 @@ namespace Unity.SpaceGod.Core.Tests
             haven.Kind = SettlementKind.Haven;
             var raider = Hull(ShipClass.Destroyer, Raiders, 1e12);
             Assert.That(Outfitting.IsYard(haven), Is.True, "a haven refits its raiders");
-            Assert.That(Outfitting.AiRefit(havenEconomy, raider, haven), Is.EqualTo(ModuleKind.ArmourPlating));
-            Assert.That(Outfitting.AiRefit(havenEconomy, raider, haven), Is.EqualTo(ModuleKind.Brig));
-            Assert.That(Outfitting.AiRefit(havenEconomy, raider, haven), Is.EqualTo(ModuleKind.CargoRack));
+            Assert.That(Outfitting.AiRefit(havenEconomy, raider, haven), Is.SameAs(FacilityKinds.ForModule(ModuleKind.ArmourPlating)));
+            Assert.That(Outfitting.AiRefit(havenEconomy, raider, haven), Is.SameAs(FacilityKinds.ForModule(ModuleKind.Brig)));
+            Assert.That(Outfitting.AiRefit(havenEconomy, raider, haven), Is.SameAs(FacilityKinds.ForModule(ModuleKind.CargoRack)));
         }
 
         [Test]
