@@ -69,10 +69,15 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public readonly Action<CombatSpec, Loadout, int> Effect;
 
+        /// <summary>Marines it quarters (U.SPC-T465), per unit of hull scale if <see cref="Scaled"/>: what one adds to the
+        /// hull's marine complement (<see cref="CombatSpec.Marines"/>). A site may set its own (<see cref="FacilitySite.Berths"/>).</summary>
+        public readonly double Berths;
+
         public FacilityKind(string id, string name, double size, double massTonnes, bool scaled, (Good good, double tonnes)[] bill,
                             HullCategory[] categories = null, bool fittable = true, CompartmentKind? compartment = null,
-                            ModuleKind? module = null, Action<CombatSpec, Loadout, int> effect = null)
+                            ModuleKind? module = null, Action<CombatSpec, Loadout, int> effect = null, double berths = 0)
         {
+            Berths = Math.Max(0, berths);
             Id = id ?? throw new ArgumentNullException(nameof(id));
             Name = name ?? id;
             Size = Math.Max(0, size);
@@ -113,7 +118,7 @@ namespace Unity.SpaceGod.Core
     /// The registry of facility kinds (U.SPC-T470). The hull's structure (bridge, engineering, quarters, hangar deck,
     /// holds, batteries' magazines, the bow and midships sections, a breacher's assault bay) and the four fittable
     /// facilities that were internal-bay modules (armour plate, cargo racks, a scanner suite, a brig) are registered
-    /// here; new kinds plug in with <see cref="Register"/>.
+    /// here, with the marine habitat (U.SPC-T465, <see cref="MarineHabitats"/>); new kinds plug in with <see cref="Register"/>.
     /// </summary>
     public static class FacilityKinds
     {
@@ -125,7 +130,15 @@ namespace Unity.SpaceGod.Core
                             Battery = "battery", Bow = "bow", Midships = "midships", AssaultBay = "assault-bay";
 
         // What a yard fits into free space.
-        public const string ArmourPlating = "armour-plating", CargoRacks = "cargo-racks", Scanner = "scanner-suite", Brig = "brig";
+        public const string ArmourPlating = "armour-plating", CargoRacks = "cargo-racks", Scanner = "scanner-suite", Brig = "brig",
+                            MarineHabitat = "marine-habitat";
+
+        /// <summary>The hulls big enough for a marine habitat (U.SPC-T465): every one but fighters, small craft and
+        /// satellites, whose crews repel boarders alone.</summary>
+        public static readonly HullCategory[] MarineHulls =
+        {
+            HullCategory.Freighter, HullCategory.Warship, HullCategory.Battleship, HullCategory.Carrier, HullCategory.Station, HullCategory.Support,
+        };
 
         static FacilityKinds()
         {
@@ -143,6 +156,12 @@ namespace Unity.SpaceGod.Core
             Register(FacilityKind.OfModule(CargoRacks, ModuleKind.CargoRack, 1));
             Register(FacilityKind.OfModule(Scanner, ModuleKind.Scanner, 1));
             Register(FacilityKind.OfModule(Brig, ModuleKind.Brig, 1));
+
+            // The marines' barracks (U.SPC-T465): berths, a drill deck and an armoury, one section, growing with the hull
+            // (fifty marines on a destroyer, some two hundred on a carrier). See MarineHabitats.
+            Register(new FacilityKind(MarineHabitat, "Marine habitat", 1, 220, true,
+                new[] { (Good.Alloys, 70.0), (Good.Machinery, 15.0), (Good.Electronics, 8.0) },
+                MarineHulls, true, CompartmentKind.Barracks, null, null, MarineHabitats.BerthsPerScale));
         }
 
         static FacilityKind Structure(string id, string name, double size, CompartmentKind compartment) =>
@@ -188,13 +207,26 @@ namespace Unity.SpaceGod.Core
 
         public const int Keel = -1, Amidships = -2;
 
-        public FacilitySite(string kind, string name = null, double z = 0, double y = 0, int link = Keel)
+        /// <summary>The marines this space quarters as the hull was designed (U.SPC-T465), or null for its kind's
+        /// (<see cref="FacilityKind.Berths"/>, grown with the hull): a stock design's habitat holds the complement it was drawn for.</summary>
+        public readonly double? Berths;
+
+        public FacilitySite(string kind, string name = null, double z = 0, double y = 0, int link = Keel, double? berths = null)
         {
             Kind = kind ?? throw new ArgumentNullException(nameof(kind));
             Name = name ?? FacilityKinds.Of(kind)?.Name ?? kind;
             Z = z;
             Y = y;
             Link = link;
+            Berths = berths;
+        }
+
+        /// <summary>Marines it quarters on a hull of <paramref name="scale"/> (<see cref="Loadout.Scale"/>).</summary>
+        public double BerthsOn(double scale)
+        {
+            if (Berths is double b) return Math.Max(0, b);
+            var d = Def;
+            return d == null ? 0 : d.Berths * (d.Scaled ? scale : 1);
         }
 
         /// <summary>A facility a yard fits into a hull's free space (it opens off midships, if it is a space at all).</summary>
@@ -214,6 +246,8 @@ namespace Unity.SpaceGod.Core
     /// </summary>
     public static class FacilityLayouts
     {
+        // The warships' marine habitats (U.SPC-T465) are barracks branching off below their quarters (or midships), each
+        // quartering the complement the class was drawn with; a freighter keeps a security post for its few guards.
         static readonly Dictionary<ShipClass, FacilitySite[]> ByClass = new Dictionary<ShipClass, FacilitySite[]>
         {
             [ShipClass.Carrier] = new[]
@@ -221,6 +255,7 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.4), new FacilitySite(FacilityKinds.Hangar, "Hangar deck", 0.15),
                 new FacilitySite(FacilityKinds.Quarters, "Crew quarters", -0.02), new FacilitySite(FacilityKinds.Midships, "Midships", -0.18),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.4), new FacilitySite(FacilityKinds.Bridge, "Island bridge", -0.11, 0.14, 3),
+                new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", -0.02, -0.06, 2, 320),
             },
             [ShipClass.Battleship] = new[]
             {
@@ -228,17 +263,20 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Quarters, "Crew quarters", 0.0), new FacilitySite(FacilityKinds.Midships, "Midships", -0.16),
                 new FacilitySite(FacilityKinds.Battery, "Aft battery", -0.28), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.42),
                 new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.11, 0.1, 3),
+                new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.0, -0.06, 2, 260),
             },
             [ShipClass.Cruiser] = new[]
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.3), new FacilitySite(FacilityKinds.Quarters, "Crew quarters", 0.05),
                 new FacilitySite(FacilityKinds.Midships, "Midships", -0.12), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.38),
                 new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.17, 0.06, 2),
+                new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.05, -0.05, 1, 140),
             },
             [ShipClass.Destroyer] = new[]
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.25), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.08, 0.05, 1),
+                new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", -0.05, -0.04, 1, 50),
             },
             // The lane interdictor (U.SPC-T479): its projector room amidships inside the ring, between its two reactors.
             [ShipClass.Interdictor] = new[]
@@ -250,6 +288,7 @@ namespace Unity.SpaceGod.Core
             {
                 new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.43), new FacilitySite(FacilityKinds.Hold, "Forward hold", 0.15),
                 new FacilitySite(FacilityKinds.Hold, "Aft hold", -0.15), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.42),
+                new FacilitySite(FacilityKinds.MarineHabitat, "Security post", -0.15, -0.05, 2, 4),
             },
             [ShipClass.Miner] = new[]
             {
@@ -280,9 +319,11 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.15, 0.04), new FacilitySite(FacilityKinds.Midships, "Sensor room", -0.08),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
+            // A breacher is too small for a habitat: its assault bay carries one boarding team (seventy marines) out to
+            // the target and does not train them.
             [ShipClass.Breacher] = new[]
             {
-                new FacilitySite(FacilityKinds.AssaultBay, "Assault bay", 0.25), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0, 0.03),
+                new FacilitySite(FacilityKinds.AssaultBay, "Assault bay", 0.25, 0, FacilitySite.Keel, 70), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0, 0.03),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
         };
@@ -293,15 +334,44 @@ namespace Unity.SpaceGod.Core
             new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.1), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
         };
 
-        /// <summary>A station's or satellite's: a gun deck around a control room and its reactor.</summary>
+        /// <summary>A defence platform's (and any station's or satellite's without its own): a gun deck around a control
+        /// room and its reactor, and the garrison's barracks off the control room.</summary>
         public static readonly FacilitySite[] Platform =
+        {
+            new FacilitySite(FacilityKinds.Battery, "Gun deck", 0.15, 0.15), new FacilitySite(FacilityKinds.Bridge, "Control", 0, 0),
+            new FacilitySite(FacilityKinds.Engineering, "Reactor", -0.15, -0.15),
+            new FacilitySite(FacilityKinds.MarineHabitat, "Garrison barracks", 0, -0.08, 1, 60),
+        };
+
+        /// <summary>A satellite's: too small for a garrison, its spaces only.</summary>
+        public static readonly FacilitySite[] Satellite =
         {
             new FacilitySite(FacilityKinds.Battery, "Gun deck", 0.15, 0.15), new FacilitySite(FacilityKinds.Bridge, "Control", 0, 0),
             new FacilitySite(FacilityKinds.Engineering, "Reactor", -0.15, -0.15),
         };
 
+        /// <summary>An orbital station's: a platform's spaces with barracks for its larger garrison.</summary>
+        public static readonly FacilitySite[] Station =
+        {
+            new FacilitySite(FacilityKinds.Battery, "Gun deck", 0.15, 0.15), new FacilitySite(FacilityKinds.Bridge, "Control", 0, 0),
+            new FacilitySite(FacilityKinds.Engineering, "Reactor", -0.15, -0.15),
+            new FacilitySite(FacilityKinds.MarineHabitat, "Garrison barracks", 0, -0.08, 1, 180),
+        };
+
         /// <summary>The facilities a ship of the class is designed with.</summary>
         public static IReadOnlyList<FacilitySite> For(ShipClass c) => ByClass.TryGetValue(c, out var l) ? l : Small;
+
+        /// <summary>The marines a hull with these facilities quarters (U.SPC-T465): every space's berths on a hull of
+        /// <paramref name="scale"/>. A hull with no habitat (or assault bay) carries none.</summary>
+        public static double Complement(IEnumerable<FacilitySite> facilities, double scale)
+        {
+            double n = 0;
+            if (facilities != null) foreach (var s in facilities) n += s.BerthsOn(scale);
+            return n;
+        }
+
+        /// <summary>The marine complement a class's design is drawn with: its layout's berths.</summary>
+        public static double Complement(ShipClass c, CombatSpec design) => Complement(For(c), Loadout.HullScale(design));
 
         /// <summary>Sets (or replaces) the facilities a class is designed with.</summary>
         public static void Register(ShipClass c, FacilitySite[] layout) => ByClass[c] = layout ?? throw new ArgumentNullException(nameof(layout));

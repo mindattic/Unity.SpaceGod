@@ -404,7 +404,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>Fighter squadrons a carrier can launch (6 craft each).</summary>
         public int Squadrons;
 
-        /// <summary>People aboard: the ship's company, and the marines who board and repel boarders.</summary>
+        /// <summary>People aboard: the ship's company, and the marines who board and repel boarders. The marines are the
+        /// complement its marine habitats quarter (U.SPC-T465, <see cref="FacilityLayouts.Complement(ShipClass, CombatSpec)"/>).</summary>
         public double Crew, Marines;
 
         /// <summary>
@@ -422,7 +423,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 40000, MainThrustMN = 100000, RetroThrustMN = 75000, LateralThrustMN = 35000, VerticalThrustMN = 35000, PitchYawTorqueMNKm = 4770000, RollTorqueMNKm = 1190000,
                 Hull = 26000, Shield = 11000, ShieldRegen = 75, Armor = 6, MaxSpeed = 0.07, Accel = 0.0025, Decel = 0.0025,
                 BoostSpeedMultiplier = 1.3, BoostDurationS = 30, TurnRateDegS = 4, Squadrons = 3,
-                Crew = 3800, Marines = 320,
+                Crew = 3800,
                 DryMassTonnes = 140000, PropellantTonnes = 70000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
@@ -462,7 +463,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 30000, MainThrustMN = 90000, RetroThrustMN = 67500, LateralThrustMN = 31500, VerticalThrustMN = 31500, PitchYawTorqueMNKm = 3140000, RollTorqueMNKm = 785000,
                 Hull = 30000, Shield = 13000, ShieldRegen = 90, Armor = 10, MaxSpeed = 0.09, Accel = 0.003, Decel = 0.003,
                 BoostSpeedMultiplier = 1.3, BoostDurationS = 32, TurnRateDegS = 5,
-                Crew = 2400, Marines = 260,
+                Crew = 2400,
                 DryMassTonnes = 120000, PropellantTonnes = 60000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
@@ -504,7 +505,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 6000, MainThrustMN = 30000, RetroThrustMN = 22500, LateralThrustMN = 12000, VerticalThrustMN = 12000, PitchYawTorqueMNKm = 335000, RollTorqueMNKm = 83800,
                 Hull = 13000, Shield = 6000, ShieldRegen = 54, Armor = 6, MaxSpeed = 0.14, Accel = 0.005, Decel = 0.006,
                 BoostSpeedMultiplier = 1.4, BoostDurationS = 28, TurnRateDegS = 8,
-                Crew = 900, Marines = 140,
+                Crew = 900,
                 DryMassTonnes = 45000, PropellantTonnes = 22000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
@@ -537,7 +538,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 700, MainThrustMN = 6300, RetroThrustMN = 4720, LateralThrustMN = 2520, VerticalThrustMN = 2520, PitchYawTorqueMNKm = 14400, RollTorqueMNKm = 3610,
                 Hull = 5500, Shield = 2500, ShieldRegen = 30, Armor = 3, MaxSpeed = 0.24, Accel = 0.009, Decel = 0.011,
                 BoostSpeedMultiplier = 1.5, BoostDurationS = 25, TurnRateDegS = 14,
-                Crew = 280, Marines = 50,
+                Crew = 280,
                 DryMassTonnes = 9000, PropellantTonnes = 5000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
@@ -569,7 +570,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 900, MainThrustMN = 27000, RetroThrustMN = 20200, LateralThrustMN = 10800, VerticalThrustMN = 10800, PitchYawTorqueMNKm = 101000, RollTorqueMNKm = 25200,
                 Hull = 4500, Shield = 750, ShieldRegen = 9, Armor = 2, MaxSpeed = 0.05, Accel = 0.0015, Decel = 0.0018,
                 BoostSpeedMultiplier = 1.25, BoostDurationS = 36, TurnRateDegS = 3,
-                Crew = 40, Marines = 4,
+                Crew = 40,
                 DryMassTonnes = 9000, PropellantTonnes = 6000, ExhaustVelocityKmS = 2500,
                 Layout = new[]
                 {
@@ -591,7 +592,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 500, MainThrustMN = 14000, RetroThrustMN = 10500, LateralThrustMN = 5600, VerticalThrustMN = 5600, PitchYawTorqueMNKm = 11500, RollTorqueMNKm = 2860,
                 Hull = 6500, Shield = 500, ShieldRegen = 6, Armor = 4, MaxSpeed = 0.04, Accel = 0.0012, Decel = 0.0014,
                 BoostSpeedMultiplier = 1.2, BoostDurationS = 38, TurnRateDegS = 3,
-                Crew = 30, Marines = 0,
+                Crew = 30,
                 DryMassTonnes = 8000, PropellantTonnes = 7000, ExhaustVelocityKmS = 2200,
                 Layout = new[]
                 {
@@ -609,7 +610,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 120, MainThrustMN = 5400, RetroThrustMN = 4050, LateralThrustMN = 2700, VerticalThrustMN = 2700, PitchYawTorqueMNKm = 4150, RollTorqueMNKm = 1040,
                 Hull = 3000, Shield = 900, ShieldRegen = 15, Armor = 12, MaxSpeed = 0.3, Accel = 0.012, Decel = 0.014,
                 BoostSpeedMultiplier = 1.6, BoostDurationS = 22, TurnRateDegS = 18,
-                Crew = 20, Marines = 70,
+                Crew = 20,
                 DryMassTonnes = 1800, PropellantTonnes = 900, ExhaustVelocityKmS = 3500,
                 Layout = new[]
                 {
@@ -633,7 +634,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 3, MainThrustMN = 150, RetroThrustMN = 113, LateralThrustMN = 75, VerticalThrustMN = 75, PitchYawTorqueMNKm = 34.9, RollTorqueMNKm = 8.73,
                 Hull = 1300, Shield = 600, ShieldRegen = 12, Armor = 0, MaxSpeed = 0.35, Accel = 0.02, Decel = 0.024,
                 BoostSpeedMultiplier = 1.8, BoostDurationS = 14, TurnRateDegS = 30,
-                Crew = 6, Marines = 0,
+                Crew = 6,
                 DryMassTonnes = 220, PropellantTonnes = 180, ExhaustVelocityKmS = 4500,
                 Layout = new[]
                 {
@@ -656,7 +657,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 4, MainThrustMN = 220, RetroThrustMN = 165, LateralThrustMN = 110, VerticalThrustMN = 110, PitchYawTorqueMNKm = 120, RollTorqueMNKm = 30,
                 Hull = 1800, Shield = 700, ShieldRegen = 12, Armor = 1, MaxSpeed = 0.32, Accel = 0.018, Decel = 0.02,
                 BoostSpeedMultiplier = 1.7, BoostDurationS = 16, TurnRateDegS = 26,
-                Crew = 2, Marines = 0,
+                Crew = 2,
                 DryMassTonnes = 60, PropellantTonnes = 30, ExhaustVelocityKmS = 3000,
                 Layout = new[]
                 {
@@ -681,7 +682,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 60, MainThrustMN = 1800, RetroThrustMN = 1350, LateralThrustMN = 900, VerticalThrustMN = 900, PitchYawTorqueMNKm = 900, RollTorqueMNKm = 225,
                 Hull = 2600, Shield = 1600, ShieldRegen = 20, Armor = 2, MaxSpeed = 0.3, Accel = 0.012, Decel = 0.014,
                 BoostSpeedMultiplier = 1.5, BoostDurationS = 18, TurnRateDegS = 20,
-                Crew = 40, Marines = 0,
+                Crew = 40,
                 DryMassTonnes = 2400, PropellantTonnes = 2600, ExhaustVelocityKmS = 4500,
                 Layout = new[]
                 {
@@ -704,7 +705,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 80, MainThrustMN = 4000, RetroThrustMN = 3000, LateralThrustMN = 2000, VerticalThrustMN = 2000, PitchYawTorqueMNKm = 1900, RollTorqueMNKm = 475,
                 Hull = 2600, Shield = 1100, ShieldRegen = 16, Armor = 10, MaxSpeed = 0.3, Accel = 0.013, Decel = 0.015,
                 BoostSpeedMultiplier = 1.6, BoostDurationS = 20, TurnRateDegS = 20,
-                Crew = 8, Marines = 0,
+                Crew = 8,
                 DryMassTonnes = 1400, PropellantTonnes = 700, ExhaustVelocityKmS = 3500,
                 Layout = new[]
                 {
@@ -731,7 +732,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 200, MainThrustMN = 12000, RetroThrustMN = 6000, LateralThrustMN = 2400, VerticalThrustMN = 2400, PitchYawTorqueMNKm = 2000, RollTorqueMNKm = 500,
                 Hull = 5000, Shield = 400, ShieldRegen = 5, Armor = 6, MaxSpeed = 0.05, Accel = 0.0016, Decel = 0.0012,
                 BoostSpeedMultiplier = 1.2, BoostDurationS = 30, TurnRateDegS = 4,
-                Crew = 12, Marines = 0,
+                Crew = 12,
                 DryMassTonnes = 3000, PropellantTonnes = 2500, ExhaustVelocityKmS = 3000,
                 Layout = new[]
                 {
@@ -752,7 +753,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 2.5, MainThrustMN = 175, RetroThrustMN = 130, LateralThrustMN = 95, VerticalThrustMN = 95, PitchYawTorqueMNKm = 60, RollTorqueMNKm = 15,
                 Hull = 1100, Shield = 450, ShieldRegen = 10, Armor = 0, MaxSpeed = 0.36, Accel = 0.024, Decel = 0.026,
                 BoostSpeedMultiplier = 1.8, BoostDurationS = 12, TurnRateDegS = 32,
-                Crew = 1, Marines = 0,
+                Crew = 1,
                 DryMassTonnes = 35, PropellantTonnes = 25, ExhaustVelocityKmS = 3200,
                 Layout = new[]
                 {
@@ -775,7 +776,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 9, MainThrustMN = 300, RetroThrustMN = 225, LateralThrustMN = 110, VerticalThrustMN = 110, PitchYawTorqueMNKm = 380, RollTorqueMNKm = 95,
                 Hull = 3200, Shield = 1100, ShieldRegen = 14, Armor = 3, MaxSpeed = 0.26, Accel = 0.012, Decel = 0.013,
                 BoostSpeedMultiplier = 1.5, BoostDurationS = 12, TurnRateDegS = 18,
-                Crew = 3, Marines = 0,
+                Crew = 3,
                 DryMassTonnes = 160, PropellantTonnes = 70, ExhaustVelocityKmS = 3000,
                 Layout = new[]
                 {
@@ -800,7 +801,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 20, MainThrustMN = 700, RetroThrustMN = 520, LateralThrustMN = 350, VerticalThrustMN = 350, PitchYawTorqueMNKm = 260, RollTorqueMNKm = 65,
                 Hull = 1500, Shield = 1100, ShieldRegen = 16, Armor = 1, MaxSpeed = 0.3, Accel = 0.014, Decel = 0.016,
                 BoostSpeedMultiplier = 1.5, BoostDurationS = 16, TurnRateDegS = 22,
-                Crew = 14, Marines = 0,
+                Crew = 14,
                 DryMassTonnes = 700, PropellantTonnes = 500, ExhaustVelocityKmS = 3500,
                 Layout = new[]
                 {
@@ -822,7 +823,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 120, MainThrustMN = 3600, RetroThrustMN = 2700, LateralThrustMN = 1800, VerticalThrustMN = 1800, PitchYawTorqueMNKm = 2200, RollTorqueMNKm = 550,
                 Hull = 3400, Shield = 1500, ShieldRegen = 16, Armor = 3, MaxSpeed = 0.2, Accel = 0.008, Decel = 0.01,
                 BoostSpeedMultiplier = 1.3, BoostDurationS = 24, TurnRateDegS = 12,
-                Crew = 30, Marines = 0,
+                Crew = 30,
                 DryMassTonnes = 3600, PropellantTonnes = 3000, ExhaustVelocityKmS = 3500,
                 Layout = new[]
                 {
@@ -843,7 +844,7 @@ namespace Unity.SpaceGod.Core
                 MassKt = 500, MainThrustMN = 4200, RetroThrustMN = 3150, LateralThrustMN = 1700, VerticalThrustMN = 1700, PitchYawTorqueMNKm = 9000, RollTorqueMNKm = 2250,
                 Hull = 4200, Shield = 3000, ShieldRegen = 35, Armor = 3, MaxSpeed = 0.22, Accel = 0.008, Decel = 0.010,
                 BoostSpeedMultiplier = 1.4, BoostDurationS = 20, TurnRateDegS = 12,
-                Crew = 160, Marines = 0,
+                Crew = 160,
                 DryMassTonnes = 7000, PropellantTonnes = 4500, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
@@ -862,6 +863,14 @@ namespace Unity.SpaceGod.Core
                 },
             } },
         };
+
+        /// <summary>Every class's marines are what its design's habitats quarter (U.SPC-T465, <see cref="MarineHabitats"/>), not
+        /// a flat figure per class: a hull with no habitat carries none and repels boarders with its crew alone.</summary>
+        static CombatSpec()
+        {
+            foreach (var kv in Specs)
+                foreach (var design in kv.Value) design.Marines = FacilityLayouts.Complement(kv.Key, design);
+        }
 
         /// <summary>A copy to refit (U.SPC-T65): every figure the same, the hardpoint list its own array
         /// (sharing the unchanged <see cref="SubsystemDef"/>s, which are never mutated).</summary>
@@ -889,7 +898,8 @@ namespace Unity.SpaceGod.Core
         {
             DesignName = "Defence platform", LengthKm = PlatformLengthKm,
             Hull = 21000, Shield = 11000, ShieldRegen = 66, Armor = 8, MaxSpeed = 0, Accel = 0, Decel = 0, TurnRateDegS = 0,
-            Crew = 220, Marines = 60,
+            // Its garrison is what its barracks quarter (U.SPC-T465).
+            Crew = 220, Marines = FacilityLayouts.Complement(FacilityLayouts.Platform, 1),
             Layout = new[]
             {
                 new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.18, 0.12),

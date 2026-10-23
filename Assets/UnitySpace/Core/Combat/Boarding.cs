@@ -14,6 +14,9 @@ namespace Unity.SpaceGod.Core
         Bridge,
         Engineering,
         AssaultBay,
+
+        /// <summary>A marine habitat (U.SPC-T465): where the ship's marines live and drill, and muster from to repel boarders.</summary>
+        Barracks,
     }
 
     /// <summary>
@@ -82,6 +85,13 @@ namespace Unity.SpaceGod.Core
         public Faction Boarder;
         public double BoarderQuality = 1;
         public double DefenderQuality = 1;
+
+        /// <summary>How far the marines aboard have drilled in their habitats (U.SPC-T465), 0 (raw) to 1 (fully trained):
+        /// it raises their quality (<see cref="DrillFactor"/>) both repelling boarders and boarding from this hull.</summary>
+        public double Training;
+
+        /// <summary>What the marines' drill multiplies their quality by.</summary>
+        public double DrillFactor => MarineHabitats.Factor(Training);
 
         /// <summary>Set when the boarders hold the bridge and engineering.</summary>
         public bool Captured;
@@ -223,12 +233,86 @@ namespace Unity.SpaceGod.Core
             return i;
         }
 
-        /// <summary>Crew spread through the ship; marines quartered amidships (or wherever there is room).</summary>
+        /// <summary>The marine habitats' barracks aboard (U.SPC-T465).</summary>
+        public IEnumerable<Compartment> Barracks
+        {
+            get
+            {
+                foreach (var c in Compartments) if (c.Kind == CompartmentKind.Barracks) yield return c;
+            }
+        }
+
+        /// <summary>Whether the hull has a marine habitat at all; one without repels boarders with its crew alone.</summary>
+        public bool HasBarracks => Of(CompartmentKind.Barracks) != null;
+
+        /// <summary>Whether the ship's company works in a compartment: everywhere but the marines' barracks (unless the
+        /// barracks are all there is).</summary>
+        bool CrewSpace(Compartment c) => c.Kind != CompartmentKind.Barracks || !HasCrewSpace;
+
+        bool HasCrewSpace
+        {
+            get
+            {
+                foreach (var c in Compartments) if (c.Kind != CompartmentKind.Barracks) return true;
+                return false;
+            }
+        }
+
+        int CrewSpaces
+        {
+            get
+            {
+                int n = 0;
+                foreach (var c in Compartments) if (CrewSpace(c)) n++;
+                return n;
+            }
+        }
+
+        /// <summary>Spreads <paramref name="crew"/> evenly through the spaces the ship's company works in.</summary>
+        void SpreadCrew(double crew, bool add)
+        {
+            int n = CrewSpaces;
+            foreach (var c in Compartments)
+            {
+                if (!CrewSpace(c)) { if (!add) c.Crew = 0; continue; }
+                c.Crew = (add ? c.Crew : 0) + crew / n;
+            }
+        }
+
+        /// <summary>Quarters <paramref name="marines"/>: shared among the habitats' barracks, or, on a hull with none (a
+        /// prize crew, a breacher's team in its assault bay), amidships or wherever there is room.</summary>
+        void Quarter(double marines)
+        {
+            if (marines <= 0) return;
+            int n = 0;
+            foreach (var _ in Barracks) n++;
+            if (n > 0)
+            {
+                foreach (var c in Barracks) c.Marines += marines / n;
+                return;
+            }
+            (Of(CompartmentKind.Quarters) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.AssaultBay) ?? Compartments[Compartments.Count / 2]).Marines += marines;
+        }
+
+        /// <summary>Crew spread through the ship; marines in their habitats' barracks (or amidships, or wherever there is room).</summary>
         void Crew0(double crew, double marines)
         {
-            foreach (var c in Compartments) c.Crew = crew / Compartments.Count;
-            var barracks = Of(CompartmentKind.Quarters) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.AssaultBay) ?? Compartments[Compartments.Count / 2];
-            barracks.Marines = marines;
+            SpreadCrew(crew, false);
+            Quarter(marines);
+        }
+
+        /// <summary>
+        /// A day's drill (U.SPC-T465): marines in their habitats' barracks train, the whole complement going from raw to
+        /// fully trained in <see cref="MarineHabitats.DrillDays"/> days. Nothing is learned without a habitat, with
+        /// nobody in it, or while the ship is being boarded.
+        /// </summary>
+        public void Drill(double days)
+        {
+            if (days <= 0 || UnderBoarding || Captured) return;
+            double inBarracks = 0;
+            foreach (var c in Barracks) inBarracks += c.Marines;
+            if (inBarracks < 0.5) return;
+            Training = Math.Min(1, Training + days / Math.Max(1e-9, MarineHabitats.DrillDays.Value));
         }
 
         // ---------------------------------------------------------------- the fight
@@ -304,7 +388,7 @@ namespace Unity.SpaceGod.Core
                 double attack = c.Boarders * BoarderQuality;
                 // The bridge and engineering are fortified: blast doors, prepared positions, a last stand.
                 double fortified = c.Kind == CompartmentKind.Bridge || c.Kind == CompartmentKind.Engineering ? 1.6 : 1;
-                double defence = (c.Marines * DefenderQuality + c.Crew * CrewFight) * DefenderAdvantage * fortified * (c.Vented ? 0.7 : 1);
+                double defence = (c.Marines * DefenderQuality * DrillFactor + c.Crew * CrewFight) * DefenderAdvantage * fortified * (c.Vented ? 0.7 : 1);
                 double defenderLosses = Math.Min(defenders, attack * Lethality * dt);
                 double boarderLosses = Math.Min(c.Boarders, defence * Lethality * dt);
                 // Marines stand in front; crew take what the marines cannot.
@@ -459,15 +543,17 @@ namespace Unity.SpaceGod.Core
         /// <summary>A prize crew takes over: the boarders become the ship's people; the old crew are prisoners.</summary>
         public void HandOver(double prizeCrew)
         {
+            SpreadCrew(prizeCrew, false);
             foreach (var c in Compartments)
             {
-                c.Crew = prizeCrew / Compartments.Count;
                 c.Marines = c.Boarders;
                 c.Boarders = 0;
                 c.Taken = false;
             }
             Boarder = null;
             Captured = false;
+            // The ship's own marines are gone; the boarders now aboard never drilled in its habitats.
+            Training = 0;
         }
 
         /// <summary>
@@ -488,6 +574,7 @@ namespace Unity.SpaceGod.Core
             Boarder = null;
             Captured = false;
             DefenderQuality = lurkerQuality;
+            Training = 0;
             if (survivors > 0) (Of(CompartmentKind.Engineering) ?? Compartments[Compartments.Count - 1]).Survivors = survivors;
             if (lurkers > 0) (Of(CompartmentKind.Hold) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.Bridge) ?? Compartments[0]).Marines = lurkers;
         }
@@ -530,16 +617,19 @@ namespace Unity.SpaceGod.Core
             return have * share;
         }
 
-        /// <summary>People come aboard: crew spread through the ship, marines to their barracks.</summary>
+        /// <summary>People come aboard: crew spread through the ship, marines to their barracks (the ship's own coming back
+        /// from a boarding, so their drill is kept).</summary>
         public void Embark(double crew, double marines)
         {
-            if (crew > 0) foreach (var c in Compartments) c.Crew += crew / Compartments.Count;
-            if (marines > 0) (Of(CompartmentKind.Quarters) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.AssaultBay) ?? Compartments[Compartments.Count / 2]).Marines += marines;
+            if (crew > 0) SpreadCrew(crew, true);
+            Quarter(marines);
         }
 
-        /// <summary>Back at a yard: crew and marines made up to strength.</summary>
+        /// <summary>Back at a yard: crew and marines made up to strength. Raw recruits dilute the complement's drill.</summary>
         public void Muster(double crew, double marines)
         {
+            double had = Marines;
+            if (marines > had) Training *= had / marines;
             foreach (var c in Compartments) c.Marines = 0;
             Crew0(crew, marines);
             foreach (var c in Compartments)

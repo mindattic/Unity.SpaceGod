@@ -2970,6 +2970,7 @@ namespace Unity.SpaceGod.Core
                 foreach (var lane in new List<Lane>(Fleet.Lanes.Danger.Keys)) Fleet.Lanes.SetDanger(lane, Fleet.Lanes.Danger[lane] * 0.85);
             MergeGroups(jd);
             PayUpkeep();
+            DrillMarines();
             Refit(jd);
             Sieges(jd);
             Scans(jd);
@@ -3082,6 +3083,16 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Credits a port's owner pays to raise one defence platform (besides its steel and electronics).</summary>
         public const double PlatformPrice = 3e7;
+
+        /// <summary>A day's drill for the marines of every hull out of battle that has a marine habitat (U.SPC-T465).</summary>
+        void DrillMarines()
+        {
+            foreach (var s in Fleet.Ships)
+            {
+                if (s.Destroyed || s.Derelict || s.Battle != null || s.Combat == null) continue;
+                s.Combat.Interior.Drill(1);
+            }
+        }
 
         /// <summary>
         /// Warships at a friendly yard repair and rearm, buying alloys, electronics and munitions from its

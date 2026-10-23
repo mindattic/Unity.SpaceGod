@@ -526,6 +526,11 @@ namespace Unity.SpaceGod.Core
             int plates = Count(ModuleKind.ArmourPlating);
             spec.Armor = Base.Armor + plates * ArmourPerPlate;
             spec.Hull = Base.Hull * (1 + plates * HullPerPlate);
+            // The marine complement is what the habitats quarter (U.SPC-T465): each one fitted adds its berths, each of the
+            // design's own taken out its own.
+            foreach (var f in AddedFacilities) spec.Marines += f.BerthsOn(scale);
+            foreach (var f in RemovedFacilities) spec.Marines -= f.BerthsOn(scale);
+            spec.Marines = Math.Max(0, spec.Marines);
             foreach (var f in AddedFacilities) f.Def?.Effect?.Invoke(spec, this, 1);
             foreach (var f in RemovedFacilities) f.Def?.Effect?.Invoke(spec, this, -1);
 
@@ -894,7 +899,11 @@ namespace Unity.SpaceGod.Core
         {
             if (kind?.Compartment == null || ship.Combat == null) return null;
             var was = ship.Combat.Interior;
-            return Interior.For(l.Facilities, was.Crew, Math.Max(0, was.Marines + spec.Marines - ship.Combat.Spec.Marines));
+            var now = Interior.For(l.Facilities, was.Crew, Math.Max(0, was.Marines + spec.Marines - ship.Combat.Spec.Marines));
+            // The marines who were aboard keep their drill; recruits for a new habitat start raw (U.SPC-T465).
+            now.DefenderQuality = was.DefenderQuality;
+            now.Training = now.Marines > 0 ? was.Training * Math.Min(1, was.Marines / now.Marines) : 0;
+            return now;
         }
 
         // ---------------------------------------------------------------- the AI's refits

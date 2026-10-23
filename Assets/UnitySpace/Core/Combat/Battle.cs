@@ -2463,7 +2463,9 @@ namespace Unity.SpaceGod.Core
             var space = c.Interior.Nearest(local.Z, local.Y);
             // Another faction on the same side may have started boarding (or taken) this hull while the pod was in
             // flight, when the squad cannot land: it returns to the ship that fired it, if that is still there.
-            if (!c.Interior.Board(m.Owner, m.Owner.MarineQuality, m.Marines, space, true, Seconds, rng))
+            // The squad fights as well as it drilled in the habitat it came from (U.SPC-T465).
+            double drill = m.Source?.Combat?.Interior.DrillFactor ?? 1;
+            if (!c.Interior.Board(m.Owner, m.Owner.MarineQuality * drill, m.Marines, space, true, Seconds, rng))
             {
                 if (m.Source != null && m.Source.Present && !m.Source.Captured) m.Source.Combat.Interior.Embark(0, m.Marines);
             }
@@ -2586,7 +2588,7 @@ namespace Unity.SpaceGod.Core
                     {
                         double marines = c.MarinesAvailable * 0.9;
                         RemoveMarines(c.Interior, marines);
-                        t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality * 1.15, marines, space, true, Seconds, rng);
+                        t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality * 1.15 * c.Interior.DrillFactor, marines, space, true, Seconds, rng);
                     }
                     Emit(FxKind.Breach, contact, contact - to.Normalized * 0.1, t.LengthKm * 0.15, u.Side, t, space.Index);
                 }
@@ -2607,7 +2609,7 @@ namespace Unity.SpaceGod.Core
                         double marines = c.MarinesAvailable * 0.85;
                         RemoveMarines(c.Interior, marines);
                         var airlock = t.Combat.Interior.Of(CompartmentKind.Midships) ?? t.Combat.Interior.Nearest(0, 0);
-                        t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality, marines, airlock, false, Seconds, rng);
+                        t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality * c.Interior.DrillFactor, marines, airlock, false, Seconds, rng);
                         Emit(FxKind.Latch, u.Pos, t.Pos, u.LengthKm, u.Side, t, airlock.Index);
                     }
                 }

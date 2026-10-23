@@ -206,9 +206,12 @@ namespace Unity.SpaceGod.Core
 
             Register(new HullFrame("station/defence-platform", CombatSpec.Platform.DesignName, HullCategory.Station, null, CombatSpec.Platform,
                 2, false, War.PlatformPrice / PricePerBuildPoint));
-            Register(new HullFrame("station/orbital-station", OrbitalStation.DesignName, HullCategory.Station, null, OrbitalStation, 8, false, 60000, 50000));
-            Register(new HullFrame("satellite/weapons", WeaponsSatellite.DesignName, HullCategory.Satellite, null, WeaponsSatellite, 0, false, 900));
-            Register(new HullFrame("satellite/sensor", SensorSatellite.DesignName, HullCategory.Satellite, null, SensorSatellite, 1, false, 400));
+            Register(new HullFrame("station/orbital-station", OrbitalStation.DesignName, HullCategory.Station, null, OrbitalStation, 8, false, 60000, 50000,
+                FacilityLayouts.Station));
+            Register(new HullFrame("satellite/weapons", WeaponsSatellite.DesignName, HullCategory.Satellite, null, WeaponsSatellite, 0, false, 900, 0,
+                FacilityLayouts.Satellite));
+            Register(new HullFrame("satellite/sensor", SensorSatellite.DesignName, HullCategory.Satellite, null, SensorSatellite, 1, false, 400, 0,
+                FacilityLayouts.Satellite));
         }
 
         /// <summary>Credits a yard charges per build point (as <see cref="Economy.HullPrice"/> does).</summary>
@@ -270,7 +273,8 @@ namespace Unity.SpaceGod.Core
         {
             DesignName = "Orbital station", LengthKm = 2.0,
             Hull = 34000, Shield = 14000, ShieldRegen = 70, Armor = 9, MaxSpeed = 0, Accel = 0, Decel = 0, TurnRateDegS = 0,
-            Crew = 1400, Marines = 180, DryMassTonnes = 400000,
+            // Its garrison is what its barracks quarter (U.SPC-T465).
+            Crew = 1400, Marines = FacilityLayouts.Complement(FacilityLayouts.Station, 1), DryMassTonnes = 400000,
             Layout = new[]
             {
                 new SubsystemDef(SubsystemKind.HeavyLaser, 0.35, 0.05, 0, arcCenterDeg: 90, arcWidthDeg: 180),

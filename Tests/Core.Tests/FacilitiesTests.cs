@@ -48,12 +48,14 @@ namespace Unity.SpaceGod.Core.Tests
             }
             // As the interiors were laid out before facilities: a cruiser's keel from bow to engineering, the bridge off midships.
             var cruiser = Interior.For(ShipClass.Cruiser, 100, 10);
-            Assert.That(cruiser.Compartments.Select(x => x.Name), Is.EqualTo(new[] { "Bow", "Crew quarters", "Midships", "Engineering", "Bridge" }));
+            // Its marine habitat (U.SPC-T465) opens off the quarters.
+            Assert.That(cruiser.Compartments.Select(x => x.Name), Is.EqualTo(new[] { "Bow", "Crew quarters", "Midships", "Engineering", "Bridge", "Marine barracks" }));
             Assert.That(cruiser.Of(CompartmentKind.Midships).Links, Is.EqualTo(new[] { 1, 3, 4 }));
             Assert.That(cruiser.Of(CompartmentKind.Bridge).Links, Is.EqualTo(new[] { 2 }));
-            Assert.That(cruiser.Of(CompartmentKind.Quarters).Marines, Is.EqualTo(10), "marines quartered in the quarters");
+            Assert.That(cruiser.Of(CompartmentKind.Barracks).Links, Is.EqualTo(new[] { 1 }));
+            Assert.That(cruiser.Of(CompartmentKind.Barracks).Marines, Is.EqualTo(10), "marines quartered in their habitat");
             var platform = Interior.ForPlatform(30, 3);
-            Assert.That(platform.Compartments.Select(x => x.Name), Is.EqualTo(new[] { "Gun deck", "Control", "Reactor" }));
+            Assert.That(platform.Compartments.Select(x => x.Name), Is.EqualTo(new[] { "Gun deck", "Control", "Reactor", "Garrison barracks" }));
         }
 
         [Test]
