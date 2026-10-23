@@ -291,7 +291,11 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public DeepSpace DeepSpace { get; }
 
-        public Galaxy() => DeepSpace = new DeepSpace(this);
+        public Galaxy()
+        {
+            DeepSpace = new DeepSpace(this);
+            Polities.Command.Galaxy = this;
+        }
 
         /// <summary>The ships crossing between systems and the voyages that send them (see <see cref="InterstellarTraffic"/>).</summary>
         public InterstellarTraffic Traffic { get; private set; }
@@ -365,6 +369,8 @@ namespace Unity.SpaceGod.Core
             DeepSpace.Update(jd);
             Construction?.Update(jd);
             Wars?.Update(jd);
+            // The polities' standing directives: research accrues, and groups given objectives elsewhere are sent (U.SPC-T423).
+            Polities.Command.Update(jd);
         }
 
         /// <summary>

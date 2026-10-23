@@ -38,6 +38,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>Who is at war with whom, for every system at once.</summary>
         public Diplomacy Diplomacy { get; } = new Diplomacy();
 
+        /// <summary>The strategy layer (U.SPC-T423): each polity's production, build and research priorities and its fleet groups' objectives.</summary>
+        public StrategicCommand Command { get; }
+
+        public Polities() => Command = new StrategicCommand(this);
+
         public IReadOnlyList<Faction> Factions => factions;
 
         /// <summary>The systems' worlds, in the order they were built.</summary>

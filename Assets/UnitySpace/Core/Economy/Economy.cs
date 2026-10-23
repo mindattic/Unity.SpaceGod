@@ -35,6 +35,12 @@ namespace Unity.SpaceGod.Core
         /// <summary>Called when a yard has banked enough to lay down a hull. Return the class to build, or null to wait.</summary>
         public Func<Settlement, ShipClass?> ChooseBuild;
 
+        /// <summary>
+        /// Whether a settlement's owner favours an industry (its production focus, U.SPC-T423: it grows on thinner margins and
+        /// is kept up through a glut) and the extra growth a review its research gives it. Unset, every industry follows its market.
+        /// </summary>
+        public Func<Settlement, IndustryKind, (bool Favoured, double Bonus)> Priority;
+
         /// <summary>Factions founding new settlements as their people run out of room (U.SPC-T98), run at each review; null for none.</summary>
         public Colonisation Colonisation;
 
@@ -315,9 +321,12 @@ namespace Unity.SpaceGod.Core
                     if (f.Recipe.Kind == IndustryKind.Shipyard) continue;
                     double margin = Margin(s, f.Recipe);
                     double step = 0;
+                    // An industry its owner favours grows on a thinner margin and is kept up through a glut (U.SPC-T423).
+                    var (favoured, bonus) = Priority != null ? Priority(s, f.Recipe.Kind) : (false, 0.0);
+                    double grow = favoured ? 1.0 : 1.4, shrink = favoured ? 0.4 : 0.7;
                     // Expanding takes hands: a facility short of crew does not grow.
-                    if (margin > 1.4 && f.Utilisation > 0.8 && f.Staffing >= 0.95) step = 0.03;
-                    else if (margin < 0.7 || f.Utilisation < 0.2) step = -0.02;
+                    if (margin > grow && f.Utilisation > 0.8 && f.Staffing >= 0.95) step = 0.03 + bonus;
+                    else if (margin < shrink || f.Utilisation < 0.2) step = -0.02;
                     f.Level = Math.Max(f.BaseLevel * 0.4, Math.Min(f.BaseLevel * 3, f.Level * (1 + step)));
                 }
 

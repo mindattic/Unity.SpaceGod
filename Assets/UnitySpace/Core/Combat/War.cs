@@ -25,6 +25,15 @@ namespace Unity.SpaceGod.Core
         /// <summary>Hold one of the navy's own jump gates against raiders lying in wait off it: take station on its approach
         /// and fight them there (U.SPC-T374).</summary>
         HoldGate,
+
+        /// <summary>Lie over an enemy port so no ship may dock there, on its polity's orders (U.SPC-T423, see <see cref="StrategicCommand"/>).</summary>
+        Blockade,
+
+        /// <summary>Shadow a ship its polity has given it to guard (U.SPC-T423).</summary>
+        Escort,
+
+        /// <summary>Visit every world of a system in turn, on its polity's orders (U.SPC-T423).</summary>
+        Explore,
     }
 
     /// <summary>
@@ -1840,6 +1849,8 @@ namespace Unity.SpaceGod.Core
             foreach (var s in Fleet.Ships)
                 if (s.Leader == dead && s != heir) s.Leader = heir;
             if (Orders.TryGetValue(dead, out var o)) Orders[heir] = o;
+            // The objective its polity's command gave the group goes on under the heir (U.SPC-T423).
+            world.Polities?.Command.OnSuccession(dead, heir);
             if (PriorOrders.TryGetValue(dead, out var prior)) PriorOrders[heir] = prior;
             Orders.Remove(dead);
             PriorOrders.Remove(dead);
@@ -1878,6 +1889,9 @@ namespace Unity.SpaceGod.Core
                 case OrderKind.Raid: return 1.5 + rng.NextDouble();
                 case OrderKind.GateWatch:
                 case OrderKind.HoldGate: return 0.5;
+                case OrderKind.Blockade: return 1.0;
+                case OrderKind.Escort: return 0.1;
+                case OrderKind.Explore: return 0.3;
                 default: return normal;
             }
         }
@@ -1897,6 +1911,9 @@ namespace Unity.SpaceGod.Core
                 int yard = NearestYard(f, here, jd);
                 if (yard >= 0) return new GroupOrder { Kind = OrderKind.Repair, Body = yard };
             }
+
+            // Its polity's command has given it an objective (U.SPC-T423): that comes before its own plans.
+            if (Directed(leader, here, jd) is GroupOrder directed) return directed;
 
             // Defend: an own port with enemies at it.
             int threatened = -1;
@@ -1962,6 +1979,135 @@ namespace Unity.SpaceGod.Core
                 return new GroupOrder { Kind = OrderKind.Assault, Body = mark.Body };
 
             return new GroupOrder { Kind = OrderKind.Patrol, Body = NextPatrol(leader, here) };
+        }
+
+        /// <summary>
+        /// The order that carries out the objective <paramref name="leader"/>'s polity has given its group (U.SPC-T423, see
+        /// <see cref="StrategicCommand"/>), or null when it has none (or has just finished it) and its own command plans as
+        /// before. Take: storm a haven, besiege an enemy port whose defences are broken, else attack it; taken, it holds it.
+        /// Hold: defend the place. Blockade: lie over the port. Escort: go where its charge is or is bound. Explore: on to the
+        /// nearest world not yet visited, standing down when every one has been. An objective in another system keeps the
+        /// group in port here until command sends it there.
+        /// </summary>
+        GroupOrder Directed(Ship leader, int here, double jd)
+        {
+            var command = world.Polities?.Command;
+            var o = command?.ObjectiveOf(leader);
+            if (o == null) return null;
+            var f = leader.Faction;
+            if (o.Where != world) return new GroupOrder { Kind = OrderKind.Patrol, Body = here };
+            switch (o.Kind)
+            {
+                case ObjectiveKind.Take:
+                {
+                    Settlement target = null;
+                    double bestDays = double.MaxValue;
+                    foreach (var s in Economy.Settlements)
+                    {
+                        if (!command.Enemy(f, s) || (o.Body >= 0 ? s.Body != o.Body : s.Kind == SettlementKind.Haven)) continue;
+                        double days = s.Body == here ? 0 : Fleet.EstimateTravelDays(leader, here, s.Body, jd);
+                        if (days < bestDays)
+                        {
+                            bestDays = days;
+                            target = s;
+                        }
+                    }
+                    if (target == null)
+                    {
+                        // Nothing left there held by an enemy: taken (or the war is over and it was given back); it holds the place.
+                        int held = o.Body;
+                        if (held < 0)
+                            foreach (var s in Economy.Settlements)
+                                if (s.Owner == f && !s.Fallen && (held < 0 || s.Population > PopulationAt(held, f))) held = s.Body;
+                        if (held < 0 || !OwnsAt(held, f))
+                        {
+                            // Not taken by it: the war that made it an enemy's is over.
+                            command.Complete(leader, world, jd, $"The {leader.Name}'s group stands down: nothing there is an enemy's to take now");
+                            return null;
+                        }
+                        command.Taken(leader, world, held, jd);
+                        return new GroupOrder { Kind = OrderKind.Defend, Body = command.ObjectiveOf(leader).Body };
+                    }
+                    if (target.Kind == SettlementKind.Haven) return new GroupOrder { Kind = OrderKind.Assault, Body = target.Body };
+                    if (target.Body == here && target.Platforms.Count == 0 && target.DaysSinceCapture > CaptureGraceDays)
+                        return new GroupOrder { Kind = OrderKind.Siege, Body = here };
+                    return new GroupOrder { Kind = OrderKind.Attack, Body = target.Body };
+                }
+                case ObjectiveKind.Hold:
+                    return new GroupOrder { Kind = OrderKind.Defend, Body = o.Body >= 0 ? o.Body : here };
+                case ObjectiveKind.Blockade:
+                {
+                    foreach (var s in Economy.At(o.Body))
+                        if (command.Blockadable(f, s)) return new GroupOrder { Kind = OrderKind.Blockade, Body = o.Body };
+                    command.Complete(leader, world, jd, $"The {leader.Name}'s group lifts its blockade of {Catalog[o.Body].Name}: the port is no enemy's now");
+                    return null;
+                }
+                case ObjectiveKind.Escort:
+                {
+                    var charge = o.Charge?.Controller;
+                    if (charge == null || charge.Destroyed || !Fleet.IsPresent(charge)) return new GroupOrder { Kind = OrderKind.Patrol, Body = here };
+                    int bound = BoundFor(charge);
+                    return new GroupOrder { Kind = OrderKind.Escort, Body = bound >= 0 ? bound : here };
+                }
+                case ObjectiveKind.Explore:
+                {
+                    var worlds = new List<int>();
+                    if (o.Body >= 0) worlds.Add(o.Body);
+                    else
+                    {
+                        foreach (int b in world.FreeShipPorts())
+                            if (!worlds.Contains(b)) worlds.Add(b);
+                        foreach (var s in Economy.Settlements)
+                            if (!worlds.Contains(s.Body)) worlds.Add(s.Body);
+                    }
+                    if (worlds.Contains(here) && !o.Visited.Contains(here)) o.Visited.Add(here);
+                    int next = -1;
+                    double nearest = double.MaxValue;
+                    var from = world.Ephemeris.HelioAt(here, jd);
+                    foreach (int b in worlds)
+                    {
+                        if (o.Visited.Contains(b)) continue;
+                        double d = (world.Ephemeris.HelioAt(b, jd) - from).Length;
+                        if (d < nearest)
+                        {
+                            nearest = d;
+                            next = b;
+                        }
+                    }
+                    if (next < 0)
+                    {
+                        command.Complete(leader, world, jd, $"The {leader.Name}'s group has explored every world it was sent to ({o.Visited.Count}) and stands down");
+                        return null;
+                    }
+                    return new GroupOrder { Kind = OrderKind.Explore, Body = next };
+                }
+            }
+            return null;
+        }
+
+        bool OwnsAt(int body, Faction f)
+        {
+            foreach (var s in Economy.At(body))
+                if (s.Owner == f && !s.Fallen) return true;
+            return false;
+        }
+
+        double PopulationAt(int body, Faction f)
+        {
+            double p = 0;
+            foreach (var s in Economy.At(body))
+                if (s.Owner == f && !s.Fallen) p += s.Population;
+            return p;
+        }
+
+        /// <summary>Where a ship is or is going: the fight it is in, its trip's end, or the body it holds at.</summary>
+        static int BoundFor(Ship c)
+        {
+            if (c.Battle != null) return c.Battle.Body;
+            if (c.Phase == ShipPhase.Transit || c.Phase == ShipPhase.Lane || c.Phase == ShipPhase.Lurk || c.Phase == ShipPhase.Adrift)
+                return c.FinalBody >= 0 && c.Journey != null ? c.FinalBody : c.DestinationBody;
+            if ((c.Phase == ShipPhase.Queued || c.Planetside) && c.Ring != null) return c.Ring.Body;
+            return c.Orbit?.Body ?? -1;
         }
 
         /// <summary>How long a navy group holds a gate it was sent to (days on station after it gets there) before command
@@ -2046,6 +2192,8 @@ namespace Unity.SpaceGod.Core
                 int yard = NearestYard(f, here, jd);
                 if (yard >= 0) return new GroupOrder { Kind = OrderKind.Repair, Body = yard };
             }
+            // A wing too can be given an objective by its polity's command, off its beat (U.SPC-T423).
+            if (Directed(leader, here, jd) is GroupOrder directed) return directed;
             var beat = leader.Route ?? new int[0];
             int threatened = -1;
             double bestDays = double.MaxValue;
@@ -2839,7 +2987,7 @@ namespace Unity.SpaceGod.Core
             foreach (var st in Economy.Settlements)
             {
                 if (st.Kind == SettlementKind.Haven) continue;
-                Faction besieger = null;
+                Faction besieger = null, blockader = null;
                 bool defended = st.Platforms.Count > 0 || BattleAt(st.Body) != null || st.DaysSinceCapture < CaptureGraceDays, guarded = false;
                 foreach (var s in Fleet.Ships)
                 {
@@ -2847,9 +2995,11 @@ namespace Unity.SpaceGod.Core
                     var c = s.Controller;
                     if (c.Phase != ShipPhase.Parked || c.Orbit.Body != st.Body) continue;
                     if (Diplomacy.Hostile(s.Faction, st.Owner) && Orders.TryGetValue(s, out var o) && o.Kind == OrderKind.Siege) besieger = s.Faction;
+                    // A group sent to blockade it holds the space over it as a siege does, but lands nobody (U.SPC-T423).
+                    else if (Diplomacy.Hostile(s.Faction, st.Owner) && Orders.TryGetValue(s, out var b) && b.Kind == OrderKind.Blockade) blockader = s.Faction;
                     else if (s.Faction == st.Owner) defended = guarded = true;
                 }
-                if (besieger != null && !guarded) besiegers[st] = besieger;
+                if ((besieger ?? blockader) is Faction holder && !guarded) besiegers[st] = holder;
                 else besiegers.Remove(st);
                 if (besieger == null || defended)
                 {
@@ -3073,11 +3223,6 @@ namespace Unity.SpaceGod.Core
 
         // ---------------------------------------------------------------- shipbuilding
 
-        static readonly ShipClass[] WarshipCycle =
-        {
-            ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Carrier,
-        };
-
         /// <summary>What a navy's yard lays down next, or null to leave it to the merchant fleet.</summary>
         public ShipClass? ChooseWarship(Settlement yard)
         {
@@ -3087,9 +3232,15 @@ namespace Unity.SpaceGod.Core
             int count = 0;
             foreach (var s in Fleet.Ships)
                 if (!s.Destroyed && s.Faction == f && s.Spec.IsMilitary && !s.PatrolWing) count++;
+            // What it lays down, and how big a navy it keeps, are its polity's build plan (U.SPC-T423; the balanced fleet unless told otherwise).
+            var command = world.Polities?.Command;
+            var plan = command?.BuildPlanOf(f) ?? BuildPlan.Balanced;
+            if (plan.Cycle.Length == 0) return null;
             int cap = AtWar(f) ? world.NavyCapAtWar : world.NavyCap;
+            double share = command?.NavyShare(f) ?? 1;
+            if (share != 1) cap = (int)Math.Round(cap * share);
             if (count >= cap) return null;
-            return WarshipCycle[(builtWarships + yard.Id) % WarshipCycle.Length];
+            return plan.Cycle[(builtWarships + yard.Id) % plan.Cycle.Length];
         }
 
         static readonly string[] HullNames =

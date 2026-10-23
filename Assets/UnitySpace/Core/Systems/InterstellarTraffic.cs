@@ -37,6 +37,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>A raider band or a navy picket gone out under its own drive to lie in wait on an FTL route with a gravity
         /// projector (U.SPC-T421, see <see cref="DeepSpace.LieInWait"/>).</summary>
         Ambush,
+
+        /// <summary>A navy group sent by its polity's command to carry out an objective in another system (U.SPC-T423, see
+        /// <see cref="StrategicCommand"/>): there until the objective is done or called off.</summary>
+        Directed,
     }
 
     /// <summary>
@@ -905,6 +909,7 @@ namespace Unity.SpaceGod.Core
             VoyagePurpose.Hunt => "a hunt beyond the gates",
             VoyagePurpose.Relocate => "a move beyond the gates",
             VoyagePurpose.Ambush => "lying in wait between the stars",
+            VoyagePurpose.Directed => "its orders beyond the gates",
             _ => "a run beyond the gates",
         };
 
@@ -954,6 +959,12 @@ namespace Unity.SpaceGod.Core
                     ship.Ports = null;
                     v.StayUntilJd = jd + 20 + rng.NextDouble() * 10;
                     break;
+                case VoyagePurpose.Directed:
+                    // Here until its objective is done or called off (see StrategicCommand); the war here gives its orders.
+                    ship.Route = null;
+                    ship.Ports = null;
+                    v.StayUntilJd = double.PositiveInfinity;
+                    break;
                 case VoyagePurpose.Campaign:
                     // Here until the campaign is won, lost or called off (see InterstellarWars), not for a set stay.
                     ship.Route = null;
@@ -970,7 +981,8 @@ namespace Unity.SpaceGod.Core
                     return;
             }
             ship.Role = v.Purpose == VoyagePurpose.Survey ? ShipRole.Free : v.HomeRole;
-            if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign || v.Purpose == VoyagePurpose.Hunt)
+            if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign || v.Purpose == VoyagePurpose.Hunt ||
+                v.Purpose == VoyagePurpose.Directed)
                 ship.Ports ??= world.FreeShipPorts();
             world.Log(jd, cameIn != null
                     ? $"{ship.Name} of {ship.Faction.Name} comes through the {cameIn.Partner.Name} from {v.Home.Name}"
@@ -1230,6 +1242,22 @@ namespace Unity.SpaceGod.Core
             var v = SetOut(from, to, ship, VoyagePurpose.Campaign, route, jd);
             v.Campaign = campaign;
             v.StayUntilJd = double.PositiveInfinity;
+            return v;
+        }
+
+        /// <summary>
+        /// Sends a navy group (<paramref name="ship"/>, a flagship idle in <paramref name="from"/>) to <paramref name="to"/> on its
+        /// polity's orders (U.SPC-T423, see <see cref="StrategicCommand"/>), by the quickest way open to it, or under its own
+        /// drive where no gate goes. It stays there while its objective there stands. Null if it cannot go.
+        /// </summary>
+        public Voyage SendDirected(Ship ship, StarSystem from, StarSystem to, double jd)
+        {
+            if (from == to || !Idle(from.World, ship)) return null;
+            var route = Network.Route(from, to, ship.Faction, jd);
+            Voyage v;
+            if (route == null || route.Count == 0) v = CanCruise(ship) ? SetOutByCruise(from, to, null, ship, VoyagePurpose.Directed, jd) : null;
+            else v = SetOut(from, to, ship, VoyagePurpose.Directed, route, jd);
+            if (v != null) v.StayUntilJd = double.PositiveInfinity;
             return v;
         }
 
@@ -1560,7 +1588,9 @@ namespace Unity.SpaceGod.Core
                 // A war fleet comes home when its campaign says so (see InterstellarWars).
                 if (v.Purpose == VoyagePurpose.Campaign) continue;
                 bool hurt = (ship.Spec.IsMilitary || ship.Faction.IsPirate) && ship.Combat.Damage > 0.45;
-                if (jd < v.StayUntilJd && !hurt) continue;
+                // A group its polity sent here stays while its objective here stands (U.SPC-T423).
+                if (v.Purpose == VoyagePurpose.Directed && !hurt && galaxy.Polities.Command.Holds(ship, world)) continue;
+                if (jd < v.StayUntilJd && !hurt && v.Purpose != VoyagePurpose.Directed) continue;
                 if (ship.Battle != null || (ship.Phase != ShipPhase.Parked && ship.Phase != ShipPhase.Landed)) continue;
                 // A freighter sells what it carries before it goes (unless it has been at it far too long).
                 if (ship.HasCargo && v.Purpose == VoyagePurpose.Trade && jd < v.StayUntilJd + 30) continue;

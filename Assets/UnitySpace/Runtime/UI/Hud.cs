@@ -2997,6 +2997,10 @@ namespace Unity.SpaceGod.UI
                 case OrderKind.Hunt: return "Hunt pirates at " + where;
                 case OrderKind.GateWatch: return "Lie in wait off the jump gates (" + where + ")";
                 case OrderKind.HoldGate: return "Hold the jump gates against raiders (" + where + ")";
+                case OrderKind.Assault: return "Storm " + where;
+                case OrderKind.Blockade: return "Blockade " + where;
+                case OrderKind.Escort: return "Escort, at " + where;
+                case OrderKind.Explore: return "Explore, next " + where;
                 default: return "Patrol, next " + where;
             }
         }

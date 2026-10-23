@@ -402,6 +402,37 @@ namespace Unity.SpaceGod.Core
                 WorldEventKind.Diplomacy, from.Catalog.Root.Index);
         }
 
+        /// <summary>
+        /// Sends <paramref name="leader"/>'s group (idle in <paramref name="from"/>) on a campaign to take <paramref name="goal"/>,
+        /// on its polity's orders (U.SPC-T423, see <see cref="StrategicCommand"/>): the war it is fighting against whoever holds
+        /// ports there. Null if it is at war with nobody there or there is no way to fight through.
+        /// </summary>
+        public Campaign Launch(Ship leader, StarSystem from, StarSystem goal, double jd)
+        {
+            var f = leader?.Faction;
+            if (f == null || from == null || goal == null || from == goal) return null;
+            Conflict w = null;
+            foreach (var c in wars)
+                if (c.Involves(f) && EnemyHolds(c.Enemy(f), goal))
+                {
+                    w = c;
+                    break;
+                }
+            // A defender's campaigns take back only what was taken from it; anything else is the group's own work there.
+            if (w == null || (f == w.Defender && !GoalsOf(w, f).Contains(goal))) return null;
+            var route = galaxy.Network.Route(from, goal, f, jd, force: true);
+            if (route == null || route.Count == 0) return null;
+            var campaign = new Campaign { War = w, Faction = f, Home = from, Goal = goal, Stage = CampaignStage.Marching, SetOutJd = jd, Flagship = leader.Name };
+            if (Traffic.SendCampaign(leader, from, goal, campaign, jd) == null) return null;
+            if (f == w.Aggressor && !w.Goals.Contains(goal)) w.Goals.Add(goal);
+            w.Campaigns.Add(campaign);
+            campaigns.Add(campaign);
+            w.LastActiveJd = jd;
+            from.World.Log(jd, $"The {leader.Name} leads a {f.Name} war fleet out for {goal.Name} on its command's orders, {route.Count} gate{(route.Count == 1 ? "" : "s")} away",
+                WorldEventKind.Diplomacy, from.Catalog.Root.Index);
+            return campaign;
+        }
+
         /// <summary>A group <paramref name="f"/> can send: a sound, armed flagship of its navy idle in port, not its home guard.</summary>
         static bool Fit(World world, Ship ship, Faction f)
         {
@@ -411,6 +442,8 @@ namespace Unity.SpaceGod.Core
             // every day and every day fail to sail, holding back every other group.
             if (ship == world.PilotedShip || ship.Voyage != null || ship.GateKm != null || ship.Phase != ShipPhase.Parked || ship.OutOfPropellant) return false;
             if (world.Holdings != null && world.Holdings.Owns(ship)) return false;
+            // Nor one its polity's command has given an objective of its own (U.SPC-T423).
+            if (world.Polities.Command.Holds(ship)) return false;
             if (ship.Combat.Damage > 0.2 || !ship.Combat.Armed || world.War.IsHomeGuard(ship)) return false;
             return GroupMarines(world, ship) > 0;
         }

@@ -489,6 +489,8 @@ namespace Unity.SpaceGod.Core
             economy.RouteFactor = Companies.RouteFactor;
             economy.PaidFor = Companies.PaidFor;
             ShipAdded += Companies.OnShipAdded;
+            // Each polity's production focus steers which of its industries grow (U.SPC-T423).
+            economy.Priority = (s, kind) => Polities.Command.Priority(s.Owner, kind);
             economy.ChooseBuild = yard => Companies.Enabled
                 ? Requisition(yard) ?? Companies.OrderAt(yard) ?? war.ChooseWarship(yard)
                 : TraderCount() < MerchantTarget ? ChooseBuild(yard) : war.ChooseWarship(yard) ?? ChooseBuild(yard);

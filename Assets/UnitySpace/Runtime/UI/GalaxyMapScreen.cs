@@ -46,6 +46,15 @@ namespace Unity.SpaceGod.UI
 
         bool showTerritory = true, showFlows = true, showFronts = true, showPirates = true, showConstruction = true;
 
+        /// <summary>The strategy layer's COMMAND panel is up in place of the system detail (U.SPC-T423).</summary>
+        bool commandMode;
+        Faction commanded;
+        Ship commandGroup;
+        CommandScope commandScope = CommandScope.Group;
+        Vector2 groupScroll;
+        PolityReport report;
+        float reportAt = -10f;
+
         GUIStyle title, text, small, label, labelDim, button, buttonOn;
         Texture2D panelTex, buttonTex, buttonOnTex, glow;
 
@@ -112,7 +121,8 @@ namespace Unity.SpaceGod.UI
             if (Event.current.type == EventType.Repaint) DrawMap(canvas, jd);
             DrawHeader(header, jd);
             DrawLegend(legend);
-            DrawDetail(detail, jd);
+            if (commandMode) DrawCommand(detail, jd);
+            else DrawDetail(detail, jd);
         }
 
         // ---------------------------------------------------------------- projection
@@ -455,6 +465,11 @@ namespace Unity.SpaceGod.UI
                 "As known in " + app.ActiveSystem.Name + "   ·   " + known + " of " + model.Systems.Count + " systems heard from   ·   " +
                 model.Links.Count + " gate links   ·   traffic over the last " + GalaxyMap.FlowWindowDays.ToString("0", CultureInfo.InvariantCulture) + " days", small);
             GUI.contentColor = old;
+            if (GUI.Button(new Rect(r.xMax - 340, r.y + 10, 120, 26), commandMode ? "SYSTEM DETAIL" : "COMMAND", commandMode ? buttonOn : button))
+            {
+                commandMode = !commandMode;
+                reportAt = -10f;
+            }
             if (GUI.Button(new Rect(r.xMax - 210, r.y + 10, 120, 26), "Reset view", button)) fitted = false;
             if (GUI.Button(new Rect(r.xMax - 82, r.y + 10, 72, 26), "Close", button)) app.ShowGalaxyMap = false;
         }
@@ -601,6 +616,180 @@ namespace Unity.SpaceGod.UI
                 }
                 Line(ref y, x, w, line, c);
             }
+        }
+
+        // ---------------------------------------------------------------- command (U.SPC-T423)
+
+        /// <summary>The states that can be commanded: every polity with a navy and a port somewhere.</summary>
+        List<Faction> CommandableStates()
+        {
+            var polities = app.Galaxy.Polities;
+            var list = new List<Faction>();
+            foreach (var f in polities.Factions)
+            {
+                if (f.IsPirate || !f.IsMilitary) continue;
+                foreach (var _ in polities.SettlementsOf(f))
+                {
+                    list.Add(f);
+                    break;
+                }
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// The strategy layer (U.SPC-T423): one polity at a glance (its systems, people, money, navy and wars), its production,
+        /// build and research priorities, every one of its fleet groups with what it is doing and what it was told to do, and
+        /// objectives (take, hold, blockade, escort, explore) for the system picked on the map, given to one squadron, every
+        /// group in a system, or the whole navy.
+        /// </summary>
+        void DrawCommand(Rect r, double jd)
+        {
+            var command = app.Galaxy.Polities.Command;
+            var states = CommandableStates();
+            float x = r.x + 14, w = r.width - 28, y = r.y + 10;
+            if (states.Count == 0)
+            {
+                Line(ref y, x, w, "No polity with a navy to command.", Dim);
+                return;
+            }
+            if (commanded == null || !states.Contains(commanded))
+            {
+                var mine = command.Player ?? app.Piloted.Ship?.Faction;
+                var holder = app.ActiveSystem.Holder;
+                commanded = mine != null && states.Contains(mine) ? mine : holder != null && states.Contains(holder) ? holder : states[0];
+                command.Player = commanded;
+                reportAt = -10f;
+            }
+            if (report == null || report.Faction != commanded || Time.unscaledTime - reportAt > 0.5f)
+            {
+                report = command.Report(commanded, jd);
+                reportAt = Time.unscaledTime;
+            }
+            var inv = CultureInfo.InvariantCulture;
+
+            if (GUI.Button(new Rect(x, y, 26, 22), "<", button)) Cycle(states, -1);
+            if (GUI.Button(new Rect(x + w - 26, y, 26, 22), ">", button)) Cycle(states, 1);
+            var old = GUI.contentColor;
+            GUI.contentColor = Tint(commanded.Color, 1);
+            GUI.Label(new Rect(x + 34, y + 2, w - 68, 22), commanded.Name.ToUpperInvariant(), title);
+            GUI.contentColor = old;
+            y += 28;
+
+            Line(ref y, x, w, report.Systems + (report.Systems == 1 ? " system held, " : " systems held, ") + report.Ports + (report.Ports == 1 ? " port, " : " ports, ") +
+                              People(report.Population), Color.white);
+            Line(ref y, x, w, "Treasury " + report.Treasury.ToString("N0", inv) + " cr   ·   unrest " + (report.Unrest * 100).ToString("0", inv) + "%", Color.white);
+            Line(ref y, x, w, "Navy: " + report.Warships + " hulls in " + report.Groups + " groups, strength " + report.Strength.ToString("N0", inv) + "; " +
+                              report.Commanded + " under your orders" + (report.Campaigns > 0 ? ", " + report.Campaigns + " on campaign" : ""), Color.white);
+            Line(ref y, x, w, report.AtWarWith.Count == 0 ? "At peace" : "At war with the " + string.Join(", the ", report.AtWarWith.ConvertAll(f => f.Name)),
+                report.AtWarWith.Count == 0 ? Dim : FrontColor);
+            Line(ref y, x, w, "Marines x" + report.MarineQuality.ToString("0.00", inv) + ", crew morale " + report.Morale.ToString("0.00", inv) + ", " +
+                              report.CrewLost.ToString("N0", inv) + " spacers lost", Dim);
+            y += 4;
+
+            Heading(ref y, x, w, "PRIORITIES");
+            var d = command.Of(commanded);
+            if (GUI.Button(new Rect(x, y, w, 22), "Production: " + d.Production.Name, button))
+                command.SetProduction(commanded, Next(ProductionFocus.All, d.Production));
+            y += 24;
+            Line(ref y, x, w, d.Production.Description, Dim);
+            if (GUI.Button(new Rect(x, y, w, 22), "Build: " + d.Build.Name, button)) command.SetBuild(commanded, Next(BuildPlan.All, d.Build));
+            y += 24;
+            Line(ref y, x, w, d.Build.Description, Dim);
+            string research = d.Research == null ? "nothing"
+                : d.Research.Name + " " + (d.Level(d.Research) + 1) + "  (" + d.ResearchPoints.ToString("0", inv) + " of " + d.Research.CostOf(d.Level(d.Research)).ToString("0", inv) + ")";
+            if (d.Research != null && d.Level(d.Research) >= d.Research.MaxLevel) research = d.Research.Name + ": every level reached";
+            if (GUI.Button(new Rect(x, y, w, 22), "Research: " + research, button))
+            {
+                var tracks = new List<ResearchTrack> { null };
+                foreach (var t in ResearchTrack.All) tracks.Add(t);
+                command.SetResearch(commanded, tracks[(tracks.IndexOf(d.Research) + 1) % tracks.Count]);
+            }
+            y += 24;
+            var levels = new List<string>();
+            foreach (var t in ResearchTrack.All) levels.Add(t.Name + " " + d.Level(t));
+            Line(ref y, x, w, string.Join("   ·   ", levels), Dim);
+            y += 4;
+
+            var target = selected ?? app.ActiveSystem;
+            Heading(ref y, x, w, "ORDERS FOR " + target.Name.ToUpperInvariant());
+            float third = (w - 8) / 3;
+            string[] scopes = { "SQUADRON", "SYSTEM", "EMPIRE" };
+            for (int i = 0; i < 3; i++)
+                if (GUI.Button(new Rect(x + i * (third + 4), y, third, 22), scopes[i], (int)commandScope == i ? buttonOn : button)) commandScope = (CommandScope)i;
+            y += 26;
+            var from = commandGroup != null ? command.WorldOf(commandGroup) : null;
+            string who = commandScope == CommandScope.Group ? (commandGroup != null ? "the " + commandGroup.Name + "'s group" : "pick a group below")
+                : commandScope == CommandScope.System ? "every group in " + (command.SystemOf(from ?? app.ActiveSystem.World)?.Name ?? "this system")
+                : "every group of the " + commanded.Name;
+            Line(ref y, x, w, "To: " + who, Dim);
+            ObjectiveKind[] kinds = { ObjectiveKind.Take, ObjectiveKind.Hold, ObjectiveKind.Blockade, ObjectiveKind.Escort, ObjectiveKind.Explore };
+            float fifth = (w - 16) / 5;
+            for (int i = 0; i < kinds.Length; i++)
+                if (GUI.Button(new Rect(x + i * (fifth + 4), y, fifth, 24), kinds[i].ToString().ToUpperInvariant(), buttonOn)) Give(command, kinds[i], target, from, jd);
+            y += 28;
+            if (GUI.Button(new Rect(x, y, w, 22), "CLEAR ORDERS (back to their own command's plans)", button))
+            {
+                int n = command.Clear(commanded, commandScope, commandGroup, from ?? app.ActiveSystem.World);
+                app.ShowToast(n == 0 ? "No group there was under orders" : n + (n == 1 ? " group stands down" : " groups stand down"));
+                reportAt = -10f;
+            }
+            y += 28;
+
+            Heading(ref y, x, w, "FLEET  (" + report.Fleet.Count + " groups)");
+            var list = new Rect(x - 4, y, w + 8, Mathf.Max(40, r.yMax - y - 8));
+            const float rowH = 34;
+            groupScroll = GUI.BeginScrollView(list, groupScroll, new Rect(0, 0, w - 12, report.Fleet.Count * rowH));
+            for (int i = 0; i < report.Fleet.Count; i++)
+            {
+                var g = report.Fleet[i];
+                bool on = g.Leader == commandGroup;
+                if (GUI.Button(new Rect(0, i * rowH, w - 12, rowH - 2), GUIContent.none, on ? buttonOn : button))
+                {
+                    commandGroup = g.Leader;
+                    commandScope = CommandScope.Group;
+                }
+                GUI.Label(new Rect(6, i * rowH + 1, w - 24, 16),
+                    g.Leader.Name + "  (" + g.Hulls + (g.Hulls == 1 ? " hull" : " hulls") + ", " + g.Strength.ToString("N0", inv) + ")   " + g.System, labelDim);
+                var c = GUI.contentColor;
+                GUI.contentColor = string.IsNullOrEmpty(g.Objective) ? Dim : Accent;
+                GUI.Label(new Rect(6, i * rowH + 16, w - 24, 16), string.IsNullOrEmpty(g.Objective) ? g.Order : g.Objective + "  ·  " + g.Order, small);
+                GUI.contentColor = c;
+            }
+            GUI.EndScrollView();
+        }
+
+        void Cycle(List<Faction> states, int step)
+        {
+            int i = states.IndexOf(commanded);
+            commanded = states[((i < 0 ? 0 : i) + step + states.Count) % states.Count];
+            app.Galaxy.Polities.Command.Player = commanded;
+            commandGroup = null;
+            reportAt = -10f;
+        }
+
+        static T Next<T>(IReadOnlyList<T> all, T current) where T : class
+        {
+            for (int i = 0; i < all.Count; i++)
+                if (all[i] == current) return all[(i + 1) % all.Count];
+            return all.Count > 0 ? all[0] : null;
+        }
+
+        void Give(StrategicCommand command, ObjectiveKind kind, StarSystem target, World from, double jd)
+        {
+            if (commandScope == CommandScope.Group && commandGroup == null)
+            {
+                app.ShowToast("Pick a group from the fleet list first, or give the order to a whole system or the empire");
+                return;
+            }
+            // An escort for your own hull, when you are flying in that system and are no enemy of theirs; else command's pick.
+            Ship charge = null;
+            var pilot = app.Piloted.Ship;
+            if (kind == ObjectiveKind.Escort && pilot != null && target.World.Fleet.IsPresent(pilot) && !app.Galaxy.Polities.Diplomacy.Hostile(commanded, pilot.Faction))
+                charge = pilot;
+            string why = command.Order(commanded, commandScope, commandGroup, from ?? app.ActiveSystem.World, kind, target.World, jd, out int given, -1, charge);
+            app.ShowToast(why ?? given + (given == 1 ? " group: " : " groups: ") + command.Describe(kind, target.World, -1, charge).ToLowerInvariant());
+            reportAt = -10f;
         }
 
         /// <summary>A plain star on the charts (U.SPC-T420): what is known of it, and an FTL course to it.</summary>
