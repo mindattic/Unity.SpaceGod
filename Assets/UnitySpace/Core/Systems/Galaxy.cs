@@ -15,6 +15,18 @@ namespace Unity.SpaceGod.Core
         /// <summary>Position of the system's root relative to the Sun, light-years (J2000 ecliptic axes, as inside every system).</summary>
         public DVec3 PositionLy { get; }
 
+        /// <summary>
+        /// Where the system's root sits in the galaxy, as a sector and an offset (U.SPC-T412, see <see cref="GalacticPosition"/>):
+        /// the frame its own km coordinates (ephemeris, fleet, gates) are measured from.
+        /// </summary>
+        public GalacticPosition Origin { get; }
+
+        /// <summary>The place in the galaxy <paramref name="localKm"/> from this system's root.</summary>
+        public GalacticPosition At(DVec3 localKm) => Origin.Offset(localKm);
+
+        /// <summary>Where <paramref name="place"/> is from this system's root, km (exact for anywhere near the system).</summary>
+        public DVec3 LocalKm(GalacticPosition place) => place.KmFrom(Origin);
+
         public BodyCatalog Catalog { get; }
         public Ephemeris Ephemeris { get; }
         public World World { get; }
@@ -117,6 +129,7 @@ namespace Unity.SpaceGod.Core
         {
             Name = name;
             PositionLy = positionLy;
+            Origin = GalacticPosition.FromLy(positionLy);
             Catalog = ephemeris.Catalog;
             Ephemeris = ephemeris;
             World = world;
@@ -241,6 +254,9 @@ namespace Unity.SpaceGod.Core
             Color = AlphaCentauri.StarColor(teffK);
         }
 
+        /// <summary>Where it is in the galaxy (U.SPC-T412): a ship under its own drive can fly to it like to any system.</summary>
+        public GalacticPosition Origin => GalacticPosition.FromLy(PositionLy);
+
         /// <summary>Absolute magnitude (as seen from 10 parsecs), from the apparent one and the distance; NaN when unknown.</summary>
         public double AbsoluteMagnitude => double.IsNaN(ApparentMagnitude) ? double.NaN
             : ApparentMagnitude - 5 * (Math.Log10(PositionLy.Length / 3.261563777) - 1);
@@ -257,6 +273,15 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The jump-gate lattice between the systems (see <see cref="GateNetwork"/>).</summary>
         public GateNetwork Network { get; private set; }
+
+        /// <summary>
+        /// The open space between the stars (U.SPC-T412): ships crossing it under their own cruise drives, the wrecks and
+        /// derelicts left out there, and what happens when they meet (see <see cref="DeepSpace"/>). It runs every step with
+        /// the systems, gates or no gates.
+        /// </summary>
+        public DeepSpace DeepSpace { get; }
+
+        public Galaxy() => DeepSpace = new DeepSpace(this);
 
         /// <summary>The ships crossing between systems and the voyages that send them (see <see cref="InterstellarTraffic"/>).</summary>
         public InterstellarTraffic Traffic { get; private set; }
@@ -324,6 +349,8 @@ namespace Unity.SpaceGod.Core
                 }
             }
             Traffic?.Update(jd);
+            // Between the stars: groups under their own drives fly on, meet, find wrecks and drop out at their stars.
+            DeepSpace.Update(jd);
             Construction?.Update(jd);
             Wars?.Update(jd);
         }

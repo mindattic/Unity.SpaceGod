@@ -104,6 +104,15 @@ namespace Unity.SpaceGod.Core
         public string PlannedMarket;
         public double ExpectedSale, PlannedOnNewsJd = double.NaN;
 
+        /// <summary>
+        /// This leg is flown under the ship's own cruise drive through open space (U.SPC-T412, see <see cref="DeepSpace"/>),
+        /// not by the gates: its <see cref="Ship.GateKm"/> is the point at the edge of its star's well where it engages.
+        /// </summary>
+        public bool ByCruise;
+
+        /// <summary>A plain star (one nobody simulates) this leg is bound for under the ship's own drive, by name; null for a system.</summary>
+        public string StarName;
+
         public JumpGate NextGate => Route != null && Leg < Route.Count ? Route[Leg] : null;
         public bool Homeward => Destination == Home;
     }
@@ -178,13 +187,35 @@ namespace Unity.SpaceGod.Core
         /// <summary>Ships inside a gate right now.</summary>
         public IReadOnlyList<Passage> InGates => inGates;
 
-        /// <summary>Every ship inside a gate right now (in no system's fleet until it comes out at the far end).</summary>
+        /// <summary>Every ship inside a gate or out between the stars under its own drive right now (in no system's fleet
+        /// until it comes out at the far end).</summary>
         public IEnumerable<Ship> InTransit()
         {
             foreach (var p in inGates)
                 foreach (var s in p.Ships)
                     yield return s;
+            foreach (var s in galaxy.DeepSpace.InFlight())
+                yield return s;
         }
+
+        /// <summary>The voyages of the groups inside the gates and out between the stars (their flagships').</summary>
+        IEnumerable<Voyage> VoyagesInTransit()
+        {
+            foreach (var p in inGates)
+                if (p.Leader.Voyage != null) yield return p.Leader.Voyage;
+            foreach (var c in galaxy.DeepSpace.Cruises)
+                if (c.Ships.Count > 0 && c.Leader.Voyage != null) yield return c.Leader.Voyage;
+        }
+
+        /// <summary>Decisions about the open space between the stars (U.SPC-T412), on their own numbers so the gate traffic's
+        /// stay as they were whenever no ship goes that way.</summary>
+        readonly Random cruiseRng;
+
+        /// <summary>Share of survey trips a survey hull with a drive of its own makes to a star off the gate network.</summary>
+        public const double StarSurveyShare = 0.3;
+
+        /// <summary>The farthest (ly) a survey service sends a hull under its own drive to look at a plain star.</summary>
+        public const double MaxStarSurveyLy = 16;
 
         /// <summary>What each system knows of the others, and how old it is (U.SPC-T100).</summary>
         public Newswire News { get; }
@@ -258,10 +289,13 @@ namespace Unity.SpaceGod.Core
         {
             this.galaxy = galaxy;
             rng = new Random(seed);
+            cruiseRng = new Random(seed + 13);
             nextDailyJd = jd + 0.5;
             News = new Newswire(galaxy, jd);
             Clans = new PirateClans(galaxy, this, seed + 7);
             foreach (var system in galaxy.Systems) Register(system);
+            galaxy.DeepSpace.Arrived += OnCruiseArrived;
+            galaxy.DeepSpace.ReachedStar += OnReachedStar;
         }
 
         /// <summary>Takes <paramref name="s"/>'s gate traffic on: ships there reaching a gate, and the orders of those abroad (a system opened by a new gate, U.SPC-T97, as well as the first ones).</summary>
@@ -339,6 +373,13 @@ namespace Unity.SpaceGod.Core
             {
                 atGates.RemoveAll(e => e.ship == ship);
                 if (!ship.Destroyed) CancelVoyage(system, ship, now, v != null && ship.Faction == v.Faction);
+                return;
+            }
+            // At the edge of the well, bound across open space under its own drive (U.SPC-T412): no gate to open.
+            if (v.ByCruise)
+            {
+                atGates.RemoveAll(e => e.ship == ship);
+                EngageCruise(system, ship, when);
                 return;
             }
             var gate = v.NextGate;
@@ -537,12 +578,181 @@ namespace Unity.SpaceGod.Core
             world.War.GateAmbushes(double.IsNaN(world.Jd) ? jd : Math.Max(jd, world.Jd));
         }
 
+        // ---------------------------------------------------------------- under its own drive (U.SPC-T412)
+
+        /// <summary>Whether <paramref name="ship"/> carries a cruise drive, and so can cross between the stars without a gate.</summary>
+        public static bool CanCruise(Ship ship) => CruiseDrives.Of(ship) != null;
+
+        /// <summary>
+        /// Sends <paramref name="ship"/> (idle in <paramref name="from"/>, with a cruise drive) to <paramref name="to"/> through
+        /// open space under its own drive, gates or none: out to the edge of the well, across, and in from the far edge.
+        /// Null if it cannot go.
+        /// </summary>
+        public Voyage SendByCruise(Ship ship, StarSystem from, StarSystem to, VoyagePurpose purpose, double jd)
+        {
+            if (to == null || from == to || !Idle(from.World, ship) || !CanCruise(ship)) return null;
+            return SetOutByCruise(from, to, null, ship, purpose, jd);
+        }
+
+        /// <summary>
+        /// Sends <paramref name="ship"/> (idle in <paramref name="from"/>, with a cruise drive) to <paramref name="star"/>, a star
+        /// nobody simulates, under its own drive: it drops out at the edge of the star's well, stays a while and comes home.
+        /// Null if it cannot go.
+        /// </summary>
+        public Voyage SendToStar(Ship ship, StarSystem from, NearbyStar star, VoyagePurpose purpose, double jd)
+        {
+            if (star.Name == null || !Idle(from.World, ship) || !CanCruise(ship)) return null;
+            return SetOutByCruise(from, null, star.Name, ship, purpose, jd);
+        }
+
+        Voyage SetOutByCruise(StarSystem from, StarSystem to, string star, Ship ship, VoyagePurpose purpose, double jd)
+        {
+            var target = to != null ? to.Origin : FindStar(star)?.Origin;
+            if (target == null) return null;
+            ship.StakeoutKm = null;
+            var v = new Voyage
+            {
+                Purpose = purpose, Home = from, Destination = to, Route = new List<JumpGate>(), SetOutJd = jd, Faction = ship.Faction,
+                Ly = target.Value.DistanceLy(from.Origin), ByCruise = true, StarName = star,
+                HomeRole = ship.Role, HomeRoute = ship.Route, HomePorts = ship.Ports,
+            };
+            ship.Voyage = v;
+            outCache?.Add(v);
+            ship.GateKm = DeepSpace.DeparturePointKm(from, target.Value);
+            from.World.Fleet.ScheduleNext(ship, jd);
+            return v;
+        }
+
+        /// <summary>Turns a voyage under way in <paramref name="system"/> onto its own drive for <paramref name="to"/>: out to the well's edge from here.</summary>
+        void CruiseFrom(StarSystem system, Ship ship, StarSystem to, double jd)
+        {
+            var v = ship.Voyage;
+            v.Destination = to;
+            v.ByCruise = true;
+            v.StarName = null;
+            v.Route = new List<JumpGate>();
+            v.Leg = 0;
+            v.AtGate = false;
+            v.WaitingSinceJd = double.NaN;
+            ship.GateKm = DeepSpace.DeparturePointKm(system, to.Origin);
+            system.World.Fleet.ScheduleNext(ship, jd);
+        }
+
+        NearbyStar? FindStar(string name)
+        {
+            if (name == null) return null;
+            foreach (var n in galaxy.NearbyStars)
+                if (string.Equals(n.Name, name, StringComparison.OrdinalIgnoreCase)) return n;
+            return null;
+        }
+
+        /// <summary>
+        /// At the edge of the well: the group's hulls with a drive go out into open space together, as copies (the ones
+        /// here retired, as at a gate); escorts that cannot cross on their own stay behind under the strongest of them.
+        /// </summary>
+        void EngageCruise(StarSystem system, Ship leader, double jd)
+        {
+            var v = leader.Voyage;
+            var world = system.World;
+            var drive = CruiseDrives.Of(leader);
+            var star = v.StarName != null ? FindStar(v.StarName) : null;
+            if (drive == null || (v.Destination == null && star == null) || v.Destination == system)
+            {
+                CancelVoyage(system, leader, jd, system == v.Home);
+                return;
+            }
+            v.AtGate = false;
+            v.WaitingSinceJd = double.NaN;
+            world.Economy.Release(leader);
+            var at = leader.Orbit != null ? leader.Orbit.OffsetAt(jd) : leader.GateKm ?? DVec3.Zero;
+
+            var ships = new List<Ship>();
+            var hired = new HashSet<Ship>();
+            var copy = CopyOf(leader);
+            copy.Voyage = v;
+            copy.Role = leader.Role;
+            ships.Add(copy);
+            foreach (var e in world.Fleet.Ships)
+            {
+                // An escort still fighting, left a hulk, or with no drive of its own, stays behind.
+                if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict || !CanCruise(e)) continue;
+                var ec = CopyOf(e);
+                ec.Role = ShipRole.Escort;
+                ec.Leader = copy;
+                ec.FormationSlot = e.FormationSlot;
+                ships.Add(ec);
+                if (world.Escorts != null && world.Escorts.IsHired(e))
+                {
+                    hired.Add(ec);
+                    world.Escorts.UnmarkHired(e);
+                }
+                Retire(world, e);
+            }
+            Retire(world, leader);
+            world.War?.HandOverCommand(leader, keepHunter: v.Purpose == VoyagePurpose.Hunt);
+
+            var news = News.Bundle(system, jd);
+            var c = star != null
+                ? galaxy.DeepSpace.LaunchToStar(ships, system, at, star.Value, drive, jd, news)
+                : galaxy.DeepSpace.Launch(ships, system, at, v.Destination, drive, jd, news);
+            foreach (var h in hired) c.Hired.Add(h);
+            string group = ships.Count > 1 ? $" and {ships.Count - 1} more" : "";
+            world.Log(jd, $"{leader.Name}{group} engage{(ships.Count > 1 ? "" : "s")} {drive.Name.ToLowerInvariant()} for {c.ToName}, " +
+                          $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly through open space", WorldEventKind.Info, system.Catalog.Root.Index);
+        }
+
+        /// <summary>Dropped out at the edge of a system's well and in its fleet: home, or to its business there.</summary>
+        void OnCruiseArrived(Cruise c, double jd)
+        {
+            var system = c.To;
+            var leader = c.Leader;
+            var v = leader.Voyage;
+            if (v != null)
+            {
+                v.ByCruise = false;
+                if (v.Homeward) Home(system, leader, jd);
+                else if (v.Destination == system) Arrive(system, leader, null, jd);
+                else
+                {
+                    // Sent somewhere else on the way: on from here, by the gates if they go there, else by its drive.
+                    var route = v.Destination == null ? null : Network.Route(system, v.Destination, leader.Faction, jd);
+                    if (route != null && route.Count > 0)
+                    {
+                        v.Route = route;
+                        v.Leg = 0;
+                        leader.GateKm = route[0].PositionKm;
+                        system.World.Fleet.ScheduleNext(leader, jd);
+                    }
+                    else if (v.Destination != null && CanCruise(leader)) CruiseFrom(system, leader, v.Destination, jd);
+                    else Arrive(system, leader, null, jd);
+                }
+            }
+            News.Carried(system, c.News, leader.Name, jd);
+        }
+
+        /// <summary>Dropped out at a plain star it was sent to look at: it holds there a while, then sets out for home.</summary>
+        void OnReachedStar(Cruise c, double jd)
+        {
+            var leader = c.Leader;
+            var v = leader.Voyage;
+            if (v == null || v.Home == null) return;
+            Arrivals[v.Purpose] = (Arrivals.TryGetValue(v.Purpose, out int n) ? n : 0) + 1;
+            double stay = 8 + cruiseRng.NextDouble() * 12;
+            v.Home.World.Log(jd, $"{leader.Name} of {leader.Faction.Name} reports from {c.ToName}, {v.Ly.ToString("0.0", CultureInfo.InvariantCulture)} ly out under its own drive",
+                WorldEventKind.Info, v.Home.Catalog.Root.Index);
+            v.StarName = null;
+            v.Destination = v.Home;
+            v.StayUntilJd = jd + stay;
+            galaxy.DeepSpace.Retarget(c, v.Home, jd + stay);
+        }
+
         /// <summary>Back where it belongs: takes up its old role, route and ports.</summary>
         void Home(StarSystem system, Ship ship, double jd)
         {
             var v = ship.Voyage;
             ship.Voyage = null;
             ship.GateKm = null;
+            v.ByCruise = false;
             ship.Role = v.HomeRole;
             ship.Route = v.HomeRoute;
             ship.RouteIndex = 0;
@@ -604,8 +814,9 @@ namespace Unity.SpaceGod.Core
                     ship.Route = null;
                     ship.Ports = null;
                     v.StayUntilJd = jd + 20 + rng.NextDouble() * 15;
-                    // The gate's owner shuts it behind them, and sends a navy after them to where they came from.
-                    if (cameIn.Owner != null && cameIn.Owner.IsMilitary)
+                    // The gate's owner shuts it behind them, and sends a navy after them to where they came from. (Raiders
+                    // who came in through open space under their own drive came by no one's gate.)
+                    if (cameIn != null && cameIn.Owner != null && cameIn.Owner.IsMilitary)
                     {
                         Blockade(cameIn, jd, BlockadeDays, $"{ship.Faction.Name} raiders come through");
                         expeditionsWanted.Add((system, v.Home, ship.Faction, jd));
@@ -635,7 +846,9 @@ namespace Unity.SpaceGod.Core
             ship.Role = v.Purpose == VoyagePurpose.Survey ? ShipRole.Free : v.HomeRole;
             if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign || v.Purpose == VoyagePurpose.Hunt)
                 ship.Ports ??= world.FreeShipPorts();
-            world.Log(jd, $"{ship.Name} of {ship.Faction.Name} comes through the {cameIn.Partner.Name} from {v.Home.Name}", WorldEventKind.Info, system.Catalog.Root.Index);
+            world.Log(jd, cameIn != null
+                    ? $"{ship.Name} of {ship.Faction.Name} comes through the {cameIn.Partner.Name} from {v.Home.Name}"
+                    : $"{ship.Name} of {ship.Faction.Name} comes in from {v.Home.Name} under its own drive", WorldEventKind.Info, system.Catalog.Root.Index);
             world.Fleet.ScheduleNext(ship, jd);
         }
 
@@ -666,6 +879,13 @@ namespace Unity.SpaceGod.Core
             v.AtGate = false;
             v.WaitingSinceJd = double.NaN;
             ship.GateKm = null;
+            // The gates are shut to it, but it has a drive of its own (U.SPC-T412): it goes the long way, through open space.
+            if (v.Campaign == null && v.Destination != null && v.Destination != system && CanCruise(ship))
+            {
+                CruiseFrom(system, ship, v.Destination, jd);
+                system.World.Log(jd, $"{ship.Name} gives up on the gates and sets out for {v.Destination.Name} under its own drive", WorldEventKind.Info, system.Catalog.Root.Index);
+                return;
+            }
             // A war fleet's voyage is its campaign's: it is not called off here but ended by the war (U.SPC-T296).
             if (system == v.Home && v.Campaign == null)
             {
@@ -788,9 +1008,7 @@ namespace Unity.SpaceGod.Core
 
             foreach (var s in galaxy.Systems) SendHomeWhenDone(s, jd);
             // Every voyage under way, gathered once: the dispatchers below count them for each of many routes.
-            outCache = new List<Voyage>();
-            foreach (var p in inGates)
-                if (p.Leader.Voyage != null) outCache.Add(p.Leader.Voyage);
+            outCache = new List<Voyage>(VoyagesInTransit());
             foreach (var s in galaxy.Systems)
                 foreach (var ship in s.World.Fleet.Ships)
                     if (!ship.Destroyed && ship.Voyage != null) outCache.Add(ship.Voyage);
@@ -823,7 +1041,7 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>A ship that can be sent: its own master (not an escort, not the player's), idle in port, not fighting.</summary>
-        internal static bool Idle(World world, Ship s) =>
+        public static bool Idle(World world, Ship s) =>
             !s.Destroyed && !s.IsEscort && !s.Derelict && s.Battle == null && s != world.PilotedShip && s.Voyage == null && s.GateKm == null &&
             (s.Phase == ShipPhase.Parked || s.Phase == ShipPhase.Landed) && s.Orbit != null
             // Nor one of the player's own fleet: it sails where its captain's standing orders take it.
@@ -850,8 +1068,8 @@ namespace Unity.SpaceGod.Core
                     if (Counts(v)) n++;
                 return n;
             }
-            foreach (var p in inGates)
-                if (Counts(p.Leader.Voyage)) n++;
+            foreach (var v in VoyagesInTransit())
+                if (Counts(v)) n++;
             foreach (var s in galaxy.Systems)
                 foreach (var ship in s.World.Fleet.Ships)
                     if (!ship.Destroyed && Counts(ship.Voyage)) n++;
@@ -867,7 +1085,8 @@ namespace Unity.SpaceGod.Core
         {
             if (from == to || !Idle(from.World, ship)) return null;
             var route = Network.Route(from, to, ship.Faction, jd);
-            if (route == null || route.Count == 0) return null;
+            // No way through the gates: a hull with a drive of its own goes through open space instead (U.SPC-T412).
+            if (route == null || route.Count == 0) return CanCruise(ship) ? SetOutByCruise(from, to, null, ship, purpose, jd) : null;
             return SetOut(from, to, ship, purpose, route, jd);
         }
 
@@ -914,6 +1133,8 @@ namespace Unity.SpaceGod.Core
             v.Destination = to;
             v.Route = route ?? new List<JumpGate>();
             v.Leg = 0;
+            v.ByCruise = false;
+            v.StarName = null;
             ship.GateKm = v.Route.Count > 0 ? v.Route[0].PositionKm : (DVec3?)null;
             if (ship.Battle == null) system.World.Fleet.ScheduleNext(ship, jd);
             return true;
@@ -1129,6 +1350,8 @@ namespace Unity.SpaceGod.Core
         void DispatchSurvey(StarSystem from, double jd)
         {
             if (Out(from, VoyagePurpose.Survey) >= 2 || rng.NextDouble() > SurveyChancePerDay) return;
+            // Now and then a survey hull with a drive of its own goes to look at a star off the gate network (U.SPC-T412).
+            if (galaxy.NearbyStars.Count > 0 && cruiseRng.NextDouble() < StarSurveyShare && DispatchStarSurvey(from, jd)) return;
             var world = from.World;
             var wild = new List<StarSystem>();
             foreach (var s in galaxy.Systems)
@@ -1145,6 +1368,27 @@ namespace Unity.SpaceGod.Core
                 world.Log(jd, $"{ship.Name} sets out to survey {to.Name}, {route.Count} gate{(route.Count == 1 ? "" : "s")} out", WorldEventKind.Info, PortOf(ship));
                 return;
             }
+        }
+
+        /// <summary>A survey hull with a cruise drive sent to a plain star within <see cref="MaxStarSurveyLy"/>; false if none could go.</summary>
+        bool DispatchStarSurvey(StarSystem from, double jd)
+        {
+            var near = new List<NearbyStar>();
+            foreach (var n in galaxy.NearbyStars)
+                if (n.Origin.DistanceLy(from.Origin) <= MaxStarSurveyLy) near.Add(n);
+            if (near.Count == 0) return false;
+            var star = near[cruiseRng.Next(near.Count)];
+            var world = from.World;
+            foreach (var ship in world.Fleet.Ships)
+            {
+                if (!Idle(world, ship) || ship.Role != ShipRole.Free || ship.Spec.Class != ShipClass.Courier || !CanCruise(ship)) continue;
+                if (SendToStar(ship, from, star, VoyagePurpose.Survey, jd) == null) continue;
+                ship.Cargo = "Survey instruments, bound for " + star.Name;
+                world.Log(jd, $"{ship.Name} sets out under its own drive to survey {star.Name}, " +
+                              $"{star.Origin.DistanceLy(from.Origin).ToString("0.0", CultureInfo.InvariantCulture)} ly through open space", WorldEventKind.Info, PortOf(ship));
+                return true;
+            }
+            return false;
         }
 
         /// <summary>A navy group sent after raiders to the system they came from; false if none could go yet.</summary>
@@ -1189,7 +1433,12 @@ namespace Unity.SpaceGod.Core
                 if (ship.HasCargo && v.Purpose == VoyagePurpose.Trade && jd < v.StayUntilJd + 30) continue;
                 var route = Network.Route(system, v.Home, ship.Faction, jd);
                 ship.StakeoutKm = null;
-                if (route == null || route.Count == 0) continue;
+                if (route == null || route.Count == 0)
+                {
+                    // No way home through the gates, but a drive of its own (U.SPC-T412): home through open space.
+                    if (CanCruise(ship) && system != v.Home) CruiseFrom(system, ship, v.Home, jd);
+                    continue;
+                }
                 // It knows home's markets only by the news that has reached it here (U.SPC-T100).
                 var homeNews = News.Known(system, v.Home);
                 if (v.Purpose == VoyagePurpose.Trade && !ship.HasCargo && homeNews != null &&
@@ -1201,6 +1450,7 @@ namespace Unity.SpaceGod.Core
                 v.Destination = v.Home;
                 v.Route = route;
                 v.Leg = 0;
+                v.ByCruise = false;
                 ship.GateKm = route[0].PositionKm;
                 world.Fleet.ScheduleNext(ship, jd);
             }

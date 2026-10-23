@@ -1297,6 +1297,13 @@ namespace Unity.SpaceGod.UI
                 NameAndDetails(new Rect(r.x + 12, sy, w - 24, 15), "   " + crossing + (crossing == 1 ? " ship" : " ships"), "in the gates", small);
                 sy += 15;
             }
+            // Groups out in open space under their own drives (U.SPC-T412).
+            int cruising = app.Galaxy.DeepSpace.Cruises.Count;
+            if (cruising > 0)
+            {
+                NameAndDetails(new Rect(r.x + 12, sy, w - 24, 15), "   " + cruising + (cruising == 1 ? " group" : " groups"), "between the stars", small);
+                sy += 15;
+            }
             float treeTop = sy + 4 - r.y;
 
             var catalog = app.Catalog;

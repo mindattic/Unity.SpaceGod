@@ -152,9 +152,12 @@ namespace Unity.SpaceGod.Views
                 links[i].Visible = true;
             }
 
-            // Ships in the gates: a spark each, partway along its link.
+            // Ships in the gates: a spark each, partway along its link. Then the groups out in open space under their own
+            // drives (U.SPC-T412), each where it really is between the stars.
             var inGates = galaxy.Traffic.InGates;
-            while (sparks.Count < inGates.Count)
+            var cruises = galaxy.DeepSpace.Cruises;
+            int shown = inGates.Count + cruises.Count;
+            while (sparks.Count < shown)
             {
                 var go = new GameObject("Passage");
                 go.transform.SetParent(Root.transform, false);
@@ -169,18 +172,30 @@ namespace Unity.SpaceGod.Views
             for (int i = 0; i < sparks.Count; i++)
             {
                 var (t, m) = sparks[i];
-                bool on = i < inGates.Count;
+                bool on = i < shown && (i < inGates.Count || cruises[i - inGates.Count].Ships.Count > 0);
                 t.gameObject.SetActive(on);
                 if (!on) continue;
-                var p = inGates[i];
-                var from = p.From.Home.PositionLy;
-                var ly = from + (p.To.Home.PositionLy - from) * p.Progress(jd);
+                DVec3 ly;
+                Ship leader;
+                if (i < inGates.Count)
+                {
+                    var p = inGates[i];
+                    var from = p.From.Home.PositionLy;
+                    ly = from + (p.To.Home.PositionLy - from) * p.Progress(jd);
+                    leader = p.Leader;
+                }
+                else
+                {
+                    var c = cruises[i - inGates.Count];
+                    ly = c.PositionAt(jd).Ly;
+                    leader = c.Leader;
+                }
                 var rel = At(ly);
                 float dist = Mathf.Max(rel.magnitude, 1e-3f);
                 t.localPosition = rel;
                 t.localRotation = Quaternion.LookRotation(rel / dist, cameraRotation * Vector3.up);
                 t.localScale = Vector3.one * dist * 0.012f;
-                var fc = p.Leader.Faction.Color;
+                var fc = leader.Faction.Color;
                 m.SetColor("_Color", new Color(fc.R, fc.G, fc.B));
                 m.SetFloat("_Intensity", 1.8f * fade);
             }
