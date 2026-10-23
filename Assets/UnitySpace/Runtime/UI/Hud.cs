@@ -143,6 +143,7 @@ namespace Unity.SpaceGod.UI
             DrawHail();
             DrawLaneRide();
             DrawFtl();
+            DrawCourseMarker();
             DrawInterdiction();
             if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
@@ -293,8 +294,10 @@ namespace Unity.SpaceGod.UI
                            c.ToName.ToUpperInvariant() + ", " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " LY TO GO");
                 return;
             }
+            // The trip compressed on the sim clock (U.SPC-T420): when it drops out, by the calendar and in real seconds at this pace.
             DrawBanner("FTL  ·  BOUND FOR " + c.ToName.ToUpperInvariant() + "   ·   " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " LY TO GO   ·   " +
-                       speedC.ToString("N0", CultureInfo.InvariantCulture) + " C   ·   DROPPING OUT IN " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " S");
+                       speedC.ToString("N0", CultureInfo.InvariantCulture) + " C   ·   ETA " + Astro.ToDateTime(c.ArriveJd).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
+                       "   ·   DROPPING OUT IN " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " S AT " + app.Clock.Warp.Label.ToUpperInvariant() + "  (, .)");
         }
 
         /// <summary>
@@ -305,34 +308,100 @@ namespace Unity.SpaceGod.UI
         {
             if (!app.IsPiloting || app.RidingLane) return;
             var ftl = app.Ftl;
+            var ap = app.FtlAutopilot;
+            var course = app.PlottedCourse;
             double jd = app.Clock.Jd;
             var inv = CultureInfo.InvariantCulture;
-            string head, tail;
-            if (ftl.Stage == FtlStage.Spooling)
+            string head, mid = null, tail;
+            if (ap.Active && ap.Course != null)
+            {
+                // The FTL autopilot at the helm (U.SPC-T420): where it has got to in flying the course.
+                var c = ap.Course;
+                string name = c.Target.Name.ToUpperInvariant();
+                switch (ap.Stage)
+                {
+                    case FtlAutopilotStage.OutRun:
+                        head = "FTL AUTOPILOT  ·  " + name + "  ·  OUT TO THE RIM  ·  " + Percent(ap.RunFraction(jd)) + "  ·  " +
+                               SpeedText(ap.VelocityKmS(jd).Length) + "  ·  beyond it in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
+                        break;
+                    case FtlAutopilotStage.Aligning:
+                        head = "FTL AUTOPILOT  ·  " + name + "  ·  TURNING ONTO IT";
+                        break;
+                    default:
+                        head = "FTL AUTOPILOT  ·  " + name + "  ·  SPOOLING  ·  " + Percent(ftl.SpoolFraction(jd)) + "  ·  engages in " +
+                               Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
+                        break;
+                }
+                mid = CourseLine(c);
+                tail = "time runs at " + app.Clock.Warp.Label + "  (, . to change)    End takes the helm back    a fight or hunters let go of it";
+            }
+            else if (ftl.Stage == FtlStage.Spooling)
             {
                 head = "FTL DRIVE SPOOLING  ·  " + ftl.Target.Name.ToUpperInvariant() + "  ·  " + app.Distance(ftl.Target) + "  ·  " +
                        Percent(ftl.SpoolFraction(jd)) + "  ·  engages in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
                 tail = "hold the nose on it, beyond the rim and out of any fight, or the charge is lost    Enter calls it off";
             }
+            else if (course != null)
+            {
+                // A plotted course (U.SPC-T420): the way there, the ETA and the fuel, and how to fly it.
+                head = "COURSE  ·  " + course.Target.KindName.ToUpperInvariant() + "  " + course.Target.Name.ToUpperInvariant() + "  ·  " + app.Distance(course.Target);
+                mid = course.Flyable ? CourseLine(course) : course.Refusal;
+                tail = (course.Flyable ? "End  autopilot: out to the rim, onto it, spool and engage    " : "") + "PgUp/PgDn  another star or beacon    Del  clear    F11  galaxy map";
+            }
             else
             {
                 var t = app.FtlPointed;
                 if (t == null) return;
-                head = "FTL  ·  STAR  " + t.Name.ToUpperInvariant() + "  ·  " + app.Distance(t);
+                head = "FTL  ·  " + t.KindName.ToUpperInvariant() + "  " + t.Name.ToUpperInvariant() + "  ·  " + app.Distance(t);
                 tail = app.FtlBeyondRim
-                    ? app.FtlBlocked ?? "Enter  spool the drive for it (out through open space to the edge of its well)"
+                    ? app.FtlBlocked ?? "Enter  spool the drive for it (out through open space to the edge of its well)    End  autopilot"
                     : "inside the gravity wells: no jump until beyond the outer rim, " + app.FtlRimAu.ToString("0.##", inv) + " AU out (" +
-                      app.PilotFromStarAu.ToString("0.##", inv) + " AU now)";
+                      app.PilotFromStarAu.ToString("0.##", inv) + " AU now)    End  autopilot flies you out and on";
             }
             var a = new GUIContent(head);
+            var m = new GUIContent(mid ?? "");
             var b = new GUIContent(tail);
-            float w = Mathf.Max(text.CalcSize(a).x, small.CalcSize(b).x) + 28;
-            var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 240, w, 50));
+            float w = Mathf.Max(text.CalcSize(a).x, Mathf.Max(small.CalcSize(m).x, small.CalcSize(b).x)) + 28;
+            float h = mid == null ? 50 : 68;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 222 - h, w, h));
             GUI.contentColor = StreakColor;
             GUI.Label(new Rect(r.x + 14, r.y + 5, w, 20), a, text);
+            float y = r.y + 27;
+            if (mid != null)
+            {
+                GUI.contentColor = course != null && !course.Flyable && !ap.Active ? RetrogradeColor : Color.white;
+                GUI.Label(new Rect(r.x + 14, y, w, 18), m, small);
+                y += 18;
+            }
             GUI.contentColor = Dim;
-            GUI.Label(new Rect(r.x + 14, r.y + 27, w, 18), b, small);
+            GUI.Label(new Rect(r.x + 14, y, w, 18), b, small);
             GUI.contentColor = Color.white;
+        }
+
+        /// <summary>A plotted course's numbers in a line: the run out, the jump, any interdictions, the ETA and the fuel (U.SPC-T420).</summary>
+        static string CourseLine(FtlCourse c)
+        {
+            var inv = CultureInfo.InvariantCulture;
+            string run = c.NeedsOutRun ? "out to the rim " + (c.OutRunKm / Astro.AuKm).ToString("0.##", inv) + " AU, " + FtlNavigation.Describe(c.OutRunDays) + "   ·   " : "";
+            string cool = c.CoolDays > 0 ? "cooling " + FtlNavigation.Describe(c.CoolDays) + "   ·   " : "";
+            string jump = c.Ly.ToString("0.00", inv) + " ly under FTL, " + FtlNavigation.Describe(c.SpoolDays + c.FtlDays);
+            string pulled = c.Interdictions.Count == 0 ? "" : "   ·   pulled out by " + string.Join(", ", c.Interdictions) + " (" + FtlNavigation.Describe(c.CrossingDays) + " under normal drive)";
+            return run + cool + jump + pulled + "   ·   ETA " + Astro.ToDateTime(c.EtaJd).ToString("yyyy-MM-dd HH:mm", inv) + " (" + FtlNavigation.Describe(c.TotalDays) + ")" +
+                   "   ·   fuel " + c.FuelTonnes.ToString("N0", inv) + " of " + c.TanksTonnes.ToString("N0", inv) + " t";
+        }
+
+        /// <summary>The plotted course's star or beacon marked where it lies in the view, named, with how far (U.SPC-T420).</summary>
+        void DrawCourseMarker()
+        {
+            if (Event.current.type != EventType.Repaint || !app.PlottedBearing(out var dir, out double km)) return;
+            if (!DirectionToGui(dir, out var p)) return;
+            var c = new Color(StreakColor.r, StreakColor.g, StreakColor.b, 0.95f);
+            const float r = 11;
+            DrawLine(p + new Vector2(0, -r), p + new Vector2(r, 0), c, 1.5f);
+            DrawLine(p + new Vector2(r, 0), p + new Vector2(0, r), c, 1.5f);
+            DrawLine(p + new Vector2(0, r), p + new Vector2(-r, 0), c, 1.5f);
+            DrawLabel(app.PlottedCourse.Target.Name.ToUpperInvariant() + "  " + app.Distance(app.PlottedCourse.Target), p + new Vector2(r + 5, -8), c, false);
+            DrawLine(p + new Vector2(-r, 0), p + new Vector2(0, -r), c, 1.5f);
         }
 
         /// <summary>The names of the stars in the view between them (with who holds a system's).</summary>
@@ -3240,6 +3309,8 @@ namespace Unity.SpaceGod.UI
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "FTL  (capital ships, survey hulls)   beyond the system's outer rim, put the nose on another star, Enter to spool (hold it there), it engages for that star",
+                "   PgDn/PgUp plot a course to the next star or beacon (nearest first), or pick one on the galaxy map (F11): ETA, fuel, wells on the way   Del clear",
+                "   End  FTL autopilot: flies out beyond the rim, turns onto the star, spools and engages, time compressed (Settings > FTL)   End again takes the helm back",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",

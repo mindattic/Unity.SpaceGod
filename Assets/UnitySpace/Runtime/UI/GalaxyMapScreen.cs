@@ -15,7 +15,9 @@ namespace Unity.SpaceGod.UI
     /// it is, every other as the last news of it had it, and a system never heard from as a bare star.
     ///
     /// Click a star to inspect it (the panel on the right), double-click or TRAVEL to fly there through the gates (the
-    /// navigator's STAR SYSTEMS trip, <see cref="UnitySpaceApp.TravelTo"/>). Drag to turn the map, shift-drag to pan,
+    /// navigator's STAR SYSTEMS trip, <see cref="UnitySpaceApp.TravelTo"/>). At the helm of a hull with its own FTL drive
+    /// (U.SPC-T420) any star or beacon, the plain stars on the charts among them, can be picked to plot an FTL course to
+    /// (its ETA, fuel and any well on the way) and the FTL autopilot engaged for it. Drag to turn the map, shift-drag to pan,
     /// the wheel to zoom. The view fills the screen; its panels keep to the middle 21:9 band, so on a 32:9 screen they
     /// sit where the eye is rather than out at the far edges.
     /// </summary>
@@ -27,6 +29,15 @@ namespace Unity.SpaceGod.UI
         StarSystem builtFor;
 
         StarSystem selected, hovered;
+
+        /// <summary>A plain star on the charts picked or under the cursor (U.SPC-T420): nobody simulates it, but an FTL drive can go there.</summary>
+        NearbyStar? selectedStar, hoveredStar;
+
+        /// <summary>The plain stars drawn, nearest the system the player is in first, gathered with the model.</summary>
+        readonly List<NearbyStar> chartStars = new List<NearbyStar>();
+
+        /// <summary>The most plain stars drawn: the charts run on far beyond what the map frames.</summary>
+        const int MaxChartStars = 300;
         float yaw, tilt = 0.55f, zoom = 1f;
         Vector2 pan;
         bool fitted;
@@ -45,6 +56,7 @@ namespace Unity.SpaceGod.UI
         static readonly Color FrontColor = new Color(1f, 0.3f, 0.26f);
         static readonly Color PirateColor = new Color(1f, 0.55f, 0.15f);
         static readonly Color BuildColor = new Color(0.75f, 0.8f, 0.9f);
+        static readonly Color CourseColor = new Color(0.6f, 0.95f, 0.75f);
 
         /// <summary>The widest the panels spread, as width over height: 21:9, as the rest of the HUD.</summary>
         const float MaxPanelAspect = 21f / 9f;
@@ -60,6 +72,7 @@ namespace Unity.SpaceGod.UI
         public void Opened()
         {
             selected = app.ActiveSystem;
+            selectedStar = null;
             fitted = false;
             builtAt = -10f;
         }
@@ -78,6 +91,7 @@ namespace Unity.SpaceGod.UI
                 model = GalaxyMap.Build(app.Galaxy, app.ActiveSystem, jd, app.Galaxy.Construction?.Works());
                 builtAt = Time.unscaledTime;
                 builtFor = app.ActiveSystem;
+                GatherChartStars();
             }
             if (selected == null || model.Of(selected) == null) selected = app.ActiveSystem;
 
@@ -139,6 +153,33 @@ namespace Unity.SpaceGod.UI
         /// <summary>The same point dropped to the ecliptic plane (z = the map's middle): where a star's stalk stands.</summary>
         Vector2 Foot(Rect canvas, DVec3 ly) => Project(canvas, new DVec3(ly.X, ly.Y, centreLy.Z));
 
+        /// <summary>The plain stars on the charts nearest the system the player is in, up to <see cref="MaxChartStars"/>.</summary>
+        void GatherChartStars()
+        {
+            chartStars.Clear();
+            var here = app.ActiveSystem.PositionLy;
+            chartStars.AddRange(app.Galaxy.NearbyStars);
+            chartStars.RemoveAll(n => n.Name == null);
+            chartStars.Sort((a, b) => (a.PositionLy - here).LengthSquared.CompareTo((b.PositionLy - here).LengthSquared));
+            if (chartStars.Count > MaxChartStars) chartStars.RemoveRange(MaxChartStars, chartStars.Count - MaxChartStars);
+        }
+
+        NearbyStar? NearestStar(Rect canvas, Vector2 mouse)
+        {
+            NearbyStar? best = null;
+            float bestPx = 12;
+            foreach (var n in chartStars)
+            {
+                float px = (Project(canvas, n.PositionLy) - mouse).magnitude;
+                if (px < bestPx)
+                {
+                    bestPx = px;
+                    best = n;
+                }
+            }
+            return best;
+        }
+
         StarSystem Nearest(Rect canvas, Vector2 mouse)
         {
             StarSystem best = null;
@@ -162,10 +203,18 @@ namespace Unity.SpaceGod.UI
             var e = Event.current;
             if (!canvas.Contains(e.mousePosition))
             {
-                if (e.type == EventType.Repaint) hovered = null;
+                if (e.type == EventType.Repaint)
+                {
+                    hovered = null;
+                    hoveredStar = null;
+                }
                 return;
             }
-            if (e.type == EventType.MouseMove || e.type == EventType.Repaint) hovered = Nearest(canvas, e.mousePosition);
+            if (e.type == EventType.MouseMove || e.type == EventType.Repaint)
+            {
+                hovered = Nearest(canvas, e.mousePosition);
+                hoveredStar = hovered == null ? NearestStar(canvas, e.mousePosition) : null;
+            }
             switch (e.type)
             {
                 case EventType.MouseDown when e.button == 0:
@@ -174,7 +223,14 @@ namespace Unity.SpaceGod.UI
                     if (hit != null)
                     {
                         selected = hit;
+                        selectedStar = null;
                         if (e.clickCount >= 2) Travel(hit);
+                    }
+                    else if (NearestStar(canvas, e.mousePosition) is NearbyStar star)
+                    {
+                        // A plain star: no gate goes there, but an FTL drive can (U.SPC-T420).
+                        selectedStar = star;
+                        if (e.clickCount >= 2 && app.CanPlotFtl) app.PlotFtlCourse(FtlTarget.OfStar(star));
                     }
                     e.Use();
                     break;
@@ -283,6 +339,32 @@ namespace Unity.SpaceGod.UI
                     if (l.ShutAtA) Barrier(a, b);
                     if (l.ShutAtB) Barrier(b, a);
                 }
+            }
+
+            // The plain stars on the charts (U.SPC-T420): no system yet, but an FTL drive goes anywhere.
+            foreach (var n in chartStars)
+            {
+                var p = Project(local, n.PositionLy);
+                if (!local.Contains(p)) continue;
+                var c = Color.Lerp(new Color(n.Color.R, n.Color.G, n.Color.B), Unknown, 0.45f);
+                bool picked = selectedStar.HasValue && selectedStar.Value.Name == n.Name;
+                bool hover = hoveredStar.HasValue && hoveredStar.Value.Name == n.Name;
+                Disc(p, picked || hover ? 4.5f : 2.6f, new Color(c.r, c.g, c.b, picked || hover ? 0.95f : 0.6f));
+                if (picked) Brackets(p, 11, Accent);
+                if (picked || hover) Label(p + new Vector2(8, -14), n.Name + "  ·  " + n.SpectralType, picked ? Accent : Dim, true);
+            }
+
+            // The plotted FTL course (U.SPC-T420): a straight line through open space, unlike any gate route.
+            var course = app.PlottedCourse;
+            if (course?.Target != null && course.From == app.ActiveSystem)
+            {
+                var a = Project(local, app.ActiveSystem.PositionLy);
+                var b = Project(local, course.Target.Origin.Ly);
+                var c = course.Flyable ? CourseColor : FrontColor;
+                Dashed(a, b, new Color(c.r, c.g, c.b, 0.9f), 2.5f, 12, 5);
+                Ring(b, 15, c, 2f);
+                Label(Vector2.Lerp(a, b, 0.5f) + new Vector2(8, 4), "FTL " + course.Ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly" +
+                      (course.Flyable ? ", ETA " + FtlNavigation.Describe(course.TotalDays) : ""), c, true);
             }
 
             // The stars.
@@ -395,6 +477,7 @@ namespace Unity.SpaceGod.UI
             Swatch(ref y, x, w, Unknown, "link to a system never heard from", true);
             Swatch(ref y, x, w, FlowColor, "traffic through the gate", false);
             Swatch(ref y, x, w, Accent, "the way there by the gates", false);
+            Swatch(ref y, x, w, CourseColor, "plotted FTL course, through open space", true);
             Swatch(ref y, x, w, FrontColor, "war front (dashed) or shut gate (bar)", true);
             Swatch(ref y, x, w, PirateColor, "raiders about", false);
             y += 6;
@@ -423,14 +506,19 @@ namespace Unity.SpaceGod.UI
 
             var old = GUI.contentColor;
             GUI.contentColor = Dim;
-            GUI.Label(new Rect(x, r.yMax - 76, w, 70),
-                "Click a star to inspect it, double-click to travel.\nDrag to turn, shift-drag to pan, wheel to zoom.\nF11 or Esc closes the map.", small);
+            GUI.Label(new Rect(x, r.yMax - 92, w, 86),
+                "Click a star to inspect it, double-click to travel.\nAt the helm: plot an FTL course to any star.\nDrag to turn, shift-drag to pan, wheel to zoom.\nF11 or Esc closes the map.", small);
             GUI.contentColor = old;
         }
 
         void DrawDetail(Rect r, double jd)
         {
             GUI.Box(r, GUIContent.none, Panel);
+            if (selectedStar is NearbyStar star)
+            {
+                DrawStarDetail(r, star);
+                return;
+            }
             var s = selected ?? app.ActiveSystem;
             var m = model.Of(s);
             if (m == null) return;
@@ -450,6 +538,7 @@ namespace Unity.SpaceGod.UI
                 Line(ref y, x, w, app.Galaxy.Traffic?.News.Describe(app.ActiveSystem, s, jd) ?? "no news", Dim);
                 if (GUI.Button(new Rect(x, y + 2, w, 28), app.IsPiloting ? "TRAVEL  (release the helm first)" : "TRAVEL HERE THROUGH THE GATES", buttonOn)) Travel(s);
                 y += 36;
+                DrawFtlSection(ref y, x, w, FtlTarget.OfStar(s));
             }
             y += 4;
 
@@ -512,6 +601,73 @@ namespace Unity.SpaceGod.UI
                 }
                 Line(ref y, x, w, line, c);
             }
+        }
+
+        /// <summary>A plain star on the charts (U.SPC-T420): what is known of it, and an FTL course to it.</summary>
+        void DrawStarDetail(Rect r, NearbyStar star)
+        {
+            float x = r.x + 14, w = r.width - 28, y = r.y + 10;
+            GUI.Label(new Rect(x, y, w, 22), star.Name.ToUpperInvariant(), title);
+            y += 24;
+            var inv = CultureInfo.InvariantCulture;
+            Line(ref y, x, w, (star.PositionLy - app.ActiveSystem.PositionLy).Length.ToString("0.00", inv) + " ly away   ·   " +
+                              (string.IsNullOrEmpty(star.SpectralType) ? "type unknown" : star.SpectralType + " star"), Color.white);
+            Line(ref y, x, w, "A star on the charts: nobody simulates it yet and no gate goes there. A hull with its own FTL drive can fly " +
+                              "to it, and drops out at the edge of its well.", Dim);
+            y += 6;
+            DrawFtlSection(ref y, x, w, FtlTarget.OfStar(star));
+        }
+
+        /// <summary>
+        /// FTL to <paramref name="target"/> (U.SPC-T420): at the helm of a hull with its own drive, PLOT FTL COURSE works the
+        /// course out (shown here once plotted: the run out, the jump, any wells on the way, the ETA and the fuel) and ENGAGE
+        /// AUTOPILOT flies it.
+        /// </summary>
+        void DrawFtlSection(ref float y, float x, float w, FtlTarget target)
+        {
+            Heading(ref y, x, w, "FTL");
+            if (!app.IsPiloting)
+            {
+                Line(ref y, x, w, "Take the helm of a capital ship or an explorer (P) to plot an FTL course here: no gates needed.", Dim);
+                y += 4;
+                return;
+            }
+            if (!app.CanPlotFtl)
+            {
+                Line(ref y, x, w, app.RidingLane ? "Not from a lane: come off it first." : HelmFtl.Refusal(app.Piloted.Ship), Dim);
+                y += 4;
+                return;
+            }
+            var course = app.PlottedCourse;
+            bool plotted = course != null && FtlNavigation.Same(course.Target, target);
+            if (plotted)
+            {
+                var inv = CultureInfo.InvariantCulture;
+                if (!course.Flyable) Line(ref y, x, w, course.Refusal, FrontColor);
+                else
+                {
+                    if (course.NeedsOutRun)
+                        Line(ref y, x, w, "Out to the rim: " + (course.OutRunKm / Astro.AuKm).ToString("0.##", inv) + " AU under the ordinary drive, " +
+                                          FtlNavigation.Describe(course.OutRunDays), Color.white);
+                    if (course.CoolDays > 0) Line(ref y, x, w, "The drive cools first: " + FtlNavigation.Describe(course.CoolDays), Color.white);
+                    Line(ref y, x, w, "Jump: " + course.Ly.ToString("0.00", inv) + " ly, charging " + FtlNavigation.Describe(course.SpoolDays) + " and " +
+                                      FtlNavigation.Describe(course.FtlDays) + " under FTL", Color.white);
+                    if (course.Interdictions.Count > 0)
+                        Line(ref y, x, w, "Pulled out by " + string.Join(", ", course.Interdictions) + " on the way: " +
+                                          FtlNavigation.Describe(course.CrossingDays) + " crossing under the ordinary drive", PirateColor);
+                    Line(ref y, x, w, "ETA " + Astro.ToDateTime(course.EtaJd).ToString("yyyy-MM-dd HH:mm", inv) + " UTC, " + FtlNavigation.Describe(course.TotalDays) +
+                                      " from now", CourseColor);
+                    Line(ref y, x, w, "Reaction mass: " + course.FuelTonnes.ToString("N0", inv) + " t of " + course.TanksTonnes.ToString("N0", inv) +
+                                      " t in the tanks (one jump reaches " + (double.IsInfinity(course.RangeLy) ? "anywhere" : course.RangeLy.ToString("0.#", inv) + " ly") + ")", Dim);
+                }
+            }
+            if (GUI.Button(new Rect(x, y + 2, w * 0.48f, 28), plotted ? "PLOT AGAIN" : "PLOT FTL COURSE", button)) app.PlotFtlCourse(target);
+            if (GUI.Button(new Rect(x + w * 0.52f, y + 2, w * 0.48f, 28), "ENGAGE AUTOPILOT", buttonOn))
+            {
+                if (app.PlotFtlCourse(target, quiet: true) && app.EngageFtlAutopilot()) app.ShowGalaxyMap = false;
+                else if (app.PlottedCourse != null && !app.PlottedCourse.Flyable) app.ShowToast(UnitySpaceApp.CourseSummary(app.PlottedCourse));
+            }
+            y += 36;
         }
 
         static string Days(double d) => d < 1 ? (d * 24).ToString("0", CultureInfo.InvariantCulture) + " h" : d.ToString("0.0", CultureInfo.InvariantCulture) + " days";

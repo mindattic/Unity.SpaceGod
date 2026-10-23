@@ -1200,6 +1200,17 @@ namespace Unity.SpaceGod
                 return;
             }
 
+            // Interstellar navigation (U.SPC-T420): a course to a star or beacon picked and plotted, and the FTL autopilot
+            // flying it; while it has the helm the stick is not read.
+            if (Input.ClearFtlCourse && PlottedCourse != null) ClearFtlCourse();
+            if (Input.CycleFtlTarget != 0) CycleFtlCourse(Input.CycleFtlTarget);
+            if (FtlAutopilot.Active)
+            {
+                if (UpdateFtlAutopilot(ship, dt)) return;
+            }
+            else if (Input.ToggleFtlAutopilot && EngageFtlAutopilot()) return;
+            RefreshFtlCourse(ship);
+
             // The stick, one way per kind of hull (U.SPC-T269): a light fighter's mouse swings the view and the
             // hull turns after it, a heavy fighter's or freighter's turns the hull itself, and a capital ship
             // is turned on the keys while the mouse looks around it.

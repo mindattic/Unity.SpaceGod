@@ -32,6 +32,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>A plain star on the charts, one nobody simulates yet.</summary>
         public static FtlTarget OfStar(NearbyStar star) => new FtlTarget(star.Name, null, star.Origin);
 
+        /// <summary>A beacon rather than a star (U.SPC-T420): a void station out in the dark between the stars, which the
+        /// gate network relays through, with no star of its own.</summary>
+        public bool IsBeacon => System != null && System.IsVoidBase;
+
+        /// <summary>"beacon" or "star", for the navigator's lines.</summary>
+        public string KindName => IsBeacon ? "beacon" : "star";
+
         /// <summary>Where it is, km from <paramref name="here"/>'s root.</summary>
         public DVec3 LocalKm(StarSystem here) => here.LocalKm(Origin);
 

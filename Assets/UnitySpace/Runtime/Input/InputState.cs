@@ -103,6 +103,17 @@ namespace Unity.SpaceGod.Input
         /// <summary>While piloting a hull with its own FTL drive (U.SPC-T417): spools the drive for what the nose is on (Enter), or calls a charge off.</summary>
         public bool EngageFtl;
 
+        /// <summary>While piloting a hull with its own FTL drive (U.SPC-T420): End engages the FTL autopilot for the plotted
+        /// course (plotting one for the star the nose is on if there is none), or lets go of it.</summary>
+        public bool ToggleFtlAutopilot;
+
+        /// <summary>While piloting a hull with its own FTL drive (U.SPC-T420): Page Down plots a course to the next star or
+        /// beacon out, nearest first, Page Up the one before (0: neither).</summary>
+        public int CycleFtlTarget;
+
+        /// <summary>While piloting (U.SPC-T420): Delete clears the plotted FTL course.</summary>
+        public bool ClearFtlCourse;
+
         /// <summary>F5 saves to the quicksave slot, F8 loads it, F6 opens the save slots.</summary>
         public bool QuickSave, QuickLoad, ToggleSaves;
 
@@ -210,6 +221,9 @@ namespace Unity.SpaceGod.Input
             Pilot = kb.pKey.wasPressedThisFrame;
             ActivateGate = kb.yKey.wasPressedThisFrame;
             EngageFtl = kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame;
+            ToggleFtlAutopilot = kb.endKey.wasPressedThisFrame;
+            CycleFtlTarget = kb.pageDownKey.wasPressedThisFrame ? 1 : kb.pageUpKey.wasPressedThisFrame ? -1 : 0;
+            ClearFtlCourse = kb.deleteKey.wasPressedThisFrame;
             QuickSave = kb.f5Key.wasPressedThisFrame;
             QuickLoad = kb.f8Key.wasPressedThisFrame;
             ToggleSaves = kb.f6Key.wasPressedThisFrame;
@@ -241,6 +255,8 @@ namespace Unity.SpaceGod.Input
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
             ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleGalaxyMap = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = EngageFtl = false;
             QuickSave = QuickLoad = ToggleSaves = false;
+            ToggleFtlAutopilot = ClearFtlCourse = false;
+            CycleFtlTarget = 0;
             NumberKey = -1;
         }
 

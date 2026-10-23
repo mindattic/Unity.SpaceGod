@@ -115,6 +115,8 @@ namespace Unity.SpaceGod
             Travel.Active ? "Not between the stars: wait until the trip is over"
             // Under the hull's own FTL drive (U.SPC-T417): the charge, the run and the crossing are the helm's until it drops out.
             : InFtlCruise || Ftl.Stage != FtlStage.Idle ? "Not under FTL: wait until the drive drops out"
+            // The FTL autopilot's run out is flown on its own clock (U.SPC-T420), not the helm's.
+            : FtlAutopilot.Active ? "Not while the FTL autopilot flies: take the helm back first (End)"
             // What the clamps have brought out (survivors, crates, a fight aboard) is the session's until they come off.
             : Salvage != null ? "Not while latched to a hulk: cast off first (4)"
             : null;
