@@ -309,7 +309,7 @@ namespace Unity.SpaceGod
         /// <summary>The model a battle unit is drawn with (a ship's view, or a platform), for parenting things to its hull.</summary>
         public Transform UnitTransform(BattleUnit u)
         {
-            if (u.Ship != null) return u.Ship.Id < shipViews.Length ? shipViews[u.Ship.Id].Root.transform : null;
+            if (u.Ship != null) return u.Ship.Id < shipViews.Length && shipViews[u.Ship.Id] != null ? shipViews[u.Ship.Id].Root.transform : null;
             if (u.Kind == UnitKind.Platform && platformViews.TryGetValue(u.Combat, out var go)) return go.transform;
             return null;
         }
@@ -507,9 +507,9 @@ namespace Unity.SpaceGod
             Array.Resize(ref shipBlendT, ships.Count);
             Array.Resize(ref shipLastBattle, ships.Count);
             Array.Resize(ref wreckStart, ships.Count);
+            // Their models are built when they are wanted (U.SPC-T414, see UpdateStreaming), not here.
             for (int i = have; i < ships.Count; i++)
             {
-                shipViews[i] = new ShipView(ships[i], systemRoot);
                 shipBlendT[i] = 1;
                 wreckStart[i] = -1;
             }
@@ -521,6 +521,7 @@ namespace Unity.SpaceGod
             if (shipViews != null)
                 foreach (var v in shipViews)
                 {
+                    if (v == null) continue;
                     Materials.DestroyOwned(v.Root.transform);
                     Destroy(v.Root);
                 }
@@ -535,9 +536,10 @@ namespace Unity.SpaceGod
             shipBlendT = new float[ships.Count];
             shipLastBattle = new Battle[ships.Count];
             wreckStart = new float[ships.Count];
+            // No model is built on entering a system (U.SPC-T414): each is streamed in by UpdateStreaming as it is
+            // wanted, a few a frame, and drawn as its icon until then.
             for (int i = 0; i < ships.Count; i++)
             {
-                shipViews[i] = new ShipView(ships[i], systemRoot);
                 shipBlendT[i] = 1;
                 wreckStart[i] = ships[i].Destroyed ? float.MaxValue : -1;
             }
@@ -597,6 +599,7 @@ namespace Unity.SpaceGod
                 SpaceCamera.Update(dt, Input);
             }
             UpdateClipPlanes(dt);
+            UpdateStreaming(dt);
             UpdateViews(dt);
             UpdateHover();
             HandleSelectionClicks();
@@ -1474,6 +1477,8 @@ namespace Unity.SpaceGod
             // Through the gate, the chase is left behind in the system the ship has left.
             World.Pursuit?.ReleaseAll(Clock.Jd);
             Activate(destination);
+            // The far side streams in behind the gate's own flare and fold (U.SPC-T414).
+            BeginHelmGateCover();
             Piloted = Target.OfShip(arrived);
             World.PilotedShip = arrived;
             pilotFrameBody = arrived.Orbit.Body;
@@ -2322,7 +2327,7 @@ namespace Unity.SpaceGod
             fovKick *= Mathf.Exp(-dt * 3.5f);
             GateFlash = Mathf.Max(0, GateFlash - dt / GateFlashS);
             LaneExitFade = Mathf.Max(0, LaneExitFade - dt / LaneExitFadeS);
-            UnityCamera.fieldOfView = Mathf.Min(150f, cameraFov + fovKick + Travel.FovKick);
+            UnityCamera.fieldOfView = Mathf.Clamp(cameraFov + fovKick + Travel.FovKick - HelmFoldDeg * HelmGateFold, 10f, 150f);
         }
 
         public Vector3 Relative(DVec3 scene)
@@ -2413,6 +2418,8 @@ namespace Unity.SpaceGod
             for (int i = 0; i < shipViews.Length; i++)
             {
                 var ship = Fleet.Ships[i];
+                // Not streamed in (U.SPC-T414): out of sight, or drawn as its icon until its model is built.
+                if (shipViews[i] == null) continue;
                 if (ship.Destroyed)
                 {
                     // A jump gate retires the origin hull the same way a kill does (so its id stays put

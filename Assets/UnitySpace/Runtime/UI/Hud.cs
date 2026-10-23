@@ -357,7 +357,8 @@ namespace Unity.SpaceGod.UI
                     continue;
                 }
                 float px = (float)ShipLod.ApparentPx(app.ShipDisplayLength(ship), depth, ppu);
-                if (ShipLod.DrawsModel(px)) continue;
+                // Drawn as its model (and the model built: one still streaming in shows as its icon meanwhile).
+                if (app.ShipModelShown(ship, px)) continue;
                 if (app.Occluded(scene)) continue;
                 if (ship.IsEscort && app.ToGui(app.ShipScene(ship.Leader), out var lp, out _) && (lp - p).magnitude < 7f) continue;
                 var c = ship.Faction.Color;
@@ -428,7 +429,7 @@ namespace Unity.SpaceGod.UI
         {
             if (!ContactScene(ship, contact, out var at) || !app.ToGui(at, out var p, out var depth) || app.Occluded(at)) return;
             float px = (float)ShipLod.ApparentPx(app.ShipDisplayLength(ship), depth, ppu);
-            if (iconName && ShipLod.DrawsModel(px)) return;
+            if (iconName && app.ShipModelShown(ship, px)) return;
             var c = ship.Faction.Color;
             var at2 = p + new Vector2(Mathf.Max(px * 0.5f, iconName ? Icons.PixelSize(ship.Spec.Class) * 0.5f : 10) + 4, -8);
             string text;
@@ -785,6 +786,14 @@ namespace Unity.SpaceGod.UI
                 var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
                 if (app.RidingLane && DirectionToGui(app.PilotForward, out var ahead)) centre = ahead;
                 DrawStreaks(centre, strength, StreakCount, StreakColor, 0, 170f);
+            }
+            // Through a gate at the helm (U.SPC-T414): the gate's violet glow and its streaks held over the far side
+            // while it streams in, space folding shut and open again with it (the view narrows, see HelmGateFold).
+            float glow = app.HelmGateGlow;
+            if (glow > 0.001f)
+            {
+                DrawGateLight(glow, GateGlowColor, 0.55f);
+                DrawStreaks(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f), glow, WarpLineCount, WarpColor, 500, 320f);
             }
             if (app.GateFlash > 0.001f)
             {

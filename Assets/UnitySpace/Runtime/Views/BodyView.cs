@@ -116,32 +116,43 @@ namespace Unity.SpaceGod.Views
             }
             else
             {
-                var texture = body.Texture != null ? Resources.Load<Texture2D>("Textures/" + body.Texture) : null;
-                windProfile = body.GasGiant && texture != null ? GasGiantWeather.ProfileFor(body.Name) : null;
+                // Its maps load in the background (U.SPC-T414): until they arrive it is drawn in its own colour (a
+                // gas giant, whose shader has no tint, on a swatch of it), the way an unmapped body always is.
+                bool mapped = body.Texture != null;
+                windProfile = body.GasGiant && mapped ? GasGiantWeather.ProfileFor(body.Name) : null;
                 material = Materials.Create(windProfile != null ? Materials.GasGiant : Materials.Planet, body.Name);
-                if (texture != null)
+                material.SetFloat("_UseTexture", 0);
+                material.SetColor("_Color", tint);
+                bool clouds = body.SurfaceHaze >= 0.99f;
+                // A visible-light cloud deck (Venus) is nearly featureless: keep its contrast faint.
+                material.SetFloat("_NoiseStrength", clouds ? 0.05f : body.Kind == BodyKind.Planet ? 0.12f : 0.32f);
+                material.SetFloat("_NoiseScale", clouds ? 1.6f : body.Kind == BodyKind.Planet ? 2.2f : 3.5f);
+                if (windProfile != null) material.SetTexture("_MainTex", AssetStreamer.Swatch(tint));
+                if (mapped)
                 {
-                    material.SetTexture("_MainTex", texture);
-                    material.SetFloat("_UseTexture", 1);
-                    material.SetFloat("_PoleMargin", body.TexturePoleMargin);
-                    material.SetColor("_Color", body.TintTexture ? tint : Color.white);
+                    var m = material;
+                    bool tintTexture = body.TintTexture;
+                    float poleMargin = body.TexturePoleMargin;
+                    AssetStreamer.Request<Texture2D>(AssetStreamer.TexturePath(body.Texture), texture =>
+                    {
+                        if (m == null || texture == null) return;
+                        m.SetTexture("_MainTex", texture);
+                        m.SetFloat("_UseTexture", 1);
+                        m.SetFloat("_PoleMargin", poleMargin);
+                        m.SetColor("_Color", tintTexture ? tint : Color.white);
+                    });
                 }
-                else
+                if (body.NormalMap != null)
                 {
-                    material.SetFloat("_UseTexture", 0);
-                    material.SetColor("_Color", tint);
-                    bool clouds = body.SurfaceHaze >= 0.99f;
-                    // A visible-light cloud deck (Venus) is nearly featureless: keep its contrast faint.
-                    material.SetFloat("_NoiseStrength", clouds ? 0.05f : body.Kind == BodyKind.Planet ? 0.12f : 0.32f);
-                    material.SetFloat("_NoiseScale", clouds ? 1.6f : body.Kind == BodyKind.Planet ? 2.2f : 3.5f);
-                }
-                var normalMap = body.NormalMap != null ? Resources.Load<Texture2D>("Textures/" + body.NormalMap) : null;
-                if (normalMap != null)
-                {
-                    material.SetTexture("_NormalMap", normalMap);
-                    material.SetFloat("_UseNormalMap", 1);
-                    // The maps are baked with relief exaggerated x8 (SOURCES.md); this brings it back toward legible.
-                    material.SetFloat("_NormalStrength", 0.6f);
+                    var m = material;
+                    AssetStreamer.Request<Texture2D>(AssetStreamer.TexturePath(body.NormalMap), normalMap =>
+                    {
+                        if (m == null || normalMap == null) return;
+                        m.SetTexture("_NormalMap", normalMap);
+                        m.SetFloat("_UseNormalMap", 1);
+                        // The maps are baked with relief exaggerated x8 (SOURCES.md); this brings it back toward legible.
+                        m.SetFloat("_NormalStrength", 0.6f);
+                    });
                 }
                 material.SetFloat("_Haze", body.SurfaceHaze);
                 material.SetColor("_HazeColor", tint);

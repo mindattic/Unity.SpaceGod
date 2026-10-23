@@ -85,7 +85,19 @@ namespace Unity.SpaceGod.Rendering
             return mr;
         }
 
-        static string KenneyModelFor(Ship ship)
+        /// <summary>
+        /// Whether <paramref name="ship"/>'s model can be built this frame without waiting on the disk (U.SPC-T414): a
+        /// procedural hull always can; a Kenney craft once its model has been loaded in the background (asked for here
+        /// if it has not been).
+        /// </summary>
+        public static bool Ready(Ship ship)
+        {
+            string kenney = KenneyModelFor(ship);
+            return kenney == null || Prototypes.ContainsKey(kenney) || AssetStreamer.Ready(AssetStreamer.ShipPath(kenney));
+        }
+
+        /// <summary>The Kenney craft a ship is drawn as, or null for a procedural hull.</summary>
+        public static string KenneyModelFor(Ship ship)
         {
             // Local traffic (U.SPC-T375): a boxy bus, nippy taxis and skiffs, and a roomier six-seat tourer, each drawn
             // at its own design's length.
@@ -110,7 +122,10 @@ namespace Unity.SpaceGod.Rendering
         {
             if (!Prototypes.TryGetValue(modelName, out var prototype))
             {
-                var source = Resources.Load<GameObject>("Ships/" + modelName);
+                // Loaded in the background beforehand (see Ready); should a view be built before it arrives, the
+                // procedural hull stands in rather than the frame waiting on the disk.
+                if (!AssetStreamer.Ready(AssetStreamer.ShipPath(modelName))) return null;
+                var source = AssetStreamer.Loaded<GameObject>(AssetStreamer.ShipPath(modelName));
                 prototype = source != null ? Normalise(source, modelName) : null;
                 Prototypes[modelName] = prototype;
             }
@@ -154,15 +169,18 @@ namespace Unity.SpaceGod.Rendering
             return wrapper;
         }
 
-        static Texture2D plating;
+        const string PlatingPath = "Textures/ship_plating";
 
-        /// <summary>The seamless sci-fi panel texture every hull is plated with (see Ship.shader).</summary>
+        /// <summary>The seamless sci-fi panel texture every hull is plated with (see Ship.shader): set on the material
+        /// as soon as it has loaded in the background (at once if it already has).</summary>
         public static void Plate(Material m, float tilesPerUnit)
         {
-            plating ??= Resources.Load<Texture2D>("Textures/ship_plating");
-            if (plating == null) return;
-            m.SetTexture("_Plating", plating);
             m.SetFloat("_PlatingScale", tilesPerUnit);
+            AssetStreamer.Pin(PlatingPath);
+            AssetStreamer.Request<Texture2D>(PlatingPath, plating =>
+            {
+                if (m != null && plating != null) m.SetTexture("_Plating", plating);
+            });
         }
 
         static Material[] MaterialsFor(string modelName, Faction faction, GameObject prototype)

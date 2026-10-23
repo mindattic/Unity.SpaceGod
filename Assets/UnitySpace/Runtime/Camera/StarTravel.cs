@@ -63,13 +63,23 @@ namespace Unity.SpaceGod.Cameras
         }
 
         /// <summary>The flash of going through a gate's ring, 0..1 (the HUD washes the screen with it).</summary>
-        public float GateFlash => Active && ThroughGate ? (float)GateJump.Flash(phase, t) : 0;
+        public float GateFlash => Active && ThroughGate ? (float)GateJump.Flash(phase, EffectT) : 0;
 
         /// <summary>The glow of the inside of a gate, 0..1 (the HUD tints the screen with it).</summary>
-        public float GateGlow => Active && ThroughGate ? (float)GateJump.Glow(phase, t) : 0;
+        public float GateGlow => Active && ThroughGate ? (float)GateJump.Glow(phase, EffectT) : 0;
 
-        /// <summary>How much wider than usual the view opens going through a gate, degrees.</summary>
-        public float FovKick => Active && ThroughGate ? (float)GateJump.FovKick(phase, t) : 0;
+        /// <summary>How much wider than usual the view opens going through a gate, degrees (narrower in the fold).</summary>
+        public float FovKick => Active && ThroughGate ? (float)GateJump.FovKick(phase, EffectT) : 0;
+
+        /// <summary>Whether the tunnel is being held open while the far side finishes loading (U.SPC-T414).</summary>
+        public bool HoldingForLoad => Active && ThroughGate && phase == GateJump.Phase.Tunnel && tunnel.Holding;
+
+        /// <summary>Where the effects stand: in the tunnel, its cover's progress (standing still while held for the far
+        /// side, see <see cref="GateCover"/>); elsewhere the phase's own.</summary>
+        float EffectT => phase == GateJump.Phase.Tunnel ? (float)tunnel.T : t;
+
+        /// <summary>The tunnel's cover: its own length, held at its height while the far side streams in.</summary>
+        readonly GateCover tunnel = new GateCover();
 
         /// <summary>How near the camera is to the ring of the gate it is going through (scene units), for the near
         /// clip plane; infinite when no ring is near.</summary>
@@ -139,6 +149,9 @@ namespace Unity.SpaceGod.Cameras
             phase = GateJump.Phase.Approach;
             gateClearance = double.MaxValue;
             if (ThroughGate) Banner += "   ·   VIA " + departure.Name.ToUpperInvariant();
+            // What the destination is drawn with starts loading now, in the background (U.SPC-T414), so the most of it
+            // is in memory before the view gets there.
+            Rendering.AssetStreamer.WarmSystem(To);
         }
 
         /// <summary>Whether the destination's views are already built (hidden, part way across).</summary>
@@ -166,6 +179,7 @@ namespace Unity.SpaceGod.Cameras
             if (!Active) return;
             if (app.ActiveSystem != To) app.Activate(To);
             Views.BodyView.CoronaPresence = 1f;
+            app.StreamFocus = null;
             Active = false;
             Banner = null;
             app.Interstellar.Visible = false;
@@ -204,12 +218,19 @@ namespace Unity.SpaceGod.Cameras
                 }
                 return;
             }
+            if (phase == GateJump.Phase.Tunnel)
+            {
+                // Held at its height while what the view will see on the far side is still loading (U.SPC-T414).
+                tunnel.Advance(dt, destinationBuilt && app.StreamingPending > 0);
+                t = (float)tunnel.T;
+                UpdateTunnel();
+                return;
+            }
             t = Mathf.Min(1, t + dt / (float)GateJump.Seconds(phase));
             switch (phase)
             {
                 case GateJump.Phase.Approach: UpdateApproach(); break;
-                case GateJump.Phase.Plunge: UpdatePlunge(); break;
-                default: UpdateTunnel(); break;
+                default: UpdatePlunge(); break;
             }
         }
 
@@ -245,6 +266,7 @@ namespace Unity.SpaceGod.Cameras
             phase = GateJump.Phase.Tunnel;
             Stage = Leg.Cross;
             t = 0;
+            tunnel.Begin(GateJump.TunnelSeconds, GateJump.HoldAt, Streaming.GateCoverMaxSeconds.Value);
         }
 
         /// <summary>Inside the gate: nothing of either system on screen while the destination is built (hidden), the
@@ -257,11 +279,16 @@ namespace Unity.SpaceGod.Cameras
                 app.Activate(To);
                 app.SetSystemVisible(false);
                 destinationBuilt = true;
+                // What will be seen coming out of the far gate streams in first.
+                GateScene(arrival, out var exitAt, out var exitAxis, out _);
+                app.StreamFocus = exitAt;
+                app.StreamFocusHeading = -exitAxis;
             }
-            if (t < 1) return;
+            if (tunnel.Active) return;
 
             if (!destinationBuilt) app.Activate(To);
             destinationBuilt = true;
+            app.StreamFocus = null;
             app.SpaceCamera.SetUpFrame(Quaternion.FromToRotation(Vector3.up, toUp));
             Views.BodyView.CoronaPresence = 1f;
             app.SetSystemVisible(true);

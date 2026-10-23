@@ -33,8 +33,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>How far in front of the ring the view lines up before the plunge, in ring diameters.</summary>
         public const double LineUpDiameters = 3.5;
 
-        /// <summary>Share of the way through the tunnel at which the destination is built (hidden).</summary>
-        public const double BuildAt = 0.4;
+        /// <summary>Share of the way through the tunnel at which the destination is built (hidden): early, so its models
+        /// and textures have the rest of the tunnel to stream in (U.SPC-T414).</summary>
+        public const double BuildAt = 0.2;
+
+        /// <summary>Share of the way through the tunnel at which it is held open (warp at its height) while the far side
+        /// is still loading (U.SPC-T414, see <see cref="GateCover"/>).</summary>
+        public const double HoldAt = 0.5;
 
         /// <summary>How much wider the view opens (degrees) going through a gate.</summary>
         public const double FovKickDeg = 24;
@@ -136,9 +141,18 @@ namespace Unity.SpaceGod.Core
             {
                 case Phase.Approach: return 0;
                 case Phase.Plunge: return FovKickDeg * t * t;
-                case Phase.Tunnel: return FovKickDeg;
+                case Phase.Tunnel: return FovKickDeg * (1 - 1.6 * Fold(phase, t));
                 default: return FovKickDeg * (1 - Smoother(t / 0.25));
             }
+        }
+
+        /// <summary>The fold at the end of the tunnel, 0..1 (U.SPC-T414): space pinches shut ahead (the view narrowing past
+        /// its usual width) just before the far gate's flare throws it open again. None anywhere else.</summary>
+        public static double Fold(Phase phase, double t)
+        {
+            if (phase != Phase.Tunnel) return 0;
+            t = Clamp01(t);
+            return Smoother((t - 0.7) / 0.22) * (1 - Smoother((t - 0.95) / 0.05));
         }
 
         static double Clamp01(double x) => x < 0 ? 0 : x > 1 ? 1 : x;
