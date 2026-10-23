@@ -30,7 +30,7 @@ namespace Unity.SpaceGod.UI
         }
 
         /// <summary>
-        /// The trade desk (F12): the trader's rank and what the house is worth, and five pages: the runs the player's price
+        /// The trade desk (backslash): the trader's rank and what the house is worth, and five pages: the runs the player's price
         /// intelligence adds up to (with a broker's price sheet to buy at the port in view, and a house freighter to send
         /// on the best), the trade news, the trading companies' charter offers and the house's hulls out on charter, the
         /// underwriters' quotes and policies, and the house's warehouses with their stock to store or sell. Alongside a

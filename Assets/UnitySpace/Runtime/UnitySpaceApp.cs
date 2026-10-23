@@ -196,7 +196,7 @@ namespace Unity.SpaceGod
         /// <summary>The player's fleet and property (F10): buy hulls and property, hire captains, give standing orders, read the books.</summary>
         public bool ShowFleet { get; set; }
 
-        /// <summary>The trade desk (F12, U.SPC-T426): the trader's rank, runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
+        /// <summary>The trade desk (backslash, U.SPC-T426): the trader's rank, runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
         public bool ShowTrade { get; set; }
 
         /// <summary>The galaxy map (F11, U.SPC-T103): a full screen of every system, its holder, the gate traffic, fronts and raiders.</summary>

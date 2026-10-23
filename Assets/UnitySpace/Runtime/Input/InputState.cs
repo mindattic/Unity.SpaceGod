@@ -72,7 +72,7 @@ namespace Unity.SpaceGod.Input
         /// <summary>The player's own fleet and property (F10; F9 is the model viewer's): owned ships, captains, standing orders, the books.</summary>
         public bool ToggleFleet;
 
-        /// <summary>The trade desk (F12, U.SPC-T426): runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
+        /// <summary>The trade desk (backslash, U.SPC-T426): runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
         public bool ToggleTrade;
 
         /// <summary>F11: the galaxy map (U.SPC-T103).</summary>
@@ -222,7 +222,7 @@ namespace Unity.SpaceGod.Input
             ToggleBounties = kb.f4Key.wasPressedThisFrame;
             ToggleContracts = kb.f7Key.wasPressedThisFrame;
             ToggleFleet = kb.f10Key.wasPressedThisFrame;
-            ToggleTrade = kb.f12Key.wasPressedThisFrame;
+            ToggleTrade = kb.backslashKey.wasPressedThisFrame;
             ToggleGalaxyMap = kb.f11Key.wasPressedThisFrame;
             HailPolity = kb.f12Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;

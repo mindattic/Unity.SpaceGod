@@ -2497,7 +2497,7 @@ namespace Unity.SpaceGod.UI
                 if (o.OnCharter)
                 {
                     GUI.contentColor = Dim;
-                    GUI.Label(new Rect(w - 36 - 162, ly, 160, rowH), "on charter (F12)", small);
+                    GUI.Label(new Rect(w - 36 - 162, ly, 160, rowH), "on charter (\\)", small);
                 }
                 else if (GUI.Button(new Rect(w - 36 - 162, ly, 160, rowH - 2), "Orders: next", button))
                 {
@@ -3373,7 +3373,7 @@ namespace Unity.SpaceGod.UI
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
                 "F7  contracts board of the port in view: freight, passengers, colonists, escorts, patrols, surveys, bounties",
                 "F10  your fleet: buy hulls, warehouses, station shares and claims; hire captains and give them standing orders",
-                "F12  trade desk: runs from your price intelligence, brokers, trade news, charters, insurance, warehouses, the back door",
+                "\\  trade desk: runs from your price intelligence, brokers, trade news, charters, insurance, warehouses, the back door",
                 "F4  bounty board of the port in view: outlaws wanted there, their records, where last seen, who hunts them",
                 "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
                 "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
