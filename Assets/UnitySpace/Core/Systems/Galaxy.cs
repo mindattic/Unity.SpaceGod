@@ -245,12 +245,22 @@ namespace Unity.SpaceGod.Core
         public readonly double ApparentMagnitude;
         public readonly Rgb Color;
 
+        /// <summary>The photosphere's temperature, K, the colour comes from.</summary>
+        public readonly double TeffK;
+
         public NearbyStar(string name, double raDeg, double decDeg, double distanceLy, string spectralType, double magnitude, double teffK)
+            : this(name, Astro.DirectionFromRaDec(raDeg, decDeg) * distanceLy, spectralType, magnitude, teffK)
+        {
+        }
+
+        /// <summary>A star at <paramref name="positionLy"/> from Sol's root (a charted one, U.SPC-T413, see <see cref="StarEntry"/>).</summary>
+        public NearbyStar(string name, DVec3 positionLy, string spectralType, double magnitude, double teffK)
         {
             Name = name;
-            PositionLy = Astro.DirectionFromRaDec(raDeg, decDeg) * distanceLy;
+            PositionLy = positionLy;
             SpectralType = spectralType;
             ApparentMagnitude = magnitude;
+            TeffK = teffK;
             Color = AlphaCentauri.StarColor(teffK);
         }
 
@@ -266,7 +276,7 @@ namespace Unity.SpaceGod.Core
     /// The neighbourhood: the simulated star systems at their real positions, plus the nearest real
     /// stars around them for the view between systems. The seed of a larger map.
     /// </summary>
-    public sealed class Galaxy
+    public sealed partial class Galaxy
     {
         public readonly List<StarSystem> Systems = new List<StarSystem>();
         public readonly List<NearbyStar> NearbyStars = new List<NearbyStar>();
@@ -334,6 +344,8 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public void Update(double jd)
         {
+            // The galaxy charted and built about the pilot as it moves (U.SPC-T413).
+            ExploreIfMoved(jd);
             foreach (var s in Systems)
             {
                 if (AtFullDetail(s))
@@ -411,11 +423,12 @@ namespace Unity.SpaceGod.Core
         /// settled more thinly the farther out it is (<see cref="NearbySocieties"/>), all joined by the jump-gate
         /// lattice (<see cref="GateNetwork"/>) that the interstellar traffic flies; the rest of the
         /// nearest stars are shown, not simulated, until a faction's gate reaches one (<see cref="GateConstruction"/>,
-        /// <see cref="FrontierSystems"/>).
+        /// <see cref="FrontierSystems"/>). Beyond them the rest of the galaxy, real catalogue stars and then stars made up
+        /// from <paramref name="seed"/>, is charted and built only as a pilot comes near (<see cref="Viewpoint"/>, <see cref="Explore"/>).
         /// </summary>
-        public static Galaxy CreateDefault(double jd)
+        public static Galaxy CreateDefault(double jd, int seed = DefaultSeed)
         {
-            var g = new Galaxy();
+            var g = new Galaxy { Seed = seed };
             // Sol first: the Federation is founded there, with its capital on Earth, before its frontier joins it.
             var sol = StarSystem.CreateSol(jd, g.Polities);
             var alphaCentauri = StarSystem.CreateAlphaCentauri(jd, g.Polities);

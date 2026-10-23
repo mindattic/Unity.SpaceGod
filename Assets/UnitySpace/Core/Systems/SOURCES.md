@@ -259,8 +259,44 @@ The stars of the interstellar view that nobody simulates until a faction builds 
 | DX Cancri | M6.5Ve | 0.087 | 0.11 | derived | 2700 | 1.4 *assumed* | |
 
 - **Planets:** Gliese 887 b (9.262 d, 0.068 AU, e 0.09, 4.2 M⊕ min) and c (21.789 d, 0.120 AU, e 0.22, 7.6 M⊕ min), Jeffers et al. 2020 (Science 368, 1477); Groombridge 34 Ab (11.4433 d, 0.0717 AU, e 0.09, 3.03 M⊕ min), Howard et al. 2014 and Pinamonti et al. 2018. Radii from the Chen & Kipping 2017 relation; planes and phases assumed.
-- **Left out:** EZ Aquarii, a close triple whose masses are not pinned down well enough, stays a plain star.
+- **Left out:** EZ Aquarii, a close triple whose masses are not pinned down well enough, has no hand-built entry; it stays a plain star until a pilot comes near, when the catalogue source builds it as one star with values estimated from its temperature (see "The rest of the galaxy" below).
 - **The gates themselves** are fiction: what one costs (tonnes of Alloys, Electronics and Machinery, scaling with its reach), how long it takes to build (two years and a fifth of a year per light-year, after a survey of 60 days and 15 per light-year), the farthest one reaches (8 ly) and how war damages them are game rules, in `GateConstruction.cs`.
+
+
+## The rest of the galaxy (U.SPC-T413)
+
+Past the hand-built systems every star comes from a registered source (`SystemSources.cs`), charted as a pilot comes near and built only when one comes nearer (`GalaxyStreaming.cs`).
+
+**Catalogue stars** (`CatalogueStars.cs`): the interstellar view's 21 neighbours (above), twelve more of the nearest systems out to 20 ly, and four bright landmarks beyond. Values are from each star's Wikipedia article (Hipparcos, Gaia DR3 and the papers it cites). Known planets of these stars are not modelled yet; each is built as its star alone with the habitat orbit the frontier stars have. The list is far from complete (there are some sixty systems between 12 and 20 ly); the sphere is kept free of invented stars all the same.
+
+| Star | RA | Dec | ly | Type | V | Teff (K) | Mass (M☉) | Radius (R☉) | L (L☉) |
+|---|---|---|---|---|---|---|---|---|---|
+| Kapteyn's Star | 5h11m40.58s | −45°01′06.3″ | 12.83 | sdM1 | 8.85 | 3570 | 0.274 | 0.291 | 0.012 |
+| Lacaille 8760 | 21h17m15.27s | −38°52′02.5″ | 12.95 | M0Ve | 6.67 | 3800 | 0.60 | 0.51 | 0.072 |
+| Kruger 60 A | 22h27m59.47s | +57°41′45.1″ | 13.07 | M3V | 9.59 | 3180 | 0.271 | 0.35 | 0.010 |
+| Van Maanen's Star | 0h49m09.90s | +5°23′19.0″ | 14.07 | DZ7 | 12.37 | 6220 | 0.68 | 0.011 | 0.00017 |
+| Gliese 876 | 22h53m16.73s | −14°15′49.3″ | 15.24 | M4V | 10.19 | 3473 | 0.37 | 0.376 | 0.0122 |
+| 40 Eridani A | 4h15m16.32s | −7°39′10.3″ | 16.26 | K0.5V | 4.43 | 5072 | 0.78 | 0.81 | 0.46 |
+| 70 Ophiuchi A | 18h05m27.29s | +2°30′00.4″ | 16.71 | K0V | 4.03 | 5300 | 0.89 | 0.91 | 0.60 |
+| Altair | 19h50m47.00s | +8°52′06.0″ | 16.73 | A7V | 0.76 | 7550 | 1.86 | 1.79 | 10.6 |
+| Sigma Draconis | 19h32m21.59s | +69°39′40.2″ | 18.80 | G9V | 4.67 | 5297 | 0.87 | 0.78 | 0.43 |
+| Eta Cassiopeiae A | 0h49m06.29s | +57°48′54.7″ | 19.33 | F9V | 3.44 | 5973 | 0.97 | 1.04 | 1.23 |
+| 82 Eridani | 3h19m55.65s | −43°04′11.2″ | 19.71 | G8V | 4.25 | 5401 | 0.85 | 0.92 | 0.69 |
+| Delta Pavonis | 20h08m43.61s | −66°10′55.4″ | 19.89 | G8IV | 3.56 | 5604 | 0.99 | 1.22 | 1.22 |
+| Vega | 18h36m56.34s | +38°47′01.3″ | 25.04 | A0V | 0.03 | 9602 | 2.14 | 2.5 | 40.1 |
+| Fomalhaut | 22h57m39.05s | −29°37′20.1″ | 25.13 | A3V | 1.16 | 8590 | 1.92 | 1.84 | 16.6 |
+| Pollux | 7h45m18.95s | +28°01′34.3″ | 33.78 | K0III | 1.14 | 4586 | 1.91 | 9.06 | 32.7 |
+| Arcturus | 14h15m39.67s | +19°10′56.7″ | 36.7 | K1.5III | −0.05 | 4286 | 1.08 | 25.4 | 170 |
+
+- A neighbour with no hand-built entry (EZ Aquarii) has its mass read off the main-sequence temperature-mass table of Pecaut & Mamajek 2013 (ApJS 208, 9), its radius from M^0.8 (M^0.57 above a solar mass) and its luminosity from L = R²(T/5772 K)⁴: estimates, and its summary says so. Rotations are assumed.
+
+**The procedural galaxy** (`ProceduralSystems.cs`) is fiction on a real shape:
+
+- **Frame:** the galactic centre is Sagittarius A* (RA 17h45m40.04s, Dec −29°00′28.2″) at 8.178 kpc (26,673 ly; GRAVITY Collaboration 2019); the north galactic pole RA 12h51m26.28s, Dec +27°07′42.0″ (J2000); the Sun 20.8 pc (68 ly) above the plane (Bennett & Bovy 2019).
+- **Density:** a thin exponential disc, scale length 2.6 kpc and scale height 300 pc (Bland-Hawthorn & Gerhard 2016), normalised to 0.0032 star systems a cubic light-year at the Sun (what the catalogued systems within 12 ly give), fading past 50,000 ly from the centre, plus an exponential bulge (0.1 /ly³ at the centre, scale 1,500 ly). Spiral arms, the bar and the halo are left out.
+- **Stars:** the solar neighbourhood's mix (RECONS): 73% M, 12% K, 7% G, 3% F, 0.6% A, 0.13% B, 5% white dwarfs, the rest brown dwarfs. Masses uniform within a class, temperature rising with mass across it; radius M^0.8 (M^0.57 above a solar mass), 0.012 R☉ for a white dwarf, 0.1 R☉ for a brown dwarf; luminosity from radius and temperature.
+- **Planets and belts:** invented. A few planets a star on average (fewer round white and brown dwarfs and round A and B stars), the innermost at 0.02–0.25 AU scaled by √L, each next 1.4–3 times farther out; 60% rocky (0.1–5 M⊕), 25% Neptune-like (5–50 M⊕), 15% giants (50–3000 M⊕); radii from the Chen & Kipping 2017 relation, periods from Kepler's third law. One system in seven has a belt past its planets.
+- **Determinism:** space is cut into 10-ly cells; a cell's stars come from the galaxy's seed and the cell alone (SplitMix64), and a star's planets from its own seed, so the galaxy is the same however and in whatever order it is explored.
 
 ## Real spacecraft (Sol)
 

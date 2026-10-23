@@ -403,6 +403,8 @@ namespace Unity.SpaceGod
             // The system the player is in runs at full detail, the rest at coarse (U.SPC-T104): this one is brought
             // up to the moment from its last coarse step before anything of it is drawn.
             Galaxy.Promote(system, Clock.Jd);
+            // The galaxy is charted and built about wherever the player is (U.SPC-T413).
+            Galaxy.Viewpoint = system.Origin;
             systemRoot = new GameObject(system.Name).transform;
             systemRoot.SetParent(worldRoot, false);
             SystemVisible = true;
@@ -581,6 +583,7 @@ namespace Unity.SpaceGod
 
             Clock.Advance(dt);
             Galaxy.Update(Clock.Jd);
+            RefreshCharts();
             UpdateSaves(dt);
             SyncShipViews();
 
@@ -2059,6 +2062,22 @@ namespace Unity.SpaceGod
                 GalaxyRebuilt?.Invoke();
             }
             ShowToast("Time reset to now");
+        }
+
+        /// <summary>The galaxy's <see cref="Galaxy.ChartVersion"/> the view between the stars was last built from.</summary>
+        int chartsShown;
+
+        /// <summary>
+        /// Rebuilds the view between the stars when exploring has charted new stars or built new systems (U.SPC-T413),
+        /// never in the middle of a trip through it.
+        /// </summary>
+        void RefreshCharts()
+        {
+            if (Galaxy.ChartVersion == chartsShown || Travel.Active) return;
+            chartsShown = Galaxy.ChartVersion;
+            Materials.DestroyOwned(Interstellar.Root.transform);
+            Destroy(Interstellar.Root);
+            Interstellar = new InterstellarView(Galaxy, worldRoot);
         }
 
         // ---------------------------------------------------------------- ships
