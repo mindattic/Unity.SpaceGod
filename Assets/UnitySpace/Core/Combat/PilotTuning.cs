@@ -76,6 +76,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.OreTug] = new PilotTuning(0.14, 60, 1.5, 40, 8, 3.2),
             // The lane tender (U.SPC-T481): a work boat, steadier than an explorer and slower to spool.
             [ShipClass.LaneTender] = new PilotTuning(0.18, 55, 1.5, 30, 7, 3.5),
+            // The gate picket (U.SPC-T480): a small hull, flown nose-first like a heavy fighter but no dogfighter.
+            [ShipClass.GatePicket] = new PilotTuning(0.3, 80, 1.8, 22, 8, 2.6),
 
             // Capital ships: still weighty -- you're captaining a warship, not dogfighting in it --
             // but sharper than their AI-battle turn rates so they're not sluggish to the point of
@@ -105,6 +107,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Breacher:
                 case ShipClass.Gunship:
                 case ShipClass.Bomber:
+                case ShipClass.GatePicket:
                     return PilotControl.DirectNose;
                 case ShipClass.Freighter:
                 case ShipClass.Miner:

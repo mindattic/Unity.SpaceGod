@@ -432,6 +432,9 @@ namespace Unity.SpaceGod.Core
             GateNetwork.Fortify(link.AtB);
             p.Gate = link.AtA;
             p.To.World.Fleet.AddFaction(p.Builder);
+            // And watched from the day it opens (U.SPC-T480).
+            GatePickets.PostFull(link.AtA, jd);
+            GatePickets.PostFull(link.AtB, jd);
             Built++;
             Log(p, jd, $"The {link.AtA.Name} is finished: {p.Builder.Name} opens the way from {p.From.Name} to {p.To.Name}, {p.Ly:0.0} ly, " +
                        $"after {(jd - p.StartJd) / 365.25:0.0} years and {p.Spent / 1e6:0} million credits");

@@ -6,9 +6,9 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// A navy's standing patrol wings (U.SPC-T371): besides its battle groups, every navy that holds ports in a system keeps
     /// a few small wings flying a beat of them, so the space between its worlds is never empty. A wing is a light wing
-    /// (three fighters), a heavy-fighter wing (a gunship leading two light fighters) or a picket (a destroyer leading a
-    /// heavy and two light fighters), raised in that order, so a navy with a port or two flies only light fighters and the
-    /// warship pickets are the big navies'; each on a beat of up to <see cref="BeatLength"/> of its navy's ports, the wings spread so
+    /// (three fighters), a heavy-fighter wing (a gunship leading two light fighters) or a destroyer wing (a destroyer
+    /// leading a heavy and two light fighters), raised in that order, so a navy with a port or two flies only light fighters
+    /// and the destroyer wings are the big navies' (a navy's gate pickets are another thing, see <see cref="GatePickets"/>); each on a beat of up to <see cref="BeatLength"/> of its navy's ports, the wings spread so
     /// that between them they cover every port.
     /// <para>A wing is commanded, not loosed on whatever it meets (see <see cref="War.Commanded"/>): it defends the ports on
     /// its beat when an enemy turns up there, hunts raiders seen working them, and puts in at a yard to repair, but it never
@@ -28,7 +28,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The kinds of wing, in the order a navy raises them: light wing, heavy-fighter wing, lane picket (a
         /// destroyer and a lane interdictor that lie in wait on the lanes between the ports of its beat for raiders,
-        /// U.SPC-T479), picket.</summary>
+        /// U.SPC-T479), destroyer wing.</summary>
         static readonly ShipClass[][] Compositions =
         {
             new[] { ShipClass.Fighter, ShipClass.Fighter, ShipClass.Fighter },
@@ -39,7 +39,7 @@ namespace Unity.SpaceGod.Core
 
         static readonly string[] CallSigns =
         {
-            "Lamplighter", "Nighthawk", "Vigilant", "Redstart", "Picket", "Outrider", "Lookout", "Harfang", "Tripwire", "Nightwatch",
+            "Lamplighter", "Nighthawk", "Vigilant", "Redstart", "Sentinel", "Outrider", "Lookout", "Harfang", "Tripwire", "Nightwatch",
             "Gyrfalcon", "Warder", "Ranger", "Skirmisher", "Lanner", "Kingfisher", "Osprey", "Shrike", "Peregrine", "Hobby",
             "Goshawk", "Kite", "Sparrowhawk", "Falconet",
         };

@@ -130,6 +130,27 @@ namespace Unity.SpaceGod.Core
             !LaneUpkeep.IsTender(target);
 
         /// <summary>
+        /// How far (km, in a battle's own frame) a raider's gunners reckon a gate picket nearer than it is (U.SPC-T480): a
+        /// picket alive is a navy forewarned, so a band kills it before anything else, merchants included.
+        /// </summary>
+        public const double PicketFirstKm = 30;
+
+        /// <summary>The share of its own strength in hostile guns a band lying off a gate takes on to silence a gate picket
+        /// there (U.SPC-T480): more than for warships alone (<see cref="BaseNerve"/>), since a picket left alive gives it away.</summary>
+        public const double PicketNerve = 1.2;
+
+        /// <summary>Whether <paramref name="ship"/> is a gate picket (see <see cref="GatePickets"/>).</summary>
+        public static bool IsPicket(Ship ship) => ship != null && ship.Spec.Class == ShipClass.GatePicket;
+
+        /// <summary>
+        /// How much nearer than it is (km) a raider of <paramref name="raider"/> reckons <paramref name="target"/> when it
+        /// picks what to shoot at (see <see cref="Battle.PickTarget"/>): <see cref="PicketFirstKm"/> for a gate picket of
+        /// anyone's but the raiders', 0 for anything else, and 0 for anyone who is no raider.
+        /// </summary>
+        public static double TargetBias(Faction raider, Ship target) =>
+            raider != null && raider.IsPirate && IsPicket(target) && target.Faction != null && !target.Faction.IsPirate ? PicketFirstKm : 0;
+
+        /// <summary>
         /// How much a raider's gunners favour <paramref name="kind"/> on a hull it means to rob: shields and engines first, to
         /// leave it dead in space; its guns and the rest after; never the reactor, which would take the prize with it.
         /// </summary>

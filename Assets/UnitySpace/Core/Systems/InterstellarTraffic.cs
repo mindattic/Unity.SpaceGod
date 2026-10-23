@@ -602,6 +602,8 @@ namespace Unity.SpaceGod.Core
             else if (v.Homeward) Home(system, leader, jd);
             else Arrive(system, leader, p.To, jd);
             foreach (var s in p.Ships) world.NotifyAdded(s);
+            // The gate's pickets see it come out and warn their navy if it is hostile (U.SPC-T480).
+            GatePickets.OnArrival(p.To, p.Ships, jd);
             News.Carried(system, p.News, leader.Name, jd);
             p.To.Traffic += 1;
             // Raiders lying off the gate see it come out (U.SPC-T94), however quickly it moves on.

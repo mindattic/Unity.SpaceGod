@@ -40,7 +40,7 @@ All piloted. Inertial dampeners are what make a dogfight survivable (see the rea
 - **Frigate.** A torpedo and missile boat. Its doctrine is the alpha strike: burn in, fire, flip and burn out. Antimatter and photon torpedoes.
 - **Corvette.** In-system defence with no FTL. It operates on its home system's hyper lanes.
 - **Lane Interdictor.** Pulls ships out of hyper lanes mid-transit. The pirates' and raiders' favourite.
-- **Gate Picket.** Small, sensor-heavy early warning at gate exits.
+- **Gate Picket.** Small, sensor-heavy early warning at gate exits. In the game (U.SPC-T480, `GatePickets`): every navy posts one at each gate it holds, which warns it of hostiles through the gate or dropping out of FTL nearby, and raiders kill it first. Not the destroyer patrol wing, which flies a beat of its navy's ports.
 
 ### Logistics
 
@@ -118,7 +118,6 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 | Marines live in a Marine Habitat | A flat marine figure per class | U.SPC-T465 |
 | Boarding the player takes part in | Boarding only resolves on its own | U.SPC-T468 |
 | Frigate, corvette, command cruiser, gate breaker | Not yet classes | U.SPC-T475 to U.SPC-T478 |
-| Gate picket | Not yet a class (the lane interdictor landed in U.SPC-T479, the lane tender and lane upkeep in U.SPC-T481) | U.SPC-T480 |
 | The lane interdictor, a sub-capital, has no FTL of its own | It shares the destroyer's own FTL drive, so a raider band crossing between the stars keeps its interdictor | U.SPC-T472 |
 | Truss-and-pod freighters; ice hauler / ore tug | Not yet | U.SPC-T482, U.SPC-T483 |
 | Recon / EW fighter; boarding shuttle | Not yet classes (the interceptor, space superiority fighter and bomber are hulls of their own since U.SPC-T484) | U.SPC-T485, U.SPC-T486 |

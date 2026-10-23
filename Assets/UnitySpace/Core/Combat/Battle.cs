@@ -869,6 +869,8 @@ namespace Unity.SpaceGod.Core
                 if (o.Ship != null && !o.Ship.Spec.IsMilitary) score += u.Faction.IsPirate ? -15 : 10;
                 // A lane tender is the prize of the fight (U.SPC-T481): sink it and its lane goes dark.
                 if (LaneUpkeep.IsTender(o.Ship)) score -= LaneUpkeep.TenderFocus.Value;
+                // Raiders kill a gate picket first, before it can warn its navy (U.SPC-T480).
+                if (o.Ship != null && !o.Combat.Disabled) score -= RaidDoctrine.TargetBias(u.Faction, o.Ship);
                 if (o.Kind == UnitKind.Platform) score += 6;
                 if (flagship != null && flagship != u && flagship.Target == o) score -= 6;
                 score *= 0.85 + rng.NextDouble() * 0.3;

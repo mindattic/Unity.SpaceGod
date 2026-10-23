@@ -100,11 +100,29 @@ namespace Unity.SpaceGod.Core
         /// <summary>What each scanner suite fitted (<see cref="ModuleKind.Scanner"/>) adds: half the base range again, and resolution.</summary>
         public const double ScannerRangeShare = 0.5, ScannerResolution = 0.5;
 
+        /// <summary>A gate picket's long-range search suite (U.SPC-T480): six times a warship's reach and twice its
+        /// resolution, so it makes out a raider lying dark off its gate and an arrival's class as it comes through.</summary>
+        public static readonly SensorSuite Picket = new SensorSuite(2.4e6, 3);
+
+        /// <summary>Hull classes built round a suite of their own rather than the civil or military base (the extension
+        /// point: register a class's suite, see <see cref="RegisterBase"/>).</summary>
+        static readonly Dictionary<ShipClass, SensorSuite> baseByClass = new Dictionary<ShipClass, SensorSuite>
+        {
+            [ShipClass.GatePicket] = Picket,
+        };
+
+        /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="suite"/> as their base suite.</summary>
+        public static void RegisterBase(ShipClass cls, SensorSuite suite) => baseByClass[cls] = suite;
+
+        /// <summary>The suite a hull of <paramref name="cls"/> is built with, before any scanner is fitted.</summary>
+        public static SensorSuite BaseOf(ShipClass cls, bool military) =>
+            baseByClass.TryGetValue(cls, out var b) ? b : military ? Military : Civil;
+
         /// <summary>The suite <paramref name="s"/> carries: its hull's base, more with each scanner fitted.</summary>
         public static SensorSuite Of(Ship s)
         {
             if (s == null) return Civil;
-            var b = s.Spec.IsMilitary ? Military : Civil;
+            var b = s.Spec == null ? Civil : BaseOf(s.Spec.Class, s.Spec.IsMilitary);
             int n = s.Loadout?.Count(ModuleKind.Scanner) ?? 0;
             return new SensorSuite(b.RangeKm * (1 + ScannerRangeShare * n), b.Resolution + ScannerResolution * n);
         }

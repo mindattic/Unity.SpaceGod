@@ -477,6 +477,8 @@ namespace Unity.SpaceGod.Core
         {
             Network = network ?? GateNetwork.Build(Systems, jd, Polities);
             Network.Fortify();
+            // And watches them: a picket at each held gate's exit (U.SPC-T480).
+            GatePickets.PostAll(Network, jd);
             Traffic = new InterstellarTraffic(this, jd);
             Polities.InTransit = Traffic.InTransit;
             Construction = new GateConstruction(this, jd);

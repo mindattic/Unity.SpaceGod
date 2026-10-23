@@ -68,6 +68,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Bomber: BuildBomber(b); break;
                 case ShipClass.LaneTender: BuildLaneTender(b); break;
                 case ShipClass.Interdictor: BuildInterdictor(b); break;
+                case ShipClass.GatePicket: BuildPicket(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -784,6 +785,19 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0.07f, 0.15f), new Vector3(0.09f, 0.04f, 0.18f), b.Glow(new Color(0.6f, 0.85f, 1f)));
             b.Nozzle(new Vector3(-0.07f, 0, -0.47f), 0.05f, 0.06f);
             b.Nozzle(new Vector3(0.07f, 0, -0.47f), 0.05f, 0.06f);
+        }
+
+        /// <summary>A gate picket (U.SPC-T480): a slim hull carrying a tall sensor mast and a broad search dish, more
+        /// antenna than ship, with one small drive.</summary>
+        static void BuildPicket(Builder b)
+        {
+            b.Frustum(-0.42f, 0.45f, new Vector2(0.12f, 0.08f), new Vector2(0.02f, 0.02f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.06f, 0.1f), new Vector3(0.04f, 0.025f, 0.12f), b.Glow(new Color(0.6f, 0.85f, 1f)));
+            // The mast and its dish, the picket's whole purpose.
+            b.Box(new Vector3(0, 0.16f, -0.08f), new Vector3(0.02f, 0.22f, 0.02f), b.Dark);
+            b.Cylinder(new Vector3(0, 0.28f, -0.08f), 0.11f, 0.015f, b.Light, segments: 12);
+            b.Box(new Vector3(0, 0, -0.15f), new Vector3(0.3f, 0.01f, 0.1f), b.Accent);
+            b.Nozzle(new Vector3(0, 0, -0.44f), 0.035f, 0.05f);
         }
 
         /// <summary>

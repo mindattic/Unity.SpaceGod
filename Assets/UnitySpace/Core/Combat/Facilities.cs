@@ -274,6 +274,12 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bridge, "Flight deck", 0.2, 0.03), new FacilitySite(FacilityKinds.Battery, "Gun deck", 0),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
+            // A sensor mast with a drive (U.SPC-T480): the bridge, the sensor room under the mast, engineering.
+            [ShipClass.GatePicket] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.15, 0.04), new FacilitySite(FacilityKinds.Midships, "Sensor room", -0.08),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
+            },
             [ShipClass.Breacher] = new[]
             {
                 new FacilitySite(FacilityKinds.AssaultBay, "Assault bay", 0.25), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0, 0.03),
@@ -318,7 +324,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Breacher:
                 case ShipClass.Gunship:
                 case ShipClass.Courier:
-                case ShipClass.OreTug: return 2;
+                case ShipClass.OreTug:
+                case ShipClass.GatePicket: return 2;
                 default: return 1;
             }
         }

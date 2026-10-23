@@ -77,6 +77,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Miner:
                 case ShipClass.OreTug: return hexagon ??= Draw(Hexagon);
                 case ShipClass.Courier: return dot ??= Draw(p => Ring(p, 0.42f, 0.16f));
+                // A gate picket (U.SPC-T480): the contact blip, a lookout's mark.
+                case ShipClass.GatePicket: return Blip;
                 case ShipClass.Fighter: return dart ??= Draw(p => Triangle(new Vector2(p.x * 1.8f, p.y), 0.75f));
                 // The heavy fighter (U.SPC-T467): a broader, blunter dart than the light fighter's.
                 case ShipClass.Gunship: return wedge ??= Draw(p => Triangle(new Vector2(p.x * 1.25f, p.y), 0.8f));
@@ -98,7 +100,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Battleship: return 20;
                 case ShipClass.Cruiser: return 16;
                 case ShipClass.Destroyer: return 13;
-                case ShipClass.Courier: return 9;
+                case ShipClass.Courier:
+                case ShipClass.GatePicket: return 9;
                 case ShipClass.Fighter: return 8;
                 case ShipClass.Gunship: return 10;
                 case ShipClass.Interceptor: return 7;

@@ -620,6 +620,8 @@ namespace Unity.SpaceGod.Core
             }
             world.Log(jd, $"{c.Leader.Name}{More(c)} of {c.Leader.Faction.Name} drop{(c.Ships.Count > 1 ? "" : "s")} out of cruise at the edge of {system.Name}, " +
                           $"in from {c.From?.Name ?? "open space"}", WorldEventKind.Info, system.Catalog.Root.Index);
+            // A gate picket near where it drops out sees it and warns its navy if it is hostile (U.SPC-T480).
+            GatePickets.OnDropOut(system, c.Ships, at, jd);
             Arrived?.Invoke(c, jd);
             // Nobody sent it here on business: a free ship, it finds its own way in (the player's own, jumped from the helm,
             // is the helm's to fly on from here, U.SPC-T417).

@@ -57,6 +57,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>How many forts the owner keeps here when it can (0: an unguarded gate).</summary>
         public int MaxForts;
 
+        /// <summary>Since when this end has been short of the gate pickets its owner keeps here (U.SPC-T480, see
+        /// <see cref="GatePickets.Upkeep"/>); NaN while it has them all.</summary>
+        public double PicketsShortSinceJd = double.NaN;
+
         /// <summary>
         /// Whether <paramref name="faction"/> is at war with this end's owner (U.SPC-T92): the gate will not open for it, but
         /// a war fleet may force it, fighting its forts and taking it (see <see cref="InterstellarWars"/>). A gate shut by a

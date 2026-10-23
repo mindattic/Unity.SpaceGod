@@ -314,6 +314,13 @@ namespace Unity.SpaceGod.Core
             Garrisons(jd);
             foreach (var w in new List<Conflict>(wars)) Judge(w, jd);
             RebuildForts(jd);
+            // The gates' pickets: handed on with their gates, and replaced when lost (U.SPC-T480).
+            if (galaxy.Network != null)
+                foreach (var link in galaxy.Network.Links)
+                {
+                    GatePickets.Upkeep(link.AtA, jd);
+                    GatePickets.Upkeep(link.AtB, jd);
+                }
             if (AutoDeclare && jd >= nextDeclareJd)
             {
                 nextDeclareJd = jd + 30;

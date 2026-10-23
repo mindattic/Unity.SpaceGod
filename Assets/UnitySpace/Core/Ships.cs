@@ -57,6 +57,10 @@ namespace Unity.SpaceGod.Core
         /// pirate's and raider's favourite, since the lanes' routes are predictable; navies fly it as a lane picket against
         /// them. Lightly armed: its reactor is spent on the emitter.</summary>
         Interdictor,
+        /// <summary>A gate picket (U.SPC-T480): a small, sensor-heavy hull stationed at a held jump gate's exit to give its
+        /// owner early warning of whatever comes through the gate or drops out of FTL nearby (see <see cref="GatePickets"/>).
+        /// Lightly armed and no match for a raider band, which goes for it first.</summary>
+        GatePicket,
     }
 
     public enum ShipRole
@@ -152,6 +156,7 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Bomber, "Bomber", 0.6, true),
             new ShipClassSpec(ShipClass.LaneTender, "Lane tender", 0.2, false),
             new ShipClassSpec(ShipClass.Interdictor, "Lane interdictor", 0.35, true),
+            new ShipClassSpec(ShipClass.GatePicket, "Gate picket", 0.8, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];
@@ -588,6 +593,16 @@ namespace Unity.SpaceGod.Core
         /// yard when hurt.
         /// </summary>
         public bool Convoy;
+
+        /// <summary>
+        /// The jump gate this hull keeps watch at as a gate picket (U.SPC-T480, see <see cref="GatePickets"/>), or null. A
+        /// picket flies as a <see cref="PatrolWing"/> (never merged, sent away or counted as a warship) and holds its post off
+        /// the gate's exit (<see cref="PicketPostKm"/>), warning its navy of what comes through.
+        /// </summary>
+        public JumpGate PicketGate;
+
+        /// <summary>A gate picket's post, km off the system root: just inside its gate's exit.</summary>
+        public DVec3 PicketPostKm;
 
         /// <summary>What sort of local craft this is when it is <see cref="ShipRole.Commuter"/> traffic (U.SPC-T375), or
         /// <see cref="CivilCraft.None"/>.</summary>

@@ -137,20 +137,26 @@ namespace Unity.SpaceGod.Core.Tests
             var g = Create();
             var sol = g.Find("Sol System");
             var ac = g.Find("Alpha Centauri");
-            double jd = RunUntil(g, StartJd, 150, () => g.Traffic.Arrivals.TryGetValue(VoyagePurpose.Trade, out int n) && n > 0);
-            Assert.That(g.Traffic.Arrivals.GetValueOrDefault(VoyagePurpose.Trade), Is.GreaterThan(0), "no freighter crossed with goods in 150 days");
-            Assert.That(g.Traffic.TollsPaid, Is.GreaterThan(0));
-
-            // Find one that has come through with its cargo, and follow it to the sale.
+            // Find one that has come through with its cargo, and follow it to the sale: a foreign trader, not one of a power
+            // that holds the system it came to as well (the Federation trades out of Barnard's Star as well as Sol), whose
+            // colours are native there anyway.
             Ship trader = null;
             StarSystem there = null;
-            foreach (var s in new[] { sol, ac })
-                foreach (var ship in s.World.Fleet.Ships)
-                    if (!ship.Destroyed && ship.Voyage != null && ship.Voyage.Purpose == VoyagePurpose.Trade && ship.Voyage.Destination == s && ship.HasCargo)
-                    {
-                        trader = ship;
-                        there = s;
-                    }
+            bool Find()
+            {
+                foreach (var s in new[] { sol, ac })
+                    foreach (var ship in s.World.Fleet.Ships)
+                        if (!ship.Destroyed && ship.Voyage != null && ship.Voyage.Purpose == VoyagePurpose.Trade && ship.Voyage.Destination == s && ship.HasCargo &&
+                            !s.World.Fleet.Factions.Contains(ship.Faction))
+                        {
+                            trader = ship;
+                            there = s;
+                        }
+                return trader != null;
+            }
+            double jd = RunUntil(g, StartJd, 150, Find);
+            Assert.That(g.Traffic.Arrivals.GetValueOrDefault(VoyagePurpose.Trade), Is.GreaterThan(0), "no freighter crossed with goods in 150 days");
+            Assert.That(g.Traffic.TollsPaid, Is.GreaterThan(0));
             Assume.That(trader, Is.Not.Null, "the arrival had already sold");
             var v = trader.Voyage;
             Assert.That(v.Home, Is.Not.SameAs(there));
@@ -279,8 +285,8 @@ namespace Unity.SpaceGod.Core.Tests
             var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Free && s.Spec.Class == ShipClass.Courier && !s.Destroyed
                 && s.Battle == null && sol.World.War.Danger(s.Orbit.Body) == 0);
             string name = ship.Name;
-            // Wait for it to be in port, then send it.
-            double jd = RunUntil(g, StartJd, 20, () => ship.Phase == ShipPhase.Parked && ship.Voyage == null && ship.Battle == null);
+            // Wait for it to be in port (with propellant aboard: one that has run dry waits for its tanker first), then send it.
+            double jd = RunUntil(g, StartJd, 20, () => ship.Phase == ShipPhase.Parked && ship.Voyage == null && ship.Battle == null && !ship.OutOfPropellant);
             var v = g.Traffic.Send(ship, sol, tau, VoyagePurpose.Survey, jd);
             Assert.That(v, Is.Not.Null);
             Assert.That(v.Route.Count, Is.GreaterThanOrEqualTo(2));
@@ -346,8 +352,10 @@ namespace Unity.SpaceGod.Core.Tests
             var ac = g.Find("Alpha Centauri");
             var raider = sol.World.Fleet.Ships.First(s => s.Faction == sol.World.Pirates && !s.IsEscort && !s.Destroyed);
             string name = raider.Name;
-            int escorts = sol.World.Fleet.Ships.Count(s => s.Leader == raider && !s.Destroyed);
             double jd = RunUntil(g, StartJd, 30, () => raider.Phase == ShipPhase.Parked && raider.Battle == null);
+            // The escorts free to follow it when it is sent (one still caught in a fight is left behind, see
+            // EscortsLeftBehindAtAGateAreNoLongerTiedToTheFlagshipThatCrossed).
+            int escorts = sol.World.Fleet.Ships.Count(s => s.Leader == raider && !s.Destroyed && s.Battle == null);
             var v = g.Traffic.Send(raider, sol, ac, VoyagePurpose.Raid, jd);
             Assert.That(v, Is.Not.Null);
             Assert.That(v.Route.Single(), Is.SameAs(sol.GateTo(ac)), "raiders slip through an open gate");

@@ -76,6 +76,8 @@ namespace Unity.SpaceGod.Core
             // Announced like any other hull coming into the system (as gate traffic is, see InterstellarTraffic), so a
             // company hull is taken back into its company's fleet rather than dropped from it.
             destination.World.NotifyAdded(ship);
+            // The far gate's pickets see it come out (U.SPC-T480).
+            GatePickets.OnArrival(gate.Partner, new[] { ship }, jd);
             arrived = ship;
             return true;
         }

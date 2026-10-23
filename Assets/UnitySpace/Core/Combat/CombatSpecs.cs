@@ -788,6 +788,28 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.Engine, -0.05, 0, -0.45),
                     new SubsystemDef(SubsystemKind.Engine, 0.05, 0, -0.45),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
+                },
+            } },
+            [ShipClass.GatePicket] = new[] { new CombatSpec
+            {
+                // The gate picket (U.SPC-T480): a sensor mast with a drive, not a warship. A light gun and point defence for
+                // what strays near it, good shields to last until word is out, and a long-range search suite (see
+                // SensorSuite.Picket) that is the whole reason it is there.
+                DesignName = "Gate picket", LengthKm = 0.12,
+                MassKt = 20, MainThrustMN = 700, RetroThrustMN = 520, LateralThrustMN = 350, VerticalThrustMN = 350, PitchYawTorqueMNKm = 260, RollTorqueMNKm = 65,
+                Hull = 1500, Shield = 1100, ShieldRegen = 16, Armor = 1, MaxSpeed = 0.3, Accel = 0.014, Decel = 0.016,
+                BoostSpeedMultiplier = 1.5, BoostDurationS = 16, TurnRateDegS = 22,
+                Crew = 14, Marines = 0,
+                DryMassTonnes = 700, PropellantTonnes = 500, ExhaustVelocityKmS = 3500,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.3, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0, 0.05, 0.05),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.04, 0.15),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, 0.15, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, -0.25, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.46),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
                 },
             } },

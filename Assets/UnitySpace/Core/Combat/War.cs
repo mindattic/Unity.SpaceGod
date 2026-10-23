@@ -1438,24 +1438,27 @@ namespace Unity.SpaceGod.Core
                 var at = lurker.Orbit.OffsetAt(jd);
                 var marks = new List<Ship>();
                 double guns = 0;
+                Ship picket = null;
                 foreach (var s in Fleet.Ships)
                 {
                     if (s.Destroyed || s.Battle != null || s == world.PilotedShip || s.Derelict || !Fleet.IsAt(s.Controller, root)) continue;
                     if (!Diplomacy.Hostile(lurker.Faction, s.Faction) || (s.Controller.Orbit.OffsetAt(jd) - at).Length > GateAmbushRangeKm) continue;
                     if (s.Spec.IsMilitary || s.Faction.IsPirate) guns += s.Combat.Strength;
                     else if (!s.IsEscort) marks.Add(s);
+                    if (picket == null && RaidDoctrine.IsPicket(s)) picket = s;
                 }
-                // The band sizes up what is there first (U.SPC-T374): the best mark worth the guns about it; with none, the
-                // warships alone, if they are few enough to take on.
+                // The band sizes up what is there first (U.SPC-T374): the best mark worth the guns about it; with none, a gate
+                // picket that would give it away (U.SPC-T480), or the warships alone, if they are few enough to take on.
                 double band = GroupStrength(lurker);
                 var prey = BestMark(marks, guns, band);
-                if (prey == null && (guns <= 0 || guns > band * RaidDoctrine.BaseNerve)) continue;
+                bool silence = picket != null && guns <= band * RaidDoctrine.PicketNerve;
+                if (prey == null && !silence && (guns <= 0 || guns > band * RaidDoctrine.BaseNerve)) continue;
                 var b = TryStartBattle(root, lurker.Faction, jd, at);
                 if (b == null) continue;
                 var gate = GateNear(at);
                 if (gate != null) gate.Ambushes++;
                 world.Log(jd, $"{lurker.Faction.Name} raiders ({lurker.Name}) lying off the {gate?.Name ?? "gates"} fall on " +
-                    (prey != null ? $"the {prey.Name}" : "the warships coming through"), WorldEventKind.Battle, root);
+                    (silence ? $"the picket {picket.Name}" : prey != null ? $"the {prey.Name}" : "the warships coming through"), WorldEventKind.Battle, root);
                 return;
             }
         }
@@ -1947,6 +1950,7 @@ namespace Unity.SpaceGod.Core
             if (f.IsPirate) return DecidePirate(leader, here, jd, withdrawing);
             // A fresh plan: a lane picket planned earlier and not yet reached no longer stands (U.SPC-T479).
             leader.LurkLane = null;
+            if (leader.PicketGate != null) return DecidePicket(leader, here, jd, withdrawing);
             if (leader.PatrolWing) return DecideWing(leader, here, jd, withdrawing);
             // A fresh plan: a gate it was holding is held again only if it is still the order (U.SPC-T374).
             var held = leader.StakeoutKm;
@@ -1976,6 +1980,11 @@ namespace Unity.SpaceGod.Core
                 }
             }
             if (threatened >= 0) return new GroupOrder { Kind = OrderKind.Defend, Body = threatened };
+
+            // A gate picket has warned of hostiles come in at one of its own gates (U.SPC-T480): command sends a group
+            // strong enough to meet them there while they are still at the gate, before they are loose in the system.
+            if (!IsHomeGuard(leader) && GateWarned(leader, here, jd, held) != null)
+                return new GroupOrder { Kind = OrderKind.HoldGate, Body = Catalog.Root.Index };
 
             // At a haven it found, with the garrison broken: stay and finish the job.
             foreach (var s in Economy.At(here))
@@ -2205,6 +2214,88 @@ namespace Unity.SpaceGod.Core
             if (days > 30) return null;
             StakeOut(leader, best, jd + days + HoldGateDays);
             return best;
+        }
+
+        /// <summary>The warnings this system's gate pickets have given (U.SPC-T480, see <see cref="GatePickets"/>), oldest
+        /// first (the last <see cref="GatePickets.WarningsKept"/>).</summary>
+        public readonly List<PicketWarning> PicketWarnings = new List<PicketWarning>();
+
+        /// <summary>
+        /// The strength of the hostile groups <paramref name="f"/>'s pickets at <paramref name="gate"/> have warned of in the
+        /// last <see cref="GatePickets.WarningDays"/> that are still there (U.SPC-T480): parked off the system root within
+        /// <see cref="GateFightRangeKm"/> of the gate. Raiders staked out off it are left to <see cref="RaidersOffGate"/>.
+        /// </summary>
+        public double WarnedOffGate(JumpGate gate, Faction f, double jd)
+        {
+            int root = Catalog.Root.Index;
+            double total = 0;
+            var counted = new HashSet<Ship>();
+            foreach (var w in PicketWarnings)
+            {
+                if (w.Gate != gate || w.Owner != f || jd - w.Jd > GatePickets.WarningDays || jd < w.Jd) continue;
+                var s = w.Intruder?.Controller;
+                if (s == null || s.Destroyed || !Fleet.IsPresent(s) || !counted.Add(s) || !Diplomacy.Hostile(f, s.Faction)) continue;
+                if (!Fleet.IsAt(s, root) || s.Orbit == null || (s.Orbit.OffsetAt(jd) - gate.PositionKm).Length > GateFightRangeKm) continue;
+                if (s.Faction.IsPirate && s.StakeoutKm is DVec3 spot && GateNear(spot) == gate) continue;
+                total += GroupStrength(s);
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// The gate command sends navy group <paramref name="leader"/> to hold on a picket's warning (U.SPC-T480), or null:
+        /// one of its navy's own gates here whose pickets have warned of hostiles still at it (<see cref="WarnedOffGate"/>),
+        /// the gravest such threat the group, with the gate's forts beside it, is strong enough to meet, within a month's
+        /// flight. Takes station on the gate's approach (<see cref="Ship.StakeoutKm"/>), keeping a station it already held there.
+        /// </summary>
+        JumpGate GateWarned(Ship leader, int here, double jd, DVec3? held)
+        {
+            var f = leader.Faction;
+            if (world.Gates.Count == 0 || PicketWarnings.Count == 0) return null;
+            double strength = GroupStrength(leader);
+            JumpGate best = null;
+            double bestThreat = 0;
+            foreach (var g in world.Gates)
+            {
+                if (g.Owner != f) continue;
+                double threat = WarnedOffGate(g, f, jd);
+                if (threat <= 0) continue;
+                double forts = 0;
+                foreach (var fort in g.Forts) forts += fort.Strength;
+                if (strength + forts < threat * 1.25) continue;
+                if (threat > bestThreat)
+                {
+                    bestThreat = threat;
+                    best = g;
+                }
+            }
+            if (best == null) return null;
+            int root = Catalog.Root.Index;
+            if (held is DVec3 spot && GateNear(spot) == best)
+            {
+                leader.StakeoutKm = spot;
+                leader.StakeoutUntilJd = Math.Max(leader.StakeoutUntilJd, jd + HoldGateDays);
+                return best;
+            }
+            double days = here == root ? 0 : Fleet.EstimateTravelDays(leader, here, root, jd);
+            if (days > 30) return null;
+            StakeOut(leader, best, jd + days + HoldGateDays);
+            return best;
+        }
+
+        /// <summary>
+        /// A gate picket's orders (U.SPC-T480, see <see cref="GatePickets"/>): to a yard when it is badly hurt or has run from
+        /// a fight, else out to its post off its gate and holding it. Never to fight: it is a lookout, not a warship, and
+        /// holding a patrol order (not an objective) it opens no fight of its own (see <see cref="Commanded"/>).
+        /// </summary>
+        GroupOrder DecidePicket(Ship leader, int here, double jd, bool withdrawing)
+        {
+            if (withdrawing || GroupDamage(leader) > GatePickets.RepairDamage)
+            {
+                int yard = NearestYard(leader.Faction, here, jd);
+                if (yard >= 0) return new GroupOrder { Kind = OrderKind.Repair, Body = yard };
+            }
+            return new GroupOrder { Kind = OrderKind.Patrol, Body = Catalog.Root.Index };
         }
 
         /// <summary>The strength of the raider bands navy <paramref name="f"/> (looking from <paramref name="at"/>) knows to be

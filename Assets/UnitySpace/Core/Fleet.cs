@@ -676,6 +676,13 @@ namespace Unity.SpaceGod.Core
                 Burn(ship, departJd, to, () => FixedPoint(to, approach));
                 return;
             }
+            if (ship.PicketGate != null && to == catalog.Root.Index)
+            {
+                // A gate picket back out to its post off its gate's exit (U.SPC-T480).
+                var post = ship.PicketPostKm;
+                Burn(ship, departJd, to, () => FixedPoint(to, post));
+                return;
+            }
             // A slow boat that judged the lanes' tolls dearer than the time flies straight across on a transfer orbit.
             bool direct = ship.PlannedDirect && UsesConics(ship);
             ship.PlannedDirect = false;
