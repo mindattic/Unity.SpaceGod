@@ -291,34 +291,31 @@ namespace Unity.SpaceGod.UI
         }
 
         /// <summary>
-        /// The helm's FTL drive (U.SPC-T417): what the nose is on and the key to spool for it, the charge as it builds, and a
-        /// run within the system under way.
+        /// The helm's FTL drive (U.SPC-T417): the star the nose is on and the key to spool for it (or, inside the system's
+        /// gravity wells, how far out the rim is: canon, U.SPC-T455, no jump inside them), and the charge as it builds.
         /// </summary>
         void DrawFtl()
         {
             if (!app.IsPiloting || app.RidingLane) return;
             var ftl = app.Ftl;
             double jd = app.Clock.Jd;
+            var inv = CultureInfo.InvariantCulture;
             string head, tail;
-            switch (ftl.Stage)
+            if (ftl.Stage == FtlStage.Spooling)
             {
-                case FtlStage.Spooling:
-                    head = "FTL DRIVE SPOOLING  ·  " + ftl.Target.Name.ToUpperInvariant() + "  ·  " + app.Distance(ftl.Target, jd) + "  ·  " +
-                           Percent(ftl.SpoolFraction(jd)) + "  ·  engages in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
-                    tail = "hold the nose on it (the charge is lost if it swings off or a fight starts)    Enter calls it off";
-                    break;
-                case FtlStage.Engaged:
-                    head = "FTL  ·  BOUND FOR " + ftl.Target.Name.ToUpperInvariant() + "  ·  " + Percent(ftl.Progress(jd)) + "  ·  " + SpeedText(app.PilotSpeedKmS) +
-                           "  ·  dropping out in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
-                    tail = "under the drive: it drops out beside the " + (ftl.Target.Kind == FtlTargetKind.Body ? "world" : "beacon") + ", the helm back in hand";
-                    break;
-                default:
-                    var t = app.FtlPointed;
-                    if (t == null) return;
-                    head = "FTL  ·  " + (t.Kind == FtlTargetKind.Star ? "STAR  " : t.Kind == FtlTargetKind.Body ? "" : "BEACON  ") + t.Name.ToUpperInvariant() + "  ·  " +
-                           app.Distance(t, jd);
-                    tail = "Enter  spool the drive for it" + (t.Kind == FtlTargetKind.Star ? " (out through open space to the edge of its well)" : "");
-                    break;
+                head = "FTL DRIVE SPOOLING  ·  " + ftl.Target.Name.ToUpperInvariant() + "  ·  " + app.Distance(ftl.Target) + "  ·  " +
+                       Percent(ftl.SpoolFraction(jd)) + "  ·  engages in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
+                tail = "hold the nose on it, beyond the rim and out of any fight, or the charge is lost    Enter calls it off";
+            }
+            else
+            {
+                var t = app.FtlPointed;
+                if (t == null) return;
+                head = "FTL  ·  STAR  " + t.Name.ToUpperInvariant() + "  ·  " + app.Distance(t);
+                tail = app.FtlBeyondRim
+                    ? "Enter  spool the drive for it (out through open space to the edge of its well)"
+                    : "inside the gravity wells: no jump until beyond the outer rim, " + app.FtlRimAu.ToString("0.##", inv) + " AU out (" +
+                      app.PilotFromStarAu.ToString("0.##", inv) + " AU now)";
             }
             var a = new GUIContent(head);
             var b = new GUIContent(tail);
@@ -917,7 +914,7 @@ namespace Unity.SpaceGod.UI
             if (strength > 0.01f)
             {
                 var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-                if ((app.RidingLane || app.FtlRunning) && DirectionToGui(app.PilotForward, out var ahead)) centre = ahead;
+                if (app.RidingLane && DirectionToGui(app.PilotForward, out var ahead)) centre = ahead;
                 DrawStreaks(centre, strength, StreakCount, StreakColor, 0, 170f);
             }
             // Through a gate at the helm (U.SPC-T414): the gate's violet glow and its streaks held over the far side
@@ -3235,7 +3232,7 @@ namespace Unity.SpaceGod.UI
                 "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   an auto turret fires on its own",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
-                "FTL  (capital ships, survey hulls)   put the nose on a star, planet or gate, Enter to spool (hold it there), it engages and drops out beside it",
+                "FTL  (capital ships, survey hulls)   beyond the system's outer rim, put the nose on another star, Enter to spool (hold it there), it engages for that star",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",

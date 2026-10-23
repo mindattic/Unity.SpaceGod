@@ -9,29 +9,29 @@ namespace Unity.SpaceGod
 {
     /// <summary>
     /// The helm's own FTL drive, I-War 2 style (U.SPC-T417, the rules in <see cref="HelmFtl"/>). At the helm of a capital
-    /// ship or a survey hull, the nose is put on a star, a planet or a beacon (the HUD names what it is on), Enter spools
-    /// the drive, and once charged it engages: to somewhere in the same system the hull runs along the line under the
-    /// drive's own speed profile and drops out beside it; to another star the hull itself goes out into open space with
-    /// the rest of the traffic between the stars (<see cref="DeepSpace"/>), the view goes over to the stars sliding by, and
-    /// it drops out at the edge of that star's well, the helm back in hand. The clock runs fast enough that the charge,
-    /// the run and the crossing each take seconds to a minute or so, and slows again after. Small craft carry no drive.
+    /// ship or a survey hull, flown out beyond the system's outer rim (canon, U.SPC-T455: no jump is possible inside a
+    /// solar system's gravity wells), the nose is put on another star (the HUD names it), Enter spools the drive, and once
+    /// charged the hull itself goes out into open space with the rest of the traffic between the stars
+    /// (<see cref="DeepSpace"/>), the view goes over to the stars sliding by, and it drops out at the edge of that star's
+    /// well, the helm back in hand. The clock runs fast enough that the charge and the crossing each take seconds to a
+    /// minute or so, and slows again after. Small craft carry no drive.
     /// </summary>
     public sealed partial class UnitySpaceApp
     {
-        /// <summary>The helm's FTL drive: its charge and any jump within the system.</summary>
+        /// <summary>The helm's FTL drive and its charge.</summary>
         public HelmFtl Ftl { get; } = new HelmFtl();
 
-        /// <summary>What the nose is on, that the drive could be spooled for (null: nothing, or a hull with no drive).</summary>
+        /// <summary>The star the nose is on, that the drive could be spooled for (null: none, or a hull with no drive).</summary>
         public FtlTarget FtlPointed { get; private set; }
+
+        /// <summary>Whether the hull at the helm is beyond its system's outer rim, clear of the gravity wells to jump.</summary>
+        public bool FtlBeyondRim { get; private set; }
 
         /// <summary>The player's hull out between the stars under its own drive, or null.</summary>
         public Cruise FtlCruise { get; private set; }
 
         /// <summary>Whether the player's hull is out between the stars under its own drive (the helm is back at the far end).</summary>
         public bool InFtlCruise => FtlCruise != null;
-
-        /// <summary>Whether a jump within the system is under way at the helm.</summary>
-        public bool FtlRunning => IsPiloting && Ftl.Stage == FtlStage.Engaged;
 
         /// <summary>The hull flown out between the stars (the same object all the way, see <see cref="Fleet.LetGo"/>).</summary>
         Ship ftlShip;
@@ -48,10 +48,10 @@ namespace Unity.SpaceGod
         int ftlTargetsChart = -1;
         float ftlTargetsAge;
 
-        /// <summary>The charge, a run within the system and a crossing to another star each run at the slowest warp that gets them over in about this many real seconds.</summary>
-        const double FtlSpoolRealSeconds = 8, FtlRunRealSeconds = 20, FtlCruiseRealSeconds = 45;
+        /// <summary>The charge and the crossing each run at the slowest warp that gets them over in about this many real seconds.</summary>
+        const double FtlSpoolRealSeconds = 8, FtlCruiseRealSeconds = 45;
 
-        /// <summary>Real seconds left of the charge or of the trip at the clock's present rate.</summary>
+        /// <summary>Real seconds left of the charge or of the crossing at the clock's present rate.</summary>
         public double FtlSecondsLeft
         {
             get
@@ -59,30 +59,34 @@ namespace Unity.SpaceGod
                 double jd = Clock.Jd, end;
                 if (InFtlCruise) end = FtlCruise.ArriveJd;
                 else if (Ftl.Stage == FtlStage.Spooling) end = Ftl.ChargedJd;
-                else if (Ftl.Stage == FtlStage.Engaged) end = Ftl.ArriveJd;
                 else return 0;
                 if (double.IsInfinity(end) || double.IsNaN(end)) return 0;
                 return Math.Max(0, end - jd) * Astro.SecondsPerDay / Math.Max(Clock.Warp.SimSecondsPerSecond, 1e-9);
             }
         }
 
-        /// <summary>A run within the system's speed as a share of its peak (0 at either end), for the streaks and the view.</summary>
-        public float FtlRunSpeed => FtlRunning ? Mathf.Sin(Mathf.PI * (float)Ftl.Progress(Clock.Jd)) : 0;
-
         /// <summary>Where the hull is, km from the system's root.</summary>
         DVec3 PilotRootKm => Ephemeris.Helio(pilotFrameBody) + pilotOffsetKm;
+
+        /// <summary>The system's outer rim, AU from its star: beyond it the drive can spool.</summary>
+        public double FtlRimAu => HelmFtl.RimKm(ActiveSystem) / Astro.AuKm;
+
+        /// <summary>How far the hull at the helm is from its system's star, AU.</summary>
+        public double PilotFromStarAu => IsPiloting ? PilotRootKm.Length / Astro.AuKm : 0;
 
         // ---------------------------------------------------------------- at the helm
 
         /// <summary>
-        /// A frame of the drive at the helm, after the hull has flown: what the nose is on, Enter to spool (again to call it
-        /// off), the charge held or lost, and once charged the jump. True when the hull has left the system this frame.
+        /// A frame of the drive at the helm, after the hull has flown: whether it is beyond the rim, what star the nose is
+        /// on, Enter to spool (again to call it off), the charge held or lost, and once charged the jump. True when the hull
+        /// has left the system this frame.
         /// </summary>
         bool UpdateHelmFtl(Ship ship)
         {
             double jd = Clock.Jd;
             bool canJump = HelmFtl.Refusal(ship) == null;
-            FtlPointed = canJump && Ftl.Stage == FtlStage.Idle ? PointedTarget(PilotRootKm, pilot.Forward, jd) : null;
+            FtlBeyondRim = HelmFtl.BeyondRim(ActiveSystem, PilotRootKm);
+            FtlPointed = canJump && Ftl.Stage == FtlStage.Idle ? PointedTarget(PilotRootKm, pilot.Forward) : null;
 
             if (Input.EngageFtl)
             {
@@ -101,7 +105,7 @@ namespace Unity.SpaceGod
                 if (ftlWarpBefore < 0) ftlWarpBefore = Clock.WarpIndex;
                 Clock.SetWarp(SimClock.WarpToCover((Ftl.ChargedJd - jd) * Astro.SecondsPerDay, FtlSpoolRealSeconds, ftlWarpBefore));
                 var t = Ftl.Target;
-                ShowToast("FTL DRIVE SPOOLING for " + t.Name.ToUpperInvariant() + ", " + Distance(t, jd) + "  (hold the nose on it; Enter calls it off)");
+                ShowToast("FTL DRIVE SPOOLING for " + t.Name.ToUpperInvariant() + ", " + Distance(t) + "  (hold the nose on it; Enter calls it off)");
                 return false;
             }
 
@@ -113,14 +117,14 @@ namespace Unity.SpaceGod
                     ShowToast(Ftl.AbortReason);
                     return false;
                 case FtlEvent.Charged:
-                    return Ftl.Target.Interstellar(ActiveSystem) ? EngageCruise(ship, jd) : EngageRun(ship, jd);
+                    return EngageCruise(ship, jd);
                 default:
                     return false;
             }
         }
 
-        /// <summary>The target dead ahead of the nose, from a list of what is here brought up to date every second or so.</summary>
-        FtlTarget PointedTarget(DVec3 rootKm, DVec3 forward, double jd)
+        /// <summary>The star dead ahead of the nose, from a list of what is charted brought up to date every second or so.</summary>
+        FtlTarget PointedTarget(DVec3 rootKm, DVec3 forward)
         {
             ftlTargetsAge -= Time.unscaledDeltaTime;
             if (ftlTargets == null || ftlTargetsFor != ActiveSystem || ftlTargetsChart != Galaxy.ChartVersion || ftlTargetsAge <= 0)
@@ -130,14 +134,14 @@ namespace Unity.SpaceGod
                 ftlTargetsChart = Galaxy.ChartVersion;
                 ftlTargetsAge = 1f;
             }
-            return HelmFtl.Pointed(ftlTargets, ActiveSystem, rootKm, forward, jd);
+            return HelmFtl.Pointed(ftlTargets, ActiveSystem, rootKm, forward);
         }
 
-        /// <summary>How far <paramref name="t"/> is from the hull, in light-years, AU or km as suits.</summary>
-        public string Distance(FtlTarget t, double jd)
+        /// <summary>How far <paramref name="t"/> is from the hull, light-years.</summary>
+        public string Distance(FtlTarget t)
         {
             if (t == null || !IsPiloting) return "";
-            HelmFtl.Bearing(t, ActiveSystem, PilotRootKm, jd, out double km);
+            HelmFtl.Bearing(t, ActiveSystem, PilotRootKm, out double km);
             return DistanceText(km);
         }
 
@@ -147,63 +151,6 @@ namespace Unity.SpaceGod
             if (km >= 0.01 * Astro.LightYearKm) return (km / Astro.LightYearKm).ToString("0.00", inv) + " ly";
             if (km >= 0.01 * Astro.AuKm) return (km / Astro.AuKm).ToString("0.00", inv) + " AU";
             return km.ToString("N0", inv) + " km";
-        }
-
-        /// <summary>Charged, for somewhere in this system: the run begins, the clock fast enough to get it over in seconds.</summary>
-        bool EngageRun(Ship ship, double jd)
-        {
-            Ftl.EngageInSystem(ActiveSystem, PilotRootKm, jd);
-            // The run is flown in the root's frame: a body's frame would be carried along under the hull as it ran.
-            pilotFrameBody = Catalog.Root.Index;
-            pilotOffsetKm = Ftl.StartKm - Ephemeris.Helio(pilotFrameBody);
-            EndSalvage(null);
-            SalvageApproach = null;
-            World.Pursuit?.ReleaseAll(jd);
-            pilotCruise = default;
-            Clock.SetWarp(SimClock.WarpToCover((Ftl.ArriveJd - jd) * Astro.SecondsPerDay, FtlRunRealSeconds, Math.Max(0, ftlWarpBefore)));
-            GateFlash = 0.6f;
-            fovKick = GateFovKick;
-            ShowToast("FTL ENGAGED for " + Ftl.Target.Name.ToUpperInvariant() + ", " + DistanceText((Ftl.EndKm - Ftl.StartKm).Length));
-            return false;
-        }
-
-        /// <summary>
-        /// A frame of a run within the system: the hull is where the drive has it (so the sensors, the law and the HUD see it
-        /// there), nose on its way, and at the end it drops out beside the target at rest, the helm back in hand. True while
-        /// the run has the hull (nothing else flies it this frame).
-        /// </summary>
-        bool UpdateFtlRun(Ship ship)
-        {
-            if (Ftl.Stage != FtlStage.Engaged) return false;
-            double jd = Clock.Jd;
-            var dir = Ftl.Direction;
-            bool arrived = Ftl.Step(ActiveSystem, PilotRootKm, dir, false, jd) == FtlEvent.Arrived;
-            var at = arrived ? Ftl.EndKm : Ftl.PositionKmAt(jd);
-            pilotOffsetKm = at - Ephemeris.Helio(pilotFrameBody);
-            pilotVelKmS = dir * Ftl.SpeedKmS(jd);
-            pilot.Forward = dir;
-            var level = pilot.Up - dir * DVec3.Dot(pilot.Up, dir);
-            pilot.Up = level.LengthSquared > 1e-9 ? level.Normalized : PilotState.LevelUp(dir);
-            pilot.AngularVelocity = DVec3.Zero;
-            ResetPilotAim();
-            World.Sensors?.UpdatePilot(ship, at, true, jd);
-            if (!arrived) return true;
-
-            // Out beside it: in its frame if it is a body, at rest there, the drive ready again.
-            var target = Ftl.Target;
-            Ftl.Arrived();
-            if (target.Kind == FtlTargetKind.Body && target.System == ActiveSystem) pilotFrameBody = target.Body;
-            pilot = PilotState.At(at - Ephemeris.Helio(pilotFrameBody), DVec3.Zero, dir);
-            var up = level.LengthSquared > 1e-9 ? level.Normalized : PilotState.LevelUp(dir);
-            pilot.Up = up;
-            ResetPilotAim();
-            PinWherePiloted(ship);
-            EndFtlWarp();
-            GateFlash = 0.6f;
-            LaneExitFade = 1;
-            fovKick = GateFovKick * 0.5f;
-            ShowToast("Dropped out of FTL beside " + target.Name.ToUpperInvariant() + ", " + Distance(target, Clock.Jd) + " off");
-            return true;
         }
 
         // ---------------------------------------------------------------- between the stars

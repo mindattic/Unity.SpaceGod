@@ -49,7 +49,7 @@ namespace Unity.SpaceGod
         public float LaneExitFade { get; private set; }
 
         /// <summary>How strongly the tunnel streaks show: with the ride's speed, and briefly after it.</summary>
-        public float LaneStreaks => RidingLane ? 0.3f + 0.7f * LaneRideSpeed : FtlRunning ? 0.3f + 0.7f * FtlRunSpeed : LaneExitFade * 0.35f;
+        public float LaneStreaks => RidingLane ? 0.3f + 0.7f * LaneRideSpeed : LaneExitFade * 0.35f;
 
         /// <summary>Real seconds left of the ride at the clock's present rate, or 0 when not riding.</summary>
         public double RideSecondsLeft =>
