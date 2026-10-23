@@ -169,6 +169,69 @@ namespace Unity.SpaceGod.Core.Tests
             }
         }
 
+        [Test]
+        public void DiplomacyAndStandingCommandOrdersSurviveASaveAndLoad()
+        {
+            var g = new Galaxy();
+            var ac = StarSystem.CreateAlphaCentauri(StartJd, g.Polities);
+            var barnard = StarSystem.CreateSettled(NearbySystems.All().First(x => x.Name == "Barnard's Star"), StartJd, g.Polities);
+            var luhman = StarSystem.CreateSettled(NearbySystems.All().First(x => x.Name == "Luhman 16"), StartJd, g.Polities);
+            g.Systems.Add(ac);
+            g.Systems.Add(barnard);
+            g.Systems.Add(luhman);
+            var net = new GateNetwork();
+            net.Link(ac, barnard);
+            net.Link(barnard, luhman);
+            net.AssignOwners();
+            g.Connect(StartJd, net);
+            g.Wars.AutoDeclare = false;
+            Faction accord = ac.World.Sol, federation = barnard.World.Sol, authority = luhman.World.Sol;
+            var s = g.Polities.Statecraft;
+            g.Polities.Command.Player = accord;
+
+            s.Sign(PactKind.Alliance, federation, authority, StartJd);
+            s.Sign(PactKind.Tribute, authority, accord, StartJd, 3e6);
+            s.Sway(federation, authority, 33);
+            s.Sway(authority, accord, -41);
+            Assert.That(s.Propose(Deal.TradePact, federation, accord, StartJd, out _), Is.Null);
+            Assert.That(s.Inbox, Has.Count.EqualTo(1));
+            g.Polities.Diplomacy.Set(accord, federation, Relation.War);
+
+            var cmd = g.Polities.Command;
+            cmd.SetProduction(accord, ProductionFocus.War);
+            cmd.SetBuild(accord, BuildPlan.Carriers);
+            cmd.SetResearch(accord, ResearchTrack.Shipyards);
+            Assert.That(cmd.Order(accord, CommandScope.Polity, null, null, ObjectiveKind.Hold, ac.World, StartJd, out int given), Is.Null);
+            Assert.That(given, Is.GreaterThan(0));
+
+            var loaded = SaveGame.FromBytes(SaveGame.ToBytes(new SaveData { Clock = new SimClock(StartJd), Galaxy = g }));
+            var lg = loaded.Galaxy;
+            var ls = lg.Polities.Statecraft;
+            var la = lg.Polities.Find(accord.Name);
+            var lf = lg.Polities.Find(federation.Name);
+            var lu = lg.Polities.Find(authority.Name);
+            Assert.That(ls, Is.Not.SameAs(s));
+            Assert.That(ls.Pacts.Select(p => (p.Kind.Name, p.A.Name, p.B.Name, p.Amount)),
+                Is.EquivalentTo(s.Pacts.Select(p => (p.Kind.Name, p.A.Name, p.B.Name, p.Amount))));
+            Assert.That(ls.Pacts, Is.Not.Empty);
+            Assert.That(ls.Opinion(lf, lu), Is.EqualTo(s.Opinion(federation, authority)));
+            Assert.That(ls.Opinion(lu, la), Is.EqualTo(s.Opinion(authority, accord)));
+            Assert.That(ls.Inbox, Has.Count.EqualTo(1));
+            Assert.That(ls.Inbox[0].Deal, Is.SameAs(Deal.TradePact));
+            Assert.That(ls.Inbox[0].From, Is.SameAs(lf));
+            Assert.That(ls.Inbox[0].To, Is.SameAs(la));
+            Assert.That(lg.Polities.Diplomacy.Get(la, lf), Is.EqualTo(Relation.War));
+            Assert.That(ls.Player, Is.SameAs(la));
+
+            var lc = lg.Polities.Command;
+            Assert.That(lc.Find(la).Production, Is.SameAs(ProductionFocus.War));
+            Assert.That(lc.Find(la).Build, Is.SameAs(BuildPlan.Carriers));
+            Assert.That(lc.Find(la).Research, Is.SameAs(ResearchTrack.Shipyards));
+            var held = lg.Systems[0].World.Fleet.Ships.Where(x => lc.ObjectiveOf(x) != null).ToList();
+            Assert.That(held, Has.Count.EqualTo(given));
+            Assert.That(lc.ObjectiveOf(held[0]).Kind, Is.EqualTo(ObjectiveKind.Hold));
+        }
+
         static SaveData Small(double jd, double scaleGoal)
         {
             // Slots only care that a save goes in and comes out: one unsettled system is plenty.
