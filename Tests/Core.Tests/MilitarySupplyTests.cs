@@ -126,8 +126,9 @@ namespace Unity.SpaceGod.Core.Tests
             Id = id, Name = f.Prefix + " " + c + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(CombatSpec.Of(c), c),
         };
 
+        // Point defence is left out: it answers the enemy's missiles, so a ship facing more of them fires it more (U.SPC-T459).
         static bool IsShot(FxKind k) => k == FxKind.Beam || k == FxKind.BeamMiss || k == FxKind.Railgun || k == FxKind.RailgunMiss || k == FxKind.Guns ||
-                                         k == FxKind.MissileLaunch || k == FxKind.PointDefense;
+                                         k == FxKind.MissileLaunch;
 
         [Test]
         public void AFleetOutOfSupplyFiresSlowerInBattle()
