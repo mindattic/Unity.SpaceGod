@@ -124,6 +124,16 @@ namespace Unity.SpaceGod.Rendering
                     b.Cylinder(new Vector3(0, 0.014f, 0.06f), 0.009f, 0.14f, b.Dark);
                     b.Cylinder(new Vector3(0, 0.014f, 0.1f), 0.011f, 0.012f, b.Glow(new Color(0.75f, 0.85f, 1f)));
                     break;
+                case SubsystemKind.TachyonLance:
+                    // A fixed spinal lance (U.SPC-T487): a long armoured emitter housing on a squat capacitor block,
+                    // ringed by three focusing coils that glow violet, and an open emitter mouth at the bow end.
+                    b.Box(new Vector3(0, 0.018f, -0.03f), new Vector3(0.07f, 0.036f, 0.07f), b.Hull);
+                    b.Box(new Vector3(0, 0.038f, -0.03f), new Vector3(0.04f, 0.006f, 0.05f), b.Accent);
+                    b.Cylinder(new Vector3(0, 0.018f, 0.07f), 0.014f, 0.2f, b.Dark);
+                    for (int ring = 0; ring < 3; ring++)
+                        b.Cylinder(new Vector3(0, 0.018f, 0.02f + ring * 0.05f), 0.017f, 0.01f, b.Glow(new Color(0.7f, 0.45f, 1f)));
+                    b.Cylinder(new Vector3(0, 0.018f, 0.172f), 0.01f, 0.004f, b.Glow(new Color(0.9f, 0.8f, 1f)));
+                    break;
                 case SubsystemKind.LaserTurret:
                     if (barrels)
                     {

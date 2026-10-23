@@ -73,6 +73,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.LightRailgun: return 30;
                 case SubsystemKind.HeavyLaser: return 25;
                 case SubsystemKind.Railgun: return 10;
+                case SubsystemKind.TachyonLance: return 5;
                 default: return 40;
             }
         }
@@ -92,7 +93,7 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public static DVec3 Bound(BattleUnit u, SubsystemDef d, DVec3 aim)
         {
-            if (d.Kind == SubsystemKind.Railgun) return Gunnery.Gimbal(aim, RestAim(u, d), Gunnery.RailgunGimbalDeg);
+            if (d.Kind == SubsystemKind.Railgun || d.Kind == SubsystemKind.TachyonLance) return Gunnery.Gimbal(aim, RestAim(u, d), Gunnery.RailgunGimbalDeg);
             if (d.ArcWidthDeg >= 360) return aim;
             u.Basis(out var right, out var up);
             double x = DVec3.Dot(aim, right), y = DVec3.Dot(aim, up), z = DVec3.Dot(aim, u.Forward);

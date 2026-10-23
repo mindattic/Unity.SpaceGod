@@ -165,6 +165,13 @@ namespace Unity.SpaceGod.Views
                     e.Color = Color.Lerp(Color.white, new Color(0.75f, 0.85f, 1f), 0.3f) * 2.2f;
                     e.Life = 0.16f;
                     break;
+                case FxKind.TachyonLance:
+                case FxKind.TachyonLanceMiss:
+                    // A tachyon lance (U.SPC-T487): no sweep and no travelling round, the whole line there at once,
+                    // violet-white and far brighter than any beam, lingering a moment as an afterimage.
+                    e.Color = Color.Lerp(new Color(0.7f, 0.45f, 1f), Color.white, 0.35f) * 3f;
+                    e.Life = 0.6f;
+                    break;
                 case FxKind.PointDefense:
                     e.Color = new Color(1f, 0.85f, 0.5f) * 0.8f;
                     e.Life = 0.08f;
@@ -284,6 +291,10 @@ namespace Unity.SpaceGod.Views
                         Sprite(bFull, PixelSize(bFull, 6f) * (0.7f + 0.3f * t), new Color(0.3f, 0.17f, 0.1f) * fade, Shape.Radial);
                     break;
                 }
+                case FxKind.TachyonLance:
+                case FxKind.TachyonLanceMiss:
+                    DrawLance(e, age, fade);
+                    break;
                 case FxKind.ShieldHit:
                     DrawShieldHit(e, t, fade);
                     break;
@@ -382,6 +393,20 @@ namespace Unity.SpaceGod.Views
         /// that has collapsed (or whose generator is shot away) shows nothing: its hits go to the hull and draw as
         /// impacts. A hull too small on screen for a patch to read gets the old ring flash, in the same colour.
         /// </summary>
+        /// <summary>A tachyon lance's shot (U.SPC-T487): the full line at once, a hot core inside a wide violet glow that
+        /// narrows as it fades, a charge flare at the emitter and, on a hit, a burst where it struck.</summary>
+        void DrawLance(Effect e, float age, float fade)
+        {
+            var a = Point(e.Battle, e.A);
+            var b = Point(e.Battle, e.B);
+            float flash = age < 0.1f ? 1 - age / 0.1f : 0;
+            Ribbon(a, b, 9f * fade + 4f * flash, e.Color * 0.35f * fade);
+            Ribbon(a, b, 2.6f, Color.white * (0.6f * fade + flash));
+            Sprite(a, PixelSize(a, 22f) * (0.4f + flash), e.Color * (0.4f * fade + flash), Shape.Radial);
+            if (e.Kind == FxKind.TachyonLance)
+                Sprite(b, PixelSize(b, 18f) * (0.6f + 0.4f * fade), e.Color * fade, Shape.Radial);
+        }
+
         void DrawShieldHit(Effect e, float t, float fade)
         {
             var u = e.Unit;

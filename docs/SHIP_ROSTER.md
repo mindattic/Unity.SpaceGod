@@ -113,7 +113,7 @@ Whether capital ships fight near a battle plane (the Rebel Galaxy handling of U.
 | Lane interdictor, gate picket, lane tender and lane upkeep | Not yet classes (an interdiction pulse exists) | U.SPC-T479 to U.SPC-T481 |
 | Truss-and-pod freighters; ice hauler / ore tug | Not yet | U.SPC-T482, U.SPC-T483 |
 | Strike craft as hulls of their own; recon / EW fighter; boarding shuttle | Three fighter classes (interceptor, heavy fighter, bomber) | U.SPC-T484 to U.SPC-T486 |
-| Tachyon lance, phaser arrays, plasma cannons | Not yet weapons | U.SPC-T487, U.SPC-T488 |
+| Phaser arrays, plasma cannons | Not yet weapons | U.SPC-T488 |
 | Antimatter / photon torpedoes, flak, interceptor missiles | Not yet | U.SPC-T489 |
 | Dreadnought spinal mounts and rear-line doctrine | Not yet | U.SPC-T490 |
 | Radiators and heat on big ships | Not yet | U.SPC-T491 |

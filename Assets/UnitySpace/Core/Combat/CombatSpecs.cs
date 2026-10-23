@@ -50,6 +50,11 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Throws flare-and-chaff clouds astern that draw off missiles homing on the craft (U.SPC-T424, see <see cref="Decoy"/>).</summary>
         Countermeasures,
+
+        /// <summary>A capital ship's spinal tachyon lance (U.SPC-T487, see <see cref="TachyonLances"/>): its shot lands the
+        /// instant it is fired, at the longest reach of any gun, but it is fixed down the bow, charges slowly and starves
+        /// the shields while it does.</summary>
+        TachyonLance,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
@@ -75,6 +80,14 @@ namespace Unity.SpaceGod.Core
         /// instantly, so <see cref="Battle.Fire"/> resolves it the instant it's aimed rather than
         /// spawning a travelling <see cref="KineticRound"/>.</summary>
         public double MuzzleSpeedKmS;
+
+        /// <summary>A tachyon lance (U.SPC-T487): no travel time and no lead, and a hit as sure at the end of its reach
+        /// as close in.</summary>
+        public bool Lance;
+
+        /// <summary>The tachyon lance: the longest reach of any gun and a hit second only to a capital torpedo, landing
+        /// the instant it is fired, on a long recharge. Its figures are the <see cref="TachyonLances"/> settings'.</summary>
+        public static readonly WeaponSpec TachyonLance = new WeaponSpec { RangeKm = 60, Damage = 650, Cooldown = 60, Accuracy = 0.95, Lance = true };
 
         public static readonly WeaponSpec Laser = new WeaponSpec { RangeKm = 16, Damage = 45, Cooldown = 3.0, Accuracy = 0.8 };
         public static readonly WeaponSpec Heavy = new WeaponSpec { RangeKm = 24, Damage = 190, Cooldown = 9.0, Accuracy = 0.72 };
@@ -213,6 +226,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AutoTurret: return 50;
                 case SubsystemKind.TorpedoTube: return 280;
                 case SubsystemKind.Countermeasures: return 30;
+                case SubsystemKind.TachyonLance: return 450;
                 default: return 200;
             }
         }
@@ -236,6 +250,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AutoTurret: return WeaponSpec.AutoTurret;
                 case SubsystemKind.TorpedoTube: return WeaponSpec.HeavyTorpedo;
                 case SubsystemKind.Countermeasures: return WeaponSpec.Flares;
+                case SubsystemKind.TachyonLance: return TachyonLances.Spec;
                 default: return null;
             }
         }
@@ -264,6 +279,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AutoTurret: return "Auto turret";
                 case SubsystemKind.TorpedoTube: return "Torpedo tube";
                 case SubsystemKind.Countermeasures: return "Countermeasures";
+                case SubsystemKind.TachyonLance: return "Tachyon lance";
                 default: return "Reactor";
             }
         }

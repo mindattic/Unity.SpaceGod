@@ -2842,12 +2842,15 @@ namespace Unity.SpaceGod.UI
             GUI.contentColor = current ? Accent : Color.white;
             GUI.Label(new Rect(x + 20, y, 200, rowH), name, small);
             GUI.contentColor = Dim;
+            // Only the greatest yards build a tachyon lance (U.SPC-T487).
+            bool builds = module == null || ModuleSpec.YardBuilds(module.Value, yard);
             string price = current ? "fitted"
+                : !builds ? "this yard cannot build it"
                 : !q.InStock ? "yard is short of " + GoodInfo.Of(q.Short).Name.ToLowerInvariant()
                 : q.Net >= 0 ? Credits(q.Net) : "+" + Credits(-q.Net) + " back";
             GUI.Label(new Rect(x + 220, y, 250, rowH), price, small);
             GUI.contentColor = Color.white;
-            if (current || !q.InStock) return;
+            if (current || !q.InStock || !builds) return;
             if (!GUI.Button(new Rect(x + w - 100, y - 1, 84, rowH - 1), module == null ? "Strip" : "Fit", button)) return;
             var outcome = Outfitting.Fit(app.Economy, ship, yard, outfitSlot, module, out var paid);
             app.ShowToast(outcome switch
@@ -2859,6 +2862,7 @@ namespace Unity.SpaceGod.UI
                 OutfitOutcome.BrigOccupied => "Hand over the prisoners before taking the brig out",
                 OutfitOutcome.Busy => "Not while fighting or boarded",
                 OutfitOutcome.CannotDock => "Not welcome to refit here",
+                OutfitOutcome.YardCannotBuild => yard.Name + " cannot build that",
                 _ => "Can't fit that here",
             });
         }

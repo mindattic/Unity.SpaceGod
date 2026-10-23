@@ -391,6 +391,11 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A mine laid.</summary>
         Deployed,
+
+        /// <summary>A tachyon lance's shot (U.SPC-T487): there and gone in the same instant along its whole length, a
+        /// wide, violet-white line from the bow to what it struck.</summary>
+        TachyonLance,
+        TachyonLanceMiss,
     }
 
     /// <summary>Something to draw: a beam, a hit, an explosion. A and B are battle-local km.</summary>
@@ -663,7 +668,8 @@ namespace Unity.SpaceGod.Core
                 if (Broadsides.Commands(u)) Broadsides.Step(this, u, dt);
                 if (u.Stunned > 0) u.Stunned -= dt;
                 // A small craft with power to spare for its shields recharges them that much faster (U.SPC-T424).
-                else c.RegenShields(Seconds, dt * PowerDistribution.FactorOf(u, PowerSystem.Shields));
+                // A charging tachyon lance draws on the reactor, and the shields recover that much slower (U.SPC-T487).
+                else c.RegenShields(Seconds, dt * PowerDistribution.FactorOf(u, PowerSystem.Shields) * TachyonLances.ShieldRegenFactor(c));
                 // No escape with boarders fighting aboard (or a breacher stuck in the hull), nor for a hull that has struck
                 // its colours or been taken: drifting off with its drives cold is not running.
                 if (u.Kind == UnitKind.Ship && u.Latched == null && !c.Disabled && !c.Interior.UnderBoarding && !u.Surrendering && !u.Captured && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
@@ -1149,7 +1155,9 @@ namespace Unity.SpaceGod.Core
             foreach (var s in u.Combat.Subsystems)
             {
                 var w = s.Def.Weapon;
-                if (w == null || s.Destroyed || w.AntiSmall) continue;
+                // A tachyon lance reaches far past the line's guns (U.SPC-T487): a hull fights at its battery's range and
+                // the lance reaches out from there, so it never hangs back where only the lance bears.
+                if (w == null || s.Destroyed || w.AntiSmall || w.Lance) continue;
                 if (w.Missile && s.Ammo <= 0) continue;
                 best = Math.Max(best, w.Missile ? w.RangeKm * 0.5 : w.RangeKm * 0.7);
             }
@@ -1331,10 +1339,13 @@ namespace Unity.SpaceGod.Core
                 double dist = (aimPoint - origin).Length;
                 double size = Math.Max(0.15, Math.Min(1, target.LengthKm / 0.4));
                 if (target.Kind == UnitKind.Fighter) size *= w.AntiSmall ? 1.4 : 0.35;
-                double chance = w.Accuracy * accuracyScale * size * (1 - 0.4 * dist / w.RangeKm) * (volley > 1 ? 1 + Broadsides.CrewVolleyAccuracyBonus : 1);
+                // A tachyon lance's shot lands the instant it is fired, so it is as sure at the end of its reach as close in (U.SPC-T487).
+                double falloff = w.Lance ? 1 : 1 - 0.4 * dist / w.RangeKm;
+                double chance = w.Accuracy * accuracyScale * size * falloff * (volley > 1 ? 1 + Broadsides.CrewVolleyAccuracyBonus : 1);
                 bool hit = rng.NextDouble() < chance;
                 var kind = s.Kind == SubsystemKind.FighterGuns || s.Kind == SubsystemKind.Autocannon || s.Kind == SubsystemKind.AutoTurret ? FxKind.Guns
                     : w.AntiSmall ? FxKind.PointDefense
+                    : w.Lance ? (hit ? FxKind.TachyonLance : FxKind.TachyonLanceMiss)
                     : s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
                     : hit ? FxKind.Beam : FxKind.BeamMiss;
 
@@ -1439,7 +1450,7 @@ namespace Unity.SpaceGod.Core
         void FirePlayerGun(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w)
         {
             var aim = u.PlayerAim.LengthSquared > 1e-12 ? u.PlayerAim.Normalized : u.Forward;
-            var sight = Gunnery.Gimbal(aim, u.Forward, s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun ? Gunnery.RailgunGimbalDeg : Gunnery.GimbalDeg);
+            var sight = Gunnery.Gimbal(aim, u.Forward, s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun || w.Lance ? Gunnery.RailgunGimbalDeg : Gunnery.GimbalDeg);
             double converge = FirstHostileAlong(u.Side, u.Pos, sight, w.RangeKm, out _);
             if (converge < 0) converge = w.RangeKm;
             var toConverge = u.Pos + sight * converge - origin;
@@ -1449,7 +1460,8 @@ namespace Unity.SpaceGod.Core
             s.Aim = dir;
             // The player's trigger keeps the gun's own rhythm, not a crew's jittered one.
             s.Cooldown = w.Cooldown;
-            u.Heat += w.Damage * Gunnery.HeatPerDamage;
+            // A tachyon lance is fed by the reactor and held back by its recharge, not by the guns' heat (U.SPC-T487).
+            if (!w.Lance) u.Heat += w.Damage * Gunnery.HeatPerDamage;
             if (u.Heat >= 1)
             {
                 u.Heat = 1;
@@ -1516,12 +1528,12 @@ namespace Unity.SpaceGod.Core
             double t = FirstHostileAlong(u.Side, origin, dir, w.RangeKm, out var hit);
             if (hit == null)
             {
-                Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.BeamMiss, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
+                Emit(w.AntiSmall ? FxKind.PointDefense : w.Lance ? FxKind.TachyonLanceMiss : FxKind.BeamMiss, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
                 return;
             }
             var at = origin + dir * t;
             var sub = SubsystemNear(hit, at);
-            Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.Beam, origin, at, damage, u.Side, hit, sub?.Index ?? -1);
+            Emit(w.AntiSmall ? FxKind.PointDefense : w.Lance ? FxKind.TachyonLance : FxKind.Beam, origin, at, damage, u.Side, hit, sub?.Index ?? -1);
             ApplyDamage(hit, sub, damage, at, null, WeakPoints.IsSmallCraft(u) ? WeakPoints.Factor(hit, sub, dir) : 1, dir);
         }
 
@@ -1961,6 +1973,8 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.AutoTurret:
                     case SubsystemKind.TorpedoTube:
                     case SubsystemKind.MissileLauncher: w = 3; break;
+                    // The gun that outranges them all is the one gunners most want silenced (U.SPC-T487).
+                    case SubsystemKind.TachyonLance: w = 4; break;
                     case SubsystemKind.ShieldGenerator: w = s.Shield > 0 ? 2.5 : 0.5; break;
                     case SubsystemKind.Engine: w = 1.4; break;
                     case SubsystemKind.Hangar: w = target.Combat.Fighters > 0 ? 1.8 : 0.4; break;

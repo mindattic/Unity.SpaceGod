@@ -46,6 +46,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A capital torpedo tube (U.SPC-T377), with its first six rounds.</summary>
         TorpedoTube,
+
+        /// <summary>A capital ship's spinal tachyon lance (U.SPC-T487, see <see cref="TachyonLances"/>): a bow mount of a
+        /// capital hull only, built only at the greatest yards, and dear.</summary>
+        TachyonLance,
     }
 
     /// <summary>The kinds of slot a hull offers: its weapon hardpoints (light ones take point defence, a laser or an
@@ -102,9 +106,16 @@ namespace Unity.SpaceGod.Core
             new ModuleSpec(ModuleKind.AutoTurret, "Auto turret", 30, false, (Good.Alloys, 10), (Good.Electronics, 9), (Good.Machinery, 4), (Good.Munitions, 2)),
             // A tube comes with its six torpedoes at 6 t a round.
             new ModuleSpec(ModuleKind.TorpedoTube, "Torpedo tube", 260, false, (Good.Alloys, 70), (Good.Electronics, 18), (Good.Machinery, 16), (Good.Munitions, 36)),
+            // The tachyon lance (U.SPC-T487): its own power plant and capacitor banks, and the platinum and rare earths of
+            // its emitter, some eight times a railgun's worth.
+            new ModuleSpec(ModuleKind.TachyonLance, "Tachyon lance", 950, false, (Good.Alloys, 260), (Good.Electronics, 180), (Good.Machinery, 90), (Good.Platinum, 30), (Good.RareEarths, 45)),
         };
 
         public static ModuleSpec Of(ModuleKind k) => All[(int)k];
+
+        /// <summary>Whether <paramref name="yard"/> can build <paramref name="m"/>: any yard builds anything but a tachyon
+        /// lance, which only the greatest lawful yards can (<see cref="TachyonLances.YardBuilds"/>).</summary>
+        public static bool YardBuilds(ModuleKind m, Settlement yard) => m != ModuleKind.TachyonLance || TachyonLances.YardBuilds(yard);
 
         public static IReadOnlyList<ModuleSpec> Catalogue => All;
 
@@ -122,7 +133,7 @@ namespace Unity.SpaceGod.Core
                 case SlotKind.HeavyMount:
                     return m == ModuleKind.LaserTurret || m == ModuleKind.HeavyLaser || m == ModuleKind.MissileLauncher ||
                            m == ModuleKind.PointDefense || m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun ||
-                           ((m == ModuleKind.Railgun || m == ModuleKind.TorpedoTube) && bearsOnBow);
+                           ((m == ModuleKind.Railgun || m == ModuleKind.TorpedoTube || m == ModuleKind.TachyonLance) && bearsOnBow);
                 // A torpedo tube is a fixed launcher: it takes a tube or a missile launcher, nothing that traverses.
                 case SlotKind.TorpedoTube: return m == ModuleKind.TorpedoTube || m == ModuleKind.MissileLauncher;
                 case SlotKind.GunMount: return m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun || m == ModuleKind.LaserTurret;
@@ -150,6 +161,7 @@ namespace Unity.SpaceGod.Core
                 case ModuleKind.MineLayer: return SubsystemKind.MineLayer;
                 case ModuleKind.AutoTurret: return SubsystemKind.AutoTurret;
                 case ModuleKind.TorpedoTube: return SubsystemKind.TorpedoTube;
+                case ModuleKind.TachyonLance: return SubsystemKind.TachyonLance;
                 case ModuleKind.ShieldGenerator:
                 case ModuleKind.HardenedShield: return SubsystemKind.ShieldGenerator;
                 default: return SubsystemKind.Engine;
@@ -263,7 +275,8 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.LaserTurret:
                 case SubsystemKind.HeavyLaser:
                 case SubsystemKind.MissileLauncher:
-                case SubsystemKind.Railgun: return SlotKind.HeavyMount;
+                case SubsystemKind.Railgun:
+                case SubsystemKind.TachyonLance: return SlotKind.HeavyMount;
                 case SubsystemKind.ShieldGenerator: return SlotKind.ShieldMount;
                 case SubsystemKind.Engine: return SlotKind.EngineMount;
                 case SubsystemKind.TorpedoTube: return SlotKind.TorpedoTube;
@@ -288,6 +301,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.MineLayer: return ModuleKind.MineLayer;
                 case SubsystemKind.AutoTurret: return ModuleKind.AutoTurret;
                 case SubsystemKind.TorpedoTube: return ModuleKind.TorpedoTube;
+                case SubsystemKind.TachyonLance: return ModuleKind.TachyonLance;
                 default: return null;
             }
         }
@@ -392,6 +406,8 @@ namespace Unity.SpaceGod.Core
                 var def = new SubsystemDef(ModuleSpec.SubsystemOf(m), was.X, was.Y, was.Z, was.FacesAft, was.ArcCenterDeg, was.ArcWidthDeg) { Rating = rating };
                 if (m == ModuleKind.HardenedShield) def.MaxHp *= 1.4;
                 if (m == ModuleKind.TorchEngine) def.MaxHp *= 1.2;
+                // A lance is spinal: whatever the mount's arc was, it fires only down the bow (U.SPC-T487).
+                if (m == ModuleKind.TachyonLance) def.ArcWidthDeg = Math.Min(was.ArcWidthDeg, TachyonLances.ArcWidthDeg);
                 spec.Layout[slot.LayoutIndex] = def;
             }
             if (baseGenerators > 0)
@@ -429,7 +445,7 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>Why a refit did or did not go through.</summary>
-    public enum OutfitOutcome { Ok, NotAYard, CannotDock, Busy, NoSuchSlot, WontFit, AlreadyFitted, NoStock, CantAfford, HoldTooFull, BrigOccupied }
+    public enum OutfitOutcome { Ok, NotAYard, CannotDock, Busy, NoSuchSlot, WontFit, AlreadyFitted, NoStock, CantAfford, HoldTooFull, BrigOccupied, YardCannotBuild }
 
     /// <summary>What a refit costs at a yard: the new module's materials bought from its market, the yard's labour,
     /// and what the part taken out fetches sold back into it.</summary>
@@ -570,6 +586,8 @@ namespace Unity.SpaceGod.Core
         {
             if (l == null || slot < 0 || slot >= l.Slots.Count) return false;
             var s = l.Slots[slot];
+            // A tachyon lance goes only into a capital hull (U.SPC-T487).
+            if (module == ModuleKind.TachyonLance && !TachyonLances.CanCarry(l.Class)) return false;
             if (module is ModuleKind m) return ModuleSpec.Fits(m, s.Kind, s.BearsOnBow);
             return s.Kind == SlotKind.InternalBay;
         }
@@ -592,6 +610,7 @@ namespace Unity.SpaceGod.Core
             if (slot < 0 || slot >= l.Slots.Count) return OutfitOutcome.NoSuchSlot;
             if (!CanFit(l, slot, module)) return OutfitOutcome.WontFit;
             if (l.Fitted[slot] == module) return OutfitOutcome.AlreadyFitted;
+            if (module is ModuleKind built && !ModuleSpec.YardBuilds(built, yard)) return OutfitOutcome.YardCannotBuild;
 
             // What the hull would carry afterwards: racks and brig cells taken out must leave room for what is in them.
             int racks = l.Count(ModuleKind.CargoRack) + (module == ModuleKind.CargoRack ? 1 : 0) - (l.Fitted[slot] == ModuleKind.CargoRack ? 1 : 0);
@@ -708,6 +727,15 @@ namespace Unity.SpaceGod.Core
                     if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Fitted[i] == ModuleKind.LaserTurret) yield return (i, ModuleKind.HeavyLaser);
             for (int i = 0; i < l.Slots.Count; i++)
                 if (l.Slots[i].Kind == SlotKind.EngineMount && l.Fitted[i] == ModuleKind.Engine) yield return (i, ModuleKind.TorchEngine);
+            // Last of all, once everything else is fitted: one tachyon lance for a capital hull, in place of a bow heavy
+            // laser, where the yard can build one and the navy is flush enough for it (U.SPC-T487).
+            if (TachyonLances.CanCarry(l.Class) && l.Count(ModuleKind.TachyonLance) == 0)
+                for (int i = 0; i < l.Slots.Count; i++)
+                    if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Slots[i].BearsOnBow && l.Fitted[i] == ModuleKind.HeavyLaser)
+                    {
+                        yield return (i, ModuleKind.TachyonLance);
+                        break;
+                    }
         }
 
         // ---------------------------------------------------------------- prisoners
