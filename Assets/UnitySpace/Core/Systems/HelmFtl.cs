@@ -93,15 +93,17 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
-    /// The helm's own FTL drive, I-War 2 style (U.SPC-T417): a capital ship or a survey hull (anything carrying a
-    /// <see cref="CruiseDriveSpec"/>) is pointed at another star, spools its drive while the nose is held on it, engages,
+    /// The helm's own FTL drive, I-War 2 style (U.SPC-T417): a capital ship or a deep-space explorer (anything carrying a
+    /// <see cref="CruiseDriveSpec"/>, U.SPC-T419) is pointed at another star, spools its drive while the nose is held on it, engages,
     /// and is handed to <see cref="DeepSpace"/>, which flies it across open space as it does every other group under its
     /// own drive and drops it out at the edge of that star's well.
     ///
     /// Canon and lore (U.SPC-T455): jumping is impossible inside a solar system's gravity wells. A hull must first fly
     /// beyond the system's outer rim (<see cref="RimKm"/>, the same edge the jump gates stand toward and the cruise drives
     /// engage at), and the drive only ever jumps to another star, never to somewhere in the same system. Small craft carry
-    /// no drive and are refused: the jump gates and lanes are their way.
+    /// no drive and are refused at the helm: the jump gates and lanes are their way, or a berth aboard a capital ship. The
+    /// helm's own escorts go with it (U.SPC-T419): those with drives of their own alongside, fighters and small craft
+    /// docked aboard as far as the hangars have room (<see cref="FtlCarriage"/>).
     ///
     /// The drive's physics (U.SPC-T418, <see cref="FtlRules"/>): no charge inside a planet's or a moon's well or a gravity
     /// projector's field either, none while the drive cools from its last drop-out, and none without the reaction mass
@@ -144,7 +146,7 @@ namespace Unity.SpaceGod.Core
             if (ship == null || ship.Spec == null) return "No ship at the helm";
             if (ship.Destroyed || ship.Derelict) return "The " + ship.Name + " is in no state to jump";
             if (CruiseDrives.Of(ship) == null)
-                return "The " + ship.Spec.Class.ToString().ToLowerInvariant() + " is too small to carry an FTL drive: the jump gates and lanes are its way";
+                return "The " + ship.Spec.Class.ToString().ToLowerInvariant() + " is too small to carry an FTL drive: the jump gates and lanes are its way, or a berth aboard a capital ship";
             return null;
         }
 
@@ -298,8 +300,37 @@ namespace Unity.SpaceGod.Core
         /// <see cref="Cruise.Piloted"/>, so nobody else gives it orders when it drops out. Null (with
         /// <see cref="AbortReason"/>) if there is nowhere to go.
         /// </summary>
-        public Cruise EngageInterstellar(Galaxy galaxy, StarSystem here, Ship ship, DVec3 fromKm, double jd, DVec3 velocityKmS = default)
+        public Cruise EngageInterstellar(Galaxy galaxy, StarSystem here, Ship ship, DVec3 fromKm, double jd, DVec3 velocityKmS = default) =>
+            EngageInterstellar(galaxy, here, ship, fromKm, jd, velocityKmS, out _);
+
+        /// <summary>
+        /// The helm's escorts that go with <paramref name="ship"/> through FTL (U.SPC-T419): those with drives of their own,
+        /// then the fighters and small craft that fit docked aboard it or them (<paramref name="aboard"/>: craft to carrier).
+        /// An escort still fighting or left a hulk stays behind, as does a craft with no berth to ride in.
+        /// </summary>
+        public static List<Ship> Wing(World world, Ship ship, out Dictionary<Ship, Ship> aboard)
         {
+            var going = new List<Ship>();
+            var craft = new List<Ship>();
+            foreach (var e in world.Fleet.Ships)
+            {
+                if (e == ship || e.Leader != ship || e.Destroyed || e.Derelict || e.Battle != null) continue;
+                if (CruiseDrives.Of(e) != null) going.Add(e);
+                else craft.Add(e);
+            }
+            var carriers = new List<Ship> { ship };
+            carriers.AddRange(going);
+            aboard = FtlCarriage.Stow(carriers, craft);
+            foreach (var e in craft)
+                if (aboard.ContainsKey(e)) going.Add(e);
+            return going;
+        }
+
+        /// <summary>As <see cref="EngageInterstellar(Galaxy, StarSystem, Ship, DVec3, double, DVec3)"/>, saying how many of the helm's
+        /// escorts went with it (<paramref name="wing"/>: alongside or docked aboard, U.SPC-T419).</summary>
+        public Cruise EngageInterstellar(Galaxy galaxy, StarSystem here, Ship ship, DVec3 fromKm, double jd, DVec3 velocityKmS, out int wing)
+        {
+            wing = 0;
             if (Stage != FtlStage.Spooling || Target == null) throw new InvalidOperationException("The drive is not charged");
             var to = Target.System ?? galaxy.Realize(Target.Name, jd);
             if (to == null || to == here)
@@ -308,6 +339,9 @@ namespace Unity.SpaceGod.Core
                 return null;
             }
             var world = here.World;
+            // Its escorts go too (U.SPC-T419): alongside under their own drives, or docked aboard. Found before the hull
+            // leaves the fleet, which would hand them over to the marker it leaves behind.
+            var escorts = Wing(world, ship, out var aboard);
             world.War?.Forget(ship);
             world.Economy?.Release(ship);
             // The hull itself goes, not a copy: its place in this fleet keeps a marker so no other id moves.
@@ -317,13 +351,36 @@ namespace Unity.SpaceGod.Core
                 return null;
             }
             ship.Role = ShipRole.Free;
+            var ships = new List<Ship> { ship };
+            var hired = new HashSet<Ship>();
+            foreach (var e in escorts)
+            {
+                if (world.Escorts != null && world.Escorts.IsHired(e))
+                {
+                    hired.Add(e);
+                    world.Escorts.UnmarkHired(e);
+                }
+                world.War?.Forget(e);
+                world.Economy?.Release(e);
+                if (world.Fleet.LetGo(e) == null) continue;
+                e.Leader = ship;
+                ships.Add(e);
+            }
+            wing = ships.Count - 1;
             var news = galaxy.Traffic?.News.Bundle(here, jd);
-            var c = galaxy.DeepSpace.Launch(new[] { ship }, here, fromKm, to, Drive, jd, news, charged: true);
+            var c = galaxy.DeepSpace.Launch(ships, here, fromKm, to, Drive, jd, news, charged: true);
             c.Piloted = true;
             // FTL carries momentum (U.SPC-T418): the hull comes out moving as it went in.
             c.CarriedVelocityKmS = velocityKmS;
+            foreach (var h in hired)
+                if (ships.Contains(h)) c.Hired.Add(h);
+            foreach (var kv in aboard)
+                if (ships.Contains(kv.Key)) c.Aboard[kv.Key] = kv.Value;
+            int docked = c.Aboard.Count;
+            string with = wing == 0 ? "" : docked == 0 ? $", {wing} escort{(wing == 1 ? "" : "s")} alongside"
+                : docked == wing ? $", {docked} craft docked aboard" : $", {wing - docked} escort{(wing - docked == 1 ? "" : "s")} alongside and {docked} craft docked aboard";
             world.Log(jd, $"{ship.Name} of {ship.Faction.Name} engages its {Drive.Name.ToLowerInvariant()} beyond the rim for {to.Name}, " +
-                          $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly under its own power", WorldEventKind.Info, here.Catalog.Root.Index);
+                          $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly under its own power{with}", WorldEventKind.Info, here.Catalog.Root.Index);
             Reset();
             return c;
         }

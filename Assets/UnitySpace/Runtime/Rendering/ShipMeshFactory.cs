@@ -58,7 +58,8 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Cruiser: BuildCruiser(b); break;
                 case ShipClass.Destroyer: BuildDestroyer(b); break;
                 case ShipClass.Miner: BuildHauler(b); break;
-                case ShipClass.Courier: BuildCourier(b); break;
+                case ShipClass.Courier:
+                case ShipClass.Explorer: BuildCourier(b); break;
                 case ShipClass.Breacher: BuildBreacher(b); break;
                 case ShipClass.Fighter: BuildFighter(b); break;
                 default: BuildFreighter(b); break;

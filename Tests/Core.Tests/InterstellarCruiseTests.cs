@@ -77,8 +77,8 @@ namespace Unity.SpaceGod.Core.Tests
         {
             foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer })
                 Assert.That(CruiseDrives.Of(c), Is.SameAs(CruiseDrives.Capital), c.ToString());
-            Assert.That(CruiseDrives.Of(ShipClass.Courier), Is.SameAs(CruiseDrives.Survey));
-            foreach (var c in new[] { ShipClass.Fighter, ShipClass.Freighter, ShipClass.Miner, ShipClass.Breacher })
+            Assert.That(CruiseDrives.Of(ShipClass.Explorer), Is.SameAs(CruiseDrives.Survey));
+            foreach (var c in new[] { ShipClass.Fighter, ShipClass.Courier, ShipClass.Freighter, ShipClass.Miner, ShipClass.Breacher })
                 Assert.That(CruiseDrives.Of(c), Is.Null, c.ToString());
             // A new drive plugs in by registering it.
             var tug = new CruiseDriveSpec("Tug drive", 50, 1, 0.5);
@@ -257,7 +257,7 @@ namespace Unity.SpaceGod.Core.Tests
             var (g, a, b) = Relays(4);
             var clan = new Faction("Test Clan", "", default) { IsPirate = true };
             var traders = new Faction("Test Traders", "", default);
-            var courier = Hull("Swift Margin", ShipClass.Courier, traders);
+            var courier = Hull("Swift Margin", ShipClass.Explorer, traders);
             courier.Combat = null; // nothing to fight with
             courier.HasCargo = true;
             courier.CargoGood = (Good)0;
@@ -282,7 +282,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (g, a, b) = Relays(4);
             var traders = new Faction("Test Traders", "", default);
-            var courier = Hull("Long Odds", ShipClass.Courier, traders);
+            var courier = Hull("Long Odds", ShipClass.Explorer, traders);
             var from = DeepSpace.DeparturePointKm(a, b.Origin);
             var plain = CruiseProfile.For(CruiseDrives.Survey, DeepSpace.ArrivalPoint(b.Origin, a.At(from), CruiseDrives.WellLimitKm(b)).DistanceLy(a.At(from)));
             g.DeepSpace.Add(new DeepSpaceObject
@@ -386,7 +386,7 @@ namespace Unity.SpaceGod.Core.Tests
             var g = Galaxy.CreateDefault(StartJd);
             var sol = g.Find("Sol System");
             var star = g.NearbyStars.OrderBy(n => n.Origin.DistanceLy(sol.Origin)).First();
-            var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Free && s.Spec.Class == ShipClass.Courier && !s.Destroyed
+            var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Free && s.Spec.Class == ShipClass.Explorer && !s.Destroyed
                 && s.Battle == null && sol.World.War.Danger(s.Orbit.Body) == 0);
             string name = ship.Name;
             double jd = RunUntil(g, StartJd, 20, () => InterstellarTraffic.Idle(sol.World, ship));
@@ -419,7 +419,7 @@ namespace Unity.SpaceGod.Core.Tests
             var g = Galaxy.CreateDefault(StartJd);
             var sol = g.Find("Sol System");
             var ac = g.Find("Alpha Centauri");
-            var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Free && s.Spec.Class == ShipClass.Courier && !s.Destroyed
+            var ship = sol.World.Fleet.Ships.First(s => s.Role == ShipRole.Free && s.Spec.Class == ShipClass.Explorer && !s.Destroyed
                 && s.Battle == null && sol.World.War.Danger(s.Orbit.Body) == 0);
             double jd = RunUntil(g, StartJd, 20, () => InterstellarTraffic.Idle(sol.World, ship));
             Assume.That(InterstellarTraffic.Idle(sol.World, ship), Is.True);

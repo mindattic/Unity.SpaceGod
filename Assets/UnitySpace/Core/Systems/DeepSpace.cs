@@ -20,6 +20,20 @@ namespace Unity.SpaceGod.Core
         /// <summary>Which of <see cref="Ships"/> were hired fighters in the system it left (so the far system's escorts take them on).</summary>
         public readonly HashSet<Ship> Hired = new HashSet<Ship>();
 
+        /// <summary>Which of <see cref="Ships"/> ride docked aboard another of them, and aboard which (U.SPC-T419, see
+        /// <see cref="FtlCarriage"/>): fighters and small craft with no drive of their own, carried in a capital ship's
+        /// hangars. They come out with the group where it drops out, and are lost with the hull carrying them.</summary>
+        public readonly Dictionary<Ship, Ship> Aboard = new Dictionary<Ship, Ship>();
+
+        /// <summary>The craft docked aboard <paramref name="carrier"/>.</summary>
+        public List<Ship> CarriedBy(Ship carrier)
+        {
+            var list = new List<Ship>();
+            foreach (var kv in Aboard)
+                if (kv.Value == carrier) list.Add(kv.Key);
+            return list;
+        }
+
         /// <summary>The system it set out from.</summary>
         public StarSystem From;
 
@@ -563,11 +577,14 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public void Destroy(Cruise c, Ship ship, double jd, string how)
         {
+            if (!c.Ships.Contains(ship)) return;
+            // Craft docked aboard go down with the hull carrying them (U.SPC-T419).
+            foreach (var craft in c.CarriedBy(ship)) Destroy(c, craft, jd, "docked aboard the " + ship.Name);
             int i = c.Ships.IndexOf(ship);
-            if (i < 0) return;
             var where = c.PositionAt(jd);
             c.Ships.RemoveAt(i);
             c.Hired.Remove(ship);
+            c.Aboard.Remove(ship);
             ship.Destroyed = true;
             if (ship.Combat != null) ship.Combat.Hull = 0;
             Add(new DeepSpaceObject

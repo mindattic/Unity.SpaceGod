@@ -571,6 +571,28 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
                 },
             } },
+            [ShipClass.Explorer] = new[] { new CombatSpec
+            {
+                // The deep-space explorer (U.SPC-T419): long-legged rather than fast or tough, a big reactor and tanks
+                // for its FTL drive and months out between the stars, a light gun and heavy shields for what it meets there.
+                DesignName = "Explorer", LengthKm = 0.22,
+                MassKt = 60, MainThrustMN = 1800, RetroThrustMN = 1350, LateralThrustMN = 900, VerticalThrustMN = 900, PitchYawTorqueMNKm = 900, RollTorqueMNKm = 225,
+                Hull = 2600, Shield = 1600, ShieldRegen = 20, Armor = 2, MaxSpeed = 0.3, Accel = 0.012, Decel = 0.014,
+                BoostSpeedMultiplier = 1.5, BoostDurationS = 18, TurnRateDegS = 20,
+                Crew = 40, Marines = 0,
+                DryMassTonnes = 2400, PropellantTonnes = 2600, ExhaustVelocityKmS = 4500,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.35, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0, 0.05, 0.1),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.06, 0.2),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, 0.2, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, -0.25, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, -0.04, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Engine, 0.04, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
+                },
+            } },
         };
 
         /// <summary>A copy to refit (U.SPC-T65): every figure the same, the hardpoint list its own array

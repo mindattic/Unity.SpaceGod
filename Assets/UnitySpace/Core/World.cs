@@ -396,8 +396,8 @@ namespace Unity.SpaceGod.Core
                 ("Kraken Hydrocarbon Company", "KHC", "Kraken Port", w.Reach, false),
                 ("Meridian Free Traders", "MFT", "Tycho City", w.Independents, false),
                 ("Long Haul Carrying Company", "LHC", "Ares Prime", w.Independents, false));
-            w.AddFreeShips(startJd, new[] { "Kestrel's Folly", "Wanderlust", "Far Horizon", "Stargazer", "Solitaire", "Driftwood", "Errant", "Idle Hours" },
-                new[] { "Prospector Nine", "Lucky Strike" });
+            w.AddFreeShips(startJd, new[] { "Kestrel's Folly", "Wanderlust", "Solitaire", "Driftwood", "Errant", "Idle Hours" },
+                new[] { "Prospector Nine", "Lucky Strike" }, new[] { "Far Horizon", "Stargazer" });
             int haven = w.Catalog["Deimos"].Index;
             war.RaisePirateGroup(startJd, haven);
             // The Banner's second band sails from its biggest belt hideout; recruiting fills the other
@@ -657,7 +657,7 @@ namespace Unity.SpaceGod.Core
                 ("Kentaurus Carrying Company", "KCC", "New Kentaurus", w.Independents, false),
                 ("Toliman Bulk", "TB", "Toliman Forge", combine, true),
                 ("Proxima Line", "PL", "New Kentaurus", accord, false));
-            w.AddFreeShips(startJd, new[] { "First Light", "Long Look", "Terminator Dawn" }, new[] { "Red Dust" });
+            w.AddFreeShips(startJd, new[] { "First Light", "Terminator Dawn" }, new[] { "Red Dust" }, new[] { "Long Look" });
             int haven = w.Catalog["Blackhollow"].Index;
             war.RaisePirateGroup(startJd, haven);
             PatrolWings.Raise(w, startJd);
@@ -1075,10 +1075,11 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// Independent pilots who go where they please: yachts and survey ships (fast courier hulls) and
-        /// prospectors (ore haulers), roaming every world in the system, not just its ports.
+        /// Independent pilots who go where they please: yachts and survey ships (fast courier hulls), prospectors (ore
+        /// haulers) and deep-space explorers (U.SPC-T419, survey hulls with an FTL drive of their own, which now and then
+        /// go off the gate network to look at a star), roaming every world in the system, not just its ports.
         /// </summary>
-        void AddFreeShips(double jd, string[] yachts, string[] prospectors)
+        void AddFreeShips(double jd, string[] yachts, string[] prospectors, string[] explorers = null)
         {
             var places = FreeShipPorts();
             void Add(string name, ShipClass cls)
@@ -1088,6 +1089,7 @@ namespace Unity.SpaceGod.Core
                 Fleet.Station(ship, places[Fleet.Rng.Next(places.Length)], jd);
             }
             foreach (var n in yachts) Add(n, ShipClass.Courier);
+            foreach (var n in explorers ?? new string[0]) Add(n, ShipClass.Explorer);
             foreach (var n in prospectors) Add(n, ShipClass.Miner);
         }
 

@@ -126,10 +126,11 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
-    /// Which hulls carry a cruise drive, and the menu's FTL tuning (U.SPC-T412). Capital ships carry the heavy drive;
-    /// the courier hull, the one the survey services send out, carries the lighter, faster survey drive. Everything
-    /// smaller (fighters, freighters, haulers, breachers) cannot leave a system except by a gate, or aboard something
-    /// that can.
+    /// Which hulls carry a cruise (FTL) drive, and the menu's FTL tuning (U.SPC-T412, U.SPC-T419). The capital classes
+    /// (carrier, battleship, cruiser, destroyer) carry the heavy drive; the deep-space explorer, the hull the survey
+    /// services send out past the gates, carries the lighter, faster survey drive. Everything else (fighters, couriers,
+    /// breachers, freighters, haulers) cannot leave a system except by a gate, or docked aboard a capital ship that can
+    /// (see <see cref="FtlCarriage"/>).
     /// </summary>
     [SettingsSource]
     public static class CruiseDrives
@@ -150,7 +151,7 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Battleship] = Capital,
             [ShipClass.Cruiser] = Capital,
             [ShipClass.Destroyer] = Capital,
-            [ShipClass.Courier] = Survey,
+            [ShipClass.Explorer] = Survey,
         };
 
         /// <summary>Gives every hull of <paramref name="cls"/> <paramref name="drive"/> (null takes it away): how a new drive or a new hull plugs in.</summary>
@@ -183,5 +184,89 @@ namespace Unity.SpaceGod.Core
         /// <summary>How far from <paramref name="system"/>'s root a cruise engages and drops out, km.</summary>
         public static double WellLimitKm(StarSystem system) =>
             Math.Max(WellLimit.Value * Astro.AuKm, system == null ? 0 : Galaxy.GateDistanceKm(system) * 4);
+    }
+
+    /// <summary>
+    /// What a hull with an FTL drive can take with it docked aboard (U.SPC-T419): carriers and the other capital ships
+    /// have hangar berths, and fighters and small craft that cannot cross between the stars on their own ride in them,
+    /// so a fleet can strike or explore off the gate network with its wings. Data, not code: a hull's berths and a
+    /// craft's size are registered (<see cref="RegisterBerths"/>, <see cref="RegisterCraft"/>), never threaded through
+    /// the cruise.
+    /// </summary>
+    public static class FtlCarriage
+    {
+        /// <summary>Hangar berths each class of drive-carrying hull has for small craft.</summary>
+        static readonly Dictionary<ShipClass, int> berths = new Dictionary<ShipClass, int>
+        {
+            [ShipClass.Carrier] = 12,
+            [ShipClass.Battleship] = 4,
+            [ShipClass.Cruiser] = 3,
+            [ShipClass.Destroyer] = 2,
+        };
+
+        /// <summary>How many berths a craft of each class takes up; a class not listed cannot be carried.</summary>
+        static readonly Dictionary<ShipClass, int> sizes = new Dictionary<ShipClass, int>
+        {
+            [ShipClass.Fighter] = 1,
+            [ShipClass.Courier] = 2,
+            [ShipClass.Breacher] = 2,
+        };
+
+        /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="count"/> berths (0 takes them away).</summary>
+        public static void RegisterBerths(ShipClass cls, int count)
+        {
+            if (count <= 0) berths.Remove(cls);
+            else berths[cls] = count;
+        }
+
+        /// <summary>Lets craft of <paramref name="cls"/> be carried, taking <paramref name="size"/> berths (0 says it cannot be).</summary>
+        public static void RegisterCraft(ShipClass cls, int size)
+        {
+            if (size <= 0) sizes.Remove(cls);
+            else sizes[cls] = size;
+        }
+
+        /// <summary>Berths hulls of <paramref name="cls"/> have.</summary>
+        public static int BerthsOf(ShipClass cls) => berths.TryGetValue(cls, out int n) ? n : 0;
+
+        /// <summary>Berths <paramref name="ship"/> has to carry craft through FTL: none without a drive of its own to carry them on.</summary>
+        public static int BerthsOf(Ship ship) =>
+            ship?.Spec == null || CruiseDrives.Of(ship) == null ? 0 : BerthsOf(ship.Spec.Class);
+
+        /// <summary>Berths a craft of <paramref name="cls"/> takes up, or 0 if it cannot be carried.</summary>
+        public static int SizeOf(ShipClass cls) => sizes.TryGetValue(cls, out int n) ? n : 0;
+
+        /// <summary>Whether <paramref name="craft"/> needs carrying (no drive of its own) and can be (it fits a berth).</summary>
+        public static bool Carriable(Ship craft) =>
+            craft?.Spec != null && !craft.Destroyed && !craft.Derelict && CruiseDrives.Of(craft) == null && SizeOf(craft.Spec.Class) > 0;
+
+        /// <summary>
+        /// Docks as many of <paramref name="craft"/> as fit aboard <paramref name="carriers"/> (the hulls going under
+        /// their own drives), each in the first with berths to spare, in the order given: what goes aboard which. Craft
+        /// that need no carrying, cannot be carried or find no room are left out (they stay behind).
+        /// </summary>
+        public static Dictionary<Ship, Ship> Stow(IEnumerable<Ship> carriers, IEnumerable<Ship> craft)
+        {
+            var free = new List<(Ship hull, int left)>();
+            foreach (var c in carriers)
+            {
+                int n = BerthsOf(c);
+                if (n > 0) free.Add((c, n));
+            }
+            var aboard = new Dictionary<Ship, Ship>();
+            foreach (var s in craft)
+            {
+                if (!Carriable(s) || aboard.ContainsKey(s)) continue;
+                int size = SizeOf(s.Spec.Class);
+                for (int i = 0; i < free.Count; i++)
+                {
+                    if (free[i].left < size || free[i].hull == s) continue;
+                    aboard[s] = free[i].hull;
+                    free[i] = (free[i].hull, free[i].left - size);
+                    break;
+                }
+            }
+            return aboard;
+        }
     }
 }

@@ -99,7 +99,8 @@ namespace Unity.SpaceGod.Core
             s.Freighters = new[] { "Proper Motion", "Runaway", "Tenth Arcsecond", "Ophiuchus", "Old Red", "Fast Mover", "Nearest Single", "Long Drift", "Dimlight", "Second Neighbour", "Steady Glow", "Cold Iron" };
             s.Haulers = new[] { "Night Side", "Slag Moth", "Ironmonger", "Furnace Rat" };
             s.Couriers = new[] { "Quickstep", "Barnard's Arrow", "Errand" };
-            s.Yachts = new[] { "Wanderjahr", "Over the Horizon" };
+            s.Yachts = new[] { "Wanderjahr" };
+            s.Explorers = new[] { "Over the Horizon" };
             s.Prospectors = new[] { "Iron Hope" };
             s.Navy = new[] { "Steadfast", "Bulwark", "Sentry" };
             s.RaiderNames = new[] { "Slipknot", "Undertow", "Riptide", "Drift Ice", "Cutpurse", "Fade" };

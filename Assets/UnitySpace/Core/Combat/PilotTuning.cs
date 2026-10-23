@@ -64,6 +64,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Fighter] = new PilotTuning(0.42, 165, 2.3, 15, 9, 1.8),
             [ShipClass.Freighter] = new PilotTuning(0.18, 75, 1.6, 36, 8, 3.0),
             [ShipClass.Miner] = new PilotTuning(0.16, 70, 1.6, 38, 8, 3.0),
+            // The deep-space explorer (U.SPC-T419): handier than a hauler, nothing like a fighter.
+            [ShipClass.Explorer] = new PilotTuning(0.22, 60, 1.6, 26, 8, 3.0),
 
             // Capital ships: still weighty -- you're captaining a warship, not dogfighting in it --
             // but sharper than their AI-battle turn rates so they're not sluggish to the point of

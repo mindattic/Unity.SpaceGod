@@ -21,6 +21,11 @@ namespace Unity.SpaceGod.Core
         /// which double as light/heavy "fighters" but are really trade and assault craft that happen
         /// to fight well.</summary>
         Fighter,
+
+        /// <summary>A deep-space explorer (U.SPC-T419): a long-legged survey hull built to leave the gate network under its
+        /// own FTL drive and chart the stars nobody has been to. Lightly armed, big enough for its drive, small next to a
+        /// capital ship.</summary>
+        Explorer,
     }
 
     public enum ShipRole
@@ -103,6 +108,7 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Courier, "Courier", 1.2, false),
             new ShipClassSpec(ShipClass.Breacher, "Breacher", 0.5, true),
             new ShipClassSpec(ShipClass.Fighter, "Fighter", 1.0, true),
+            new ShipClassSpec(ShipClass.Explorer, "Explorer", 0.6, false),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

@@ -174,7 +174,7 @@ namespace Unity.SpaceGod
             var from = ActiveSystem;
             var rootKm = PilotRootKm;
             // FTL carries momentum (U.SPC-T418): the velocity it goes in with, against the system's root, it comes out with.
-            var c = Ftl.EngageInterstellar(Galaxy, from, ship, rootKm, jd, pilotVelKmS + FrameVelocityKmS(pilotFrameBody, jd) - FrameVelocityKmS(0, jd));
+            var c = Ftl.EngageInterstellar(Galaxy, from, ship, rootKm, jd, pilotVelKmS + FrameVelocityKmS(pilotFrameBody, jd) - FrameVelocityKmS(0, jd), out int wing);
             if (c == null)
             {
                 EndFtlWarp();
@@ -210,7 +210,9 @@ namespace Unity.SpaceGod
             GateFlash = 1;
             fovKick = GateFovKick;
             ShowToast("FTL ENGAGED for " + c.ToName.ToUpperInvariant() + ", " + c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture) +
-                      " ly through open space");
+                      " ly through open space" + (wing == 0 ? "" : c.Aboard.Count > 0
+                          ? ", " + wing + " of your wing with you (" + c.Aboard.Count + " docked aboard)"
+                          : ", " + wing + " of your wing with you"));
             return true;
         }
 

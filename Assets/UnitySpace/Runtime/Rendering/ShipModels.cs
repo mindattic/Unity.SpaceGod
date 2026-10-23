@@ -114,6 +114,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Freighter: return ship.Id % 2 == 0 ? "craft_cargoA" : "craft_cargoB";
                 case ShipClass.Miner: return "craft_miner";
                 case ShipClass.Courier: return ship.Id % 2 == 0 ? "craft_speederA" : "craft_racer";
+                case ShipClass.Explorer: return "craft_speederA";
                 default: return null;
             }
         }

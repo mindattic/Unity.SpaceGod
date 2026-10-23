@@ -37,7 +37,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void CapitalShipsAndSurveyHullsCanJumpUnderTheirOwnPowerAndSmallCraftCannot()
         {
             var navy = Navy();
-            foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Courier })
+            foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Explorer })
                 Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Is.Null, c.ToString());
             foreach (var c in Enum.GetValues(typeof(ShipClass)).Cast<ShipClass>().Where(c => CruiseDrives.Of(c) == null))
                 Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Does.Contain("too small"), c.ToString());
@@ -173,9 +173,11 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(after.Id, Is.EqualTo(afterId));
             Assert.That(a.World.Fleet.Ships.Contains(ship), Is.False);
             Assert.That(bystander.Destroyed, Is.False);
-            // The fighter it led cannot follow: it is left behind, following the marker for the fleet's succession.
-            Assert.That(escort.Leader, Is.SameAs(marker));
-            Assert.That(c.Ships, Has.Count.EqualTo(1));
+            // The fighter it led has no drive of its own, so it goes docked aboard (U.SPC-T419), the same hull too.
+            Assert.That(c.Ships, Is.EqualTo(new[] { ship, escort }));
+            Assert.That(c.Aboard[escort], Is.SameAs(ship));
+            Assert.That(escort.Leader, Is.SameAs(ship));
+            Assert.That(a.World.Fleet.Ships.Contains(escort), Is.False);
 
             // Already charged: it is under way at once.
             Assert.That(c.Engaged(jd + 1e-6), Is.True);
@@ -194,6 +196,10 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(ship.Orbit.Center.X, Is.LessThan(0));
             Assert.That(ship.Phase, Is.EqualTo(ShipPhase.Parked));
             Assert.That(ship.Orbit.Fixed, Is.True);
+            // Its fighter comes out with it, still its wing.
+            Assert.That(b.World.Fleet.Ships.Contains(escort), Is.True, "the docked fighter never arrived");
+            Assert.That(escort.Leader, Is.SameAs(ship));
+            Assert.That(escort.Destroyed, Is.False);
         }
     }
 }

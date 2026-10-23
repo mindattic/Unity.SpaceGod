@@ -301,7 +301,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Cruiser:
                 case ShipClass.Freighter: return 4;
                 case ShipClass.Destroyer:
-                case ShipClass.Miner: return 3;
+                case ShipClass.Miner:
+                case ShipClass.Explorer: return 3;
                 case ShipClass.Breacher:
                 case ShipClass.Courier: return 2;
                 default: return 1;

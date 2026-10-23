@@ -93,6 +93,9 @@ namespace Unity.SpaceGod.Core
 
         public string[] Freighters = new string[0], Haulers = new string[0], Couriers = new string[0];
         public string[] Yachts = new string[0], Prospectors = new string[0];
+
+        /// <summary>Its deep-space explorers (U.SPC-T419): free survey hulls with an FTL drive of their own.</summary>
+        public string[] Explorers = new string[0];
         public string[] RaiderNames;
 
         /// <summary>The navy's ships: leader first, then escorts (the first is a cruiser in a big system, a destroyer in a small one).</summary>
@@ -274,7 +277,7 @@ namespace Unity.SpaceGod.Core
             var table = new List<(string, string, string, Faction, bool)>();
             foreach (var (name, tag, home, flag, mining) in society.Companies) table.Add((name, tag, home, Of(flag), mining));
             w.FoundCompanies(startJd, table.ToArray());
-            w.AddFreeShips(startJd, society.Yachts, society.Prospectors);
+            w.AddFreeShips(startJd, society.Yachts, society.Prospectors, society.Explorers);
             if (haven != null) war.RaisePirateGroup(startJd, haven.Body);
             foreach (var site in society.HavenSites) w.HavenSites.Add(w.Catalog[site].Index);
             // A system with a navy of its own flies its patrol wings too (U.SPC-T371).

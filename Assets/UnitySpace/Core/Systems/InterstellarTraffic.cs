@@ -661,7 +661,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// At the edge of the well: the group's hulls with a drive go out into open space together, the same objects
-        /// (U.SPC-T453), never copies; escorts that cannot cross on their own stay behind under the strongest of them.
+        /// (U.SPC-T453), never copies, with the fighters and small craft that fit docked aboard them (U.SPC-T419, see
+        /// <see cref="FtlCarriage"/>); escorts that cannot cross on their own and find no berth stay behind under the
+        /// strongest of them.
         /// </summary>
         void EngageCruise(StarSystem system, Ship leader, double jd)
         {
@@ -682,12 +684,19 @@ namespace Unity.SpaceGod.Core
             var ships = new List<Ship> { leader };
             var hired = new HashSet<Ship>();
             var going = new List<Ship>();
+            var craft = new List<Ship>();
             foreach (var e in world.Fleet.Ships)
             {
-                // An escort still fighting, left a hulk, or with no drive of its own, stays behind.
-                if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict || !CanCruise(e)) continue;
-                going.Add(e);
+                // An escort still fighting or left a hulk stays behind; one with no drive of its own goes only docked aboard.
+                if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict) continue;
+                if (CanCruise(e)) going.Add(e);
+                else craft.Add(e);
             }
+            var carriers = new List<Ship> { leader };
+            carriers.AddRange(going);
+            var aboard = FtlCarriage.Stow(carriers, craft);
+            foreach (var e in craft)
+                if (aboard.ContainsKey(e)) going.Add(e);
             foreach (var e in going)
             {
                 ships.Add(e);
@@ -709,6 +718,7 @@ namespace Unity.SpaceGod.Core
                 ? galaxy.DeepSpace.LaunchToStar(ships, system, at, star.Value, drive, jd, news)
                 : galaxy.DeepSpace.Launch(ships, system, at, v.Destination, drive, jd, news);
             foreach (var h in hired) c.Hired.Add(h);
+            foreach (var kv in aboard) c.Aboard[kv.Key] = kv.Value;
             string group = ships.Count > 1 ? $" and {ships.Count - 1} more" : "";
             world.Log(jd, $"{leader.Name}{group} engage{(ships.Count > 1 ? "" : "s")} {drive.Name.ToLowerInvariant()} for {c.ToName}, " +
                           $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly through open space", WorldEventKind.Info, system.Catalog.Root.Index);
@@ -1375,7 +1385,7 @@ namespace Unity.SpaceGod.Core
             var to = wild[rng.Next(wild.Count)];
             foreach (var ship in world.Fleet.Ships)
             {
-                if (!Idle(world, ship) || ship.Role != ShipRole.Free || ship.Spec.Class != ShipClass.Courier) continue;
+                if (!Idle(world, ship) || !IsSurveyHull(ship)) continue;
                 var route = Network.Route(from, to, ship.Faction, jd);
                 if (route == null || route.Count == 0) continue;
                 SetOut(from, to, ship, VoyagePurpose.Survey, route, jd);
@@ -1384,6 +1394,11 @@ namespace Unity.SpaceGod.Core
                 return;
             }
         }
+
+        /// <summary>A free pilot's hull that goes surveying: a fast courier through the gates, or a deep-space explorer
+        /// (U.SPC-T419), which can also go off the gate network under its own FTL drive.</summary>
+        public static bool IsSurveyHull(Ship ship) =>
+            ship.Role == ShipRole.Free && (ship.Spec.Class == ShipClass.Courier || ship.Spec.Class == ShipClass.Explorer);
 
         /// <summary>A survey hull with a cruise drive sent to a plain star within <see cref="MaxStarSurveyLy"/>; false if none could go.</summary>
         bool DispatchStarSurvey(StarSystem from, double jd)
@@ -1396,7 +1411,7 @@ namespace Unity.SpaceGod.Core
             var world = from.World;
             foreach (var ship in world.Fleet.Ships)
             {
-                if (!Idle(world, ship) || ship.Role != ShipRole.Free || ship.Spec.Class != ShipClass.Courier || !CanCruise(ship)) continue;
+                if (!Idle(world, ship) || !IsSurveyHull(ship) || !CanCruise(ship)) continue;
                 if (SendToStar(ship, from, star, VoyagePurpose.Survey, jd) == null) continue;
                 ship.Cargo = "Survey instruments, bound for " + star.Name;
                 world.Log(jd, $"{ship.Name} sets out under its own drive to survey {star.Name}, " +
