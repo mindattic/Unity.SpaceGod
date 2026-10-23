@@ -19,6 +19,7 @@ namespace Unity.SpaceGod.Rendering
         static readonly Dictionary<(ShipClass, Faction, int), Mesh> Cache = new Dictionary<(ShipClass, Faction, int), Mesh>();
         static readonly Dictionary<(SubsystemKind, Faction, bool), Mesh> PartCache = new Dictionary<(SubsystemKind, Faction, bool), Mesh>();
         static readonly Dictionary<Faction, Mesh> PlatformCache = new Dictionary<Faction, Mesh>();
+        static readonly Dictionary<(Faction, int, int, int), Mesh> TrussCache = new Dictionary<(Faction, int, int, int), Mesh>();
         static Mesh scar;
 
         public const int WholeHull = -1, Stern = 0, Bow = 1;
@@ -77,6 +78,29 @@ namespace Unity.SpaceGod.Rendering
             Cache[(shipClass, faction, section)] = mesh;
             return mesh;
         }
+
+        /// <summary>
+        /// A truss freighter (U.SPC-T482) as it is loaded now: its spine with a clamp for each of its <paramref name="pods"/>,
+        /// a cargo pod in <paramref name="loaded"/> of them (so the pods on it show its load: a bare truss empty, every clamp
+        /// filled full) and its <paramref name="spheres"/> fuel spheres. One mesh per combination, built once.
+        /// </summary>
+        public static Mesh GetTruss(Faction faction, int pods, int loaded, int spheres)
+        {
+            faction = Canon(faction);
+            pods = Mathf.Clamp(pods, 0, MaxTrussPods);
+            loaded = Mathf.Clamp(loaded, 0, pods);
+            spheres = Mathf.Clamp(spheres, 0, MaxTrussSpheres);
+            var key = (faction, pods, loaded, spheres);
+            if (TrussCache.TryGetValue(key, out var mesh)) return mesh;
+            var b = new Builder(faction, WholeHull);
+            BuildTruss(b, pods, loaded, spheres);
+            mesh = b.ToMesh("Truss_" + faction.Prefix + "_" + pods + "_" + loaded + "_" + spheres);
+            TrussCache[key] = mesh;
+            return mesh;
+        }
+
+        /// <summary>The most pods and spheres a truss is drawn with (a yard can clamp on more than the stock design's).</summary>
+        public const int MaxTrussPods = 16, MaxTrussSpheres = 8;
 
         /// <summary>An orbital defence platform: a gun core inside a ring (its guns are parts too).</summary>
         public static Mesh GetPlatform(Faction faction)
@@ -642,20 +666,77 @@ namespace Unity.SpaceGod.Rendering
             b.Nozzle(new Vector3(0.035f, 0, -0.47f), 0.022f, 0.04f);
         }
 
-        static void BuildFreighter(Builder b)
+        /// <summary>The stock freighter, fully loaded (for thumbnails and the yard's slips).</summary>
+        static void BuildFreighter(Builder b) => BuildTruss(b, BulkFreighters.StockPods, BulkFreighters.StockPods, BulkFreighters.StockSpheres);
+
+        /// <summary>A side of the spine: right, left, over, under.</summary>
+        static Vector2 SideOf(int place) =>
+            place == 0 ? new Vector2(1, 0) : place == 1 ? new Vector2(-1, 0) : place == 2 ? new Vector2(0, 1) : new Vector2(0, -1);
+
+        /// <summary>
+        /// A truss freighter (U.SPC-T482): a skeletal square truss from the cockpit at the bow to the engine astern, a
+        /// clamp arm at every pod's place along it, a standard container in the first <paramref name="loaded"/> clamps
+        /// (two abreast, or four round the spine on a long truss), and the fuel spheres ringed round the spine ahead of the
+        /// drive's shadow shield.
+        /// </summary>
+        static void BuildTruss(Builder b, int pods, int loaded, int spheres)
         {
-            b.Box(new Vector3(0, 0, -0.02f), new Vector3(0.03f, 0.03f, 0.8f), b.Dark);
-            Color[] crates = { new Color(0.75f, 0.35f, 0.2f), new Color(0.25f, 0.45f, 0.6f), new Color(0.7f, 0.65f, 0.3f), b.Hull };
-            for (int i = 0; i < 6; i++)
+            var steel = new Color(0.46f, 0.47f, 0.5f, 1f);
+            const float front = 0.36f, back = -0.4f, half = 0.022f, bar = 0.008f;
+            // The four longerons and a square frame every so often.
+            foreach (float x in new[] { -half, half })
+                foreach (float y in new[] { -half, half })
+                    b.Box(new Vector3(x, y, (front + back) * 0.5f), new Vector3(bar, bar, front - back), steel);
+            for (float z = back; z <= front + 1e-3f; z += 0.076f)
             {
-                float z = -0.3f + i * 0.11f;
-                b.Box(new Vector3(0, 0.035f, z), new Vector3(0.09f, 0.05f, 0.1f), crates[i % crates.Length]);
-                b.Box(new Vector3(0, -0.035f, z), new Vector3(0.09f, 0.05f, 0.1f), crates[(i + 2) % crates.Length]);
+                b.Box(new Vector3(0, half, z), new Vector3(half * 2 + bar, bar, bar), steel);
+                b.Box(new Vector3(0, -half, z), new Vector3(half * 2 + bar, bar, bar), steel);
+                b.Box(new Vector3(half, 0, z), new Vector3(bar, half * 2, bar), steel);
+                b.Box(new Vector3(-half, 0, z), new Vector3(bar, half * 2, bar), steel);
             }
-            b.Frustum(0.36f, 0.5f, new Vector2(0.1f, 0.08f), new Vector2(0.05f, 0.04f), 0, b.Hull);
-            b.Box(new Vector3(0, 0.03f, 0.43f), new Vector3(0.06f, 0.012f, 0.03f), b.Glow(new Color(0.8f, 0.9f, 1f)));
-            b.Box(new Vector3(0, 0, -0.43f), new Vector3(0.1f, 0.09f, 0.06f), b.Hull);
-            b.Nozzle(new Vector3(0, 0, -0.47f), 0.035f, 0.04f);
+
+            // The cockpit module at the bow.
+            b.Frustum(front, 0.5f, new Vector2(0.07f, 0.06f), new Vector2(0.035f, 0.03f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.026f, 0.44f), new Vector3(0.04f, 0.01f, 0.025f), b.Glow(new Color(0.8f, 0.9f, 1f)));
+            b.Box(new Vector3(0, 0.04f, 0.4f), new Vector3(0.012f, 0.02f, 0.012f), b.Accent);
+
+            // The pods: in rows of two abreast (four round the spine past eight), from behind the cockpit back towards the spheres.
+            Color[] paint = { new Color(0.75f, 0.35f, 0.2f), new Color(0.25f, 0.45f, 0.6f), new Color(0.7f, 0.65f, 0.3f), b.Hull, new Color(0.35f, 0.55f, 0.35f) };
+            int abreast = pods > 8 ? 4 : 2;
+            int rows = Mathf.Max(1, (pods + abreast - 1) / abreast);
+            const float podFront = 0.3f, podBack = -0.14f, reach = 0.068f, size = 0.075f;
+            float pitch = rows > 1 ? (podFront - podBack) / (rows - 1) : 0;
+            float length = Mathf.Min(0.1f, rows > 1 ? pitch * 0.9f : 0.1f);
+            for (int i = 0; i < pods; i++)
+            {
+                int row = i / abreast;
+                float z = rows > 1 ? podFront - pitch * row : (podFront + podBack) * 0.5f;
+                var dir = SideOf(i % abreast);
+                // The clamp arm, there whether a pod is in it or not.
+                b.Box(new Vector3(dir.x * (half + 0.012f), dir.y * (half + 0.012f), z),
+                      new Vector3(dir.x != 0 ? 0.024f : 0.01f, dir.y != 0 ? 0.024f : 0.01f, length * 0.5f), b.Dark);
+                if (i >= loaded) continue;
+                var centre = new Vector3(dir.x * reach, dir.y * reach, z);
+                b.Box(centre, new Vector3(size, size, length), paint[(i * 3 + row) % paint.Length]);
+                // The container's end frames.
+                b.Box(centre + new Vector3(0, 0, length * 0.5f - 0.004f), new Vector3(size + 0.004f, size + 0.004f, 0.006f), b.Dark);
+                b.Box(centre - new Vector3(0, 0, length * 0.5f - 0.004f), new Vector3(size + 0.004f, size + 0.004f, 0.006f), b.Dark);
+            }
+
+            // The fuel spheres: a ring of up to four round the spine, a second ring ahead of it for more.
+            for (int i = 0; i < spheres; i++)
+            {
+                float z = i < 4 ? -0.27f : -0.19f;
+                var dir = SideOf(i % 4);
+                b.Box(new Vector3(dir.x * (half + 0.01f), dir.y * (half + 0.01f), z), new Vector3(dir.x != 0 ? 0.02f : 0.01f, dir.y != 0 ? 0.02f : 0.01f, 0.02f), b.Dark);
+                b.Sphere(new Vector3(dir.x * 0.07f, dir.y * 0.07f, z), 0.045f, b.Light);
+                b.Box(new Vector3(dir.x * 0.07f, dir.y * 0.07f, z), new Vector3(0.094f, 0.094f, 0.008f), b.Accent);
+            }
+
+            // The drive: a shadow shield, the reactor and engine block, and one big bell.
+            b.Box(new Vector3(0, 0, -0.355f), new Vector3(0.11f, 0.11f, 0.01f), b.Dark);
+            b.Box(new Vector3(0, 0, -0.42f), new Vector3(0.08f, 0.08f, 0.08f), b.Hull);
+            b.Nozzle(new Vector3(0, 0, -0.475f), 0.04f, 0.05f);
         }
 
         static void BuildHauler(Builder b)
@@ -949,6 +1030,26 @@ namespace Unity.SpaceGod.Rendering
                     var c1 = new Vector3(center.x, center.y, z1);
                     Quad(c1, new Vector3(p0.x, p0.y, z1), new Vector3(p1.x, p1.y, z1), c1, color);
                 }
+            }
+
+            /// <summary>A faceted sphere about <paramref name="center"/>, poles along Z.</summary>
+            public void Sphere(Vector3 center, float radius, Color color, int bands = 6, int segments = 10)
+            {
+                Keep(center.z);
+                Vector3 P(int band, int seg)
+                {
+                    float lat = Mathf.PI * band / bands - Mathf.PI * 0.5f, lon = Mathf.PI * 2 * seg / segments;
+                    float r = Mathf.Cos(lat) * radius;
+                    return center + new Vector3(Mathf.Cos(lon) * r, Mathf.Sin(lon) * r, Mathf.Sin(lat) * radius);
+                }
+                for (int band = 0; band < bands; band++)
+                    for (int s = 0; s < segments; s++)
+                    {
+                        Vector3 p0 = P(band, s), p1 = P(band, s + 1), p2 = P(band + 1, s + 1), p3 = P(band + 1, s);
+                        // At the south pole p0 and p1 are one point: start the quad from the far edge so its face has a normal.
+                        if (band == 0) Quad(p2, p3, p0, p1, color);
+                        else Quad(p0, p1, p2, p3, color);
+                    }
             }
 
             public void Nozzle(Vector3 center, float radius, float length) =>

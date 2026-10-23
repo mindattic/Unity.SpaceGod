@@ -272,7 +272,7 @@ namespace Unity.SpaceGod.Core
         void PayToll(Ship ship, LaneHop hop, double jd)
         {
             if (ship.Spec.IsMilitary || ship.PatrolWing || ship.Faction.IsPirate || ship == PilotedShip || ship.Role == ShipRole.Tender) return;
-            double toll = Economy.LaneToll(ship.MassTonnes);
+            double toll = Economy.LaneToll(ship.Spec.Class, ship.MassTonnes);
             ship.Faction.Treasury -= toll;
             ship.Credits -= toll;
             var keeper = LaneKeeper(hop.From);
@@ -463,8 +463,9 @@ namespace Unity.SpaceGod.Core
             Infrastructure = new Infrastructure(Catalog, Ephemeris);
             Infrastructure.AddSettlementStructures(economy, seed + 3);
             WireColonisation();
-            // Merchants and couriers go down to the surface through the rings; warships and pirates hold orbit.
-            fleet.Lands = IsTrader;
+            // Merchants and couriers go down to the surface through the rings; warships and pirates hold orbit, and so does a
+            // bulk freighter, built in space and never landing: it trades from orbit (U.SPC-T482).
+            fleet.Lands = s => IsTrader(s) && !BulkFreighters.NeverLands(s);
 
             fleet.Lanes = lanes;
             // The lanes wear, and the tenders their keepers raise keep them up (U.SPC-T481).

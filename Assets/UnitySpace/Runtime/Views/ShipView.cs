@@ -30,6 +30,11 @@ namespace Unity.SpaceGod.Views
         readonly Glow[] breaches;
         bool visible = true;
 
+        /// <summary>A truss freighter's hull (U.SPC-T482), whose mesh is swapped as its load changes the pods clamped on
+        /// it, and what that mesh shows now; null for any other hull.</summary>
+        readonly MeshFilter truss;
+        (int pods, int loaded, int spheres) trussShown;
+
         /// <summary>Whether the full model is drawn (U.SPC-T415): false draws the hull alone, without hardpoints, scars, glows, shields or exhaust.</summary>
         bool detailed = true;
         float wreckSpin;
@@ -81,6 +86,11 @@ namespace Unity.SpaceGod.Views
             Root = new GameObject(ship.Name);
             Root.transform.SetParent(parent, false);
             ShipModels.Build(ship, Root.transform, renderers, out stern, out bow);
+            if (bow == null && stern.name == ShipModels.TrussSection)
+            {
+                truss = stern.GetComponent<MeshFilter>();
+                trussShown = ShipModels.TrussLoad(ship);
+            }
             EnsureStatics();
 
             var plumeGo = new GameObject("Plume");
@@ -389,6 +399,16 @@ namespace Unity.SpaceGod.Views
             {
                 bow.localPosition = Vector3.zero;
                 bow.localRotation = Quaternion.identity;
+            }
+            if (truss != null)
+            {
+                // The pods clamped on show its load: loaded in port, dropped off where it sells.
+                var load = ShipModels.TrussLoad(Ship);
+                if (load != trussShown)
+                {
+                    trussShown = load;
+                    truss.sharedMesh = ShipMeshFactory.GetTruss(Ship.Faction, load.pods, load.loaded, load.spheres);
+                }
             }
 
             block.SetFloat(EngineGlowId, burning ? 2.2f : 0.35f);

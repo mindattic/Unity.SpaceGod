@@ -68,7 +68,8 @@ namespace Unity.SpaceGod.Core
             // short boost -- it runs fighters down. The bomber: slow, steady, a short boost to get clear.
             [ShipClass.Interceptor] = new PilotTuning(0.48, 180, 2.4, 12, 9, 1.6),
             [ShipClass.Bomber] = new PilotTuning(0.3, 85, 1.6, 12, 8, 2.4),
-            [ShipClass.Freighter] = new PilotTuning(0.18, 75, 1.6, 36, 8, 3.0),
+            // A truss freighter (U.SPC-T482): a weak drive for its mass, so its cruise drive takes twice a hauler's time to spool.
+            [ShipClass.Freighter] = new PilotTuning(0.18, 75, 1.6, 36, 8, 6.0),
             [ShipClass.Miner] = new PilotTuning(0.16, 70, 1.6, 38, 8, 3.0),
             // The deep-space explorer (U.SPC-T419): handier than a hauler, nothing like a fighter.
             [ShipClass.Explorer] = new PilotTuning(0.22, 60, 1.6, 26, 8, 3.0),

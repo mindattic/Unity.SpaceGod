@@ -50,6 +50,12 @@ namespace Unity.SpaceGod.Rendering
                     return;
                 }
             }
+            if (BulkFreighters.IsTruss(ship.Spec.Class))
+            {
+                // A truss freighter (U.SPC-T482): drawn as it is loaded now (see ShipView, which swaps it as its load changes).
+                stern = Section(parent, renderers, TrussMesh(ship), TrussSection);
+                return;
+            }
             if (ShipMeshFactory.IsWarship(ship.Spec.Class))
             {
                 stern = Section(ship, parent, renderers, ShipMeshFactory.Stern, "Stern");
@@ -59,11 +65,32 @@ namespace Unity.SpaceGod.Rendering
             stern = Section(ship, parent, renderers, ShipMeshFactory.WholeHull, "Hull");
         }
 
-        static Transform Section(Ship ship, Transform parent, List<Renderer> renderers, int section, string name)
+        /// <summary>The name of a truss freighter's one hull section, whose mesh its view swaps as its load changes.</summary>
+        public const string TrussSection = "Truss";
+
+        /// <summary>A truss freighter's hull with the pods its load fills and the spheres it carries.</summary>
+        public static Mesh TrussMesh(Ship ship)
+        {
+            var (pods, loaded, spheres) = TrussLoad(ship);
+            return ShipMeshFactory.GetTruss(ship.Faction, pods, loaded, spheres);
+        }
+
+        /// <summary>What a truss freighter's model shows: its pods, how many of them its load fills, and its spheres. A hull
+        /// with no trade hold of its own (a thumbnail's, a gate constructor's) is drawn with every pod on.</summary>
+        public static (int pods, int loaded, int spheres) TrussLoad(Ship ship)
+        {
+            int pods = BulkFreighters.Pods(ship);
+            return (pods, ship.CapacityTonnes > 0 ? BulkFreighters.LoadedPods(ship) : pods, BulkFreighters.Spheres(ship));
+        }
+
+        static Transform Section(Ship ship, Transform parent, List<Renderer> renderers, int section, string name) =>
+            Section(parent, renderers, ShipMeshFactory.GetSection(ship.Spec.Class, ship.Faction, section), name);
+
+        static Transform Section(Transform parent, List<Renderer> renderers, Mesh mesh, string name)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
-            go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetSection(ship.Spec.Class, ship.Faction, section);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = ProceduralMaterial;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -111,7 +138,6 @@ namespace Unity.SpaceGod.Rendering
             }
             switch (ship.Spec.Class)
             {
-                case ShipClass.Freighter: return ship.Id % 2 == 0 ? "craft_cargoA" : "craft_cargoB";
                 case ShipClass.Miner: return "craft_miner";
                 case ShipClass.Courier: return ship.Id % 2 == 0 ? "craft_speederA" : "craft_racer";
                 case ShipClass.Explorer: return "craft_speederA";

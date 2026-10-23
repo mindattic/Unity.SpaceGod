@@ -150,7 +150,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Battleship, "Battleship", 0.3, true),
             new ShipClassSpec(ShipClass.Cruiser, "Cruiser", 0.3, true),
             new ShipClassSpec(ShipClass.Destroyer, "Destroyer", 0.3, true),
-            new ShipClassSpec(ShipClass.Freighter, "Freighter", 0.1, false),
+            // A truss freighter's drive is weak (U.SPC-T482): it rides the lanes, and off them is slow to speed up and slow down.
+            new ShipClassSpec(ShipClass.Freighter, "Freighter", 0.06, false),
             new ShipClassSpec(ShipClass.Miner, "Ore hauler", 0.06, false),
             new ShipClassSpec(ShipClass.Courier, "Courier", 1.2, false),
             new ShipClassSpec(ShipClass.Breacher, "Breacher", 0.5, true),
@@ -425,13 +426,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>The player's personal grid-based cargo hold (<see cref="CargoHold"/>) -- separate
         /// from the single-slot cargo fields above that the AI trade loop owns, and built only once
         /// asked for, since only the ship currently being piloted ever needs one.</summary>
-        public CargoHold PersonalHold => personalHold ??= EmptyHold(Loadout == null ? 0 : Loadout.Count(ModuleKind.CargoRack) * Loadout.RackRows);
+        public CargoHold PersonalHold => personalHold ??= EmptyHold(Loadout == null ? 0 : Loadout.ExtraHoldRows);
         CargoHold personalHold;
 
         CargoHold EmptyHold(int extraRows)
         {
             var spec = CargoHoldSpec.Of(Spec.Class);
-            return new CargoHold(spec.Width, spec.Height + extraRows);
+            return new CargoHold(spec.Width, Math.Max(1, spec.Height + extraRows));
         }
 
         /// <summary>The grid hold rebuilt with <paramref name="extraRows"/> rows of racks (U.SPC-T65), every crate

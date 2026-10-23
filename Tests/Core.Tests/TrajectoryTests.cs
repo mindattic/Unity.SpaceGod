@@ -292,7 +292,8 @@ namespace Unity.SpaceGod.Core.Tests
                 last = st.HelioKm;
                 if (!st.Burning) coasting++;
             }
-            Assert.That(coasting, Is.GreaterThan(samples * 0.8), "it coasts most of the way");
+            // A truss freighter's weak drive (U.SPC-T482) burns a while at each end, but it still coasts most of the way.
+            Assert.That(coasting, Is.GreaterThan(samples * 0.7), "it coasts most of the way");
 
             // And on arrival it is parked in that orbit.
             StepUntil(r, () => ship.Phase == ShipPhase.Parked && ship.Orbit.Body == moon, 20, 0.01, depart);

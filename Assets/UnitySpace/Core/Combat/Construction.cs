@@ -482,9 +482,8 @@ namespace Unity.SpaceGod.Core
             ship.Loadout = Loadout.Copy();
             var spec = ship.Loadout.Build();
             ship.Combat = new ShipCombat(spec, Frame.Class, InteriorOf(spec));
-            int racks = ship.Loadout.Count(ModuleKind.CargoRack);
-            if (Frame.CapacityTonnes > 0) ship.CapacityTonnes = Frame.CapacityTonnes + Outfitting.RackTonnes(ship.Loadout, racks);
-            if (racks > 0 && ship.ResizedHold(racks * Loadout.RackRows) is CargoHold hold) ship.SetHold(hold);
+            if (Frame.CapacityTonnes > 0) ship.CapacityTonnes = ship.Loadout.CapacityTonnes;
+            if (ship.Loadout.ExtraHoldRows != 0 && ship.ResizedHold(ship.Loadout.ExtraHoldRows) is CargoHold hold) ship.SetHold(hold);
             return true;
         }
     }

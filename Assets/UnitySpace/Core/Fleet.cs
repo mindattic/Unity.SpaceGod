@@ -2208,7 +2208,7 @@ namespace Unity.SpaceGod.Core
                     if (!conics) return viaLanes;
                     // A slow boat may sooner wait for a window and fall across than pay the tolls.
                     // The burns are priced in cost; the time on the lanes themselves and in the rings is not, so add it here.
-                    double laneCost = cost + route.Count * Economy.LaneToll(ship.MassTonnes) + (rideDays + viaLanes.Days - days) * TimeValueOf(ship);
+                    double laneCost = cost + route.Count * Economy.LaneToll(ship.Spec.Class, ship.MassTonnes) + (rideDays + viaLanes.Days - days) * TimeValueOf(ship);
                     int frame = CommonFrame(from, to);
                     if (BestConic(ship, frame, BodyEnd(frame, from, ship, jd), BodyEnd(frame, to, null, jd), jd, out double straightDays, out double straightDv)
                         && LegCost(ship, straightDays, straightDv) < laneCost)

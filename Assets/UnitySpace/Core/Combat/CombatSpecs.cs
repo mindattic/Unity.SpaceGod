@@ -564,26 +564,26 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.InterceptorMissile, 0, 0.05, -0.15),
                 },
             } },
+            // A truss freighter (U.SPC-T482, see BulkFreighters): a bare spine with pods and fuel spheres clamped along it and one
+            // big engine astern. No armour and no weapons, since every kilogram goes to cargo (its escorts carry the guns), and
+            // a weak drive for its mass, so off the lanes it is slow to speed up and slow down. Its shields only turn debris.
             [ShipClass.Freighter] = new[] { new CombatSpec
             {
                 DesignName = "Freighter", LengthKm = 0.6,
-                MassKt = 900, MainThrustMN = 27000, RetroThrustMN = 20200, LateralThrustMN = 10800, VerticalThrustMN = 10800, PitchYawTorqueMNKm = 101000, RollTorqueMNKm = 25200,
-                Hull = 4500, Shield = 750, ShieldRegen = 9, Armor = 2, MaxSpeed = 0.05, Accel = 0.0015, Decel = 0.0018,
+                MassKt = 900, MainThrustMN = 13500, RetroThrustMN = 9000, LateralThrustMN = 7200, VerticalThrustMN = 7200, PitchYawTorqueMNKm = 101000, RollTorqueMNKm = 25200,
+                Hull = 4500, Shield = 750, ShieldRegen = 9, Armor = 0, MaxSpeed = 0.05, Accel = 0.0008, Decel = 0.0008,
                 BoostSpeedMultiplier = 1.25, BoostDurationS = 36, TurnRateDegS = 3,
                 Crew = 40,
-                DryMassTonnes = 9000, PropellantTonnes = 6000, ExhaustVelocityKmS = 2500,
+                DryMassTonnes = 9000, PropellantTonnes = BulkFreighters.StockSpheres * BulkFreighters.SphereTonnes, ExhaustVelocityKmS = 2500,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.PointDefense, 0, 0.07, 0),
-                    // Its utility mount: mines laid astern for whatever chases it (U.SPC-T271).
-                    new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true, arcCenterDeg: 180),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.03, 0.43),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.3, arcCenterDeg: 0, arcWidthDeg: 90),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.1, 0.05, -0.1, arcCenterDeg: 90, arcWidthDeg: 90),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, -0.4, arcCenterDeg: 180, arcWidthDeg: 90),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, -0.1, 0.05, -0.1, arcCenterDeg: 270, arcWidthDeg: 90),
                     new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.47),
-                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.35),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.38),
                 },
             } },
             [ShipClass.Miner] = new[] { new CombatSpec

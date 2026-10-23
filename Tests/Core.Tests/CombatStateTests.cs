@@ -202,9 +202,16 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void ArmedIsFalseWhenTheOnlyWeaponsArePointDefense()
         {
-            var combat = Make(ShipClass.Freighter);
+            // A truss freighter carries no weapons (U.SPC-T482); one given point defence and a mine layer (U.SPC-T271) is still
+            // not armed: the one only shoots down what comes at it, the other supports, and neither fights.
+            var spec = CombatSpec.Of(ShipClass.Freighter).Clone();
+            spec.Layout = spec.Layout.Concat(new[]
+            {
+                new SubsystemDef(SubsystemKind.PointDefense, 0, 0.07, 0),
+                new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true, arcCenterDeg: 180),
+            }).ToArray();
+            var combat = new ShipCombat(spec, ShipClass.Freighter);
             Assert.That((combat.Subsystems).Any(s => s.Kind == SubsystemKind.PointDefense), Is.True);
-            // A freighter's mine layer (U.SPC-T271) is no gun: it supports, it does not fight.
             Assert.That((combat.Subsystems).Any(s => s.Def.IsWeapon && s.Kind != SubsystemKind.PointDefense && !s.Def.Weapon.Supporting), Is.False);
             Assert.That(combat.Armed, Is.False);
         }

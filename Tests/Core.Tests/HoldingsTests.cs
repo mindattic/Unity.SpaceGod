@@ -401,7 +401,9 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (var e in h.Ledger.TakeLast(12)) TestContext.Out.WriteLine($"{Astro.ToDateTime(e.Jd):yyyy-MM-dd} {e}");
 
             Assert.That(trader.Ship.TripsCompleted + miner.Ship.TripsCompleted, Is.GreaterThan(2), "they fly");
-            Assert.That(h.Ships.Where(o => !o.Lost).Sum(o => o.Earned), Is.GreaterThan(0), "and bring money in");
+            // What a hull earned before raiders took it is still money in: losing ships to piracy is the live system's risk,
+            // not a failure to trade (an unarmed truss freighter, U.SPC-T482, has only its escorts to keep them off).
+            Assert.That(h.Ships.Sum(o => o.Earned), Is.GreaterThan(0), "and bring money in");
             if (!miner.Lost) Assert.That(miner.TonnesMined, Is.GreaterThan(0));
             Assert.That(h.Ships.Sum(o => o.Wages), Is.GreaterThan(0));
             Assert.That(h.BookBalance + h.Unsettled, Is.EqualTo(h.Balance + h.CargoAfloat).Within(1), "every credit is on the books");

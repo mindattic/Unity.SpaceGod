@@ -362,11 +362,12 @@ namespace Unity.SpaceGod.Core.Tests
             {
                 var (a, shipA) = Markets(seed, farStock: 6000, priced: false);
                 if (a.PlanTrade(shipA, Home, 0) == FarPort) farUnpriced++;
-                var (b, shipB) = Markets(seed, farStock: 6000, priced: true, farHops: 30);
+                // A bulk freighter rides the lanes at its bulk share of the toll (U.SPC-T482), so sixty rides cost what thirty did.
+                var (b, shipB) = Markets(seed, farStock: 6000, priced: true, farHops: 60);
                 if (b.PlanTrade(shipB, Home, 0) == FarPort) farPriced++;
             }
             Assert.That(farUnpriced, Is.GreaterThanOrEqualTo(20), "on days alone the far market pays best");
-            Assert.That(farPriced, Is.LessThanOrEqualTo(farUnpriced / 2), "its propellant and thirty lane tolls eat into that");
+            Assert.That(farPriced, Is.LessThanOrEqualTo(farUnpriced / 2), "its propellant and sixty lane tolls eat into that");
         }
 
         [Test]
@@ -401,8 +402,10 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(w.LaneKeeper(earth), Is.SameAs(w.Sol));
             var lane = w.Fleet.Lanes.Lanes.First(l => (l.A == earth && l.B == mars) || (l.A == mars && l.B == earth));
             var trader = w.Fleet.Ships.First(s => s.Role == ShipRole.Trader && s.Faction == w.Independents && !s.Destroyed);
-            double toll = Economy.LaneToll(trader.MassTonnes);
-            Assert.That(toll, Is.EqualTo(Economy.LaneTollBase + Economy.LaneTollPerTonne * trader.MassTonnes));
+            Assert.That(Economy.LaneToll(trader.MassTonnes), Is.EqualTo(Economy.LaneTollBase + Economy.LaneTollPerTonne * trader.MassTonnes));
+            // A bulk freighter rides at its bulk share of that (U.SPC-T482).
+            double toll = Economy.LaneToll(trader.Spec.Class, trader.MassTonnes);
+            Assert.That(toll, Is.EqualTo(Economy.LaneToll(trader.MassTonnes) * BulkFreighters.LaneTollShareOf(trader.Spec.Class)).Within(1e-6));
             double payer = trader.Faction.Treasury, keeper = w.Sol.Treasury;
             w.Fleet.LaneJoined(trader, new LaneHop(lane, earth, mars), StartJd);
             Assert.That(trader.Faction.Treasury, Is.EqualTo(payer - toll).Within(1e-3));

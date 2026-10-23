@@ -73,9 +73,21 @@ namespace Unity.SpaceGod.Core
         /// hull's marine complement (<see cref="CombatSpec.Marines"/>). A site may set its own (<see cref="FacilitySite.Berths"/>).</summary>
         public readonly double Berths;
 
+        /// <summary>Tonnes of trade cargo one of it carries (U.SPC-T482): a truss freighter's cargo pod is its hold, so its
+        /// capacity is the pods it carries (<see cref="Loadout.CapacityTonnes"/>). Zero for most.</summary>
+        public readonly double CargoTonnes;
+
+        /// <summary>Rows of the grid hold (<see cref="CargoHold"/>) one of it gives (a pod's share of the hold).</summary>
+        public readonly int HoldRows;
+
+        /// <summary>The ship classes that may fit it (null: any class its <see cref="Categories"/> allow), so a pod clamps
+        /// only to a hull that has a truss (U.SPC-T482).</summary>
+        public readonly ICollection<ShipClass> Classes;
+
         public FacilityKind(string id, string name, double size, double massTonnes, bool scaled, (Good good, double tonnes)[] bill,
                             HullCategory[] categories = null, bool fittable = true, CompartmentKind? compartment = null,
-                            ModuleKind? module = null, Action<CombatSpec, Loadout, int> effect = null, double berths = 0)
+                            ModuleKind? module = null, Action<CombatSpec, Loadout, int> effect = null, double berths = 0,
+                            double cargoTonnes = 0, int holdRows = 0, ICollection<ShipClass> classes = null)
         {
             Berths = Math.Max(0, berths);
             Id = id ?? throw new ArgumentNullException(nameof(id));
@@ -89,6 +101,9 @@ namespace Unity.SpaceGod.Core
             Compartment = compartment;
             Module = module;
             Effect = effect;
+            CargoTonnes = Math.Max(0, cargoTonnes);
+            HoldRows = Math.Max(0, holdRows);
+            Classes = classes;
         }
 
         /// <summary>A facility that is one of the former internal-bay modules, with that module's name, bill and mass.</summary>
@@ -118,8 +133,14 @@ namespace Unity.SpaceGod.Core
         /// (U.SPC-T472). Asked with the hull's class, or null for a station or satellite.</summary>
         public Func<ShipClass?, bool> ClassFilter { get; set; }
 
-        /// <summary>Whether a hull of <paramref name="category"/> and <paramref name="cls"/> may carry it at all.</summary>
-        public bool AllowedOn(HullCategory category, ShipClass? cls) => AllowedOn(category) && (ClassFilter == null || ClassFilter(cls));
+        /// <summary>Whether a hull of <paramref name="category"/> and <paramref name="cls"/> may carry it at all: not one the
+        /// class bars (<see cref="FacilityLayouts.Bars"/>), and, for a kind with <see cref="Classes"/>, only those.</summary>
+        public bool AllowedOn(HullCategory category, ShipClass? cls)
+        {
+            if (!AllowedOn(category) || (ClassFilter != null && !ClassFilter(cls))) return false;
+            if (cls is ShipClass c && FacilityLayouts.Bars(c, Id)) return false;
+            return Classes == null || (cls is ShipClass k && Classes.Contains(k));
+        }
     }
 
     /// <summary>
@@ -161,6 +182,9 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public const string FtlDrive = "ftl-drive";
 
+        // What clamps along a truss freighter's spine (U.SPC-T482, see BulkFreighters).
+        public const string CargoPod = "cargo-pod", FuelSphere = "fuel-sphere";
+
         static FacilityKinds()
         {
             Register(Structure(Bridge, "Bridge", 1, CompartmentKind.Bridge));
@@ -199,6 +223,13 @@ namespace Unity.SpaceGod.Core
             {
                 ClassFilter = c => c is ShipClass k && FtlRoster.Of(k) == FtlAccess.Fitted,
             });
+
+            // A truss freighter's standard modules (U.SPC-T482): a pod is a share of its hold, a sphere a share of its tanks.
+            Register(new FacilityKind(CargoPod, "Cargo pod", 1, BulkFreighters.PodMassTonnes, false, new[] { (Good.Alloys, 90.0), (Good.Machinery, 6.0) },
+                fittable: true, cargoTonnes: BulkFreighters.PodTonnes, holdRows: BulkFreighters.PodRows, classes: BulkFreighters.TrussClasses));
+            Register(new FacilityKind(FuelSphere, "Fuel sphere", 1, BulkFreighters.SphereMassTonnes, false, new[] { (Good.Alloys, 60.0), (Good.Machinery, 4.0) },
+                fittable: true, effect: (spec, l, n) => spec.PropellantTonnes = Math.Max(0, spec.PropellantTonnes + n * BulkFreighters.SphereTonnes),
+                classes: BulkFreighters.TrussClasses));
         }
 
         static FacilityKind Structure(string id, string name, double size, CompartmentKind compartment) =>
@@ -338,12 +369,9 @@ namespace Unity.SpaceGod.Core
                 // Designed with its own FTL drive, as a battleship is (U.SPC-T472): a fitting a yard may strip.
                 new FacilitySite(FacilityKinds.FtlDrive, "FTL drive", -0.3, 0, FacilitySite.Amidships),
             },
-            [ShipClass.Freighter] = new[]
-            {
-                new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.43), new FacilitySite(FacilityKinds.Hold, "Forward hold", 0.15),
-                new FacilitySite(FacilityKinds.Hold, "Aft hold", -0.15), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.42),
-                new FacilitySite(FacilityKinds.MarineHabitat, "Security post", -0.15, -0.05, 2, 4),
-            },
+            // A truss freighter (U.SPC-T482): the cockpit at the bow, the pod gantry down the spine, the pods and spheres clamped
+            // along it (no space of their own: nobody walks into a pod) and the engine room astern.
+            [ShipClass.Freighter] = BulkFreighters.StockLayout(),
             [ShipClass.Miner] = new[]
             {
                 new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.3, 0.05), new FacilitySite(FacilityKinds.Hold, "Ore hold", 0),
@@ -429,6 +457,23 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Sets (or replaces) the facilities a class is designed with.</summary>
         public static void Register(ShipClass c, FacilitySite[] layout) => ByClass[c] = layout ?? throw new ArgumentNullException(nameof(layout));
+
+        static readonly Dictionary<ShipClass, HashSet<string>> Barred = new Dictionary<ShipClass, HashSet<string>>
+        {
+            // Every kilogram of a truss freighter goes to cargo: no plate, and no racks, since its pods are its hold (U.SPC-T482).
+            [ShipClass.Freighter] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { FacilityKinds.ArmourPlating, FacilityKinds.CargoRacks },
+        };
+
+        /// <summary>Bars (or, with <paramref name="barred"/> false, allows again) a facility kind on every hull of a class.</summary>
+        public static void Bar(ShipClass c, string kind, bool barred = true)
+        {
+            if (!Barred.TryGetValue(c, out var set)) Barred[c] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (barred) set.Add(kind);
+            else set.Remove(kind);
+        }
+
+        /// <summary>Whether hulls of <paramref name="c"/> may never fit a facility of kind <paramref name="kind"/>.</summary>
+        public static bool Bars(ShipClass c, string kind) => kind != null && Barred.TryGetValue(c, out var set) && set.Contains(kind);
 
         /// <summary>Free internal space a hull of each class has for fitted facilities beyond its structure, sections
         /// (as many as it had internal bays before U.SPC-T470).</summary>

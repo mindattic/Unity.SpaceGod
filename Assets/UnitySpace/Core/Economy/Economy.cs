@@ -401,7 +401,8 @@ namespace Unity.SpaceGod.Core
         {
             switch (c)
             {
-                case ShipClass.Freighter: return 20000;
+                // A truss freighter's hold is its stock design's pods (U.SPC-T482): 8 x 2,500 t.
+                case ShipClass.Freighter: return BulkFreighters.StockPods * BulkFreighters.PodTonnes;
                 case ShipClass.Miner: return 30000;
                 case ShipClass.Courier: return 400;
                 default: return 0;
@@ -427,6 +428,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The toll for one hyperlane ride by a ship of <paramref name="massTonnes"/>, credits.</summary>
         public static double LaneToll(double massTonnes) => LaneTollBase + LaneTollPerTonne * Math.Max(0, massTonnes);
+
+        /// <summary>The toll a ship of <paramref name="cls"/> pays for one ride: a bulk freighter rides at its bulk share
+        /// (<see cref="BulkFreighters.LaneTollShare"/>, U.SPC-T482), any other ship the full toll for its mass.</summary>
+        public static double LaneToll(ShipClass cls, double massTonnes) => LaneToll(massTonnes) * BulkFreighters.LaneTollShareOf(cls);
 
         /// <summary>What a run costs and whether the tanks cover it (see <see cref="PriceRun"/>).</summary>
         struct Run
@@ -458,7 +463,7 @@ namespace Unity.SpaceGod.Core
             {
                 Days = days,
                 Propellant = burn,
-                Cost = days * RunningCostPerDay(cls) + burn * fuelPrice + trip.LaneHops * LaneToll(mass),
+                Cost = days * RunningCostPerDay(cls) + burn * fuelPrice + trip.LaneHops * LaneToll(cls, mass),
                 Reachable = burn * (1 + Propulsion.PlanningReserve) <= tanks,
             };
         }

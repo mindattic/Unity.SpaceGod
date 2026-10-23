@@ -150,6 +150,9 @@ namespace Unity.SpaceGod.Core.Tests
             var freighter = b.AddShip(Hull(ShipClass.Freighter, Blue, 1), 1, new DVec3(-4, 0, 0), DVec3.UnitX);
             freighter.Combat.ZeroAllShields();
             foreach (var s in freighter.Combat.Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) s.Hp = 0;
+            // A crew that will not strike its colours: an unarmed truss freighter (U.SPC-T482) with its shields down would
+            // sooner surrender to the pirates than be rammed, and this is about the ram.
+            freighter.MoraleThreshold = double.MaxValue;
             bool latched = false;
             for (int i = 0; i < 2000 && !b.Over; i++)
             {

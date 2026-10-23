@@ -28,7 +28,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Interceptor] = new CargoHoldSpec(1, 2),
             [ShipClass.Bomber] = new CargoHoldSpec(3, 2),
             [ShipClass.GatePicket] = new CargoHoldSpec(3, 2),
-            [ShipClass.Freighter] = new CargoHoldSpec(8, 6),
+            // A truss freighter's hold is its pods (U.SPC-T482): six cells wide, a row for each of its stock design's eight pods.
+            [ShipClass.Freighter] = new CargoHoldSpec(6, BulkFreighters.StockPods * BulkFreighters.PodRows),
             [ShipClass.Miner] = new CargoHoldSpec(7, 6),
             // An ore tug carries nothing aboard: its load is held in its claws (U.SPC-T483). A locker for the crew's kit.
             [ShipClass.OreTug] = new CargoHoldSpec(2, 2),

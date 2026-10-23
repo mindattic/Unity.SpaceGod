@@ -268,8 +268,9 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void CargoRacksEnlargeBothHoldsAndCannotComeOutFull()
         {
+            // An ore hauler's holds: a truss freighter takes pods, not racks (U.SPC-T482).
             var (economy, yard) = Yard(Navy);
-            var ship = Hull(ShipClass.Freighter, Navy);
+            var ship = Hull(ShipClass.Miner, Navy);
             double capacity = ship.CapacityTonnes;
             int rows = ship.PersonalHold.Height;
             Assert.That(FitIn(economy, ship, yard, ModuleKind.CargoRack), Is.EqualTo(OutfitOutcome.Ok));

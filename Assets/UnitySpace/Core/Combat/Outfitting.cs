@@ -467,6 +467,38 @@ namespace Unity.SpaceGod.Core
         /// <see cref="SensorSuite.Military"/> range on a <see cref="Signatures.Haven"/> signature).</summary>
         public const double ScannerRangeKm = 1e6;
 
+        /// <summary>
+        /// The trade hold this loadout gives, tonnes: the design's own (<see cref="BaseCapacityTonnes"/>), what its racks add,
+        /// and the cargo of every facility that carries some (a truss freighter's pods, U.SPC-T482) fitted over the design,
+        /// less that of the design's own taken out.
+        /// </summary>
+        public double CapacityTonnes
+        {
+            get
+            {
+                double t = BaseCapacityTonnes + Outfitting.RackTonnes(this, Count(ModuleKind.CargoRack));
+                foreach (var f in AddedFacilities) t += f.Def?.CargoTonnes ?? 0;
+                foreach (var f in RemovedFacilities) t -= f.Def?.CargoTonnes ?? 0;
+                return Math.Max(0, t);
+            }
+        }
+
+        /// <summary>Rows the grid hold has beyond its class's (<see cref="CargoHoldSpec"/>): the racks', and those of the
+        /// facilities that give some (pods) fitted over the design, less those of the design's own taken out.</summary>
+        public int ExtraHoldRows
+        {
+            get
+            {
+                int rows = Count(ModuleKind.CargoRack) * RackRows;
+                foreach (var f in AddedFacilities) rows += f.Def?.HoldRows ?? 0;
+                foreach (var f in RemovedFacilities) rows -= f.Def?.HoldRows ?? 0;
+                return rows;
+            }
+        }
+
+        /// <summary>Whether a facility of <paramref name="kind"/> changes the hull's holds (racks, pods).</summary>
+        public static bool IsHold(FacilityKind kind) => kind != null && (kind.Module == ModuleKind.CargoRack || kind.CargoTonnes > 0 || kind.HoldRows > 0);
+
         /// <summary>Prisoners each brig holds (more on a bigger hull).</summary>
         public int BrigBerthsEach => (int)Math.Round(20 * Math.Max(1, Scale));
 
@@ -675,8 +707,7 @@ namespace Unity.SpaceGod.Core
             var l = LoadoutOf(ship);
             if (l == null || l.CanAdd(kind) != OutfitOutcome.Ok) return false;
             l.Facilities.Add(FacilitySite.Fitted(kind));
-            var spec = l.Build();
-            ship.Combat = ship.Combat.Refitted(spec, l.Class, -1, InteriorAfter(ship, l, kind, spec));
+            Rebuild(ship, l, kind, null);
             return true;
         }
 
@@ -828,13 +859,14 @@ namespace Unity.SpaceGod.Core
             if (!l.CanRemove(index)) return OutfitOutcome.WontFit;
             var kind = l.Facilities[index].Def;
 
-            // What the hull would carry afterwards: racks and brig cells taken out must leave room for what is in them.
+            // What the hull would carry afterwards: racks, pods and brig cells taken out must leave room for what is in them.
             CargoHold resized = null;
-            if (kind.Module == ModuleKind.CargoRack)
+            if (Loadout.IsHold(kind))
             {
-                int racks = l.Count(ModuleKind.CargoRack) - 1;
-                if (ship.HasCargo && ship.CargoTonnes > l.BaseCapacityTonnes + RackTonnes(l, racks) + 1e-9) return OutfitOutcome.HoldTooFull;
-                resized = ship.ResizedHold(racks * Loadout.RackRows);
+                var after = l.Copy();
+                after.Facilities.RemoveAt(index);
+                if (ship.HasCargo && ship.CargoTonnes > after.CapacityTonnes + 1e-9) return OutfitOutcome.HoldTooFull;
+                resized = ship.ResizedHold(after.ExtraHoldRows);
                 if (resized == null) return OutfitOutcome.HoldTooFull;
             }
             if (kind.Module == ModuleKind.Brig && ship.Prisoners + ship.CaptainsHeld > (l.Count(ModuleKind.Brig) - 1) * l.BrigBerthsEach + 1e-9)
@@ -882,15 +914,14 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>The hull after a facility of <paramref name="kind"/> went in or came out: its combat spec, its interior
-        /// (when the facility is a space of its own) and, for racks, both its holds.</summary>
+        /// (when the facility is a space of its own) and, for racks and pods, both its holds.</summary>
         static void Rebuild(Ship ship, Loadout l, FacilityKind kind, CargoHold resized)
         {
             var spec = l.Build();
             ship.Combat = ship.Combat.Refitted(spec, l.Class, -1, InteriorAfter(ship, l, kind, spec));
-            if (kind.Module != ModuleKind.CargoRack) return;
-            int racks = l.Count(ModuleKind.CargoRack);
-            ship.CapacityTonnes = l.BaseCapacityTonnes + RackTonnes(l, racks);
-            ship.SetHold(resized ?? ship.ResizedHold(racks * Loadout.RackRows));
+            if (!Loadout.IsHold(kind)) return;
+            ship.CapacityTonnes = l.CapacityTonnes;
+            ship.SetHold(resized ?? ship.ResizedHold(l.ExtraHoldRows));
         }
 
         /// <summary>A new interior for the hull when a facility that is a compartment went in or came out (its people

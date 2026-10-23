@@ -15,17 +15,25 @@ namespace Unity.SpaceGod.Core.Tests
     {
         const double StartJd = 2461324.0;
 
-        static Ship Hull(ShipClass c, Faction f, int id) => new Ship
+        static Ship Hull(ShipClass c, Faction f, int id, ModuleKind? utility = null)
         {
-            Id = id, Name = f.Prefix + " " + c + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(CombatSpec.Of(c), c),
-        };
+            var spec = CombatSpec.Of(c);
+            if (utility is ModuleKind m)
+            {
+                // The hull with its utility mount fitted with that module instead of its stock one.
+                var l = new Loadout(spec, c, 0);
+                l.Fitted[l.Slots.FindIndex(s => s.Kind == SlotKind.UtilityMount)] = m;
+                spec = l.Build();
+            }
+            return new Ship { Id = id, Name = f.Prefix + " " + c + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(spec, c) };
+        }
 
-        static (Battle b, BattleUnit mine, BattleUnit theirs) Duel(ShipClass mine, ShipClass theirs, DVec3 theirPos, bool player = true)
+        static (Battle b, BattleUnit mine, BattleUnit theirs) Duel(ShipClass mine, ShipClass theirs, DVec3 theirPos, bool player = true, ModuleKind? utility = null)
         {
             var blue = new Faction("Blue", "BLU", new Rgb(0, 0, 1)) { IsMilitary = true };
             var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
             var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 1);
-            b.AddShip(Hull(mine, blue, 0), 0, DVec3.Zero, DVec3.UnitX);
+            b.AddShip(Hull(mine, blue, 0, utility), 0, DVec3.Zero, DVec3.UnitX);
             b.AddShip(Hull(theirs, red, 1), 1, theirPos, -DVec3.UnitX);
             b.Units[0].PlayerControlled = player;
             return (b, b.Units[0], b.Units[1]);
@@ -68,10 +76,13 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void AFreightersMineLayerDoesNotMakeItAWarship()
+        public void AMineLayerDoesNotMakeAHullAWarship()
         {
-            var c = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
-            Assert.That(c.Subsystems.Any(s => s.Kind == SubsystemKind.MineLayer), Is.True, "a freighter carries mines for what chases it");
+            // A truss freighter carries no weapons and no mines (U.SPC-T482); bolted onto one, a mine layer still leaves it unarmed.
+            var spec = CombatSpec.Of(ShipClass.Freighter).Clone();
+            spec.Layout = spec.Layout.Concat(new[] { new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true, arcCenterDeg: 180) }).ToArray();
+            var c = new ShipCombat(spec, ShipClass.Freighter);
+            Assert.That(c.Subsystems.Any(s => s.Kind == SubsystemKind.MineLayer), Is.True);
             Assert.That(c.Armed, Is.False, "mines are a way to get away, not to fight");
         }
 
@@ -154,7 +165,7 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void AMineLaidAsternArmsThenBlowsUnderAHostileThatFliesIntoIt()
         {
-            var (b, me, them) = Duel(ShipClass.Freighter, ShipClass.Fighter, new DVec3(-3, 0, 0));
+            var (b, me, them) = Duel(ShipClass.Courier, ShipClass.Fighter, new DVec3(-3, 0, 0), utility: ModuleKind.MineLayer);
             me.PlayerMineRequested = true;
             b.Advance(0.1);
             Assert.That(b.Mines.Count, Is.EqualTo(1), "no mine was laid on request");
@@ -179,17 +190,17 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void AFreightersCrewLaysMinesForWhatIsOnItsTail()
+        public void ACouriersCrewLaysMinesForWhatIsOnItsTail()
         {
-            // A hostile fighter close astern, the freighter flown by its own crew.
-            var (b, me, them) = Duel(ShipClass.Freighter, ShipClass.Fighter, new DVec3(-1.5, 0, 0), player: false);
+            // A hostile fighter close astern, a courier with a mine layer on its utility mount flown by its own crew.
+            var (b, me, them) = Duel(ShipClass.Courier, ShipClass.Fighter, new DVec3(-1.5, 0, 0), player: false, utility: ModuleKind.MineLayer);
             for (int i = 0; i < 30 && b.Mines.Count == 0; i++)
             {
                 me.Forward = DVec3.UnitX;
                 them.Pos = me.Pos + new DVec3(-1.5, 0, 0);
                 b.Advance(0.1);
             }
-            Assert.That(b.Mines.Count, Is.GreaterThan(0), "a freighter with a fighter on its tail laid no mines");
+            Assert.That(b.Mines.Count, Is.GreaterThan(0), "a courier with a fighter on its tail laid no mines");
         }
 
         // ------------------------------------------------------------ auto turrets
