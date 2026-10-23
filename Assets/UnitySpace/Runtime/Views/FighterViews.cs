@@ -61,6 +61,17 @@ namespace Unity.SpaceGod.Views
                     if (!views.TryGetValue(u, out var v)) views[u] = v = Create(u);
                     var scene = app.BattleScene(b, u.Pos);
                     var rel = app.Relative(scene);
+                    // Its model while big enough, then a glow impostor, then nothing below a pixel (U.SPC-T415): a battle
+                    // seen from across the system is its ships' icons, not a cloud of sparks.
+                    var tier = RenderLod.Tier(RenderLod.Fighter, RenderLod.ApparentPx(app.Scale.ShipLength(u.LengthKm), rel.magnitude, ppu));
+                    bool model = RenderLod.DrawsModel(tier), shown = tier != LodTier.Culled;
+                    if (v.Hull.activeSelf != model) v.Hull.SetActive(model);
+                    if (v.Glow.gameObject.activeSelf != shown) v.Glow.gameObject.SetActive(shown);
+                    if (!shown)
+                    {
+                        v.Trail.Visible = false;
+                        continue;
+                    }
                     var f = u.Forward.SwapYZ;
                     var fwd = new Vector3((float)f.X, (float)f.Y, (float)f.Z);
                     v.Hull.transform.localPosition = rel;

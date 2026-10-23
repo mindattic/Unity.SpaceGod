@@ -30,10 +30,13 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>How many pixels long a ship of <paramref name="length"/> scene units looks at <paramref name="depth"/>, given the camera's pixels per unit at unit distance.</summary>
         public static double ApparentPx(double length, double depth, double pixelsPerUnit) =>
-            length / Math.Max(depth, 1e-9) * pixelsPerUnit;
+            RenderLod.ApparentPx(length, depth, pixelsPerUnit);
 
         /// <summary>Whether a ship <paramref name="px"/> pixels long on screen is drawn as its 3D model (else as its icon).</summary>
-        public static bool DrawsModel(double px) => DrawsModel(px, IconBelowPx.Value);
+        public static bool DrawsModel(double px) => RenderLod.DrawsModel(RenderLod.Tier(RenderLod.Ship, px));
+
+        /// <summary>Whether a ship drawn as its model at <paramref name="px"/> pixels keeps its full detail (else its hull alone, U.SPC-T415).</summary>
+        public static bool DrawsFullModel(double px) => RenderLod.Tier(RenderLod.Ship, px) == LodTier.Full;
 
         public static bool DrawsModel(double px, double iconBelowPx) => px >= iconBelowPx;
 

@@ -29,6 +29,9 @@ namespace Unity.SpaceGod.Views
         readonly List<Glow> glows = new List<Glow>();
         readonly Glow[] breaches;
         bool visible = true;
+
+        /// <summary>Whether the full model is drawn (U.SPC-T415): false draws the hull alone, without hardpoints, scars, glows, shields or exhaust.</summary>
+        bool detailed = true;
         float wreckSpin;
 
         // Shield ring: one wedge per shield generator, built once (geometry is fixed) and recoloured
@@ -391,7 +394,7 @@ namespace Unity.SpaceGod.Views
             block.SetColor(ColorId, Color.white);
             SetBlock();
             plume.enabled = visible && burning;
-            SetExhaust(visible && burning);
+            SetExhaust(visible && detailed && burning);
         }
 
         /// <summary>Starts/stops the exhaust emitter only on an actual state change -- <see cref="ParticleSystem.Stop"/>
@@ -411,7 +414,7 @@ namespace Unity.SpaceGod.Views
         /// </summary>
         public void ApplyCombat(ShipCombat combat, bool fighting, bool thrusting, float now, float dt)
         {
-            if (!visible) return;
+            if (!visible || !detailed) return;
             UpdateShieldRing(fighting);
             if (bow == null) return;
             var inverse = Quaternion.Inverse(Root.transform.rotation);
@@ -597,6 +600,33 @@ namespace Unity.SpaceGod.Views
                 foreach (var r in p.Renderers) r.SetPropertyBlock(block);
         }
 
+        /// <summary>
+        /// Full model or simplified (U.SPC-T415, <see cref="RenderLod"/>): a ship too small on screen for its hardpoints to
+        /// read draws its hull alone, its turrets, scars, fires, breaches, glows, shield ring and exhaust put away, and
+        /// stops aiming and billboarding them. Back to full detail, every hardpoint is shown as it now stands.
+        /// </summary>
+        public void SetDetail(bool full)
+        {
+            if (detailed == full) return;
+            detailed = full;
+            if (!visible) return;
+            foreach (var p in parts)
+            {
+                foreach (var r in p.Renderers) r.enabled = full && !p.Sub.Destroyed;
+                p.Scar.GetComponent<Renderer>().enabled = full && p.Sub.Destroyed && p.Mount != null;
+                p.Fire.R.enabled = full && p.Sub.Destroyed;
+                // Re-read by ApplyCombat on the next detailed frame.
+                p.ShownDestroyed = p.Sub.Destroyed;
+            }
+            if (!full)
+            {
+                HardStopExhaust();
+                foreach (var g in glows) g.R.enabled = false;
+                foreach (var g in breaches) g.R.enabled = false;
+                if (shieldRingRenderer != null) shieldRingRenderer.enabled = false;
+            }
+        }
+
         public void SetVisible(bool value)
         {
             if (visible == value) return;
@@ -604,9 +634,9 @@ namespace Unity.SpaceGod.Views
             foreach (var r in renderers) r.enabled = value;
             foreach (var p in parts)
             {
-                foreach (var r in p.Renderers) r.enabled = value && !p.Sub.Destroyed;
-                p.Scar.GetComponent<Renderer>().enabled = value && p.Sub.Destroyed && p.Mount != null;
-                p.Fire.R.enabled = value && p.Sub.Destroyed;
+                foreach (var r in p.Renderers) r.enabled = value && detailed && !p.Sub.Destroyed;
+                p.Scar.GetComponent<Renderer>().enabled = value && detailed && p.Sub.Destroyed && p.Mount != null;
+                p.Fire.R.enabled = value && detailed && p.Sub.Destroyed;
             }
             if (!value)
             {

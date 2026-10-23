@@ -323,6 +323,9 @@ namespace Unity.SpaceGod.UI
             }
 
             var ships = app.Fleet.Ships;
+            app.FoldedShips.Clear();
+            iconMarks.Clear();
+            iconDraws.Clear();
             // At the helm the player sees only what the ship's own scanners hold (U.SPC-T66): an unknown blip, a hull
             // class, or -- identified -- whose it is; a track gone cold is drawn faded where it was last seen.
             var picture = Picture;
@@ -356,23 +359,59 @@ namespace Unity.SpaceGod.UI
                     DrawIcon(Icons.Lost, p, 14, LostColor(contact));
                     continue;
                 }
-                float px = (float)ShipLod.ApparentPx(app.ShipDisplayLength(ship), depth, ppu);
+                double length = app.ShipDisplayLength(ship);
+                float px = (float)ShipLod.ApparentPx(length, depth, ppu);
                 // Drawn as its model (and the model built: one still streaming in shows as its icon meanwhile).
                 if (app.ShipModelShown(ship, px)) continue;
                 if (app.Occluded(scene)) continue;
-                if (ship.IsEscort && app.ToGui(app.ShipScene(ship.Leader), out var lp, out _) && (lp - p).magnitude < 7f) continue;
-                var c = ship.Faction.Color;
-                if (contact == null)
+                if (ship.IsEscort && app.ToGui(app.ShipScene(ship.Leader), out var lp, out _) && (lp - p).magnitude < 7f)
                 {
-                    DrawIcon(Icons.ForShip(ship.Spec.Class), p, Icons.PixelSize(ship.Spec.Class), new Color(c.R, c.G, c.B, 0.95f));
+                    app.FoldedShips.Add(ship);
                     continue;
                 }
+                var c = ship.Faction.Color;
                 const float alpha = 0.95f;
-                if (contact.Level == ContactLevel.Blip) DrawIcon(Icons.Blip, p, 12, new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, alpha));
+                Texture2D icon;
+                float size;
+                Color tint;
+                int group;
+                if (contact == null || contact.Level == ContactLevel.Identified)
+                {
+                    icon = Icons.ForShip(ship.Spec.Class);
+                    size = Icons.PixelSize(ship.Spec.Class);
+                    tint = new Color(c.R, c.G, c.B, alpha);
+                    group = GroupOf(ship.Faction);
+                }
+                else if (contact.Level == ContactLevel.Blip)
+                {
+                    icon = Icons.Blip;
+                    size = 12;
+                    tint = new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, alpha);
+                    group = -1;
+                }
                 else
                 {
-                    var tint = contact.Level == ContactLevel.Identified ? new Color(c.R, c.G, c.B, alpha) : new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, alpha);
-                    DrawIcon(Icons.ForShip(ship.Spec.Class), p, Icons.PixelSize(ship.Spec.Class), tint);
+                    icon = Icons.ForShip(ship.Spec.Class);
+                    size = Icons.PixelSize(ship.Spec.Class);
+                    tint = new Color(ContactGrey.r, ContactGrey.g, ContactGrey.b, alpha);
+                    group = -2;
+                }
+                var t = Target.OfShip(ship);
+                bool pinned = t == app.Hovered || t == app.Selected || app.SpaceCamera.FocusTarget == t || ship == app.Piloted.Ship;
+                iconMarks.Add(new LodMark(p.x, p.y, group, length, pinned));
+                iconDraws.Add((ship, icon, size, tint, p));
+            }
+
+            // Icons of one side that crowd on screen fold into one mark with a count (U.SPC-T415): a fleet, or the
+            // traffic round a port, is drawn once, its biggest hull standing for the rest.
+            foreach (var mark in RenderLod.Aggregate(iconMarks, RenderLod.AggregatePx.Value))
+            {
+                var (ship, icon, size, tint, p) = iconDraws[mark.Representative];
+                DrawIcon(icon, p, size, tint);
+                if (mark.Count > 1)
+                {
+                    for (int k = 1; k < mark.Members.Count; k++) app.FoldedShips.Add(iconDraws[mark.Members[k]].ship);
+                    DrawLabel(RenderLod.CountLabel(mark.Count), p + new Vector2(size * 0.5f, size * 0.5f - 6), tint, true);
                 }
             }
 
@@ -405,7 +444,8 @@ namespace Unity.SpaceGod.UI
                     if (!named)
                     {
                         // Drawn as its icon: named beside it if the settings say so and the scanners know whose it is.
-                        if (identified && (contact == null || !contact.Cold) && ShipLod.NamesIcon(ship.Spec.IsMilitary, ship.IsEscort)) iconNamed.Add((ship, contact));
+                        // Folded into another's mark (U.SPC-T415), the mark's own ship is named for it.
+                        if (identified && (contact == null || !contact.Cold) && !app.FoldedShips.Contains(ship) && ShipLod.NamesIcon(ship.Spec.IsMilitary, ship.IsEscort)) iconNamed.Add((ship, contact));
                         continue;
                     }
                     DrawShipName(ship, contact, ppu, false);
@@ -413,6 +453,19 @@ namespace Unity.SpaceGod.UI
                 foreach (var (ship, contact) in iconNamed)
                     DrawShipName(ship, contact, ppu, true);
             }
+        }
+
+        /// <summary>The far-off ships' icons this repaint, before they are folded into marks (U.SPC-T415).</summary>
+        readonly List<LodMark> iconMarks = new List<LodMark>();
+        readonly List<(Ship ship, Texture2D icon, float size, Color tint, Vector2 p)> iconDraws = new List<(Ship, Texture2D, float, Color, Vector2)>();
+        readonly Dictionary<Faction, int> factionGroups = new Dictionary<Faction, int>();
+
+        /// <summary>Which side an icon folds with: one group per faction.</summary>
+        int GroupOf(Faction f)
+        {
+            if (f == null) return 0;
+            if (!factionGroups.TryGetValue(f, out int g)) factionGroups[f] = g = factionGroups.Count + 1;
+            return g;
         }
 
         /// <summary>Ship name labels drawn this repaint, so an icon's name can stay clear of them.</summary>
@@ -480,7 +533,9 @@ namespace Unity.SpaceGod.UI
                 DrawIcon(Icons.ForBody(mark), p, 14, c);
                 string name = other.Catalog.Root.Name == "Sun" ? "Sun  (Sol System)" : other.Name;
                 double ly = Galaxy.DistanceLy(app.ActiveSystem, other);
-                DrawLabel(name + "  " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly", p + new Vector2(10, -8), c, true);
+                // Every ship in another system is folded into its one mark (U.SPC-T415), which says how many.
+                string ships = RenderLod.SystemShipsLabel(RenderLod.LiveShips(other.World?.Fleet));
+                DrawLabel(name + "  " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " ly" + (ships.Length > 0 ? "  · " + ships : ""), p + new Vector2(10, -8), c, true);
             }
         }
 

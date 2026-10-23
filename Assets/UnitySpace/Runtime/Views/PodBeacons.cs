@@ -62,6 +62,16 @@ namespace Unity.SpaceGod.Views
                 var centre = app.PodScene(p);
                 var rel = app.Relative(centre);
                 float length = (float)app.Scale.ShipLength(PodLengthKm);
+                // The capsules while they can be made out, then the beacon alone, then nothing below a pixel (U.SPC-T415).
+                var tier = RenderLod.Tier(RenderLod.Pod, RenderLod.ApparentPx(length * 4f, rel.magnitude, ppu));
+                bool model = RenderLod.DrawsModel(tier);
+                foreach (var c in v.Capsules)
+                    if (c.gameObject.activeSelf != model) c.gameObject.SetActive(model);
+                if (tier == LodTier.Culled)
+                {
+                    v.Beacon.gameObject.SetActive(false);
+                    continue;
+                }
                 for (int k = 0; k < v.Capsules.Length; k++)
                 {
                     var t = v.Capsules[k];

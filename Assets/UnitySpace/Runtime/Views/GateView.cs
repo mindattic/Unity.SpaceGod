@@ -61,15 +61,24 @@ namespace Unity.SpaceGod.Views
         {
             if (views.Count < app.ActiveSystem.Gates.Count) AddNew();
             double jd = app.Clock.Jd;
+            double ppu = app.PixelsPerUnitAtUnitDistance();
             foreach (var (gate, root, renderer) in views)
             {
-                renderer.enabled = visible;
-                if (!visible) continue;
+                if (!visible)
+                {
+                    renderer.enabled = false;
+                    continue;
+                }
 
                 var scenePos = app.Scale.MapNear(app.Ephemeris, app.BodyScenes, app.Catalog.Root.Index, gate.PositionKm);
                 var size = app.Scale.ShipLength(DiameterKm);
+                var rel = app.Relative(scenePos);
+                // Below a pixel a gate is not drawn at all (U.SPC-T415).
+                bool shown = RenderLod.DrawsModel(RenderLod.Tier(RenderLod.Gate, RenderLod.ApparentPx(size, rel.magnitude, ppu)));
+                renderer.enabled = shown;
+                if (!shown) continue;
                 var t = root.transform;
-                t.localPosition = app.Relative(scenePos);
+                t.localPosition = rel;
                 t.localScale = Vector3.one * (float)size;
 
                 // A ship passes straight through along the real line to the paired star.

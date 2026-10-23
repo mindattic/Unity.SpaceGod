@@ -232,6 +232,9 @@ namespace Unity.SpaceGod
         /// <summary>Where the HUD drew each ship's name last repaint (U.SPC-T376): clicking a name picks its ship, like its icon.</summary>
         public readonly List<(Rect rect, Ship ship)> ShipNameRects = new List<(Rect, Ship)>();
 
+        /// <summary>Ships the HUD folded into another's mark last repaint (U.SPC-T415): clicking the mark picks the ship that stands for it, not one hidden in it.</summary>
+        public readonly HashSet<Ship> FoldedShips = new HashSet<Ship>();
+
         DVec3[] bodyScene;
         double[] bodyRadius;
         BodyView[] bodyViews;
@@ -2449,10 +2452,13 @@ namespace Unity.SpaceGod
                 float heat = shipStates[i].Heat;
                 if (heat > 0.01f) PlaceEntryGlow(glowIndex++, i, rel, heat, pixelsPerUnit);
                 double px = ShipLod.ApparentPx(shipLength[i], rel.magnitude, pixelsPerUnit);
-                // Too small to read: hide the model, the HUD draws its named faction icon instead (U.SPC-T376).
-                bool visible = ShipLod.DrawsModel(px);
+                // Too small to read: hide the model, the HUD draws its named faction icon instead (U.SPC-T376), folded
+                // into one mark with its neighbours where they crowd; too small for its hardpoints, the hull alone (U.SPC-T415).
+                var tier = RenderLod.Tier(RenderLod.Ship, px);
+                bool visible = RenderLod.DrawsModel(tier);
                 shipViews[i].SetVisible(visible);
                 if (!visible) continue;
+                shipViews[i].SetDetail(tier == LodTier.Full && !ship.Derelict);
                 if (ship.Derelict)
                 {
                     shipViews[i].Derelict(rel, shipRotation[i], (float)shipLength[i], Time.unscaledTime + ship.Id);
@@ -2532,6 +2538,13 @@ namespace Unity.SpaceGod
             if (wreckStart[i] < 0) wreckStart[i] = Time.unscaledTime;
             var rel = Relative(WreckScene(wreck));
             float length = (float)Scale.ShipLength(ship.LengthKm);
+            // A wreck has no icon: below a pixel it is not drawn at all (U.SPC-T415).
+            if (RenderLod.Tier(RenderLod.Wreck, RenderLod.ApparentPx(length, rel.magnitude, PixelsPerUnitAtUnitDistance())) == LodTier.Culled)
+            {
+                shipViews[i].SetVisible(false);
+                return;
+            }
+            shipViews[i].SetDetail(true);
             bool stillBurning = wreckStart[i] != float.MaxValue
                 && shipViews[i].Wreck(rel, shipRotation[i], length, Time.unscaledTime - wreckStart[i], Time.unscaledTime);
             if (!stillBurning)
@@ -2545,6 +2558,7 @@ namespace Unity.SpaceGod
         /// <summary>Defence platforms are drawn while they fight.</summary>
         void UpdatePlatforms()
         {
+            double ppu = PixelsPerUnitAtUnitDistance();
             var live = new HashSet<ShipCombat>();
             foreach (var b in World.War.Battles)
             {
@@ -2562,9 +2576,15 @@ namespace Unity.SpaceGod
                         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                         platformViews[u.Combat] = go;
                     }
-                    go.transform.localPosition = Relative(BattleScene(b, u.Pos));
+                    var rel = Relative(BattleScene(b, u.Pos));
+                    float length = (float)Scale.ShipLength(CombatSpec.PlatformLengthKm);
+                    // Below a pixel a platform is not drawn at all (U.SPC-T415); its battle still shows.
+                    bool shown = RenderLod.DrawsModel(RenderLod.Tier(RenderLod.Platform, RenderLod.ApparentPx(length, rel.magnitude, ppu)));
+                    if (go.activeSelf != shown) go.SetActive(shown);
+                    if (!shown) continue;
+                    go.transform.localPosition = rel;
                     go.transform.localRotation = Quaternion.Euler(20, (float)(b.Seconds * 0.5 % 360), 0);
-                    go.transform.localScale = Vector3.one * (float)Scale.ShipLength(CombatSpec.PlatformLengthKm);
+                    go.transform.localScale = Vector3.one * length;
                 }
             }
             var gone = new List<ShipCombat>();
@@ -2758,6 +2778,7 @@ namespace Unity.SpaceGod
                 if (!ToGui(shipScene[i], out var p, out var depth)) continue;
                 double px = ShipLod.ApparentPx(shipLength[i], depth, ppu);
                 if (picture != null && ships[i] != Piloted.Ship && !ShipLod.DrawsModel(px) && picture.Of(ships[i]) == null) continue;
+                if (FoldedShips.Contains(ships[i]) && !ShipLod.DrawsModel(px)) continue;
                 double pickRadius = Math.Max(px * 0.5, Icons.PixelSize(ships[i].Spec.Class) * 0.5 + 4);
                 double d = (p - gui).magnitude;
                 if (d > pickRadius) continue;

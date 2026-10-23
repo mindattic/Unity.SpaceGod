@@ -170,7 +170,8 @@ namespace Unity.SpaceGod.Views
                 var p = Scenes[s];
                 double size = Sizes[s];
                 var rel = app.Relative(p);
-                bool show = visible && size / System.Math.Max(rel.magnitude, 1e-9) * ppu >= 4;
+                // Too small to see, not drawn (U.SPC-T415); the HUD names it once it is big enough.
+                bool show = visible && RenderLod.DrawsModel(RenderLod.Tier(RenderLod.Structure, RenderLod.ApparentPx(size, rel.magnitude, ppu)));
                 if (v.Root.activeSelf != show) v.Root.SetActive(show);
                 if (!show) continue;
                 // Taken in a siege: repainted in the new owner's livery.
@@ -219,7 +220,7 @@ namespace Unity.SpaceGod.Views
                 var p = RingScenes[r];
                 double size = Sizes[r];
                 var rel = app.Relative(p);
-                bool show = visible && size / System.Math.Max(rel.magnitude, 1e-9) * ppu >= 3;
+                bool show = visible && RenderLod.DrawsModel(RenderLod.Tier(RenderLod.DockingRing, RenderLod.ApparentPx(size, rel.magnitude, ppu)));
                 rv.Renderer.enabled = show;
                 if (!show) continue;
                 if (rv.Owner != r.Owner)
