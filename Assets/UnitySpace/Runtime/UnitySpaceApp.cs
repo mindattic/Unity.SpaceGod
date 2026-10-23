@@ -461,6 +461,8 @@ namespace Unity.SpaceGod
         public void TravelTo(StarSystem system)
         {
             if (system == null || system == ActiveSystem || Travel.Active) return;
+            // Already on the way somewhere under the hull's own drive (U.SPC-T417).
+            if (InFtlCruise) { ShowToast("Under FTL for " + FtlCruise.ToName + ": the view goes where the hull goes"); return; }
             // The pilot session belongs to this system's ship and world: the gate is the way across while flying.
             if (IsPiloting) { ShowToast("Release the helm (P) before travelling to another system, or fly through the gate"); return; }
             Select(Target.None);
@@ -594,11 +596,13 @@ namespace Unity.SpaceGod
             ShowLawNotices();
             UpdateShips(dt);
             Structures.Layout();
-            if (!Travel.Active) World.UpdateAdventures(Clock.Jd, PlayerHelioKm());
+            if (!Travel.Active && !InFtlCruise) World.UpdateAdventures(Clock.Jd, PlayerHelioKm());
 
             DropLostTargets();
             BattleTime();
             if (Travel.Active) Travel.Update(dt);
+            // Between the stars under the hull's own drive (U.SPC-T417): the view goes with it.
+            else if (InFtlCruise) UpdateFtlCruiseView(dt);
             else
             {
                 KeepReoriented();
@@ -715,10 +719,12 @@ namespace Unity.SpaceGod
         {
             var i = Input;
             HandleSaveCommands();
-            if (Travel.Active)
+            if (Travel.Active || InFtlCruise)
             {
-                // Between the stars only time and the escape hatch work.
-                if (i.Escape) Travel.Finish();
+                // Between the stars only time and the escape hatch work (and under the hull's own drive, U.SPC-T417, not
+                // even that: there is nowhere to come out but the far star).
+                if (i.Escape && Travel.Active) Travel.Finish();
+                else if (i.Escape) ShowToast("Under FTL between the stars: the drive drops out at the far star");
                 if (i.TimeFaster) Clock.Faster();
                 if (i.TimeSlower) Clock.Slower();
                 if (i.TogglePause) TogglePause();
@@ -1038,6 +1044,7 @@ namespace Unity.SpaceGod
         /// nothing handed back, since the hull is its captor's now and the war disposes of it.</summary>
         void LoseHelm()
         {
+            StopFtl();
             EndSalvage(null);
             SalvageApproach = null;
             var ship = Piloted.Ship;
@@ -1059,6 +1066,8 @@ namespace Unity.SpaceGod
 
         void ExitPiloting()
         {
+            // A charge or a run within the system stops where it is (U.SPC-T417): the crew does not jump on its own.
+            StopFtl();
             EndSalvage(null);
             SalvageApproach = null;
             TankerDueS = -1;
@@ -1145,6 +1154,12 @@ namespace Unity.SpaceGod
         {
             // Set again below once the hull has flown this frame; a lane ride or a lost helm leaves the chase on the hull.
             SpaceCamera.PilotView = null;
+            // The hull out between the stars under its own drive (U.SPC-T417): the helm is taken again where it drops out.
+            if (InFtlCruise)
+            {
+                UpdateFtlCruise();
+                if (!IsPiloting) return;
+            }
             if (!IsPiloting)
             {
                 pilotBoosting = false;
@@ -1184,6 +1199,8 @@ namespace Unity.SpaceGod
                 ShowWarNotices();
                 return;
             }
+            // Under FTL within the system (U.SPC-T417): the drive has the hull until it drops out.
+            if (UpdateFtlRun(ship)) return;
 
             // The stick, one way per kind of hull (U.SPC-T269): a light fighter's mouse swings the view and the
             // hull turns after it, a heavy fighter's or freighter's turns the hull itself, and a capital ship
@@ -1291,6 +1308,8 @@ namespace Unity.SpaceGod
             UpdatePursuit(ship, dt);
             // Through a gate, the hull flown on is another one, in another system: nothing more for this one this frame.
             if (UpdateGateActivation(ship)) return;
+            // Its own FTL drive (U.SPC-T417): pointed, spooled and engaged; to another star the hull leaves the system.
+            if (UpdateHelmFtl(ship)) return;
             UpdateLaneEntry(ship);
             UpdateLaneRejoin(ship);
             ShowWarNotices();
@@ -1473,6 +1492,8 @@ namespace Unity.SpaceGod
 
             var destination = gate.Destination;
             if (!GateTransit.TryPerform(gate, shipHelioKm, ship, Fleet, Clock.Jd, out var arrived)) return false;
+            // A charge for somewhere in the system left behind is lost (U.SPC-T417).
+            StopFtl();
             EndSalvage(null);
             SalvageApproach = null;
 
@@ -2343,6 +2364,7 @@ namespace Unity.SpaceGod
             UnityCamera.transform.SetPositionAndRotation(Vector3.zero, SpaceCamera.Rotation);
 
             float targetFov = RidingLane ? BaseFov + (LaneFov - BaseFov) * LaneRideSpeed
+                : FtlRunning ? BaseFov + (LaneFov - BaseFov) * FtlRunSpeed
                 : IsPiloting && pilotCruise.Active ? CruiseFov : IsPiloting && pilotBoosting ? BoostFov : BaseFov;
             cameraFov = Mathf.Lerp(cameraFov, targetFov, 1f - Mathf.Exp(-dt * FovResponseHz));
             // A ring gate kicks the view wide for a moment and flashes as the hull goes through (U.SPC-T41).

@@ -1901,6 +1901,29 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
+        /// Takes <paramref name="ship"/> itself out of this fleet to go on somewhere else, the same object (U.SPC-T417: a
+        /// hull jumping out under its own FTL drive is carried, not copied). Its slot keeps a marker of it, gone
+        /// (<see cref="Ship.Tombstone"/>), so no other id here moves; escorts it leaves behind follow the marker, so the
+        /// fleet's own succession picks a new leader among them as if it had gone through a gate. Its bookings here end.
+        /// Returns the marker, or null if it is not in this fleet.
+        /// </summary>
+        public Ship LetGo(Ship ship)
+        {
+            if (ship == null || ship.Id < 0 || ship.Id >= ships.Count || ships[ship.Id] != ship) return null;
+            var marker = ship.Tombstone();
+            ships[ship.Id] = marker;
+            foreach (var s in ships)
+                if (s.Leader == ship) s.Leader = marker;
+            ship.Leader = null;
+            ship.Battle = null;
+            ship.GateKm = null;
+            ship.StakeoutKm = null;
+            ship.Route = null;
+            ship.RouteIndex = 0;
+            return marker;
+        }
+
+        /// <summary>
         /// Creates a ship of a class/design (see <see cref="AddShip"/>) and parks it at an exact
         /// body-relative offset facing <paramref name="forward"/>, for a dev/sandbox spawn rather than
         /// a real yard -- built the same way a jump gate's arrival parks a fresh copy at the far gate

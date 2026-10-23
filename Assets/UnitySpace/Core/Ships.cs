@@ -598,6 +598,23 @@ namespace Unity.SpaceGod.Core
             Runner = Runner,
         };
 
+        /// <summary>
+        /// What a ship leaving its system leaves in its place in that fleet's list (U.SPC-T417, see <see cref="Fleet.LetGo"/>):
+        /// a marker with its id, name and class, gone (<see cref="Destroyed"/> and <see cref="GateDeparted"/>, so nothing
+        /// draws a wreck for it), so every other hull's id there stays put while the ship itself, the same object, goes on.
+        /// </summary>
+        internal Ship Tombstone()
+        {
+            var t = (Ship)MemberwiseClone();
+            t.Destroyed = true;
+            t.GateDeparted = true;
+            t.Leader = null;
+            t.Battle = null;
+            t.Voyage = null;
+            t.GateKm = null;
+            return t;
+        }
+
         public override string ToString() => Name;
     }
 

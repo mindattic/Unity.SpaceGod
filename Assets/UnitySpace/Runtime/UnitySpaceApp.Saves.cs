@@ -113,6 +113,8 @@ namespace Unity.SpaceGod
         /// <summary>Why the game cannot be saved or loaded right now, or null when it can.</summary>
         public string SaveBlocker() =>
             Travel.Active ? "Not between the stars: wait until the trip is over"
+            // Under the hull's own FTL drive (U.SPC-T417): the charge, the run and the crossing are the helm's until it drops out.
+            : InFtlCruise || Ftl.Stage != FtlStage.Idle ? "Not under FTL: wait until the drive drops out"
             // What the clamps have brought out (survivors, crates, a fight aboard) is the session's until they come off.
             : Salvage != null ? "Not while latched to a hulk: cast off first (4)"
             : null;
@@ -158,7 +160,7 @@ namespace Unity.SpaceGod
         public bool LoadFrom(string slot)
         {
             // (Loading drops whatever the session held, a hulk latched to included: only a trip between the stars stops it.)
-            string blocked = Travel.Active ? SaveBlocker() : null;
+            string blocked = Travel.Active || InFtlCruise || Ftl.Stage != FtlStage.Idle ? SaveBlocker() : null;
             if (blocked != null)
             {
                 ShowToast(blocked);

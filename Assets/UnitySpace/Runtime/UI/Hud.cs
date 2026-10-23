@@ -122,6 +122,7 @@ namespace Unity.SpaceGod.UI
             galaxyMapOpen = false;
 
             if (app.Travel.Active) DrawTravel();
+            else if (app.InFtlCruise) DrawFtlCruise();
             else DrawWorldOverlay();
             DrawLaneEffects();
             if (!app.ShowHud)
@@ -141,6 +142,7 @@ namespace Unity.SpaceGod.UI
             DrawSalvage();
             DrawHail();
             DrawLaneRide();
+            DrawFtl();
             DrawInterdiction();
             if (!app.ShowMarket) DrawOpportunityBoard();
             if (app.ShowMarket) DrawMarket();
@@ -259,6 +261,79 @@ namespace Unity.SpaceGod.UI
                 DrawWarp();
                 DrawGateLight(travel.GateFlash * travel.GateFlash, GateFlashColor, 0.9f);
             }
+            DrawInterstellarLabels();
+            if (string.IsNullOrEmpty(travel.Banner)) return;
+            DrawBanner(travel.Banner);
+        }
+
+        /// <summary>
+        /// Between the stars under the hull's own FTL drive (U.SPC-T417): the stars' names, warp streaks pouring from the
+        /// star ahead, and one caption: where it is bound, how far is left, and how long at this pace.
+        /// </summary>
+        void DrawFtlCruise()
+        {
+            var c = app.FtlCruise;
+            if (c == null) return;
+            double jd = app.Clock.Jd;
+            if (Event.current.type == EventType.Repaint)
+            {
+                double peak = c.Drive != null ? c.Drive.LyPerDay : 1;
+                float strength = Mathf.Clamp01((float)(c.Profile.SpeedAt(jd - c.LegJd) / Math.Max(peak, 1e-12)));
+                var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+                if (DirectionToGui(c.Direction, out var ahead)) centre = ahead;
+                DrawStreaks(centre, 0.25f + 0.75f * strength, WarpLineCount, WarpColor, 500, 320f);
+            }
+            DrawInterstellarLabels();
+            double ly = c.LyToGo(jd);
+            double speedC = c.SpeedKmS(jd) / 299792.458;
+            DrawBanner("FTL  ·  BOUND FOR " + c.ToName.ToUpperInvariant() + "   ·   " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " LY TO GO   ·   " +
+                       speedC.ToString("N0", CultureInfo.InvariantCulture) + " C   ·   DROPPING OUT IN " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " S");
+        }
+
+        /// <summary>
+        /// The helm's FTL drive (U.SPC-T417): what the nose is on and the key to spool for it, the charge as it builds, and a
+        /// run within the system under way.
+        /// </summary>
+        void DrawFtl()
+        {
+            if (!app.IsPiloting || app.RidingLane) return;
+            var ftl = app.Ftl;
+            double jd = app.Clock.Jd;
+            string head, tail;
+            switch (ftl.Stage)
+            {
+                case FtlStage.Spooling:
+                    head = "FTL DRIVE SPOOLING  ·  " + ftl.Target.Name.ToUpperInvariant() + "  ·  " + app.Distance(ftl.Target, jd) + "  ·  " +
+                           Percent(ftl.SpoolFraction(jd)) + "  ·  engages in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
+                    tail = "hold the nose on it (the charge is lost if it swings off or a fight starts)    Enter calls it off";
+                    break;
+                case FtlStage.Engaged:
+                    head = "FTL  ·  BOUND FOR " + ftl.Target.Name.ToUpperInvariant() + "  ·  " + Percent(ftl.Progress(jd)) + "  ·  " + SpeedText(app.PilotSpeedKmS) +
+                           "  ·  dropping out in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
+                    tail = "under the drive: it drops out beside the " + (ftl.Target.Kind == FtlTargetKind.Body ? "world" : "beacon") + ", the helm back in hand";
+                    break;
+                default:
+                    var t = app.FtlPointed;
+                    if (t == null) return;
+                    head = "FTL  ·  " + (t.Kind == FtlTargetKind.Star ? "STAR  " : t.Kind == FtlTargetKind.Body ? "" : "BEACON  ") + t.Name.ToUpperInvariant() + "  ·  " +
+                           app.Distance(t, jd);
+                    tail = "Enter  spool the drive for it" + (t.Kind == FtlTargetKind.Star ? " (out through open space to the edge of its well)" : "");
+                    break;
+            }
+            var a = new GUIContent(head);
+            var b = new GUIContent(tail);
+            float w = Mathf.Max(text.CalcSize(a).x, small.CalcSize(b).x) + 28;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - 240, w, 50));
+            GUI.contentColor = StreakColor;
+            GUI.Label(new Rect(r.x + 14, r.y + 5, w, 20), a, text);
+            GUI.contentColor = Dim;
+            GUI.Label(new Rect(r.x + 14, r.y + 27, w, 18), b, small);
+            GUI.contentColor = Color.white;
+        }
+
+        /// <summary>The names of the stars in the view between them (with who holds a system's).</summary>
+        void DrawInterstellarLabels()
+        {
             if (Event.current.type == EventType.Repaint && app.Interstellar.Visible && app.ShowLabels)
             {
                 foreach (var s in app.Interstellar.Stars)
@@ -276,9 +351,12 @@ namespace Unity.SpaceGod.UI
                         p + new Vector2(10, -8), system ? Accent : new Color(c.r, c.g, c.b, 0.75f), !system);
                 }
             }
-            if (string.IsNullOrEmpty(travel.Banner)) return;
-            // One quiet caption for the whole trip, over the view itself: no panel or progress bar to read as a loading screen.
-            var content = new GUIContent(travel.Banner);
+        }
+
+        /// <summary>One quiet caption for the whole trip, over the view itself: no panel or progress bar to read as a loading screen.</summary>
+        void DrawBanner(string banner)
+        {
+            var content = new GUIContent(banner);
             var size = toast.CalcSize(content);
             // Below the clock and news feed at the top of the screen.
             var r = new Rect((Screen.width - size.x) * 0.5f, Mathf.Max(Screen.height * 0.26f, 170f), size.x, size.y);
@@ -839,7 +917,7 @@ namespace Unity.SpaceGod.UI
             if (strength > 0.01f)
             {
                 var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-                if (app.RidingLane && DirectionToGui(app.PilotForward, out var ahead)) centre = ahead;
+                if ((app.RidingLane || app.FtlRunning) && DirectionToGui(app.PilotForward, out var ahead)) centre = ahead;
                 DrawStreaks(centre, strength, StreakCount, StreakColor, 0, 170f);
             }
             // Through a gate at the helm (U.SPC-T414): the gate's violet glow and its streaks held over the far side
@@ -3157,6 +3235,7 @@ namespace Unity.SpaceGod.UI
                 "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   an auto turret fires on its own",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
+                "FTL  (capital ships, survey hulls)   put the nose on a star, planet or gate, Enter to spool (hold it there), it engages and drops out beside it",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): fit guns, shields, drives, plate, racks, scanners, a brig",
                 "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",

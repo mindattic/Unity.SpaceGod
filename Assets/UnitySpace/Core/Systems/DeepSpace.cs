@@ -51,6 +51,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>The news it carries from the system it left (U.SPC-T100), handed over where it arrives.</summary>
         public List<SystemReport> News;
 
+        /// <summary>The player's own hull, jumped here from the helm (U.SPC-T417, see <see cref="HelmFtl"/>): when it drops
+        /// out nobody else sends it anywhere, the helm takes it on from there.</summary>
+        public bool Piloted;
+
         public Ship Leader => Ships[0];
 
         /// <summary>When this leg ends (it drops out at its <see cref="End"/>); infinite while it holds.</summary>
@@ -77,15 +81,17 @@ namespace Unity.SpaceGod.Core
         /// <summary>Light-years still to go to its <see cref="Target"/>.</summary>
         public double LyToGo(double jd) => Target.DistanceLy(PositionAt(jd));
 
-        /// <summary>Sets a new leg from <paramref name="from"/> to <see cref="Target"/>, its charge starting at <paramref name="jd"/>.</summary>
-        internal void SetLeg(GalacticPosition from, double jd)
+        /// <summary>Sets a new leg from <paramref name="from"/> to <see cref="Target"/>, its charge starting at <paramref name="jd"/>
+        /// (none if the drive is already <paramref name="charged"/>, as at the helm, U.SPC-T417).</summary>
+        internal void SetLeg(GalacticPosition from, double jd, bool charged = false)
         {
             Holding = false;
             HoldUntilJd = double.NaN;
             Start = from;
             End = Target;
             LegJd = jd;
-            Profile = CruiseProfile.For(Drive, Target.DistanceLy(from));
+            double ly = Target.DistanceLy(from);
+            Profile = charged ? new CruiseProfile(ly, Drive.LyPerDay, Drive.RampDays, 0) : CruiseProfile.For(Drive, ly);
         }
 
         public override string ToString() => Leader + " bound for " + ToName;
@@ -233,13 +239,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// Puts <paramref name="ships"/> (copies, flagship first, already out of every fleet) into open space at
         /// <paramref name="fromKm"/> in <paramref name="from"/> (km from its root), bound for <paramref name="to"/> on
-        /// <paramref name="drive"/>; it charges from <paramref name="jd"/>.
+        /// <paramref name="drive"/>; it charges from <paramref name="jd"/> (or engages at once if already <paramref name="charged"/>).
         /// </summary>
         public Cruise Launch(IEnumerable<Ship> ships, StarSystem from, DVec3 fromKm, StarSystem to, CruiseDriveSpec drive, double jd,
-            List<SystemReport> news = null)
+            List<SystemReport> news = null, bool charged = false)
         {
             var start = from.At(fromKm);
-            return Launch(ships, from, start, to, to.Name, ArrivalPoint(to.Origin, start, CruiseDrives.WellLimitKm(to)), drive, jd, news);
+            return Launch(ships, from, start, to, to.Name, ArrivalPoint(to.Origin, start, CruiseDrives.WellLimitKm(to)), drive, jd, news, charged);
         }
 
         /// <summary>As <see cref="Launch(IEnumerable{Ship}, StarSystem, DVec3, StarSystem, CruiseDriveSpec, double, List{SystemReport})"/>, but bound
@@ -248,11 +254,11 @@ namespace Unity.SpaceGod.Core
             List<SystemReport> news = null)
         {
             var start = from.At(fromKm);
-            return Launch(ships, from, start, null, star.Name, ArrivalPoint(star.Origin, start, CruiseDrives.WellLimitKm(null)), drive, jd, news);
+            return Launch(ships, from, start, null, star.Name, ArrivalPoint(star.Origin, start, CruiseDrives.WellLimitKm(null)), drive, jd, news, false);
         }
 
         Cruise Launch(IEnumerable<Ship> ships, StarSystem from, GalacticPosition start, StarSystem to, string toName, GalacticPosition target,
-            CruiseDriveSpec drive, double jd, List<SystemReport> news)
+            CruiseDriveSpec drive, double jd, List<SystemReport> news, bool charged)
         {
             if (drive == null) throw new ArgumentNullException(nameof(drive), "A cruise needs a drive");
             var c = new Cruise { From = from, To = to, ToName = toName, Drive = drive, Target = target, SetOutJd = jd, News = news };
@@ -263,7 +269,7 @@ namespace Unity.SpaceGod.Core
                 s.Destroyed = false;
                 s.GateDeparted = false;
             }
-            c.SetLeg(start, jd);
+            c.SetLeg(start, jd, charged);
             cruises.Add(c);
             Log(jd, $"{c.Leader.Name}{More(c)} engage{(c.Ships.Count > 1 ? "" : "s")} {drive.Name.ToLowerInvariant()}s out of {from.Name} for {toName}, " +
                     $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly, due in {c.Profile.TotalDays.ToString("0.0", CultureInfo.InvariantCulture)} days", start);
@@ -381,9 +387,10 @@ namespace Unity.SpaceGod.Core
             world.Log(jd, $"{c.Leader.Name}{More(c)} of {c.Leader.Faction.Name} drop{(c.Ships.Count > 1 ? "" : "s")} out of cruise at the edge of {system.Name}, " +
                           $"in from {c.From?.Name ?? "open space"}", WorldEventKind.Info, system.Catalog.Root.Index);
             Arrived?.Invoke(c, jd);
-            // Nobody sent it here on business: a free ship, it finds its own way in.
+            // Nobody sent it here on business: a free ship, it finds its own way in (the player's own, jumped from the helm,
+            // is the helm's to fly on from here, U.SPC-T417).
             var leader = c.Leader;
-            if (leader.Voyage == null && !leader.Destroyed)
+            if (leader.Voyage == null && !leader.Destroyed && !c.Piloted)
             {
                 leader.Role = leader.Role == ShipRole.Escort ? ShipRole.Free : leader.Role;
                 fleet.ScheduleNext(leader, jd);
