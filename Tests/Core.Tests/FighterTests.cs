@@ -76,6 +76,11 @@ namespace Unity.SpaceGod.Core.Tests
             var flown = b.Units.First(u => u.Kind == UnitKind.Ship && u.Side == 1 && u.Combat.Subsystems.Any(s => s.Kind == SubsystemKind.PointDefense));
             flown.PlayerControlled = true;
             flown.PlayerFireHeld = false; // the trigger is never pulled
+            // The escorting destroyer's flak and interceptors (U.SPC-T489) would stop the fighters short of the hull: this is about its own point defence.
+            foreach (var u in b.Units)
+                if (u != flown && u.Side == 1)
+                    foreach (var s in u.Combat.Subsystems)
+                        if (ScreenWeapons.IsScreenMount(s.Kind)) s.Hp = 0;
             bool fired = false;
             for (int i = 0; i < 600 && !fired && !b.Over; i++)
             {
