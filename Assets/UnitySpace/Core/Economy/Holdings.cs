@@ -910,7 +910,7 @@ namespace Unity.SpaceGod.Core
                 if (fuel >= 0) return fuel;
             }
             // Badly hurt: to a yard, and wait there to be mended.
-            if (ship.Combat != null && ship.Combat.Damage > RepairDamage)
+            if (ship.Combat != null && ship.Combat.HullDamage > RepairDamage)
             {
                 if (YardAt(here) != null) return here;
                 int yard = NearestYard(ship, here, jd);

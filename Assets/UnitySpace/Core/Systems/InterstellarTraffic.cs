@@ -860,7 +860,7 @@ namespace Unity.SpaceGod.Core
                 foreach (var ship in world.Fleet.Ships)
                 {
                     if (!Idle(world, ship) || ship.Faction != side || !CanCruise(ship) || ship.Phase != ShipPhase.Parked) continue;
-                    if (ship.Combat == null || ship.Combat.Damage > 0.2 || !ship.Combat.Armed || (side == navy && (ship.PatrolWing || world.War.IsHomeGuard(ship)))) continue;
+                    if (ship.Combat == null || ship.Combat.HullDamage > 0.2 || !ship.Combat.Armed || (side == navy && (ship.PatrolWing || world.War.IsHomeGuard(ship)))) continue;
                     double t = side == navy ? 0.15 + 0.15 * ambushRng.NextDouble() : 0.3 + 0.4 * ambushRng.NextDouble();
                     var station = GalacticPosition.Lerp(from.Origin, other.Origin, t);
                     string where = side == navy ? $"on the approach from {other.Name}" : $"on the {from.Name}–{other.Name} run";
@@ -1495,7 +1495,7 @@ namespace Unity.SpaceGod.Core
             var to = targets[rng.Next(targets.Count)];
             foreach (var ship in world.Fleet.Ships)
             {
-                if (!Idle(world, ship) || ship.Faction != world.Pirates || ship.Phase != ShipPhase.Parked || ship.Combat.Damage > 0.2 || !ship.Combat.Armed) continue;
+                if (!Idle(world, ship) || ship.Faction != world.Pirates || ship.Phase != ShipPhase.Parked || ship.Combat.HullDamage > 0.2 || !ship.Combat.Armed) continue;
                 var route = Network.Route(from, to, ship.Faction, jd);
                 if (route == null || route.Count == 0) continue;
                 SetOut(from, to, ship, VoyagePurpose.Raid, route, jd);
@@ -1563,7 +1563,7 @@ namespace Unity.SpaceGod.Core
             foreach (var ship in world.Fleet.Ships)
             {
                 if (!Idle(world, ship) || ship.Faction != navy || !ship.Spec.IsMilitary || ship.PatrolWing || ship.Phase != ShipPhase.Parked) continue;
-                if (world.War.IsHomeGuard(ship) || ship.Combat.Damage > 0.2 || !ship.Combat.Armed) continue;
+                if (world.War.IsHomeGuard(ship) || ship.Combat.HullDamage > 0.2 || !ship.Combat.Armed) continue;
                 var route = Network.Route(from, to, ship.Faction, jd);
                 if (route == null || route.Count == 0) continue;
                 var v = SetOut(from, to, ship, VoyagePurpose.Expedition, route, jd);
@@ -1589,7 +1589,7 @@ namespace Unity.SpaceGod.Core
                 }
                 // A war fleet comes home when its campaign says so (see InterstellarWars).
                 if (v.Purpose == VoyagePurpose.Campaign) continue;
-                bool hurt = (ship.Spec.IsMilitary || ship.Faction.IsPirate) && ship.Combat.Damage > 0.45;
+                bool hurt = (ship.Spec.IsMilitary || ship.Faction.IsPirate) && ship.Combat.HullDamage > 0.45;
                 // A group its polity sent here stays while its objective here stands (U.SPC-T423).
                 if (v.Purpose == VoyagePurpose.Directed && !hurt && galaxy.Polities.Command.Holds(ship, world)) continue;
                 if (jd < v.StayUntilJd && !hurt && v.Purpose != VoyagePurpose.Directed) continue;

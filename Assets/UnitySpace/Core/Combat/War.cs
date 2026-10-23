@@ -1323,7 +1323,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Fit to pick a fight: not withdrawing and not badly hurt.</summary>
         bool Willing(Ship leader, double jd) =>
-            !Withdrawing(leader, jd) && leader.Combat.Damage < 0.45 && leader.Combat.Armed;
+            !Withdrawing(leader, jd) && leader.Combat.HullDamage < 0.45 && leader.Combat.Armed;
 
         /// <summary>Pulling back after a fight it ran from or lost (see <see cref="Resolve"/>).</summary>
         bool Withdrawing(Ship leader, double jd) => retreating.TryGetValue(leader, out double until) && jd < until;
@@ -2902,12 +2902,12 @@ namespace Unity.SpaceGod.Core
 
         double GroupDamage(Ship leader)
         {
-            double sum = leader.Combat.Damage;
+            double sum = leader.Combat.HullDamage;
             int n = 1;
             foreach (var s in Fleet.Ships)
                 if (s.Leader == leader && !s.Destroyed)
                 {
-                    sum += s.Combat.Damage;
+                    sum += s.Combat.HullDamage;
                     n++;
                 }
             return sum / n;

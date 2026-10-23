@@ -259,7 +259,11 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>Fraction of everything (hull and hardpoints) that is damaged, 0 = pristine.</summary>
+        /// <summary>How hurt the hull is, 0 = pristine: the figure for repair and retreat decisions. Unlike <see cref="Damage"/> it does not
+        /// thin out as more parts are fitted, so a hull at 30% reads 0.7 whatever it carries (U.SPC-T506).</summary>
+        public double HullDamage => Math.Min(1, 1 - HullFraction);
+
+        /// <summary>Fraction of everything (hull and hardpoints) that is damaged, 0 = pristine; diluted by part count, so use <see cref="HullDamage"/> to decide how hurt a ship is.</summary>
         public double Damage
         {
             get

@@ -1268,7 +1268,7 @@ namespace Unity.SpaceGod.Core
                 int port = NearestPortFor(held.Record, leader, here, jd);
                 if (port >= 0) return port;
             }
-            if (leader.Combat.Damage > RepairDamage || !leader.Combat.Armed)
+            if (leader.Combat.HullDamage > RepairDamage || !leader.Combat.Armed)
             {
                 int yard = NearestYard(here, jd);
                 if (yard >= 0) return yard;

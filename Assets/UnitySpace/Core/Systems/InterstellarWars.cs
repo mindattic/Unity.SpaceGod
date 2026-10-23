@@ -456,7 +456,7 @@ namespace Unity.SpaceGod.Core
             if (world.Holdings != null && world.Holdings.Owns(ship)) return false;
             // Nor one its polity's command has given an objective of its own (U.SPC-T423).
             if (world.Polities.Command.Holds(ship)) return false;
-            if (ship.Combat.Damage > 0.2 || !ship.Combat.Armed || world.War.IsHomeGuard(ship)) return false;
+            if (ship.Combat.HullDamage > 0.2 || !ship.Combat.Armed || world.War.IsHomeGuard(ship)) return false;
             return GroupMarines(world, ship) > 0;
         }
 
@@ -543,7 +543,7 @@ namespace Unity.SpaceGod.Core
                 // Called home but not yet on the way (no way through when it was called): try again.
                 if (v.Destination != v.Home && v.HoldGate == null && !v.AtGate) Traffic.Redirect(system, ship, v.Home, jd);
             }
-            else if (GroupDamage(world, ship) > 0.4 || ship.Combat.Damage > 0.45 || !ship.Combat.Armed)
+            else if (GroupDamage(world, ship) > 0.4 || ship.Combat.HullDamage > 0.45 || !ship.Combat.Armed)
             {
                 Recall(c, system, ship, jd, "battered");
                 return;
@@ -604,12 +604,12 @@ namespace Unity.SpaceGod.Core
 
         static double GroupDamage(World world, Ship leader)
         {
-            double sum = leader.Combat.Damage;
+            double sum = leader.Combat.HullDamage;
             int n = 1;
             foreach (var s in world.Fleet.Ships)
                 if (s.Leader == leader && !s.Destroyed)
                 {
-                    sum += s.Combat.Damage;
+                    sum += s.Combat.HullDamage;
                     n++;
                 }
             return sum / n;
