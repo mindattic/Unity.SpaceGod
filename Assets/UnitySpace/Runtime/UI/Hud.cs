@@ -286,6 +286,13 @@ namespace Unity.SpaceGod.UI
             DrawInterstellarLabels();
             double ly = c.LyToGo(jd);
             double speedC = c.SpeedKmS(jd) / 299792.458;
+            if (c.Crossing)
+            {
+                // Pulled out of FTL by a star's well or a gravity projector (U.SPC-T418), crossing it under the ordinary drive.
+                DrawBanner("PULLED OUT OF FTL BY " + (c.InterdictedBy ?? "A GRAVITY WELL").ToUpperInvariant() + "   ·   CROSSING UNDER NORMAL DRIVE   ·   BOUND FOR " +
+                           c.ToName.ToUpperInvariant() + ", " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " LY TO GO");
+                return;
+            }
             DrawBanner("FTL  ·  BOUND FOR " + c.ToName.ToUpperInvariant() + "   ·   " + ly.ToString("0.00", CultureInfo.InvariantCulture) + " LY TO GO   ·   " +
                        speedC.ToString("N0", CultureInfo.InvariantCulture) + " C   ·   DROPPING OUT IN " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " S");
         }
@@ -313,7 +320,7 @@ namespace Unity.SpaceGod.UI
                 if (t == null) return;
                 head = "FTL  ·  STAR  " + t.Name.ToUpperInvariant() + "  ·  " + app.Distance(t);
                 tail = app.FtlBeyondRim
-                    ? "Enter  spool the drive for it (out through open space to the edge of its well)"
+                    ? app.FtlBlocked ?? "Enter  spool the drive for it (out through open space to the edge of its well)"
                     : "inside the gravity wells: no jump until beyond the outer rim, " + app.FtlRimAu.ToString("0.##", inv) + " AU out (" +
                       app.PilotFromStarAu.ToString("0.##", inv) + " AU now)";
             }

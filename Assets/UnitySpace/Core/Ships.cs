@@ -463,6 +463,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>The delta-v (km/s) left in the tanks at the ship's present mass (Tsiolkovsky).</summary>
         public double DeltaVBudgetKmS => Propulsion.DeltaV(ExhaustVelocityKmS, MassTonnes, MassTonnes - Propellant);
 
+        /// <summary>When its FTL drive is cool enough to charge again after its last drop-out (U.SPC-T418, see <see cref="FtlRules"/>).</summary>
+        public double FtlCoolUntilJd;
+
         /// <summary>Ran dry in flight: drifting dead where the tanks gave out, calling for a tanker.</summary>
         public bool OutOfPropellant;
         public double OutOfPropellantSinceJd;

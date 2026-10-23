@@ -55,6 +55,18 @@ namespace Unity.SpaceGod.Core
         /// out nobody else sends it anywhere, the helm takes it on from there.</summary>
         public bool Piloted;
 
+        /// <summary>The hull's own velocity in normal space when it engaged (ecliptic, km/s): FTL carries momentum, so it
+        /// comes out with the velocity it went in with (U.SPC-T418, see <see cref="FtlRules"/>).</summary>
+        public DVec3 CarriedVelocityKmS;
+
+        /// <summary>Pulled out of FTL by a star's well or a gravity projector (U.SPC-T418): crossing it now under its
+        /// ordinary drive, from the edge it was pulled out at to the far side (this leg's <see cref="End"/>), where it spools
+        /// again for its <see cref="Target"/>.</summary>
+        public bool Crossing;
+
+        /// <summary>What pulled it out last (a star's or a projector's name), or null.</summary>
+        public string InterdictedBy;
+
         public Ship Leader => Ships[0];
 
         /// <summary>When this leg ends (it drops out at its <see cref="End"/>); infinite while it holds.</summary>
@@ -81,17 +93,42 @@ namespace Unity.SpaceGod.Core
         /// <summary>Light-years still to go to its <see cref="Target"/>.</summary>
         public double LyToGo(double jd) => Target.DistanceLy(PositionAt(jd));
 
-        /// <summary>Sets a new leg from <paramref name="from"/> to <see cref="Target"/>, its charge starting at <paramref name="jd"/>
-        /// (none if the drive is already <paramref name="charged"/>, as at the helm, U.SPC-T417).</summary>
+        /// <summary>
+        /// Sets a new leg from <paramref name="from"/> to <see cref="Target"/>, its charge starting at <paramref name="jd"/>
+        /// (none if the drive is already <paramref name="charged"/>, as at the helm, U.SPC-T417), once every hull's drive has
+        /// cooled from its last drop-out; every hull pays the jump's reaction mass (U.SPC-T418, <see cref="FtlRules.PropellantFor"/>).
+        /// </summary>
         internal void SetLeg(GalacticPosition from, double jd, bool charged = false)
         {
             Holding = false;
+            Crossing = false;
             HoldUntilJd = double.NaN;
             Start = from;
             End = Target;
             LegJd = jd;
             double ly = Target.DistanceLy(from);
-            Profile = charged ? new CruiseProfile(ly, Drive.LyPerDay, Drive.RampDays, 0) : CruiseProfile.For(Drive, ly);
+            double cool = 0;
+            foreach (var s in Ships)
+            {
+                cool = Math.Max(cool, FtlRules.CoolUntil(s) - jd);
+                s.Propellant -= FtlRules.PropellantFor(Drive, s, ly);
+            }
+            Profile = charged ? new CruiseProfile(ly, Drive.LyPerDay, Drive.RampDays, 0)
+                : new CruiseProfile(ly, Drive.LyPerDay, Drive.RampDays, Drive.SpoolDays + Math.Max(0, cool));
+        }
+
+        /// <summary>Pulled out at <paramref name="entry"/> at <paramref name="jd"/>: across the field to <paramref name="exit"/>
+        /// under the ordinary drive, at <see cref="FtlRules.CrossingSpeedKmS"/>.</summary>
+        internal void SetCrossing(GalacticPosition entry, GalacticPosition exit, double jd)
+        {
+            Holding = false;
+            Crossing = true;
+            HoldUntilJd = double.NaN;
+            Start = entry;
+            End = exit;
+            LegJd = jd;
+            double lyPerDay = FtlRules.CrossingSpeedKmS.Value * Astro.SecondsPerDay / Astro.LightYearKm;
+            Profile = new CruiseProfile(exit.DistanceLy(entry), lyPerDay, 1e-6, 0);
         }
 
         public override string ToString() => Leader + " bound for " + ToName;
@@ -187,6 +224,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>The kinds of encounter every new deep space runs (the extension point: add a factory to add a kind).</summary>
         public static readonly List<Func<IDeepSpaceEncounter>> EncounterKinds = new List<Func<IDeepSpaceEncounter>>
         {
+            () => new FtlInterdiction(),
             () => new CruiseMeeting(),
             () => new WreckSalvage(),
         };
@@ -297,7 +335,92 @@ namespace Unity.SpaceGod.Core
             var here = c.PositionAt(jd);
             c.Start = c.End = here;
             c.Holding = true;
+            c.Crossing = false;
             c.HoldUntilJd = jd + days;
+            foreach (var s in c.Ships) FtlRules.StartCooldown(s, c.Drive, jd);
+        }
+
+        // ---------------------------------------------------------------- gravity fields (U.SPC-T418)
+
+        readonly List<GravityProjector> projectors = new List<GravityProjector>();
+
+        /// <summary>The gravity projectors out between the stars.</summary>
+        public IReadOnlyList<GravityProjector> Projectors => projectors;
+
+        /// <summary>Places <paramref name="p"/> in open space: from now it pulls passing hulls (not its owner's) out of FTL.</summary>
+        public GravityProjector AddProjector(GravityProjector p)
+        {
+            if (p != null && !projectors.Contains(p)) projectors.Add(p);
+            return p;
+        }
+
+        public void RemoveProjector(GravityProjector p) => projectors.Remove(p);
+
+        /// <summary>A source of fields that pull a group out of FTL: (the deep space, the group, a place on its way, how far
+        /// about it to look, km) to the fields there. A new kind of interdiction plugs in by adding one.</summary>
+        public delegate IEnumerable<GravityField> FieldSource(DeepSpace space, Cruise c, GalacticPosition near, double km);
+
+        /// <summary>Where interdicting fields come from: the stars' own mass, and the gravity projectors.</summary>
+        public static readonly List<FieldSource> FieldSources = new List<FieldSource> { StarWells, ProjectorFields };
+
+        /// <summary>The wells of the stars (running systems and plain ones on the charts) within <paramref name="km"/> of <paramref name="near"/>.</summary>
+        public static IEnumerable<GravityField> StarWells(DeepSpace space, Cruise c, GalacticPosition near, double km)
+        {
+            var g = space.galaxy;
+            if (g == null) yield break;
+            foreach (var s in g.Systems)
+            {
+                if (s.Origin.DistanceKm(near) >= km + 200 * Astro.AuKm) continue;
+                var f = FtlRules.StarWell(s);
+                if (f.RadiusKm > 0 && f.Center.DistanceKm(near) < km + f.RadiusKm) yield return f;
+            }
+            foreach (var n in g.NearbyStars)
+            {
+                if (n.Origin.DistanceKm(near) >= km + 200 * Astro.AuKm) continue;
+                var f = FtlRules.StarWell(n);
+                if (f.Center.DistanceKm(near) < km + f.RadiusKm) yield return f;
+            }
+        }
+
+        /// <summary>The fields of the projectors that would pull <paramref name="c"/> out (any but its own side's).</summary>
+        public static IEnumerable<GravityField> ProjectorFields(DeepSpace space, Cruise c, GalacticPosition near, double km)
+        {
+            foreach (var p in space.projectors)
+            {
+                if (!p.Active || p.RadiusKm <= 0) continue;
+                if (p.Owner != null && c.Leader.Faction == p.Owner) continue;
+                if (p.Position.DistanceKm(near) < km + p.RadiusKm) yield return p.Field;
+            }
+        }
+
+        /// <summary>Every field about the run from <paramref name="from"/> to <paramref name="to"/> that would pull <paramref name="c"/> out.</summary>
+        public IEnumerable<GravityField> FieldsAlong(Cruise c, GalacticPosition from, GalacticPosition to)
+        {
+            var mid = GalacticPosition.Lerp(from, to, 0.5);
+            double half = to.DistanceKm(from) / 2;
+            foreach (var source in FieldSources)
+                foreach (var f in source(this, c, mid, half))
+                    yield return f;
+        }
+
+        /// <summary>
+        /// Pulls <paramref name="c"/> out of FTL at <paramref name="entry"/> on the edge of <paramref name="field"/> at
+        /// <paramref name="jd"/>: its drives start cooling, and it crosses the field under its ordinary drive, straight on
+        /// toward where it was going, to spool again on the far side.
+        /// </summary>
+        public void Interdict(Cruise c, GravityField field, GalacticPosition entry, double jd)
+        {
+            var way = c.Target.KmFrom(entry);
+            var dir = way.LengthSquared > 0 ? way.Normalized : c.Direction;
+            var exit = FtlRules.ExitPoint(field, entry, dir);
+            // Never past where it was going.
+            if (exit.DistanceKm(entry) > c.Target.DistanceKm(entry)) exit = c.Target;
+            foreach (var s in c.Ships) FtlRules.StartCooldown(s, c.Drive, jd);
+            c.InterdictedBy = field.Name;
+            c.SetCrossing(entry, exit, jd);
+            string what = field.Kind == GravityFieldKind.Projector ? "the gravity projector " + field.Name : field.Name + "'s gravity well";
+            bool many = c.Ships.Count > 1;
+            Log(jd, $"{c.Leader.Name}{More(c)} {(many ? "are" : "is")} pulled out of FTL by {what}, crossing it under {(many ? "their" : "its")} ordinary drive", entry);
         }
 
         // ---------------------------------------------------------------- the step
@@ -341,6 +464,13 @@ namespace Unity.SpaceGod.Core
                 }
                 if (next == null) return;
                 if (next.Holding) next.SetLeg(next.Start, when);
+                else if (next.Crossing && next.End.DistanceKm(next.Target) > 1)
+                {
+                    // Clear of the field on the far side: it spools again for where it was going.
+                    next.SetLeg(next.End, when);
+                    string many = next.Ships.Count > 1 ? "" : "s";
+                    Log(when, $"{next.Leader.Name}{More(next)} clear{many} {next.InterdictedBy}'s pull and spool{many} again for {next.ToName}", next.Start);
+                }
                 else Drop(next, when);
             }
         }
@@ -352,7 +482,9 @@ namespace Unity.SpaceGod.Core
             {
                 c.Start = c.End = c.Target;
                 c.Holding = true;
+                c.Crossing = false;
                 c.HoldUntilJd = double.PositiveInfinity;
+                foreach (var s in c.Ships) FtlRules.StartCooldown(s, c.Drive, jd);
                 Log(jd, $"{c.Leader.Name}{More(c)} drop{(c.Ships.Count > 1 ? "" : "s")} out at {c.ToName}", c.Target);
                 ReachedStar?.Invoke(c, jd);
                 return;
@@ -361,7 +493,8 @@ namespace Unity.SpaceGod.Core
             var system = c.To;
             var world = system.World;
             var fleet = world.Fleet;
-            var at = system.LocalKm(c.Target);
+            // At the edge of the system, clear of any planet's well too (U.SPC-T418).
+            var at = FtlRules.ClearOfBodyWells(system, system.LocalKm(c.Target));
             // Facing in, toward the star, as it comes out of its cruise.
             var forward = at.LengthSquared > 0 ? (-at).Normalized : DVec3.UnitX;
             var up = Math.Abs(forward.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX;
@@ -371,6 +504,7 @@ namespace Unity.SpaceGod.Core
                 // Still exactly as it was engaging its drive (U.SPC-T453: the same object, never reset mid-flight)
                 // until now, dropping out at the edge of this system's well.
                 s.ResetForArrival();
+                FtlRules.StartCooldown(s, c.Drive, jd);
                 s.Orbit = new ParkingOrbit
                 {
                     Body = system.Catalog.Root.Index, RadiusKm = 0, Center = at, U = right, V = forward,
@@ -494,6 +628,47 @@ namespace Unity.SpaceGod.Core
             foreach (var ship in c.Ships)
                 if (!ship.Destroyed && ship.Combat != null) s += ship.Combat.Strength;
             return s;
+        }
+    }
+
+    /// <summary>
+    /// A group under way whose straight run takes it into a gravity field (U.SPC-T418): a star's well (not the one it
+    /// left nor the one it is bound for) or a gravity projector's. It is pulled out at the field's edge, at the moment
+    /// it reaches it, and crosses under its ordinary drive (see <see cref="DeepSpace.Interdict"/>).
+    /// </summary>
+    public sealed class FtlInterdiction : IDeepSpaceEncounter
+    {
+        public void Step(DeepSpace space, double fromJd, double toJd, Random rng)
+        {
+            if (space.Cruises.Count == 0) return;
+            foreach (var c in new List<Cruise>(space.Cruises))
+            {
+                if (c.Ships.Count == 0 || c.Holding || c.Crossing) continue;
+                double t0 = Math.Max(fromJd, c.LegJd + c.Profile.SpoolDays), t1 = Math.Min(toJd, c.ArriveJd);
+                if (!(t1 > t0)) continue;
+                var p0 = c.PositionAt(t0);
+                var p1 = c.PositionAt(t1);
+                List<GravityField> fields = null;
+                // Not the fields it set out from or is bound into: those are the ends of its way.
+                foreach (var f in space.FieldsAlong(c, p0, p1))
+                    if (!f.Contains(c.Start, 1.001) && !f.Contains(c.Target, 1.001)) (fields ??= new List<GravityField>()).Add(f);
+                if (fields == null || !FtlRules.FirstEntry(p0, p1, fields, out var hit, out double along)) continue;
+                var entry = GalacticPosition.Lerp(p0, p1, along);
+                space.Interdict(c, hit, entry, When(c, entry, t0, t1));
+            }
+        }
+
+        /// <summary>When <paramref name="c"/> reaches <paramref name="at"/> on its leg, between <paramref name="t0"/> and <paramref name="t1"/>.</summary>
+        static double When(Cruise c, GalacticPosition at, double t0, double t1)
+        {
+            double ly = at.DistanceLy(c.Start);
+            for (int i = 0; i < 48; i++)
+            {
+                double mid = (t0 + t1) / 2;
+                if (c.Profile.LyAt(mid - c.LegJd) < ly) t0 = mid;
+                else t1 = mid;
+            }
+            return (t0 + t1) / 2;
         }
     }
 

@@ -103,6 +103,10 @@ namespace Unity.SpaceGod.Core
     /// engage at), and the drive only ever jumps to another star, never to somewhere in the same system. Small craft carry
     /// no drive and are refused: the jump gates and lanes are their way.
     ///
+    /// The drive's physics (U.SPC-T418, <see cref="FtlRules"/>): no charge inside a planet's or a moon's well or a gravity
+    /// projector's field either, none while the drive cools from its last drop-out, and none without the reaction mass
+    /// the jump burns; the hull comes out with the velocity it went in with.
+    ///
     /// Engine-free and driven only by the sim clock, so the Runtime helm just feeds it the hull's place and heading.
     /// </summary>
     public sealed class HelmFtl
@@ -151,6 +155,45 @@ namespace Unity.SpaceGod.Core
                   (RimKm(here) / Astro.AuKm).ToString("0.##", CultureInfo.InvariantCulture) + " AU from its star (" +
                   (fromKm.Length / Astro.AuKm).ToString("0.##", CultureInfo.InvariantCulture) + " AU now)";
 
+        /// <summary>
+        /// Why no jump can be made from <paramref name="fromKm"/> in <paramref name="here"/> for gravity (U.SPC-T418): inside the
+        /// outer rim, inside a planet's or a moon's well, or inside a gravity projector's field (<paramref name="galaxy"/>'s).
+        /// Null if clear.
+        /// </summary>
+        public static string WellRefusal(StarSystem here, DVec3 fromKm, Galaxy galaxy = null)
+        {
+            var rim = RimRefusal(here, fromKm);
+            if (rim != null) return rim;
+            var body = FtlRules.BodyWellAt(here, fromKm);
+            if (body != null) return "No jump inside " + body.Name + "'s gravity well: fly further from it";
+            if (galaxy != null)
+            {
+                var at = here.At(fromKm);
+                foreach (var p in galaxy.DeepSpace.Projectors)
+                    if (p.Active && p.Field.Contains(at)) return "A gravity projector, " + p.Name + ", holds the drive down here: fly clear of its field";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Why <paramref name="ship"/>'s drive cannot charge for a jump of <paramref name="km"/> at <paramref name="jd"/> on its
+        /// own account (U.SPC-T418): still cooling from its last drop-out, or too little in the tanks. Null if it can.
+        /// </summary>
+        public static string DriveRefusal(Ship ship, double km, double jd)
+        {
+            var drive = CruiseDrives.Of(ship);
+            if (drive == null) return Refusal(ship);
+            double cool = FtlRules.CoolUntil(ship) - jd;
+            if (cool > 0)
+                return "The FTL drive is cooling from its last jump: " + (cool * 24).ToString("0.0", CultureInfo.InvariantCulture) + " h more";
+            double need = FtlRules.PropellantFor(drive, ship, km / Astro.LightYearKm);
+            if (need > ship.Propellant + 1e-9)
+                return "Not enough reaction mass to jump " + (km / Astro.LightYearKm).ToString("0.00", CultureInfo.InvariantCulture) + " ly: it takes " +
+                       need.ToString("N0", CultureInfo.InvariantCulture) + " t, the tanks hold " + ship.Propellant.ToString("N0", CultureInfo.InvariantCulture) +
+                       " t (range " + FtlRules.RangeLy(drive, ship).ToString("0.#", CultureInfo.InvariantCulture) + " ly)";
+            return null;
+        }
+
         /// <summary>The way to <paramref name="target"/> from <paramref name="fromKm"/> in <paramref name="here"/> (unit), and how far, km.</summary>
         public static DVec3 Bearing(FtlTarget target, StarSystem here, DVec3 fromKm, out double km)
         {
@@ -189,17 +232,23 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// Starts the charge for <paramref name="target"/> at <paramref name="jd"/>: the ship must carry a drive, be out of
-        /// any fight, be beyond the system's outer rim and have its nose on another star. False (with <see cref="AbortReason"/>) if not.
+        /// any fight, be beyond the system's outer rim and clear of every other well and projector's field (U.SPC-T418), have
+        /// its nose on another star, a cool drive and the reaction mass for the jump. False (with <see cref="AbortReason"/>) if not.
         /// </summary>
-        public bool Spool(Ship ship, StarSystem here, FtlTarget target, DVec3 fromKm, DVec3 forward, bool inCombat, double jd)
+        public bool Spool(Ship ship, StarSystem here, FtlTarget target, DVec3 fromKm, DVec3 forward, bool inCombat, double jd, Galaxy galaxy = null)
         {
             AbortReason = Refusal(ship);
             if (AbortReason == null && here == null) AbortReason = "Nowhere to jump from";
-            if (AbortReason == null) AbortReason = RimRefusal(here, fromKm);
+            if (AbortReason == null) AbortReason = WellRefusal(here, fromKm, galaxy);
             if (AbortReason == null && target == null) AbortReason = "No star ahead to jump to: put the nose on one";
             if (AbortReason == null && target.System == here) AbortReason = "No jump within a system: only to another star";
             if (AbortReason == null && inCombat) AbortReason = "The drive will not spool in a fight";
             if (AbortReason == null && OffNoseDeg(target, here, fromKm, forward) > HoldDeg) AbortReason = "The nose is off " + target.Name + ": line it up first";
+            if (AbortReason == null)
+            {
+                Bearing(target, here, fromKm, out double km);
+                AbortReason = DriveRefusal(ship, km, jd);
+            }
             if (AbortReason != null) return false;
             Target = target;
             Drive = CruiseDrives.Of(ship);
@@ -213,11 +262,13 @@ namespace Unity.SpaceGod.Core
         /// A step of the charge at <paramref name="jd"/>, the hull at <paramref name="fromKm"/> heading <paramref name="forward"/>:
         /// lost if the nose wanders, a fight starts or the hull falls back inside the rim; done when its time is up.
         /// </summary>
-        public FtlEvent Step(StarSystem here, DVec3 fromKm, DVec3 forward, bool inCombat, double jd)
+        public FtlEvent Step(StarSystem here, DVec3 fromKm, DVec3 forward, bool inCombat, double jd, Galaxy galaxy = null)
         {
             if (Stage != FtlStage.Spooling) return FtlEvent.None;
             if (inCombat) return Abort("Charge lost: the drive will not hold in a fight");
             if (!BeyondRim(here, fromKm)) return Abort("Charge lost: back inside " + here.Name + "'s gravity wells");
+            var well = WellRefusal(here, fromKm, galaxy);
+            if (well != null) return Abort("Charge lost: " + well);
             if (OffNoseDeg(Target, here, fromKm, forward) > HoldDeg) return Abort("Charge lost: the nose swung off " + Target.Name);
             return jd >= ChargedJd ? FtlEvent.Charged : FtlEvent.None;
         }
@@ -247,7 +298,7 @@ namespace Unity.SpaceGod.Core
         /// <see cref="Cruise.Piloted"/>, so nobody else gives it orders when it drops out. Null (with
         /// <see cref="AbortReason"/>) if there is nowhere to go.
         /// </summary>
-        public Cruise EngageInterstellar(Galaxy galaxy, StarSystem here, Ship ship, DVec3 fromKm, double jd)
+        public Cruise EngageInterstellar(Galaxy galaxy, StarSystem here, Ship ship, DVec3 fromKm, double jd, DVec3 velocityKmS = default)
         {
             if (Stage != FtlStage.Spooling || Target == null) throw new InvalidOperationException("The drive is not charged");
             var to = Target.System ?? galaxy.Realize(Target.Name, jd);
@@ -269,6 +320,8 @@ namespace Unity.SpaceGod.Core
             var news = galaxy.Traffic?.News.Bundle(here, jd);
             var c = galaxy.DeepSpace.Launch(new[] { ship }, here, fromKm, to, Drive, jd, news, charged: true);
             c.Piloted = true;
+            // FTL carries momentum (U.SPC-T418): the hull comes out moving as it went in.
+            c.CarriedVelocityKmS = velocityKmS;
             world.Log(jd, $"{ship.Name} of {ship.Faction.Name} engages its {Drive.Name.ToLowerInvariant()} beyond the rim for {to.Name}, " +
                           $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly under its own power", WorldEventKind.Info, here.Catalog.Root.Index);
             Reset();

@@ -21,19 +21,37 @@ namespace Unity.SpaceGod.Core
         /// <summary>Top cruise speed, as a multiple of the speed of light (before the menu's <see cref="CruiseDrives.SpeedScale"/>).</summary>
         public double CruiseC { get; }
 
-        /// <summary>How long it charges at the well's edge before it engages, days.</summary>
-        public double SpoolDays { get; }
+        /// <summary>How long it is rated to charge at the well's edge before it engages, days.</summary>
+        public double RatedSpoolDays { get; }
+
+        /// <summary>How long it charges before it engages, days: its rating times the menu's <see cref="FtlRules.SpoolScale"/>.</summary>
+        public double SpoolDays => RatedSpoolDays * FtlRules.SpoolScale.Value;
 
         /// <summary>How long it takes to come up to cruise speed (and to come down from it), days.</summary>
         public double RampDays { get; }
 
-        public CruiseDriveSpec(string name, double cruiseC, double spoolDays, double rampDays)
+        /// <summary>How long it is rated to cool after it drops out before it can charge again, days (U.SPC-T418).</summary>
+        public double RatedCooldownDays { get; }
+
+        /// <summary>How long it cools after it drops out, days: its rating times the menu's <see cref="FtlRules.CooldownScale"/>.</summary>
+        public double CooldownDays => RatedCooldownDays * FtlRules.CooldownScale.Value;
+
+        /// <summary>The share of a hull's tanks a charge burns, and the share each light-year flown burns (U.SPC-T418,
+        /// before the menu's <see cref="FtlRules.FuelScale"/>; see <see cref="FtlRules.PropellantFor"/>).</summary>
+        public double ChargePropellantShare { get; }
+        public double PropellantSharePerLy { get; }
+
+        public CruiseDriveSpec(string name, double cruiseC, double spoolDays, double rampDays, double cooldownDays = 0,
+            double chargePropellantShare = 0, double propellantSharePerLy = 0)
         {
             if (!(cruiseC > 0)) throw new ArgumentOutOfRangeException(nameof(cruiseC), "A cruise drive must move: " + name);
             Name = name;
             CruiseC = cruiseC;
-            SpoolDays = Math.Max(0, spoolDays);
+            RatedSpoolDays = Math.Max(0, spoolDays);
             RampDays = Math.Max(1e-6, rampDays);
+            RatedCooldownDays = Math.Max(0, cooldownDays);
+            ChargePropellantShare = Math.Max(0, chargePropellantShare);
+            PropellantSharePerLy = Math.Max(0, propellantSharePerLy);
         }
 
         /// <summary>Light-years a day at cruise speed, at the menu's speed scale now.</summary>
@@ -116,11 +134,15 @@ namespace Unity.SpaceGod.Core
     [SettingsSource]
     public static class CruiseDrives
     {
-        /// <summary>A capital ship's drive: a light-year a day, charging six hours.</summary>
-        public static readonly CruiseDriveSpec Capital = new CruiseDriveSpec("Capital cruise drive", (Astro.DaysPerCentury / 100), 0.25, 0.1);
+        /// <summary>A capital ship's drive: a light-year a day, charging six hours and cooling twelve after, a charge burning
+        /// 2% of the tanks and each light-year 0.2% (some 490 ly on full tanks).</summary>
+        public static readonly CruiseDriveSpec Capital = new CruiseDriveSpec("Capital cruise drive", (Astro.DaysPerCentury / 100), 0.25, 0.1,
+            cooldownDays: 0.5, chargePropellantShare: 0.02, propellantSharePerLy: 0.002);
 
-        /// <summary>A survey hull's drive: two light-years a day, charging under three hours.</summary>
-        public static readonly CruiseDriveSpec Survey = new CruiseDriveSpec("Survey cruise drive", 2 * (Astro.DaysPerCentury / 100), 0.1, 0.05);
+        /// <summary>A survey hull's drive: two light-years a day, charging under three hours and cooling six after, a charge
+        /// burning 1% of the tanks and each light-year 0.1% (some 990 ly on full tanks).</summary>
+        public static readonly CruiseDriveSpec Survey = new CruiseDriveSpec("Survey cruise drive", 2 * (Astro.DaysPerCentury / 100), 0.1, 0.05,
+            cooldownDays: 0.25, chargePropellantShare: 0.01, propellantSharePerLy: 0.001);
 
         static readonly Dictionary<ShipClass, CruiseDriveSpec> byClass = new Dictionary<ShipClass, CruiseDriveSpec>
         {
@@ -146,9 +168,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The settings menu's FTL tuning: every cruise drive's speed, as a multiple of its rated speed.</summary>
         public static readonly RangeSetting SpeedScale = new RangeSetting("ftl.cruiseSpeedScale", SettingGroups.Ftl,
-            "Cruise drive speed", 1, 0.25, 4, 0.25,
-            "How fast every cruise drive crosses between the stars, as a multiple of its rated speed (a capital drive is rated at a light-year a day). " +
-            "Applies to trips set out on from now.",
+            "Cruise drive top speed", 1, 0.25, 50, 0.25,
+            "How fast every cruise drive crosses between the stars, as a multiple of its rated speed (a capital drive is rated at a light-year a day: " +
+            "the galaxy's width in some 270 years; at the top of the range, in about five). Applies to trips set out on from now.",
             v => v.ToString("0.##", CultureInfo.InvariantCulture) + "x", "ftl interstellar cruise speed drive");
 
         /// <summary>The settings menu's FTL tuning: how far out from a star a cruise drive can engage, and where it drops out.</summary>

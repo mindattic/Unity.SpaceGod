@@ -27,6 +27,10 @@ namespace Unity.SpaceGod
         /// <summary>Whether the hull at the helm is beyond its system's outer rim, clear of the gravity wells to jump.</summary>
         public bool FtlBeyondRim { get; private set; }
 
+        /// <summary>Beyond the rim with the nose on a star, what still keeps the drive from spooling (another well, a
+        /// gravity projector, the drive cooling, too little reaction mass: U.SPC-T418), or null.</summary>
+        public string FtlBlocked { get; private set; }
+
         /// <summary>The player's hull out between the stars under its own drive, or null.</summary>
         public Cruise FtlCruise { get; private set; }
 
@@ -87,6 +91,12 @@ namespace Unity.SpaceGod
             bool canJump = HelmFtl.Refusal(ship) == null;
             FtlBeyondRim = HelmFtl.BeyondRim(ActiveSystem, PilotRootKm);
             FtlPointed = canJump && Ftl.Stage == FtlStage.Idle ? PointedTarget(PilotRootKm, pilot.Forward) : null;
+            FtlBlocked = null;
+            if (FtlPointed != null && FtlBeyondRim)
+            {
+                HelmFtl.Bearing(FtlPointed, ActiveSystem, PilotRootKm, out double km);
+                FtlBlocked = HelmFtl.WellRefusal(ActiveSystem, PilotRootKm, Galaxy) ?? HelmFtl.DriveRefusal(ship, km, jd);
+            }
 
             if (Input.EngageFtl)
             {
@@ -97,7 +107,7 @@ namespace Unity.SpaceGod
                     ShowToast("FTL charge called off");
                     return false;
                 }
-                if (!Ftl.Spool(ship, ActiveSystem, FtlPointed, PilotRootKm, pilot.Forward, ship.Battle != null, jd))
+                if (!Ftl.Spool(ship, ActiveSystem, FtlPointed, PilotRootKm, pilot.Forward, ship.Battle != null, jd, Galaxy))
                 {
                     ShowToast(Ftl.AbortReason);
                     return false;
@@ -110,7 +120,7 @@ namespace Unity.SpaceGod
             }
 
             if (Ftl.Stage != FtlStage.Spooling) return false;
-            switch (Ftl.Step(ActiveSystem, PilotRootKm, pilot.Forward, ship.Battle != null, jd))
+            switch (Ftl.Step(ActiveSystem, PilotRootKm, pilot.Forward, ship.Battle != null, jd, Galaxy))
             {
                 case FtlEvent.Aborted:
                     EndFtlWarp();
@@ -163,7 +173,8 @@ namespace Unity.SpaceGod
         {
             var from = ActiveSystem;
             var rootKm = PilotRootKm;
-            var c = Ftl.EngageInterstellar(Galaxy, from, ship, rootKm, jd);
+            // FTL carries momentum (U.SPC-T418): the velocity it goes in with, against the system's root, it comes out with.
+            var c = Ftl.EngageInterstellar(Galaxy, from, ship, rootKm, jd, pilotVelKmS + FrameVelocityKmS(pilotFrameBody, jd) - FrameVelocityKmS(0, jd));
             if (c == null)
             {
                 EndFtlWarp();
@@ -242,6 +253,8 @@ namespace Unity.SpaceGod
             SetSystemVisible(true);
             Interstellar.Visible = false;
             EnterPiloting(Target.OfShip(ship));
+            // Out moving as it went in (U.SPC-T418), in the frame the helm now flies in.
+            pilotVelKmS = c.CarriedVelocityKmS - FrameVelocityKmS(pilotFrameBody, Clock.Jd) + FrameVelocityKmS(0, Clock.Jd);
             EndFtlWarp();
             // The far side streams in behind the drop-out's own flash and fold (U.SPC-T414).
             BeginHelmGateCover();
