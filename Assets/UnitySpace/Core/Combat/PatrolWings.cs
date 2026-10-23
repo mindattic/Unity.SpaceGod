@@ -145,9 +145,7 @@ namespace Unity.SpaceGod.Core
                 }
                 // Its supply convoys: one of its freighters with naval stores round a run of its ports, under escort (U.SPC-T375).
                 int convoys = ConvoysFor(ports.Count);
-                int named = 0;
-                foreach (var s in w.Polities.Navy(f))
-                    if (s.Convoy && !s.IsEscort) named++;
+                int named = w.Polities.ConvoyCount(f);
                 for (int i = 0; i < convoys; i++)
                 {
                     string call = ConvoyNames[named % ConvoyNames.Length] + (named >= ConvoyNames.Length ? " " + (named / ConvoyNames.Length + 1) : "");

@@ -180,6 +180,19 @@ namespace Unity.SpaceGod.Core
             return navy;
         }
 
+        /// <summary>How many of <paramref name="f"/>'s supply convoys (freighters, so not in <see cref="Navy"/>) sail in any system or gate.</summary>
+        public int ConvoyCount(Faction f)
+        {
+            int n = 0;
+            foreach (var w in worlds)
+                foreach (var s in w.Fleet.Ships)
+                    if (!s.Destroyed && s.Faction == f && s.Convoy && !s.IsEscort) n++;
+            if (InTransit != null)
+                foreach (var s in InTransit())
+                    if (!s.Destroyed && s.Faction == f && s.Convoy && !s.IsEscort) n++;
+            return n;
+        }
+
         /// <summary>Whether <paramref name="f"/> is at war with anyone anywhere (pirates aside: everyone is always at odds with them).</summary>
         public bool AtWar(Faction f)
         {
