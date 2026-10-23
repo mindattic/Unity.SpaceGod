@@ -1618,6 +1618,8 @@ namespace Unity.SpaceGod
             if (lockUnit != unit.PlayerLockTarget) unit.LockProgress = 0;
             unit.PlayerLockTarget = lockUnit;
             UpdateSurrenderPrompts(ship.Battle, unit);
+            // A capital ship's captain's orders: batteries, shields, brace, damage control, the line (U.SPC-T425).
+            UpdateHelmCommand(ship.Battle, unit);
         }
 
         /// <summary>

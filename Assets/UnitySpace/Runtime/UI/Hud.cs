@@ -897,6 +897,44 @@ namespace Unity.SpaceGod.UI
             }
             if (target != null && app.ToGui(app.BattleScene(battle, target.Pos), out var tp, out _))
                 DrawRing(tp, 14 + 6 * built, me.PlayerFireHeld ? LockColor : HostileColor);
+            DrawCaptain(battle, me, x, y);
+        }
+
+        /// <summary>
+        /// The captain's orders at a capital ship's helm (U.SPC-T425), above the gauges: each battery's order, the shields'
+        /// angling, the brace, damage control and the line's formation, the turning circle at this speed, and a hostile
+        /// broadside building on this hull, which is the moment to brace.
+        /// </summary>
+        void DrawCaptain(Battle battle, BattleUnit me, float x, float y)
+        {
+            var cmd = me.Broadside;
+            if (cmd == null) return;
+            string Order(Facing f) => Facings.Label(f).ToUpperInvariant().Substring(0, 1) + ":" + (cmd[f] == BatteryOrder.HoldFire ? "HOLD" : cmd[f] == BatteryOrder.Volley ? "VOLLEY" : "AT WILL");
+            string brace = cmd.Braced ? "BRACED" : cmd.BraceCooldown > 0 ? "brace in " + Mathf.CeilToInt((float)cmd.BraceCooldown) + "s" : "3 brace";
+            string orders = "1 BATTERIES " + Order(Facing.Bow) + " " + Order(Facing.Starboard) + " " + Order(Facing.Stern) + " " + Order(Facing.Port)
+                + "    2 SHIELDS " + (cmd.ShieldTrim == null ? "even" : Facings.Label(cmd.ShieldTrim.Value))
+                + "    " + brace
+                + "    4 DAMAGE CONTROL " + Broadsides.Label(cmd.Focus) + " (" + Broadsides.Teams(me) + " teams)";
+            DrawLabel(orders, new Vector2(x, y - 62), cmd.Braced ? LockColor : Dim, true);
+            double turn = me.Ship != null ? PilotTuning.Of(me.Ship.Spec.Class).TurnRateDegS : me.Combat.Spec.TurnRateDegS;
+            double radius = Broadsides.TurningRadiusKm(me.Vel.Length, turn);
+            string line = "5-9 LINE " + Broadsides.Label(cmd.Formation) + "  ·  0 all at will"
+                + "    TURN CIRCLE " + (double.IsInfinity(radius) ? "-" : RangeText(radius)) + "  ·  about in " + Mathf.RoundToInt((float)Broadsides.ComeAboutSeconds(turn)) + "s";
+            DrawLabel(line, new Vector2(x, y - 44), Dim, true);
+
+            // The enemy's broadside building on us: the Black Flag tell.
+            var incoming = Broadsides.IncomingBroadside(battle, me);
+            if (incoming == null)
+                foreach (var o in battle.Units)
+                    if (battle.Hostile(me, o) && o.Broadside?.Readying != null && o.Broadside.ReadyingOn == me) { incoming = o; break; }
+            if (incoming != null)
+            {
+                var r = incoming.Broadside;
+                string side = r?.Readying != null ? Facings.Label(r.Readying.Value).ToUpperInvariant() + " " : "";
+                int loaded = r != null ? Mathf.RoundToInt((float)r.ReadyingLoaded * 100) : 100;
+                DrawLabel("INCOMING BROADSIDE  ·  " + incoming.Name + " " + side + "BATTERY " + loaded + "%  ·  3 BRACE",
+                    new Vector2(Screen.width * 0.5f - 160, Screen.height * 0.28f), HostileColor, false);
+            }
         }
 
         /// <summary>A mount's rounds left and its key, or that it is still cycling.</summary>
@@ -1180,7 +1218,7 @@ namespace Unity.SpaceGod.UI
         /// <summary>The flight keys for the way the flown hull is steered (U.SPC-T269).</summary>
         static string ControlHint(PilotControl control) =>
             control == PilotControl.FreeAim ? "WASD throttle/strafe, mouse aims, the hull turns after it"
-            : control == PilotControl.Helm ? "W/S throttle, A/D Q/E turn the hull, mouse looks around"
+            : control == PilotControl.Helm ? "W/S throttle, A/D Q/E turn the hull, mouse looks around, 1-9 0 captain's orders"
             : "WASD throttle/strafe, mouse steers the nose";
 
         /// <summary>
@@ -3312,6 +3350,8 @@ namespace Unity.SpaceGod.UI
                 "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
                 "Combat  (piloting)   left mouse: guns, down the crosshair (watch the heat)   T lock the hull under it, hold the crosshair on it to lock   right mouse: missiles",
                 "   capital ships: look at a side and hold left mouse to build a broadside, let go to fire it; the turrets fight on their own, at the locked hull first",
+                "   captain's orders, to the side you look at: 1 that battery at will / hold fire / volley   2 angle the shields there   3 brace   4 damage control focus",
+                "      5 line ahead  6 line abreast  7 echelon  8 screen  9 engage at will   0 all batteries at will   angle the hull to the enemy's line to make shots glance",
                 "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   an auto turret fires on its own",
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",

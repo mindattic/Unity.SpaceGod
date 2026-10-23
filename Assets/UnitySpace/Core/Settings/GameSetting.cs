@@ -19,13 +19,14 @@ namespace Unity.SpaceGod.Core
         public const string Civilizations = "Civilizations";
         public const string Ai = "AI";
         public const string Dogfighting = "Dogfighting";
+        public const string Broadsides = "Broadsides";
         public const string Economy = "Economy";
         public const string Controls = "Controls";
         public const string Audio = "Audio";
 
         public static readonly string[] Order =
         {
-            Graphics, RenderPipeline, RenderBudget, Streaming, Simulation, Ftl, Civilizations, Ai, Dogfighting, Economy, Controls, Audio,
+            Graphics, RenderPipeline, RenderBudget, Streaming, Simulation, Ftl, Civilizations, Ai, Dogfighting, Broadsides, Economy, Controls, Audio,
         };
     }
 

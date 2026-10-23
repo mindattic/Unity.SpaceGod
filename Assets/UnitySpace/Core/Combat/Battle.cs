@@ -186,6 +186,11 @@ namespace Unity.SpaceGod.Core
         /// once it has tried, U.SPC-T424).</summary>
         public bool PlayerDecoyRequested;
 
+        /// <summary>A capital ship's orders in the broadside game (U.SPC-T425): battery orders by arc, shield angling, the
+        /// brace, damage control and the formation it leads, given by the player at the helm or by its captain's doctrine.
+        /// Null for anything smaller (see <see cref="Broadsides.Of"/>).</summary>
+        public BroadsideCommand Broadside;
+
         /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north).</summary>
         public void Basis(out DVec3 right, out DVec3 up)
         {
@@ -654,6 +659,8 @@ namespace Unity.SpaceGod.Core
                 if (!u.Present) continue;
                 u.SeenVel += (u.Vel - u.SeenVel) * track;
                 var c = u.Combat;
+                // A capital ship's captain angles its shields, braces and works damage control (U.SPC-T425).
+                if (Broadsides.Commands(u)) Broadsides.Step(this, u, dt);
                 if (u.Stunned > 0) u.Stunned -= dt;
                 // A small craft with power to spare for its shields recharges them that much faster (U.SPC-T424).
                 else c.RegenShields(Seconds, dt * PowerDistribution.FactorOf(u, PowerSystem.Shields));
@@ -788,7 +795,8 @@ namespace Unity.SpaceGod.Core
                     u.Fleeing = true;
                 // Only the AI flies a boarding approach (Move leaves a player-flown hull alone), so a
                 // player-flown hull never holds a boarding target it would never close on.
-                if (u.PlayerControlled) u.BoardTarget = null;
+                // Nor does a ship its flagship has ordered into line break off to board (U.SPC-T425).
+                if (u.PlayerControlled || Broadsides.HoldsFormation(u)) u.BoardTarget = null;
                 else ChooseBoarding(u);
             }
             u.RetargetIn -= dt;
@@ -920,6 +928,9 @@ namespace Unity.SpaceGod.Core
             {
                 desired = -u.Pos * 0.01;
             }
+            // In a formation its flagship ordered (U.SPC-T425) it keeps its station tightly, fighting from there.
+            bool held = !u.Fleeing && Broadsides.HoldsFormation(u);
+            if (held) desired = (StationOf(u) - u.Pos) * 0.05 + u.Leader.Vel;
             if (desired.Length > maxSpeed) desired = desired.Normalized * maxSpeed;
 
             double accel = c.Spec.Accel * (0.3 + 0.7 * c.EngineFactor);
@@ -928,7 +939,9 @@ namespace Unity.SpaceGod.Core
             u.Vel += dv.Length > step ? dv.Normalized * step : dv;
             u.Pos += u.Vel * dt;
 
-            var face = u.Fleeing || u.Target == null ? u.Vel : BroadsideFacing(u, (u.Target.Pos - u.Pos).Normalized);
+            var face = u.Fleeing ? u.Vel
+                : u.Target == null ? (held ? u.Leader.Forward : u.Vel)
+                : BroadsideFacing(u, (u.Target.Pos - u.Pos).Normalized);
             TurnToward(u, face, c.Spec.TurnRateDegS, dt);
         }
 
@@ -1167,16 +1180,24 @@ namespace Unity.SpaceGod.Core
             double weaponPower = PowerDistribution.FactorOf(u, PowerSystem.Weapons);
             foreach (var s in c.Subsystems)
             {
+                // A fleet out of supply reloads slower: short of rounds, of spares for its mounts, of power to spare (U.SPC-T93).
+                if (s.Def.Weapon != null && !s.Destroyed) s.Cooldown -= dt * c.Readiness * weaponPower;
+            }
+            // A braced crew is holding on, not working its guns: they load, but only point defence fires (U.SPC-T425).
+            bool braced = !Broadsides.Fires(u);
+            // Which arcs' broadsides go this step, now every gun is as loaded as it will be (U.SPC-T425).
+            Broadsides.BeginVolleys(u);
+            foreach (var s in c.Subsystems)
+            {
                 var w = s.Def.Weapon;
                 if (w == null || s.Destroyed) continue;
-                // A fleet out of supply reloads slower: short of rounds, of spares for its mounts, of power to spare (U.SPC-T93).
-                s.Cooldown -= dt * c.Readiness * weaponPower;
                 // A mount the player has taken is theirs to lay and fire, reloading or not (U.SPC-T18).
                 if (Manned.Count > 0 && Manned.TryGetValue(s, out var manned))
                 {
                     FireManned(u, s, manned, w, dt, accuracyScale);
                     continue;
                 }
+                if (braced && !w.AntiSmall) continue;
                 if (s.Cooldown > 0 || s.Kind == SubsystemKind.Torpedo) continue;
                 if (s.Kind == SubsystemKind.BoardingPods)
                 {
@@ -1240,6 +1261,25 @@ namespace Unity.SpaceGod.Core
                 // A mount with a real firing arc (a broadside battery, fixed-forward fighter guns) can
                 // only engage a target that actually falls within it.
                 if (target != null && s.Def.ArcWidthDeg < 360 && !s.Def.ContainsYaw(u.YawDegOf(target.Pos))) target = null;
+                // A capital ship's batteries fire under the order of the arc the target lies in (U.SPC-T425): held, not at
+                // all; in a volley, a gun holds until its battery goes together, surer and harder.
+                double volley = 1;
+                if (target != null && u.Broadside != null && !w.AntiSmall && !w.Supporting && s.Kind != SubsystemKind.BoardingPods)
+                {
+                    var arc = Facings.Toward(u, target.Pos);
+                    var order = u.Broadside[arc];
+                    if (order == BatteryOrder.HoldFire) target = null;
+                    else if (order == BatteryOrder.Volley && Broadsides.IsBatteryGun(s))
+                    {
+                        if (!u.Broadside.Releases(arc))
+                        {
+                            Broadsides.Holding(u, arc, target);
+                            s.Aim = (target.Pos - origin).Normalized;
+                            continue;
+                        }
+                        volley = 1 + Broadsides.CrewVolleyDamageBonus;
+                    }
+                }
                 if (target == null)
                 {
                     s.Aim = DVec3.Zero;
@@ -1281,16 +1321,16 @@ namespace Unity.SpaceGod.Core
                 {
                     // At the player's own hull every shot is aimed and real (U.SPC-T270): led, late on a target
                     // crossing the gunner's sights and scattered by his skill, it hits only if it meets the hull.
-                    var dir = AimAt(u, origin, target, aimPoint, w, accuracyScale);
+                    var dir = AimAt(u, origin, target, aimPoint, w, accuracyScale * (volley > 1 ? 1 + Broadsides.CrewVolleyAccuracyBonus : 1));
                     s.Aim = dir;
-                    ResolveShot(u, s, origin, dir, w);
+                    ResolveShot(u, s, origin, dir, w, volley);
                     continue;
                 }
 
                 double dist = (aimPoint - origin).Length;
                 double size = Math.Max(0.15, Math.Min(1, target.LengthKm / 0.4));
                 if (target.Kind == UnitKind.Fighter) size *= w.AntiSmall ? 1.4 : 0.35;
-                double chance = w.Accuracy * accuracyScale * size * (1 - 0.4 * dist / w.RangeKm);
+                double chance = w.Accuracy * accuracyScale * size * (1 - 0.4 * dist / w.RangeKm) * (volley > 1 ? 1 + Broadsides.CrewVolleyAccuracyBonus : 1);
                 bool hit = rng.NextDouble() < chance;
                 var kind = s.Kind == SubsystemKind.FighterGuns || s.Kind == SubsystemKind.Autocannon || s.Kind == SubsystemKind.AutoTurret ? FxKind.Guns
                     : w.AntiSmall ? FxKind.PointDefense
@@ -1301,14 +1341,14 @@ namespace Unity.SpaceGod.Core
                 {
                     // A dumb kinetic round, not a hitscan: it takes real time to cross the range, so
                     // fire it off and let FireKineticRound/StepRounds decide what it actually hits.
-                    FireKineticRound(u, s, origin, aimPoint, target, sub, w, hit, dist, kind);
+                    FireKineticRound(u, s, origin, aimPoint, target, sub, w, hit, dist, kind, volley);
                     continue;
                 }
 
                 if (hit)
                 {
-                    Emit(kind, origin, aimPoint, w.Damage, u.Side, target, sub?.Index ?? -1);
-                    ApplyDamage(target, sub, w.Damage, aimPoint, null, small ? WeakPoints.Factor(target, sub, aimPoint - origin) : 1);
+                    Emit(kind, origin, aimPoint, w.Damage * volley, u.Side, target, sub?.Index ?? -1);
+                    ApplyDamage(target, sub, w.Damage * volley, aimPoint, null, small ? WeakPoints.Factor(target, sub, aimPoint - origin) : 1, aimPoint - origin);
                 }
                 else
                 {
@@ -1328,7 +1368,7 @@ namespace Unity.SpaceGod.Core
         /// actual <see cref="ApplyDamage"/> to <see cref="StepRounds"/>, once the round has actually crossed
         /// the intervening space.
         /// </summary>
-        void FireKineticRound(BattleUnit u, Subsystem mount, DVec3 origin, DVec3 aimPoint, BattleUnit target, Subsystem targetSub, WeaponSpec w, bool hit, double dist, FxKind kind)
+        void FireKineticRound(BattleUnit u, Subsystem mount, DVec3 origin, DVec3 aimPoint, BattleUnit target, Subsystem targetSub, WeaponSpec w, bool hit, double dist, FxKind kind, double damageScale = 1)
         {
             double speed = w.MuzzleSpeedKmS;
             double leadTime = Math.Min(dist / speed, 20);
@@ -1342,7 +1382,7 @@ namespace Unity.SpaceGod.Core
             Emit(kind, origin, hit ? impact : origin + (impact - origin).Normalized * Math.Min(w.RangeKm, dist * 1.3), 0, u.Side, null, -1);
             Rounds.Add(new KineticRound
             {
-                Pos = origin, Vel = vel, Target = target, TargetSub = targetSub, Damage = w.Damage,
+                Pos = origin, Vel = vel, Target = target, TargetSub = targetSub, Damage = w.Damage * damageScale,
                 ArriveIn = arriveIn, Life = arriveIn + (hit ? 0 : 0.5), Side = u.Side, Hit = hit,
                 Railgun = mount.Kind == SubsystemKind.Railgun || mount.Kind == SubsystemKind.LightRailgun,
                 SmallCraft = WeakPoints.IsSmallCraft(u),
@@ -1374,7 +1414,7 @@ namespace Unity.SpaceGod.Core
                     if (r.Target.Present && r.Target.Side != r.Side && !r.Target.Surrendering)
                     {
                         var sub = r.TargetSub != null && !r.TargetSub.Destroyed ? r.TargetSub : null;
-                        ApplyDamage(r.Target, sub, r.Damage, r.Pos, null, r.SmallCraft ? WeakPoints.Factor(r.Target, sub, r.Vel - r.Target.Vel) : 1);
+                        ApplyDamage(r.Target, sub, r.Damage, r.Pos, null, r.SmallCraft ? WeakPoints.Factor(r.Target, sub, r.Vel - r.Target.Vel) : 1, r.Vel - r.Target.Vel);
                     }
                 }
                 else if (r.Life <= 0) r.Gone = true;
@@ -1481,7 +1521,7 @@ namespace Unity.SpaceGod.Core
             var at = origin + dir * t;
             var sub = SubsystemNear(hit, at);
             Emit(w.AntiSmall ? FxKind.PointDefense : FxKind.Beam, origin, at, damage, u.Side, hit, sub?.Index ?? -1);
-            ApplyDamage(hit, sub, damage, at, null, WeakPoints.IsSmallCraft(u) ? WeakPoints.Factor(hit, sub, dir) : 1);
+            ApplyDamage(hit, sub, damage, at, null, WeakPoints.IsSmallCraft(u) ? WeakPoints.Factor(hit, sub, dir) : 1, dir);
         }
 
         /// <summary>An aimed round flies on, and hits the first hostile hull its path crosses this step.</summary>
@@ -1498,7 +1538,7 @@ namespace Unity.SpaceGod.Core
                     var at = r.Pos + step / len * t;
                     r.Gone = true;
                     var sub = SubsystemNear(hit, at);
-                    ApplyDamage(hit, sub, r.Damage, at, null, r.SmallCraft ? WeakPoints.Factor(hit, sub, r.Vel - hit.Vel) : 1);
+                    ApplyDamage(hit, sub, r.Damage, at, null, r.SmallCraft ? WeakPoints.Factor(hit, sub, r.Vel - hit.Vel) : 1, r.Vel - hit.Vel);
                     return;
                 }
             }
@@ -1947,7 +1987,7 @@ namespace Unity.SpaceGod.Core
         /// shields is multiplied by <paramref name="exposed"/>: a small craft's hit on an open weak point (U.SPC-T424, see
         /// <see cref="WeakPoints.Factor"/>).
         /// </summary>
-        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at, DVec3? shieldAt = null, double exposed = 1)
+        public void ApplyDamage(BattleUnit target, Subsystem sub, double damage, DVec3 at, DVec3? shieldAt = null, double exposed = 1, DVec3? incoming = null)
         {
             if (!target.Present) return;
             var c = target.Combat;
@@ -1968,7 +2008,21 @@ namespace Unity.SpaceGod.Core
                 }
             }
             if (sub != null && exposed > 1) damage *= exposed;
-            damage = Math.Max(damage * 0.15, damage - c.Spec.Armor);
+            // A capital ship's crew braced for the broadside shrugs off part of it, and a hull angled to the line of fire
+            // meets the shot obliquely: thicker armour, part of the hit turned aside (U.SPC-T425).
+            double armour = c.Spec.Armor;
+            if (Broadsides.Commands(target))
+            {
+                damage *= Broadsides.BraceFactor(target);
+                // A weak point struck from its open side has no armour to angle (U.SPC-T424).
+                if (incoming.HasValue && !(sub != null && exposed > 1))
+                {
+                    var (thicker, through) = Broadsides.Angling(target, incoming.Value);
+                    armour *= thicker;
+                    damage *= through;
+                }
+            }
+            damage = Math.Max(damage * 0.15, damage - armour);
             Emit(FxKind.Impact, at, at, damage, target.Side, target, sub?.Index ?? -1);
             if (sub != null && !sub.Destroyed)
             {
@@ -2075,7 +2129,7 @@ namespace Unity.SpaceGod.Core
                     else
                     {
                         var sub = m.TargetSub != null && !m.TargetSub.Destroyed ? m.TargetSub : PickSubsystem(t);
-                        ApplyDamage(t, sub, m.Damage, aim, entry, m.SmallCraft ? WeakPoints.Factor(t, sub, m.Vel - t.Vel) : 1);
+                        ApplyDamage(t, sub, m.Damage, aim, entry, m.SmallCraft ? WeakPoints.Factor(t, sub, m.Vel - t.Vel) : 1, m.Vel - t.Vel);
                     }
                 }
             }

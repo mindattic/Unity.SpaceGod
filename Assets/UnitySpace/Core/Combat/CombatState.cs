@@ -16,6 +16,13 @@ namespace Unity.SpaceGod.Core
         /// meaningful only for <see cref="SubsystemKind.ShieldGenerator"/>; set by <see cref="ShipCombat"/>.</summary>
         public double Shield, MaxShield;
 
+        /// <summary>How much of its even share this generator holds while the shields are angled (U.SPC-T425, see
+        /// <see cref="Broadsides.StepShields"/>): above 1 on the facing they are angled to, below it elsewhere.</summary>
+        public double ShieldCapScale = 1;
+
+        /// <summary>The charge this generator regenerates to: its share, as angled.</summary>
+        public double ShieldCap => MaxShield * ShieldCapScale;
+
         /// <summary>Battle-clock seconds this generator's arc was last hit, for its own regen pause.</summary>
         public double LastHitSeconds = -999;
 
@@ -189,10 +196,21 @@ namespace Unity.SpaceGod.Core
         {
             double ratings = GeneratorRatings;
             if (ratings <= 0) return;
+            // Angled shields (U.SPC-T425) move charge between arcs but never make more of it: no regen past the whole's cap.
+            double room = 0;
+            foreach (var s in Subsystems)
+                if (s.Kind == SubsystemKind.ShieldGenerator && !s.Destroyed) room += s.MaxShield - s.Shield;
             foreach (var s in Subsystems)
             {
+                if (room <= 0) return;
                 if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed) continue;
-                if (nowSeconds - s.LastHitSeconds > 8) s.Shield = Math.Min(s.MaxShield, s.Shield + Spec.ShieldRegen * s.Def.Rating / ratings * dt);
+                // Toward its cap as angled; a generator above it is left for the angling to drain.
+                if (nowSeconds - s.LastHitSeconds > 8 && s.Shield < s.ShieldCap)
+                {
+                    double add = Math.Min(room, Math.Min(s.ShieldCap - s.Shield, Spec.ShieldRegen * s.Def.Rating / ratings * dt));
+                    s.Shield = add >= s.ShieldCap - s.Shield ? s.ShieldCap : s.Shield + add;
+                    room -= add;
+                }
             }
         }
 

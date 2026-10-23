@@ -2,7 +2,7 @@
 
 Scoping for U.SPC-T17: each kind of ship flies by its own rules at the helm, not by one shared model with different numbers per class. Feel comes before physical accuracy. The owner reviews and tunes one family at a time, and each family is a ticket of its own (listed under [Work plan](#work-plan)).
 
-This covers handling: how the stick, throttle and keys become motion. Weapons, lock-on, wingmen and attack runs belong to the dogfighting game (U.SPC-T424). Batteries, firing arcs, bracing, damage control and formations belong to the capital broadside game (U.SPC-T425). Both games are built on the flight models described here.
+This covers handling: how the stick, throttle and keys become motion. Weapons, lock-on, wingmen and attack runs belong to the dogfighting game (U.SPC-T424). Batteries, firing arcs, bracing, damage control and formations belong to the capital broadside game (U.SPC-T425, `Core/Combat/Broadsides.cs`, landed: see the README's Broadsides). Both games are built on the flight models described here.
 
 ## Where it stands
 
