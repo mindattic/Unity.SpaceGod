@@ -1,0 +1,19 @@
+{
+    "name": "Unity.SpaceGod.Rendering.Hdrp",
+    "rootNamespace": "Unity.SpaceGod.Rendering.Hdrp",
+    "references": [
+        "Unity.SpaceGod.Core",
+        "Unity.SpaceGod.Runtime",
+        "Unity.RenderPipelines.HighDefinition.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

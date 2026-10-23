@@ -78,6 +78,20 @@ namespace Unity.SpaceGod.Rendering
 
         /// <summary>The renderer features the active renderer carries, by name.</summary>
         IReadOnlyList<string> RenderFeatures { get; }
+
+        /// <summary>
+        /// The photoreal choices of the settings menu (U.SPC-T430). A backend puts into effect those its pipeline
+        /// offers (<see cref="RenderPipelineProfile.Features"/>) and keeps the rest only to report them back.
+        /// </summary>
+        PhotorealOptions Photoreal { get; set; }
+
+        /// <summary>
+        /// The planet atmosphere the game's own camera is at, for a physically based sky (U.SPC-T430):
+        /// <paramref name="shell"/> describes it and <paramref name="centre"/> is the planet's centre relative to the
+        /// camera. <see cref="AtmosphereShell.None"/> clears it. A pipeline without such a sky ignores it (the shaders'
+        /// own atmosphere rims draw it there).
+        /// </summary>
+        void SetAtmosphere(Camera camera, AtmosphereShell shell, Vector3 centre);
     }
 
     /// <summary>
@@ -188,5 +202,9 @@ namespace Unity.SpaceGod.Rendering
         public virtual void SetPostProcessing(Camera camera, PostProcessLook look) { }
 
         public virtual IReadOnlyList<string> RenderFeatures => Array.Empty<string>();
+
+        public virtual PhotorealOptions Photoreal { get; set; } = PhotorealOptions.Default;
+
+        public virtual void SetAtmosphere(Camera camera, AtmosphereShell shell, Vector3 centre) { }
     }
 }

@@ -16,6 +16,10 @@
        requires the Editor closed) -> Builds\Windows\Unity.SpaceGod.exe.
     4. Copies Builds\Windows\* -> C:\Apps\Unity.SpaceGod\.
 
+.PARAMETER SkipHdrp
+    Build only the URP player (the default), not the HDRP one beside it in HDRP\ that
+    Settings > Render pipeline restarts into (U.SPC-T430). Faster; choosing HDRP then stays on URP.
+
 .PARAMETER Launch
     After publishing, immediately run the deployed Unity.SpaceGod.exe.
 
@@ -23,7 +27,7 @@
     powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
     powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -Launch
 #>
-param([switch]$Launch)
+param([switch]$Launch, [switch]$SkipHdrp)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -115,6 +119,8 @@ New-Item -ItemType Directory -Force "$repoDir/Logs" | Out-Null
 $logFile = "$repoDir/Logs/deploy-build.log"
 # Start-Process joins these with bare spaces, so paths are quoted here or a space in one would split it.
 $uargs = @("-batchmode", "-quit", "-projectPath", "`"$repoDir`"", "-executeMethod", "Unity.SpaceGod.EditorTools.ProjectSetup.SetupAndBuild", "-logFile", "`"$logFile`"")
+# The same build makes the HDRP player in Builds\Windows\HDRP (U.SPC-T430) unless told not to.
+if ($SkipHdrp) { $uargs += "-skipHdrp" }
 $p = Start-Process -FilePath $unity -ArgumentList $uargs -Wait -PassThru -NoNewWindow
 $errors = Select-String -Path $logFile -Pattern "error CS\d+" -ErrorAction SilentlyContinue | Select-Object -First 40
 if ($errors) { $errors | ForEach-Object { Write-Host $_.Line -ForegroundColor Red } }

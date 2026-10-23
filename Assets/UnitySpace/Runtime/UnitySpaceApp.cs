@@ -2493,6 +2493,52 @@ namespace Unity.SpaceGod
                 light.Sun2Color = Vector4.zero;
             }
             RenderBackend.Active.Lighting = light;
+            UpdateAtmosphere();
+        }
+
+        bool atmosphereSet;
+
+        /// <summary>
+        /// Tells a pipeline that draws a physically based sky (HDRP) which planet's air the camera is in or nearest
+        /// (U.SPC-T430): the one closest by height over its size, within a few radii of its surface. A pipeline
+        /// without such a sky is not asked; its planets keep only the shaders' own atmosphere rims.
+        /// </summary>
+        void UpdateAtmosphere()
+        {
+            var backend = RenderBackend.Active;
+            if (!backend.Profile.Offers(PipelineFeatures.PhysicalSky)) return;
+            int best = -1;
+            double bestScore = double.PositiveInfinity, bestDistance = 0;
+            for (int i = 0; i < Catalog.Count; i++)
+            {
+                var b = Catalog[i];
+                if (!b.IsVisible) continue;
+                double d = (SpaceCamera.ScenePosition - bodyScene[i]).Length;
+                double score = PlanetAtmospheres.Closeness(d, bodyRadius[i], b.AtmosphereStrength, b.IsStar);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = i;
+                    bestDistance = d;
+                }
+            }
+            if (best < 0)
+            {
+                ClearAtmosphere();
+                return;
+            }
+            var body = Catalog[best];
+            var shell = PlanetAtmospheres.Describe(best, bodyRadius[best], bestDistance, body.AtmosphereColor.R, body.AtmosphereColor.G,
+                body.AtmosphereColor.B, body.AtmosphereStrength);
+            backend.SetAtmosphere(UnityCamera, shell, Relative(bodyScene[best]));
+            atmosphereSet = true;
+        }
+
+        void ClearAtmosphere()
+        {
+            if (!atmosphereSet) return;
+            atmosphereSet = false;
+            RenderBackend.Active.SetAtmosphere(UnityCamera, AtmosphereShell.None, Vector3.zero);
         }
 
         static readonly Rgb SunLight = AlphaCentauri.StarColor(5772);
@@ -2509,7 +2555,11 @@ namespace Unity.SpaceGod
 
         void UpdateViews(float dt)
         {
-            if (!SystemVisible) return;
+            if (!SystemVisible)
+            {
+                ClearAtmosphere();
+                return;
+            }
             UpdateLights();
             var forward = SpaceCamera.Rotation * Vector3.forward;
             double pixelsPerUnit = PixelsPerUnitAtUnitDistance();
