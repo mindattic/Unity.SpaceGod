@@ -327,6 +327,37 @@ namespace Unity.SpaceGod.Core
                 }
             }
 
+            // A static collection can still be filled by code running on another thread (parallel test
+            // fixtures), so it is copied into an array before it is walked; a copy that collides with a
+            // writer is taken again, so the walk itself never enumerates a live collection.
+            static object[] Snapshot(IEnumerable source)
+            {
+                for (int attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        var list = new List<object>();
+                        foreach (var x in source) list.Add(x);
+                        return list.ToArray();
+                    }
+                    catch (InvalidOperationException) when (attempt < 100) { System.Threading.Thread.Yield(); }
+                }
+            }
+
+            static DictionaryEntry[] SnapshotEntries(IDictionary source)
+            {
+                for (int attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        var list = new List<DictionaryEntry>();
+                        foreach (DictionaryEntry e in source) list.Add(e);
+                        return list.ToArray();
+                    }
+                    catch (InvalidOperationException) when (attempt < 100) { System.Threading.Thread.Yield(); }
+                }
+            }
+
             static void Walk(object v, string key, int depth, Dictionary<object, string> k, Dictionary<string, object> b)
             {
                 if (v == null || v is string || v is Delegate || v is MemberInfo || depth > 24) return;
@@ -342,13 +373,13 @@ namespace Unity.SpaceGod.Core
                 {
                     if (t.GetElementType().IsPrimitive) return;
                     int i = 0;
-                    foreach (var x in a) Walk(x, key + "[" + i++ + "]", depth + 1, k, b);
+                    foreach (var x in Snapshot(a)) Walk(x, key + "[" + i++ + "]", depth + 1, k, b);
                     return;
                 }
                 if (v is IDictionary d)
                 {
                     int i = 0;
-                    foreach (DictionaryEntry e in d)
+                    foreach (DictionaryEntry e in SnapshotEntries(d))
                     {
                         Walk(e.Key, key + "{k" + i + "}", depth + 1, k, b);
                         Walk(e.Value, key + "{" + i + "}", depth + 1, k, b);
@@ -361,7 +392,7 @@ namespace Unity.SpaceGod.Core
                     if (v is IEnumerable en && t.IsGenericType)
                     {
                         int i = 0;
-                        foreach (var x in en) Walk(x, key + "[" + i++ + "]", depth + 1, k, b);
+                        foreach (var x in Snapshot(en)) Walk(x, key + "[" + i++ + "]", depth + 1, k, b);
                     }
                     return;
                 }
