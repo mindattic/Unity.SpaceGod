@@ -151,6 +151,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Battleship] = Capital,
             [ShipClass.Cruiser] = Capital,
             [ShipClass.Destroyer] = Capital,
+            // A destroyer-sized hull (U.SPC-T479): it crosses with its band, never left at the well's edge.
+            [ShipClass.Interdictor] = Capital,
             [ShipClass.Explorer] = Survey,
         };
 

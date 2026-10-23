@@ -21,7 +21,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void DefaultFleetHasEveryClassAndSomeShipsUnderway()
         {
             var (fleet, _) = Create();
-            // The classic fleet predates breachers, fighters, explorers, gunships and lane tenders (they sail with the
+            // The classic fleet predates breachers, fighters, explorers, gunships, lane interdictors and lane tenders (they sail with the
             // pirates/carriers/free pilots of the full World.BuildMilitary roster, and the tenders with the World's lane upkeep,
             // U.SPC-T481, not this standalone Core.Tests fixture) -- adding
             // either here would also perturb this fixture's own chaotic N-body simulation used by other
@@ -30,7 +30,7 @@ namespace Unity.SpaceGod.Core.Tests
             // that fly from carriers' hangars as squadrons.
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
                 if (c != ShipClass.Breacher && c != ShipClass.Fighter && c != ShipClass.Explorer && c != ShipClass.Gunship && c != ShipClass.OreTug
-                    && c != ShipClass.Interceptor && c != ShipClass.Bomber && c != ShipClass.LaneTender) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
+                    && c != ShipClass.Interceptor && c != ShipClass.Bomber && c != ShipClass.LaneTender && c != ShipClass.Interdictor) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
             Assert.That(fleet.Ships.Count >= 40, Is.True);
             Assert.That((fleet.Ships).Any(s => !s.IsEscort && s.Phase == ShipPhase.Transit), Is.True);
             Assert.That((fleet.Ships).Any(s => !s.IsEscort && s.Phase == ShipPhase.Parked), Is.True);

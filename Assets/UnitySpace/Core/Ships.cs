@@ -51,6 +51,12 @@ namespace Unity.SpaceGod.Core
         /// and aligned (see <see cref="LaneUpkeep"/>). A lane nobody tends slows, grows unreliable and in the end fails, so
         /// tenders matter in peace and are a prime mark in war.</summary>
         LaneTender,
+
+        /// <summary>A lane interdictor (U.SPC-T479): a destroyer-sized hull built round a field projector that disrupts a
+        /// hyperlane's magnetic field and throws every ship riding past out of it (see <see cref="LaneInterdictors"/>). The
+        /// pirate's and raider's favourite, since the lanes' routes are predictable; navies fly it as a lane picket against
+        /// them. Lightly armed: its reactor is spent on the emitter.</summary>
+        Interdictor,
     }
 
     public enum ShipRole
@@ -145,6 +151,7 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Interceptor, "Interceptor", 1.3, true),
             new ShipClassSpec(ShipClass.Bomber, "Bomber", 0.6, true),
             new ShipClassSpec(ShipClass.LaneTender, "Lane tender", 0.2, false),
+            new ShipClassSpec(ShipClass.Interdictor, "Lane interdictor", 0.35, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

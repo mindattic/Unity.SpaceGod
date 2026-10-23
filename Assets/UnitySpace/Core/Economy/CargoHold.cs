@@ -32,6 +32,7 @@ namespace Unity.SpaceGod.Core
             // An ore tug carries nothing aboard: its load is held in its claws (U.SPC-T483). A locker for the crew's kit.
             [ShipClass.OreTug] = new CargoHoldSpec(2, 2),
             [ShipClass.Destroyer] = new CargoHoldSpec(6, 5),
+            [ShipClass.Interdictor] = new CargoHoldSpec(5, 4),
             [ShipClass.Cruiser] = new CargoHoldSpec(7, 6),
             [ShipClass.Battleship] = new CargoHoldSpec(9, 7),
             [ShipClass.Carrier] = new CargoHoldSpec(10, 8),

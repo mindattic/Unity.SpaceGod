@@ -102,7 +102,7 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(w.War.IsHomeGuard(leader), Is.False, $"{leader.Name} stands as a navy's home guard");
                 var o = w.War.OrderOf(leader);
                 if (o == null) continue;
-                Assert.That(o.Kind, Is.AnyOf(OrderKind.Patrol, OrderKind.Defend, OrderKind.Hunt, OrderKind.Repair), $"{leader.Name} was ordered to {o.Kind}");
+                Assert.That(o.Kind, Is.AnyOf(OrderKind.Patrol, OrderKind.Defend, OrderKind.Hunt, OrderKind.Repair, OrderKind.Ambush), $"{leader.Name} was ordered to {o.Kind}");
                 if (o.Kind != OrderKind.Repair)
                     Assert.That(PatrolWings.OnBeat(leader, o.Body), Is.True, $"{leader.Name} was sent off its beat to {w.Catalog[o.Body].Name}");
             }

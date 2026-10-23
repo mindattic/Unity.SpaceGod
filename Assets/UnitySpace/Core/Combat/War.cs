@@ -295,7 +295,7 @@ namespace Unity.SpaceGod.Core
                 {
                     var v = kv.Key;
                     // Already caught by another lurker's pulse this pass: it is fighting there.
-                    if (v.LaneLeg.Lane != lane || v.Faction.IsPirate || v.Derelict || v.Battle != null) continue;
+                    if (v.LaneLeg.Lane != lane || !Targets(lurker, v) || v.Derelict || v.Battle != null) continue;
                     double now = kv.Value.at;
                     // Last seen on another lane (it rode one out and another in since the last look): no pass of this one yet.
                     double before = laneSeen.TryGetValue(v, out var b) && b.lane == lane ? b.at : now;
@@ -314,6 +314,14 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         bool WorthPulsing(Ship lurker, List<Ship> victims)
         {
+            // A navy's lane picket (U.SPC-T479) pulls out every raider or enemy it can take on: the guns riding with them no
+            // more than its own group's, with a margin for the stun the pulse leaves them under.
+            if (!lurker.Faction.IsPirate)
+            {
+                double hostile = 0;
+                foreach (var v in victims) hostile += GroupStrength(v);
+                return hostile <= GroupStrength(lurker) * PicketNerve;
+            }
             var marks = new List<Ship>();
             double guns = 0;
             foreach (var v in victims)
@@ -331,22 +339,47 @@ namespace Unity.SpaceGod.Core
             return BestMark(marks, guns, band) != null || (guns > 0 && guns <= band * RaidDoctrine.BaseNerve);
         }
 
-        /// <summary>A raider lying in wait beside its lane, pulse at the ready: not one in a fight, at the helm, or off
-        /// running the player down (U.SPC-T273), which has left its station however its schedule still reads.</summary>
+        /// <summary>How much more strength a navy's lane picket will pull out of a lane than its own group has (the pulse
+        /// leaves them stunned and shieldless for the first minute or two).</summary>
+        public const double PicketNerve = 1.5;
+
+        /// <summary>
+        /// A group lying in wait beside its lane, pulse at the ready: a raider band, or a navy's lane picket (U.SPC-T479),
+        /// that still carries a working field projector (see <see cref="LaneInterdictors"/>; a band whose interdictor was lost
+        /// lies there with nothing to pulse). Not one in a fight, at the helm, or off running the player down (U.SPC-T273),
+        /// which has left its station however its schedule still reads.
+        /// </summary>
         bool Lurking(Ship lurker) =>
-            !lurker.Destroyed && !lurker.IsEscort && lurker.Faction.IsPirate && lurker.Phase == ShipPhase.Lurk && lurker.Battle == null &&
-            lurker != world.PilotedShip && (world.Pursuit == null || world.Pursuit.Of(lurker) == null);
+            !lurker.Destroyed && !lurker.IsEscort && lurker.Phase == ShipPhase.Lurk && lurker.Battle == null &&
+            lurker != world.PilotedShip && (world.Pursuit == null || world.Pursuit.Of(lurker) == null) &&
+            LaneInterdictors.Fielded(lurker, Fleet.Ships);
+
+        /// <summary>
+        /// Whether <paramref name="lurker"/>'s pulse is meant for <paramref name="rider"/> (U.SPC-T479): a raider's for any
+        /// ship but another raider's, a navy picket's for raiders, its enemies at war, and the player's hull when that navy
+        /// has a price on the player's head.
+        /// </summary>
+        public bool Targets(Ship lurker, Ship rider)
+        {
+            if (lurker == null || rider == null || rider.Faction == null || lurker.Faction == null) return false;
+            if (lurker.Faction.IsPirate) return !rider.Faction.IsPirate;
+            if (rider.Faction == lurker.Faction) return false;
+            if (Diplomacy != null && Diplomacy.Hostile(lurker.Faction, rider.Faction)) return true;
+            return rider == world.PilotedShip && world.Law != null && world.Law.Player.WantedBy(lurker.Faction);
+        }
 
         void Interdict(Ship lurker, double station, List<Ship> victims, double jd)
         {
             var lane = lurker.LaneLeg.Lane;
-            pulseReady[lurker] = jd + 1;
+            bool picket = !lurker.Faction.IsPirate;
+            var emitter = LaneInterdictors.EmitterOf(lurker, Fleet.Ships) ?? lurker;
+            pulseReady[lurker] = jd + LaneInterdictors.RechargeDays.Value;
             // A pilot surging through may be past before the shell closes: the pulse goes off, and misses.
             var pilot = world.PilotedShip;
             if (pilot != null && victims.Contains(pilot) && pilot.LaneSurged && rng.NextDouble() < SurgeSlipChance)
             {
                 victims.Remove(pilot);
-                pilotNotices.Add($"Through! The {lurker.Name}'s pulse goes off astern as you surge clear of the {lane.Name} lane's interdiction field");
+                pilotNotices.Add($"Through! The {emitter.Name}'s pulse goes off astern as you surge clear of the {lane.Name} lane's interdiction field");
                 world.Log(jd, $"The {pilot.Name} surges through an interdiction pulse on the {lane.Name} lane", WorldEventKind.Battle, lane.A);
                 if (victims.Count == 0) return;
             }
@@ -357,8 +390,11 @@ namespace Unity.SpaceGod.Core
                 Fleet.PullOut(v, jd, at, side);
             }
             var helio = Fleet.LanePoint(lurker, jd, lurker.LaneHold) + lurker.LaneHoldSide;
-            var b = new Battle(nextBattleId++, 0, "Ambush on the " + lane.Name + " lane", helio, jd, rng.Next())
+            var b = new Battle(nextBattleId++, 0, (picket ? "Interdiction on the " : "Ambush on the ") + lane.Name + " lane", helio, jd, rng.Next())
             {
+                // A navy's picket stops raiders and enemies on the lane in the law's name, as a patrol interdicting a
+                // wanted ship does (U.SPC-T479).
+                EnforcingSide = picket ? 0 : -1,
                 Site = new LaneSite
                 {
                     Hop = lurker.LaneLeg, FromOffset = lurker.LaneFromOffset, ToOffset = lurker.LaneToOffset, Progress = lurker.LaneHold, Side = lurker.LaneHoldSide,
@@ -377,7 +413,8 @@ namespace Unity.SpaceGod.Core
                 var unit = b.AddShip(pilot, 1, spot, -spot.Normalized);
                 unit.PlayerControlled = true;
             }
-            BattleUnit source = b.UnitOf(lurker);
+            // The pulse comes from the group's interdictor (U.SPC-T479), wherever it flies in the formation.
+            BattleUnit source = b.UnitOf(emitter) ?? b.UnitOf(lurker);
             // A victim whose scanners made the raiders out lying dark beside the lane as it closed (by class at least,
             // at the lurk's stand-off from the lane line) was braced for the pulse: drives and shields ride it out.
             var warned = new HashSet<Ship>();
@@ -397,17 +434,25 @@ namespace Unity.SpaceGod.Core
             if (pilot != null && pilot.Battle == b)
             {
                 var pu = b.UnitOf(pilot);
+                string closing = picket ? $"{lurker.Faction.Name} warships closing" : "Raiders closing";
                 pilotNotices.Add(pu != null && pu.Stunned > 0
-                    ? $"INTERDICTED: the {lurker.Name}'s pulse throws you out of the {lane.Name} lane, drives and shields dead for {pu.Stunned:0} s. Raiders closing"
-                    : $"INTERDICTED: thrown out of the {lane.Name} lane, but braced for the pulse: drives and shields held. Raiders closing");
+                    ? $"INTERDICTED: the {emitter.Name}'s pulse throws you out of the {lane.Name} lane, drives and shields dead for {pu.Stunned:0} s. {closing}"
+                    : $"INTERDICTED: thrown out of the {lane.Name} lane, but braced for the pulse: drives and shields held. {closing}");
             }
             if (source != null) b.Emit(FxKind.Pulse, source.Pos, source.Pos, 30, 0, source, -1);
             Battles.Add(b);
-            lanes0().Danger.TryGetValue(lane, out double danger);
-            lanes0().SetDanger(lane, danger + 3);
-            world.Log(jd, $"{lurker.Faction.Name} raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out", WorldEventKind.Battle, lane.A);
-            BumpDanger(lane.A, 1);
-            BumpDanger(lane.B, 1);
+            string pulled = $"{victims.Count} ship{(victims.Count == 1 ? "" : "s")} pulled out";
+            if (picket)
+                // The law's own picket: a fight on the lane, but no raiders' ambush to steer the traffic round.
+                world.Log(jd, $"The {lurker.Faction.Name} lane picket {lurker.Name} interdicts the {lane.Name} lane: {pulled}", WorldEventKind.Battle, lane.A);
+            else
+            {
+                lanes0().Danger.TryGetValue(lane, out double danger);
+                lanes0().SetDanger(lane, danger + 3);
+                world.Log(jd, $"{lurker.Faction.Name} raiders ({lurker.Name}) spring an ambush on the {lane.Name} lane: {pulled}", WorldEventKind.Battle, lane.A);
+                BumpDanger(lane.A, 1);
+                BumpDanger(lane.B, 1);
+            }
             BattleStarted?.Invoke(b);
         }
 
@@ -442,8 +487,7 @@ namespace Unity.SpaceGod.Core
             LaneThreat? best = null;
             foreach (var lurker in Fleet.Ships)
             {
-                if (!Lurking(lurker)) continue;
-                if (lurker.LaneLeg.Lane != lane) continue;
+                if (lurker.Phase != ShipPhase.Lurk || lurker.LaneLeg.Lane != lane || !Targets(lurker, rider) || !Lurking(lurker)) continue;
                 if (pulseReady.TryGetValue(lurker, out double ready) && ready > jd) continue;
                 // The lurker's station and the pulse's reach, as fractions of the rider's own leg.
                 double stationA = lurker.LaneLeg.From == lane.A ? lurker.LaneHold : 1 - lurker.LaneHold;
@@ -1901,6 +1945,8 @@ namespace Unity.SpaceGod.Core
             var f = leader.Faction;
             bool withdrawing = retreating.TryGetValue(leader, out double until) && jd < until;
             if (f.IsPirate) return DecidePirate(leader, here, jd, withdrawing);
+            // A fresh plan: a lane picket planned earlier and not yet reached no longer stands (U.SPC-T479).
+            leader.LurkLane = null;
             if (leader.PatrolWing) return DecideWing(leader, here, jd, withdrawing);
             // A fresh plan: a gate it was holding is held again only if it is still the order (U.SPC-T374).
             var held = leader.StakeoutKm;
@@ -1983,6 +2029,9 @@ namespace Unity.SpaceGod.Core
             // Strike a hidden haven this navy has found, if the group can take its garrison.
             if (!IsHomeGuard(leader) && AssaultTarget(leader, here, jd) is Settlement mark)
                 return new GroupOrder { Kind = OrderKind.Assault, Body = mark.Body };
+
+            // A group carrying a lane interdictor may hold a picket on a troubled lane out of the system (U.SPC-T479).
+            if (!IsHomeGuard(leader) && LanePicket(leader, here, PatrolWings.Ports(world, f), false) is GroupOrder picket) return picket;
 
             return new GroupOrder { Kind = OrderKind.Patrol, Body = NextPatrol(leader, here) };
         }
@@ -2218,7 +2267,54 @@ namespace Unity.SpaceGod.Core
             foreach (int body in beat)
                 if (body != here && PiratesSeenAt(body, f, at, jd))
                     return new GroupOrder { Kind = OrderKind.Hunt, Body = body };
+            // A lane picket wing (U.SPC-T479) lies in wait now and then on a lane between the ports of its beat.
+            if (LanePicket(leader, here, beat, true) is GroupOrder picket) return picket;
             return new GroupOrder { Kind = OrderKind.Patrol, Body = PatrolWings.NextOnBeat(leader, here) };
+        }
+
+        /// <summary>
+        /// A navy group's lane picket (U.SPC-T479): with a lane interdictor in the group (see <see cref="LaneInterdictors"/>)
+        /// and nothing more pressing, now and then (<see cref="LaneInterdictors.PicketChance"/>) it lies in wait part-way along
+        /// the most troubled hyperlane out of its system, where raiders have struck lately, bound for one of
+        /// <paramref name="ports"/> at its far end, to pull the raiders and enemies riding it out into a fight (see
+        /// <see cref="Targets"/>). A wing (<paramref name="keepToPorts"/>) takes only a lane that ends at one of them; another
+        /// group, failing that, makes for the far end itself. Null when it does not.
+        /// </summary>
+        GroupOrder LanePicket(Ship leader, int here, IEnumerable<int> ports, bool keepToPorts)
+        {
+            var lanes = Fleet.Lanes;
+            if (lanes == null || !LaneInterdictors.Fielded(leader, Fleet.Ships)) return null;
+            if (rng.NextDouble() >= LaneInterdictors.PicketChance.Value) return null;
+            int system = lanes.SystemOf(here);
+            Lane best = null;
+            int bound = -1;
+            double bestScore = 0;
+            foreach (var lane in lanes.Lanes)
+            {
+                if (lane.A != system && lane.B != system) continue;
+                int far = lane.Other(system), to = -1;
+                if (ports != null)
+                    foreach (int p in ports)
+                        if (lanes.SystemOf(p) == far) { to = p; break; }
+                if (to < 0)
+                {
+                    if (keepToPorts) continue;
+                    to = far;
+                }
+                lanes.Danger.TryGetValue(lane, out double danger);
+                double score = (danger + 0.25) * (0.7 + rng.NextDouble() * 0.6);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = lane;
+                    bound = to;
+                }
+            }
+            if (best == null) return null;
+            leader.LurkLane = best;
+            leader.LurkAt = 0.3 + rng.NextDouble() * 0.4;
+            leader.LurkDays = 2 + rng.NextDouble() * 2;
+            return new GroupOrder { Kind = OrderKind.Ambush, Body = bound };
         }
 
         /// <summary>
@@ -2305,9 +2401,9 @@ namespace Unity.SpaceGod.Core
                 if (tender >= 0) return new GroupOrder { Kind = OrderKind.Raid, Body = tender };
             }
 
-            // Lie in wait beside a busy hyperlane.
+            // Lie in wait beside a busy hyperlane: only with an interdictor in the band to pull its marks out (U.SPC-T479).
             var lanes = Fleet.Lanes;
-            if (lanes != null && rng.NextDouble() < 0.55)
+            if (lanes != null && LaneInterdictors.Fielded(leader, Fleet.Ships) && rng.NextDouble() < 0.55)
             {
                 int system = lanes.SystemOf(here);
                 var lane = BusiestLane(system);
@@ -3114,14 +3210,19 @@ namespace Unity.SpaceGod.Core
             // Every raider band keeps a breacher for taking prizes.
             var breacher = Fleet.AddShip(Name(), ShipClass.Breacher, pirates, ShipRole.Escort);
             Fleet.AddEscort(leader, breacher, Fleet.SlotFor(escorts));
+            // ... and a lane interdictor to pull its marks out of the hyperlanes (U.SPC-T479): no pulse without one.
+            var interdictor = Fleet.AddShip(Name(), ShipClass.Interdictor, pirates, ShipRole.Escort);
+            Fleet.AddEscort(leader, interdictor, Fleet.SlotFor(escorts + 1));
             Fleet.Station(leader, body, jd);
-            double hands = Crews.Complement(leader.Spec.Class) + escorts * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher);
+            double hands = Crews.Complement(leader.Spec.Class) + escorts * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher)
+                           + Crews.Complement(ShipClass.Interdictor);
             Crews.Draft(pirates, hands);
             world.NotifyAdded(leader);
         }
 
-        /// <summary>The most hands a new raider band can need (a cruiser, two destroyers and a breacher).</summary>
-        static double BandComplement => Crews.Complement(ShipClass.Cruiser) + 2 * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher);
+        /// <summary>The most hands a new raider band can need (a cruiser, two destroyers, a breacher and a lane interdictor).</summary>
+        static double BandComplement => Crews.Complement(ShipClass.Cruiser) + 2 * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher)
+                                        + Crews.Complement(ShipClass.Interdictor);
 
         void PirateRecruiting(double jd)
         {

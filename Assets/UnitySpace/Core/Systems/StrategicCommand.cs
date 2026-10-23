@@ -149,6 +149,11 @@ namespace Unity.SpaceGod.Core
         public static readonly BuildPlan Screens = Register("Screens", "Destroyers: cheap, quick hulls in numbers", 1,
             ShipClass.Destroyer, ShipClass.Destroyer, ShipClass.Cruiser);
 
+        /// <summary>Lane security (U.SPC-T479): lane interdictors with destroyers and cruisers to fight what they pull out,
+        /// groups that hold pickets on the hyperlanes raiders work.</summary>
+        public static readonly BuildPlan LaneSecurity = Register("Lane security", "Lane interdictors and their destroyers: pickets on the hyperlanes", 1,
+            ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Cruiser, ShipClass.Destroyer);
+
         public static readonly BuildPlan Mobilise = Register("Mobilise", "A balanced fleet half again as big", 1.5,
             ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Carrier);
 

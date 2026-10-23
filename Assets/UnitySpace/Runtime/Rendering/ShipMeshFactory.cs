@@ -67,6 +67,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Interceptor: BuildInterceptor(b); break;
                 case ShipClass.Bomber: BuildBomber(b); break;
                 case ShipClass.LaneTender: BuildLaneTender(b); break;
+                case ShipClass.Interdictor: BuildInterdictor(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -574,6 +575,36 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0.026f, 0.12f), new Vector3(0.036f, 0.006f, 0.036f), b.Dark);
             b.Nozzle(new Vector3(-0.035f, 0, -0.47f), 0.025f, 0.04f);
             b.Nozzle(new Vector3(0.035f, 0, -0.47f), 0.025f, 0.04f);
+        }
+
+        /// <summary>A lane interdictor (U.SPC-T479): a slim spine through a glowing field-projector ring amidships, its two
+        /// reactor housings either side of the ring.</summary>
+        static void BuildInterdictor(Builder b)
+        {
+            b.Frustum(-0.45f, 0.48f, new Vector2(0.09f, 0.06f), new Vector2(0.02f, 0.018f), 0, b.Hull);
+            b.Cylinder(new Vector3(0, 0, 0.05f), 0.05f, 0.07f, b.Dark);
+            b.Cylinder(new Vector3(0, 0, -0.15f), 0.05f, 0.07f, b.Dark);
+            // The projector ring: segments round the spine, lit with the field's glow.
+            const int segments = 14;
+            const float ring = 0.17f;
+            var glow = b.Glow(new Color(0.55f, 0.75f, 1f));
+            for (int i = 0; i < segments; i++)
+            {
+                float a = 360f * i / segments;
+                float rad = a * Mathf.Deg2Rad;
+                var at = new Vector3(Mathf.Cos(rad) * ring, Mathf.Sin(rad) * ring, -0.05f);
+                b.BoxRotated(at, new Vector3(2 * Mathf.PI * ring / segments * 1.05f, 0.02f, 0.04f), a + 90, i % 2 == 0 ? glow : b.Accent);
+            }
+            // Four struts from the spine out to the ring.
+            for (int i = 0; i < 4; i++)
+            {
+                float a = 45f + 90f * i;
+                float rad = a * Mathf.Deg2Rad;
+                b.BoxRotated(new Vector3(Mathf.Cos(rad) * ring * 0.55f, Mathf.Sin(rad) * ring * 0.55f, -0.05f), new Vector3(ring * 0.8f, 0.012f, 0.02f), a, b.Hull);
+            }
+            b.Box(new Vector3(0, 0.04f, 0.18f), new Vector3(0.04f, 0.025f, 0.08f), b.Hull);
+            b.Nozzle(new Vector3(-0.035f, 0, -0.47f), 0.022f, 0.04f);
+            b.Nozzle(new Vector3(0.035f, 0, -0.47f), 0.022f, 0.04f);
         }
 
         static void BuildFreighter(Builder b)

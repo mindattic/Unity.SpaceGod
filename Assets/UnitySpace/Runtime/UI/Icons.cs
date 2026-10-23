@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, white, prograde, retrograde, blip, lost, singularity;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, halo, white, prograde, retrograde, blip, lost, singularity;
 
         public static Texture2D White => white ??= Solid();
 
@@ -83,6 +83,8 @@ namespace Unity.SpaceGod.UI
                 // Strike craft (U.SPC-T484): the interceptor a thinner dart, the bomber a broad, deep wedge.
                 case ShipClass.Interceptor: return needle ??= Draw(p => Triangle(new Vector2(p.x * 2.6f, p.y), 0.75f));
                 case ShipClass.Bomber: return broad ??= Draw(p => Triangle(new Vector2(p.x * 1.1f, p.y * 1.3f), 0.7f));
+                // The lane interdictor (U.SPC-T479): its projector ring round a solid core.
+                case ShipClass.Interdictor: return halo ??= Draw(p => Mathf.Min(Ring(p, 0.7f, 0.14f), p.magnitude - 0.22f));
                 default: return square ??= Draw(p => Outline(Box(p, new Vector2(0.62f, 0.62f)), 0.14f));
             }
         }
@@ -101,6 +103,7 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Gunship: return 10;
                 case ShipClass.Interceptor: return 7;
                 case ShipClass.Bomber: return 10;
+                case ShipClass.Interdictor: return 13;
                 default: return 12;
             }
         }

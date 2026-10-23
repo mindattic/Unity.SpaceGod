@@ -376,6 +376,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Interceptor: return 2200;
                 case ShipClass.Bomber: return 4500;
                 case ShipClass.LaneTender: return 6000;
+                // A destroyer's hull, dearer for the field projector and its reactors (U.SPC-T479).
+                case ShipClass.Interdictor: return 14000;
                 default: return 3000;
             }
         }

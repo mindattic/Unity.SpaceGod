@@ -1796,7 +1796,7 @@ namespace Unity.SpaceGod.UI
             if (ship.Battle != null) return "IN BATTLE  " + ship.Battle.Name;
             var c = ship.Controller;
             if (ship.Derelict) return "DERELICT";
-            if (c.Phase == ShipPhase.Lurk) return "lurking on " + c.LaneLeg.Lane.Name;
+            if (c.Phase == ShipPhase.Lurk) return (c.Faction != null && !c.Faction.IsPirate ? "lane picket on " : "lurking on ") + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Adrift) return "adrift by " + c.LaneLeg.Lane.Name;
             if (c.GateKm is DVec3 gateKm)
             {

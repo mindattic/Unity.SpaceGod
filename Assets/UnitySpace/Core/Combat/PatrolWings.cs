@@ -26,11 +26,14 @@ namespace Unity.SpaceGod.Core
         /// <summary>The most ports on one wing's beat.</summary>
         public const int BeatLength = 3;
 
-        /// <summary>The three kinds of wing, in the order a navy raises them: light wing, heavy-fighter wing, picket.</summary>
+        /// <summary>The kinds of wing, in the order a navy raises them: light wing, heavy-fighter wing, lane picket (a
+        /// destroyer and a lane interdictor that lie in wait on the lanes between the ports of its beat for raiders,
+        /// U.SPC-T479), picket.</summary>
         static readonly ShipClass[][] Compositions =
         {
             new[] { ShipClass.Fighter, ShipClass.Fighter, ShipClass.Fighter },
             new[] { ShipClass.Gunship, ShipClass.Fighter, ShipClass.Fighter },
+            new[] { ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Fighter, ShipClass.Fighter },
             new[] { ShipClass.Destroyer, ShipClass.Gunship, ShipClass.Fighter, ShipClass.Fighter },
         };
 

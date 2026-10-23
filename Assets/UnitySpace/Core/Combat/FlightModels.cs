@@ -281,6 +281,7 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.Battleship, FlightFamily.Capital);
             r.Assign(ShipClass.Cruiser, FlightFamily.Capital);
             r.Assign(ShipClass.Destroyer, FlightFamily.Capital);
+            r.Assign(ShipClass.Interdictor, FlightFamily.Capital);
             r.Register(FlightFamily.LightFighter, new LightFighterFlightModel());
             r.Register(FlightFamily.Interceptor, new LightFighterFlightModel(LightFighterHandling.Interceptor, "Interceptor"));
             r.Register(FlightFamily.Bomber, new BomberFlightModel());

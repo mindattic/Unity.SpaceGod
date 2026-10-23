@@ -240,6 +240,12 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.25), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.08, 0.05, 1),
             },
+            // The lane interdictor (U.SPC-T479): its projector room amidships inside the ring, between its two reactors.
+            [ShipClass.Interdictor] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bow, "Bow", 0.3), new FacilitySite(FacilityKinds.Midships, "Projector room", -0.05),
+                new FacilitySite(FacilityKinds.Engineering, "Reactor rooms", -0.3), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.18, 0.05, 1),
+            },
             [ShipClass.Freighter] = new[]
             {
                 new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.43), new FacilitySite(FacilityKinds.Hold, "Forward hold", 0.15),
@@ -307,7 +313,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Destroyer:
                 case ShipClass.Miner:
                 case ShipClass.Explorer:
-                case ShipClass.LaneTender: return 3;
+                case ShipClass.LaneTender:
+                case ShipClass.Interdictor: return 3;
                 case ShipClass.Breacher:
                 case ShipClass.Gunship:
                 case ShipClass.Courier:

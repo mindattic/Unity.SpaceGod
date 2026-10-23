@@ -118,7 +118,8 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 | Marines live in a Marine Habitat | A flat marine figure per class | U.SPC-T465 |
 | Boarding the player takes part in | Boarding only resolves on its own | U.SPC-T468 |
 | Frigate, corvette, command cruiser, gate breaker | Not yet classes | U.SPC-T475 to U.SPC-T478 |
-| Lane interdictor, gate picket | Not yet classes (an interdiction pulse exists; the lane tender and lane upkeep landed in U.SPC-T481) | U.SPC-T479, U.SPC-T480 |
+| Gate picket | Not yet a class (the lane interdictor landed in U.SPC-T479, the lane tender and lane upkeep in U.SPC-T481) | U.SPC-T480 |
+| The lane interdictor, a sub-capital, has no FTL of its own | It shares the destroyer's own FTL drive, so a raider band crossing between the stars keeps its interdictor | U.SPC-T472 |
 | Truss-and-pod freighters; ice hauler / ore tug | Not yet | U.SPC-T482, U.SPC-T483 |
 | Recon / EW fighter; boarding shuttle | Not yet classes (the interceptor, space superiority fighter and bomber are hulls of their own since U.SPC-T484) | U.SPC-T485, U.SPC-T486 |
 | Antimatter / photon torpedoes, flak, interceptor missiles | In: battleships and carriers carry an antimatter torpedo launcher (a frigate takes one in a tube when it is a class); destroyers carry two rotary flak cannons and an interceptor launcher beside their point defence and keep between their capital and the threat; tunables in Settings > Weapons | U.SPC-T489 |
