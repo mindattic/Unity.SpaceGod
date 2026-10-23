@@ -212,6 +212,10 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Breacher:
                     i.Chain(("Assault bay", CompartmentKind.AssaultBay, 0.25, 0), ("Bridge", CompartmentKind.Bridge, 0, 0.03), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
                     break;
+                case ShipClass.Gunship:
+                    // Multi-crew (U.SPC-T467): the flight deck, then the gun deck its turret crews work from.
+                    i.Chain(("Flight deck", CompartmentKind.Bridge, 0.2, 0.03), ("Gun deck", CompartmentKind.Battery, 0, 0), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
+                    break;
                 default:
                     i.Chain(("Cockpit", CompartmentKind.Bridge, 0.1, 0), ("Engineering", CompartmentKind.Engineering, -0.3, 0));
                     break;

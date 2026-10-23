@@ -958,7 +958,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>How far off a dogfighter goes for the player in preference to whatever else it was after, km.</summary>
         public const double HuntPlayerKm = 8;
 
-        /// <summary>The small craft that dogfight: the light fighters. A heavy fighter (the Breacher) closes to board.</summary>
+        /// <summary>The small craft that dogfight: the light fighters. A heavy fighter (the gunship) brawls on the ordinary
+        /// circling approach, its crewed turrets firing all round; a Breacher closes to board.</summary>
         static bool Dogfights(BattleUnit u) =>
             u.Kind == UnitKind.Ship && u.Ship != null && (u.Ship.Spec.Class == ShipClass.Fighter || u.Ship.Spec.Class == ShipClass.Courier);
 

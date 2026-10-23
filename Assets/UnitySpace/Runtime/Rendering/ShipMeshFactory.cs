@@ -62,6 +62,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Explorer: BuildCourier(b); break;
                 case ShipClass.Breacher: BuildBreacher(b); break;
                 case ShipClass.Fighter: BuildFighter(b); break;
+                case ShipClass.Gunship: BuildGunship(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -557,6 +558,35 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0, -0.43f), new Vector3(0.18f, 0.14f, 0.05f), b.Dark);
             b.Nozzle(new Vector3(-0.06f, 0, -0.46f), 0.035f, 0.04f);
             b.Nozzle(new Vector3(0.06f, 0, -0.46f), 0.035f, 0.04f);
+        }
+
+        /// <summary>A gunship (U.SPC-T467), the heavy fighter: a broad armoured wedge with plated cheeks, a long spinal
+        /// railgun under the nose, a glazed flight deck, a turret on its spine and one under its keel, and twin
+        /// drives -- bigger and squarer than a fighter, with no drill.</summary>
+        static void BuildGunship(Builder b)
+        {
+            b.Frustum(-0.44f, 0.36f, new Vector2(0.3f, 0.12f), new Vector2(0.12f, 0.06f), 0, b.Hull);
+            foreach (float side in new[] { -1f, 1f })
+            {
+                // Armour cheeks and stub pylons.
+                b.Box(new Vector3(side * 0.16f, 0, -0.12f), new Vector3(0.05f, 0.1f, 0.48f), b.Accent);
+                b.Box(new Vector3(side * 0.24f, -0.01f, -0.2f), new Vector3(0.12f, 0.015f, 0.18f), b.Dark);
+            }
+            // The spinal railgun: a long barrel slung under the nose.
+            b.Box(new Vector3(0, -0.04f, 0.3f), new Vector3(0.035f, 0.03f, 0.36f), b.Dark);
+            b.Box(new Vector3(0, -0.04f, 0.49f), new Vector3(0.05f, 0.04f, 0.03f), b.Dark);
+            // The flight deck's glazing.
+            b.Box(new Vector3(0, 0.07f, 0.16f), new Vector3(0.08f, 0.03f, 0.12f), b.Glow(new Color(0.55f, 0.85f, 1f)));
+            // Dorsal and ventral turrets: a squat base and twin barrels each.
+            foreach (float y in new[] { 1f, -1f })
+            {
+                b.Box(new Vector3(0, y * 0.085f, y > 0 ? 0.04f : -0.05f), new Vector3(0.09f, 0.03f, 0.09f), b.Dark);
+                foreach (float side in new[] { -1f, 1f })
+                    b.Box(new Vector3(side * 0.02f, y * 0.09f, (y > 0 ? 0.04f : -0.05f) + 0.08f), new Vector3(0.012f, 0.012f, 0.1f), b.Light);
+            }
+            b.Box(new Vector3(0, 0, -0.42f), new Vector3(0.22f, 0.1f, 0.05f), b.Dark);
+            b.Nozzle(new Vector3(-0.07f, 0, -0.46f), 0.04f, 0.045f);
+            b.Nozzle(new Vector3(0.07f, 0, -0.46f), 0.04f, 0.045f);
         }
 
         static void BuildCourier(Builder b)

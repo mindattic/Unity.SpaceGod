@@ -15,7 +15,8 @@ namespace Unity.SpaceGod.Core
         /// carves after the nose, strafing is strong, and a turn is tightest at the corner speed.</summary>
         LightFighter,
 
-        /// <summary>Everspace 2-style heavy fighters (the Breacher).</summary>
+        /// <summary>Everspace 2-style heavy fighters: the Gunship (U.SPC-T467), and for now the Breacher, an assault
+        /// craft flown the same way until U.SPC-T466 makes it a fired boarding round.</summary>
         HeavyFighter,
 
         /// <summary>Freighters and miners: heavy, deliberate haulers.</summary>
@@ -178,6 +179,7 @@ namespace Unity.SpaceGod.Core
             var r = new FlightModelRegistry();
             r.Assign(ShipClass.Fighter, FlightFamily.LightFighter);
             r.Assign(ShipClass.Courier, FlightFamily.LightFighter);
+            r.Assign(ShipClass.Gunship, FlightFamily.HeavyFighter);
             r.Assign(ShipClass.Breacher, FlightFamily.HeavyFighter);
             r.Assign(ShipClass.Freighter, FlightFamily.Hauler);
             r.Assign(ShipClass.Miner, FlightFamily.Hauler);

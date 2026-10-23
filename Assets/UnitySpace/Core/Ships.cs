@@ -13,19 +13,24 @@ namespace Unity.SpaceGod.Core
         Miner,
         Courier,
 
-        /// <summary>A small assault ship with a drill prow: it rams a hull and disgorges marines.</summary>
+        /// <summary>A small assault ship with a drill prow: it rams a hull and disgorges marines. An assault craft, not a
+        /// fighter: the heavy fighter's roles are the <see cref="Gunship"/>'s (U.SPC-T467).</summary>
         Breacher,
 
         /// <summary>A dedicated star fighter: twin forward guns, no cargo to speak of, built to escort
-        /// capital ships and freighters and to dogfight -- distinct from the Courier/Breacher hulls,
-        /// which double as light/heavy "fighters" but are really trade and assault craft that happen
-        /// to fight well.</summary>
+        /// capital ships and freighters and to dogfight -- the light fighter, beside the Courier, a trade
+        /// hull that doubles as one.</summary>
         Fighter,
 
         /// <summary>A deep-space explorer (U.SPC-T419): a long-legged survey hull built to leave the gate network under its
         /// own FTL drive and chart the stars nobody has been to. Lightly armed, big enough for its drive, small next to a
         /// capital ship.</summary>
         Explorer,
+
+        /// <summary>The heavy fighter (U.SPC-T467): an armoured, multi-crew gunship with crewed turrets and a spinal gun,
+        /// built to brawl and to take on corvettes. It flies the patrol and escort wings' heavy-fighter slots, in the
+        /// <see cref="FlightFamily.HeavyFighter"/> family. Last in the list so saved class numbers keep their meaning.</summary>
+        Gunship,
     }
 
     public enum ShipRole
@@ -109,6 +114,7 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Breacher, "Breacher", 0.5, true),
             new ShipClassSpec(ShipClass.Fighter, "Fighter", 1.0, true),
             new ShipClassSpec(ShipClass.Explorer, "Explorer", 0.6, false),
+            new ShipClassSpec(ShipClass.Gunship, "Gunship", 0.7, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

@@ -59,7 +59,8 @@ namespace Unity.SpaceGod.Core.Tests
             var all = w.Fleet.Ships.Where(s => s.PatrolWing && !s.Destroyed).ToList();
             Assert.That(all.Count, Is.GreaterThanOrEqualTo(24), "Sol's navies fly too few patrol hulls to fill the space between the worlds");
             Assert.That(all.Count(s => s.Spec.Class == ShipClass.Fighter), Is.GreaterThanOrEqualTo(12), "too few light fighters on patrol");
-            Assert.That(all.Any(s => s.Spec.Class == ShipClass.Breacher), Is.True, "no heavy fighter on patrol");
+            Assert.That(all.Any(s => s.Spec.Class == ShipClass.Gunship), Is.True, "no heavy fighter on patrol");
+            Assert.That(all.Any(s => s.Spec.Class == ShipClass.Breacher), Is.False, "a breacher, an assault craft, flew a fighter's patrol slot");
             Assert.That(all.Any(s => s.Spec.Class == ShipClass.Destroyer), Is.True, "no warship leads a patrol picket");
             foreach (var s in all)
             {

@@ -47,6 +47,7 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(reg.For(c), Is.Not.Null, c.ToString());
             Assert.That(reg.FamilyOf(ShipClass.Fighter), Is.EqualTo(FlightFamily.LightFighter));
             Assert.That(reg.FamilyOf(ShipClass.Courier), Is.EqualTo(FlightFamily.LightFighter));
+            Assert.That(reg.FamilyOf(ShipClass.Gunship), Is.EqualTo(FlightFamily.HeavyFighter));
             Assert.That(reg.FamilyOf(ShipClass.Breacher), Is.EqualTo(FlightFamily.HeavyFighter));
             Assert.That(reg.FamilyOf(ShipClass.Freighter), Is.EqualTo(FlightFamily.Hauler));
             Assert.That(reg.FamilyOf(ShipClass.Miner), Is.EqualTo(FlightFamily.Hauler));
@@ -54,7 +55,7 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(reg.FamilyOf(c), Is.EqualTo(FlightFamily.Capital), c.ToString());
 
             Assert.That(reg.For(ShipClass.Fighter), Is.InstanceOf<LightFighterFlightModel>());
-            Assert.That(reg.For(ShipClass.Breacher), Is.SameAs(NewtonianFlightModel.Instance), "heavy fighters keep the shared model until theirs lands");
+            Assert.That(reg.For(ShipClass.Gunship), Is.SameAs(NewtonianFlightModel.Instance), "heavy fighters keep the shared model until theirs lands");
             Assert.That(reg.For(ShipClass.Carrier), Is.SameAs(NewtonianFlightModel.Instance));
         }
 

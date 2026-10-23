@@ -220,7 +220,8 @@ namespace Unity.SpaceGod.Core
         {
             switch (c)
             {
-                case ShipClass.Fighter: return HullCategory.Fighter;
+                case ShipClass.Fighter:
+                case ShipClass.Gunship: return HullCategory.Fighter;
                 case ShipClass.Courier:
                 case ShipClass.Breacher: return HullCategory.SmallCraft;
                 case ShipClass.Freighter:

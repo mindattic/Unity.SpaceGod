@@ -59,6 +59,8 @@ namespace Unity.SpaceGod.Core
             // fast too -- small, nimble hulls should feel quick to get going in open space.
             [ShipClass.Courier] = new PilotTuning(0.45, 150, 2.2, 14, 10, 2.0),
             [ShipClass.Breacher] = new PilotTuning(0.4, 110, 2.0, 22, 9, 2.2),
+            // The heavy fighter (U.SPC-T467): a light fighter's pace less a little, stiffer in the turn, a longer boost.
+            [ShipClass.Gunship] = new PilotTuning(0.4, 115, 2.0, 20, 9, 2.2),
             // The dedicated dogfighter: trades a hair of the Courier's top speed for the tightest turn
             // in the game -- built to out-turn everything else in a fight.
             [ShipClass.Fighter] = new PilotTuning(0.42, 165, 2.3, 15, 9, 1.8),
@@ -90,6 +92,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Courier:
                     return PilotControl.FreeAim;
                 case ShipClass.Breacher:
+                case ShipClass.Gunship:
                     return PilotControl.DirectNose;
                 case ShipClass.Freighter:
                 case ShipClass.Miner:

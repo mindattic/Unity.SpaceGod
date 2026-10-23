@@ -92,6 +92,7 @@ namespace Unity.SpaceGod.Core.Tests
         [TestCase(ShipClass.Cruiser)]
         [TestCase(ShipClass.Destroyer)]
         [TestCase(ShipClass.Breacher)]
+        [TestCase(ShipClass.Gunship)]
         [TestCase(ShipClass.Fighter)]
         public void CarriesIsFalseForEveryGoodOnWarshipsAndCombatCraft(ShipClass cls) =>
             Expect.All(Enum.GetValues(typeof(Good)).Cast<Good>(), g => Assert.That(Economy.Carries(cls, g), Is.False));

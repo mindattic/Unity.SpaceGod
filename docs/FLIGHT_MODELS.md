@@ -24,13 +24,14 @@ To add a way of flying: write an `IFlightModel` and its handling struct, then ca
 
 **Tunables are data.** Each model takes a `readonly struct` of handling numbers (for example `LightFighterHandling`) with a `Default`. When the settings registry (U.SPC-T431) lands, each field becomes a declared setting, and the model reads whatever value the registry holds.
 
-**The light/heavy fighter split** is made at the family level. In the sim the Breacher already serves as the heavy fighter (patrol wings, escort wings and the scene tour all treat it that way), and the Fighter and Courier serve as light fighters. T17 makes that split explicit in flight. Whether a heavy fighter should be a dedicated gunship hull instead of the drill-prowed assault boat is left open in the heavy-fighter ticket, and a new hull would only need `Assign(newClass, HeavyFighter)`.
+**The light/heavy fighter split** is made at the family level. The heavy fighter is the Gunship (U.SPC-T467), an armoured multi-crew hull with two crewed turrets and a spinal light railgun, built for brawling and anti-corvette work. It holds the heavy-fighter slots in patrol wings, escort wings (at the heavy hire fee) and the scene tour that the Breacher used to fill. The Fighter and Courier are the light fighters. The Breacher is an assault craft, not a fighter. It still flies in the heavy-fighter family until U.SPC-T466 turns it into a boarding round fired from an Assault Bay.
 
 | Class | Family | Model today |
 | --- | --- | --- |
 | Fighter | Light fighter | `LightFighterFlightModel` (new) |
 | Courier | Light fighter | `LightFighterFlightModel` (new; see [Couriers](#couriers)) |
-| Breacher | Heavy fighter | Newtonian, until its own model lands |
+| Gunship | Heavy fighter | Newtonian, until its own model lands |
+| Breacher | Heavy fighter (until U.SPC-T466) | Newtonian |
 | Freighter, Miner | Hauler | Newtonian, until its own model lands |
 | Carrier, Battleship, Cruiser, Destroyer | Capital | Newtonian, until its own model lands |
 
@@ -53,7 +54,7 @@ Open for the review: whether the boost's turn penalty should apply only while bo
 
 ## Heavy fighters: Everspace 2
 
-**Proposed** (follow-up ticket). Applies to the Breacher, or a dedicated heavy-fighter hull.
+**Proposed** (U.SPC-T441). Applies to the Gunship, the dedicated heavy-fighter hull.
 
 Everspace 2's ships are always coupled and very responsive. The nose is the crosshair (control for this is already in from T269), strafing is a core move, and a heavy ship feels heavy because it carries real heft, not because it is sluggish. Proposed rules:
 

@@ -20,6 +20,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(PilotTuning.ControlOf(ShipClass.Fighter), Is.EqualTo(PilotControl.FreeAim));
             Assert.That(PilotTuning.ControlOf(ShipClass.Courier), Is.EqualTo(PilotControl.FreeAim));
             Assert.That(PilotTuning.ControlOf(ShipClass.Breacher), Is.EqualTo(PilotControl.DirectNose));
+            Assert.That(PilotTuning.ControlOf(ShipClass.Gunship), Is.EqualTo(PilotControl.DirectNose));
             Assert.That(PilotTuning.ControlOf(ShipClass.Freighter), Is.EqualTo(PilotControl.Hauler));
             Assert.That(PilotTuning.ControlOf(ShipClass.Miner), Is.EqualTo(PilotControl.Hauler));
             foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer })

@@ -210,6 +210,7 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Fighter] = 1,
             [ShipClass.Courier] = 2,
             [ShipClass.Breacher] = 2,
+            [ShipClass.Gunship] = 2,
         };
 
         /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="count"/> berths (0 takes them away).</summary>

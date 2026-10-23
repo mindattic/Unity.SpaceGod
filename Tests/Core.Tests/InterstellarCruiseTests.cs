@@ -78,7 +78,7 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer })
                 Assert.That(CruiseDrives.Of(c), Is.SameAs(CruiseDrives.Capital), c.ToString());
             Assert.That(CruiseDrives.Of(ShipClass.Explorer), Is.SameAs(CruiseDrives.Survey));
-            foreach (var c in new[] { ShipClass.Fighter, ShipClass.Courier, ShipClass.Freighter, ShipClass.Miner, ShipClass.Breacher })
+            foreach (var c in new[] { ShipClass.Fighter, ShipClass.Courier, ShipClass.Freighter, ShipClass.Miner, ShipClass.Breacher, ShipClass.Gunship })
                 Assert.That(CruiseDrives.Of(c), Is.Null, c.ToString());
             // A new drive plugs in by registering it.
             var tug = new CruiseDriveSpec("Tug drive", 50, 1, 0.5);

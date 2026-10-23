@@ -527,8 +527,7 @@ namespace Unity.SpaceGod.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.Drill, 0, 0, 0.45),
-                    // The "heavy fighter": tankier and harder-hitting than the Courier but far slower
-                    // to reload, piloted the same way as any other forward-mounted gun.
+                    // A heavy forward gun to clear its way in, piloted the same way as any other forward-mounted gun.
                     new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.03, 0.3, arcCenterDeg: 0, arcWidthDeg: 50),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, 0.05),
                     // Its utility mount: an auto turret on the spine, covering it from fighters while it closes to latch (U.SPC-T278).
@@ -607,6 +606,33 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, -0.04, 0, -0.46),
                     new SubsystemDef(SubsystemKind.Engine, 0.04, 0, -0.46),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
+                },
+            } },
+            [ShipClass.Gunship] = new[] { new CombatSpec
+            {
+                // The heavy fighter (U.SPC-T467): an armoured multi-crew brawler, slower and stiffer than a light fighter
+                // but plated like a small warship, with a spinal light railgun for corvette armour and two crewed laser
+                // turrets (dorsal and ventral, all round) that keep firing whichever way the pilot points the nose.
+                DesignName = "Gunship", LengthKm = 0.14,
+                MassKt = 80, MainThrustMN = 4000, RetroThrustMN = 3000, LateralThrustMN = 2000, VerticalThrustMN = 2000, PitchYawTorqueMNKm = 1900, RollTorqueMNKm = 475,
+                Hull = 2600, Shield = 1100, ShieldRegen = 16, Armor = 10, MaxSpeed = 0.3, Accel = 0.013, Decel = 0.015,
+                BoostSpeedMultiplier = 1.6, BoostDurationS = 20, TurnRateDegS = 20,
+                Crew = 8, Marines = 0,
+                DryMassTonnes = 1400, PropellantTonnes = 700, ExhaustVelocityKmS = 3500,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.LightRailgun, 0, -0.02, 0.4, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.06, 0.1),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, -0.06, -0.05),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, -0.2),
+                    // Its utility mount: a missile rack (a small craft's, see Loadout.IsSmallCraft).
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.04, 0.15),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.05, 0.2),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, 0.15, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, -0.3, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, -0.06, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Engine, 0.06, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
                 },
             } },
         };

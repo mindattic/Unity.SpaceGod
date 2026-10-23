@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, white, prograde, retrograde, blip, lost, singularity;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, white, prograde, retrograde, blip, lost, singularity;
 
         public static Texture2D White => white ??= Solid();
 
@@ -77,6 +77,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Miner: return hexagon ??= Draw(Hexagon);
                 case ShipClass.Courier: return dot ??= Draw(p => Ring(p, 0.42f, 0.16f));
                 case ShipClass.Fighter: return dart ??= Draw(p => Triangle(new Vector2(p.x * 1.8f, p.y), 0.75f));
+                // The heavy fighter (U.SPC-T467): a broader, blunter dart than the light fighter's.
+                case ShipClass.Gunship: return wedge ??= Draw(p => Triangle(new Vector2(p.x * 1.25f, p.y), 0.8f));
                 default: return square ??= Draw(p => Outline(Box(p, new Vector2(0.62f, 0.62f)), 0.14f));
             }
         }
@@ -92,6 +94,7 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Destroyer: return 13;
                 case ShipClass.Courier: return 9;
                 case ShipClass.Fighter: return 8;
+                case ShipClass.Gunship: return 10;
                 default: return 12;
             }
         }

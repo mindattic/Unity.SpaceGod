@@ -244,7 +244,8 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>The hulls flown as fighters, whose missile rack is a utility mount.</summary>
-        public static bool IsSmallCraft(ShipClass cls) => cls == ShipClass.Fighter || cls == ShipClass.Courier || cls == ShipClass.Breacher;
+        public static bool IsSmallCraft(ShipClass cls) =>
+            cls == ShipClass.Fighter || cls == ShipClass.Courier || cls == ShipClass.Gunship || cls == ShipClass.Breacher;
 
         /// <summary>The kind of slot a hardpoint of the design becomes, or null if it is part of the hull (a bridge, a reactor).</summary>
         public static SlotKind? SlotOf(SubsystemKind k, bool small)
@@ -304,6 +305,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Miner:
                 case ShipClass.Explorer: return 3;
                 case ShipClass.Breacher:
+                case ShipClass.Gunship:
                 case ShipClass.Courier: return 2;
                 default: return 1;
             }

@@ -7,7 +7,7 @@ namespace Unity.SpaceGod.Core
     /// Fighter escorts for the merchant fleet (U.SPC-T275). A freighter in port takes on a wing to see it out, sized by
     /// what its hold is worth and how dangerous the waters it is in and bound for are: none on a cheap run through quiet
     /// space, a light fighter or two as the stakes rise, and on a rich cargo into trouble the usual full wing of a heavy
-    /// fighter (a Breacher) and two light ones. Its owners pay to take each one on and a daily wage while it flies with
+    /// fighter (a gunship) and two light ones. Its owners pay to take each one on and a daily wage while it flies with
     /// them, out of the company's cash (or its flag's treasury for a hull no company owns), and a wing is only taken on
     /// that the owners can well afford. The escorts fly with the freighter from then on, as any escort does.
     /// </summary>
@@ -75,14 +75,16 @@ namespace Unity.SpaceGod.Core
             {
                 case 1: return new[] { Light() };
                 case 2: return new[] { Light(), Light() };
-                case 3: return new[] { ShipClass.Breacher, Light(), Light() };
+                case 3: return new[] { ShipClass.Gunship, Light(), Light() };
                 default: return new ShipClass[0];
             }
         }
 
-        static bool IsFighter(ShipClass c) => c == ShipClass.Fighter || c == ShipClass.Courier || c == ShipClass.Breacher;
+        /// <summary>The hulls a wing is made of. A Breacher hired as the heavy fighter before the gunship took the slot
+        /// (U.SPC-T467) still counts, so a saved game's wing is still tallied and paid off.</summary>
+        static bool IsFighter(ShipClass c) => c == ShipClass.Fighter || c == ShipClass.Courier || c == ShipClass.Gunship || c == ShipClass.Breacher;
 
-        public static double HireFee(ShipClass c) => c == ShipClass.Breacher ? HeavyHireFee : LightHireFee;
+        public static double HireFee(ShipClass c) => c == ShipClass.Gunship ? HeavyHireFee : LightHireFee;
 
         /// <summary>Takes wings on for the freighters in port that want them, pays every escort its wage, and pays off
         /// the wings that have outlived their merchants.</summary>

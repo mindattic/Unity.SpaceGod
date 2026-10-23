@@ -6,7 +6,7 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// A navy's standing patrol wings (U.SPC-T371): besides its battle groups, every navy that holds ports in a system keeps
     /// a few small wings flying a beat of them, so the space between its worlds is never empty. A wing is a light wing
-    /// (three fighters), a heavy-fighter wing (a Breacher leading two light fighters) or a picket (a destroyer leading a
+    /// (three fighters), a heavy-fighter wing (a gunship leading two light fighters) or a picket (a destroyer leading a
     /// heavy and two light fighters), raised in that order, so a navy with a port or two flies only light fighters and the
     /// warship pickets are the big navies'; each on a beat of up to <see cref="BeatLength"/> of its navy's ports, the wings spread so
     /// that between them they cover every port.
@@ -30,8 +30,8 @@ namespace Unity.SpaceGod.Core
         static readonly ShipClass[][] Compositions =
         {
             new[] { ShipClass.Fighter, ShipClass.Fighter, ShipClass.Fighter },
-            new[] { ShipClass.Breacher, ShipClass.Fighter, ShipClass.Fighter },
-            new[] { ShipClass.Destroyer, ShipClass.Breacher, ShipClass.Fighter, ShipClass.Fighter },
+            new[] { ShipClass.Gunship, ShipClass.Fighter, ShipClass.Fighter },
+            new[] { ShipClass.Destroyer, ShipClass.Gunship, ShipClass.Fighter, ShipClass.Fighter },
         };
 
         static readonly string[] CallSigns =
@@ -53,7 +53,7 @@ namespace Unity.SpaceGod.Core
         static readonly ShipClass[][] ConvoyEscorts =
         {
             new[] { ShipClass.Fighter, ShipClass.Fighter },
-            new[] { ShipClass.Breacher, ShipClass.Fighter },
+            new[] { ShipClass.Gunship, ShipClass.Fighter },
         };
 
         static readonly string[] ConvoyNames =

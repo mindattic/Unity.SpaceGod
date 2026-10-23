@@ -35,7 +35,7 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (var c in new[] { ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer })
                 Assert.That(FtlCarriage.BerthsOf(ShipClass.Carrier), Is.GreaterThan(FtlCarriage.BerthsOf(c)));
             // Fighters and small craft can be carried; haulers cannot; anything with a drive of its own needs no carrying.
-            foreach (var c in new[] { ShipClass.Fighter, ShipClass.Courier, ShipClass.Breacher })
+            foreach (var c in new[] { ShipClass.Fighter, ShipClass.Courier, ShipClass.Gunship, ShipClass.Breacher })
                 Assert.That(FtlCarriage.Carriable(Hull("x", c, Navy())), Is.True, c.ToString());
             foreach (var c in new[] { ShipClass.Freighter, ShipClass.Miner, ShipClass.Destroyer, ShipClass.Explorer })
                 Assert.That(FtlCarriage.Carriable(Hull("x", c, Navy())), Is.False, c.ToString());

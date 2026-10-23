@@ -41,10 +41,12 @@ namespace Unity.SpaceGod.Core.Tests
             {
                 var wing = MerchantEscorts.Wing(3, rng);
                 Assert.That(wing.Length, Is.EqualTo(3));
-                Assert.That(wing[0], Is.EqualTo(ShipClass.Breacher));
+                Assert.That(wing[0], Is.EqualTo(ShipClass.Gunship));
                 Assert.That(wing.Skip(1).All(c => c == ShipClass.Fighter || c == ShipClass.Courier), Is.True);
             }
-            Assert.That(MerchantEscorts.Wing(1, rng).Single(), Is.Not.EqualTo(ShipClass.Breacher));
+            Assert.That(MerchantEscorts.Wing(1, rng).Single(), Is.Not.EqualTo(ShipClass.Gunship));
+            Assert.That(MerchantEscorts.HireFee(ShipClass.Gunship), Is.EqualTo(MerchantEscorts.HeavyHireFee));
+            Assert.That(MerchantEscorts.HireFee(ShipClass.Fighter), Is.EqualTo(MerchantEscorts.LightHireFee));
         }
 
         /// <summary>A world with a freighter carrying a fortune parked at Earth. (Building the world has already run its
@@ -72,7 +74,7 @@ namespace Unity.SpaceGod.Core.Tests
             var wing = w.Fleet.Ships.Where(s => s.Leader == hauler && !s.Destroyed).ToList();
             Assert.That(wing.Count, Is.GreaterThanOrEqualTo(2), "a freighter carrying a fortune took on no wing");
             Assert.That(wing.All(s => s.IsEscort && s.Faction == hauler.Faction && s.Role == ShipRole.Escort), Is.True);
-            Assert.That(wing.All(s => s.Spec.Class == ShipClass.Fighter || s.Spec.Class == ShipClass.Courier || s.Spec.Class == ShipClass.Breacher), Is.True);
+            Assert.That(wing.All(s => s.Spec.Class == ShipClass.Fighter || s.Spec.Class == ShipClass.Courier || s.Spec.Class == ShipClass.Gunship), Is.True);
             Assert.That(hauler.Faction.Treasury, Is.LessThan(before), "the wing came free");
 
             // Once it has its wing it takes on no more, and goes on paying the wing's wages.

@@ -306,14 +306,14 @@ namespace Unity.SpaceGod
         /// <summary>
         /// Three staged skirmishes, each built to put one distinct combat feel on camera reliably
         /// rather than hoping the live war happens to produce it in time for a capture: a capital-ship
-        /// broadside line (<see cref="Battle.BroadsideFacing"/>), then a Breacher "heavy fighter"
-        /// dogfight and a Courier "light fighter" one (their forward guns, see
+        /// broadside line (<see cref="Battle.BroadsideFacing"/>), then a gunship "heavy fighter"
+        /// brawl and a Courier "light fighter" one (their forward guns, see
         /// <see cref="CombatSpec"/>), each watched close since nobody is actually piloting them.
         /// </summary>
         static IEnumerator CombatShowcaseTour(UnitySpaceApp app, Func<string, IEnumerator> stop)
         {
             yield return BroadsideShowcase(app, stop);
-            yield return DogfightShowcase(app, stop, "Neptune", app.World.Sol, app.World.Reach, ShipClass.Breacher, "41-breacher-dogfight");
+            yield return DogfightShowcase(app, stop, "Neptune", app.World.Sol, app.World.Reach, ShipClass.Gunship, "41-gunship-dogfight");
             yield return DogfightShowcase(app, stop, "Pluto", app.World.Pirates, app.World.Sol, ShipClass.Courier, "42-courier-dogfight");
         }
 
@@ -345,8 +345,8 @@ namespace Unity.SpaceGod
 
         /// <summary>A small, fast skirmish between <paramref name="cls"/> hulls, watched in close chase
         /// from behind one of them (<see cref="Cameras.SpaceCamera.EnterPilotChase"/>, otherwise only
-        /// used for the player's own piloted ship) so its forward-mounted gun -- a Breacher's
-        /// HeavyLaser, a Courier's FighterGuns -- reads clearly as it fights.</summary>
+        /// used for the player's own piloted ship) so its forward-mounted gun -- a gunship's
+        /// light railgun and turrets, a Courier's FighterGuns -- reads clearly as it fights.</summary>
         static IEnumerator DogfightShowcase(UnitySpaceApp app, Func<string, IEnumerator> stop, string bodyName, Faction aggressor, Faction defender, ShipClass cls, string stopId)
         {
             int body = app.Catalog[bodyName].Index;
@@ -361,7 +361,7 @@ namespace Unity.SpaceGod
                 if (subject == null) break;
                 var t = Target.OfShip(subject);
                 app.Select(t);
-                app.SpaceCamera.EnterPilotChase(t, cls == ShipClass.Breacher ? 5 : 4);
+                app.SpaceCamera.EnterPilotChase(t, cls == ShipClass.Gunship ? 5 : 4);
                 yield return Wait(8f);
                 yield return stop(k == 0 ? stopId : stopId + "b");
             }
