@@ -695,8 +695,14 @@ namespace Unity.SpaceGod.Core
             }
             if (i == 0)
             {
-                // The next hull takes command, and what the group was out here to do.
-                var heir = c.Ships[0];
+                // The next hull flying on its own drive takes command (not a craft docked aboard it, U.SPC-T472), and
+                // what the group was out here to do; it leads the group from the front of the line.
+                var heir = c.Ships.Find(s => !c.Aboard.ContainsKey(s)) ?? c.Ships[0];
+                if (c.Ships[0] != heir)
+                {
+                    c.Ships.Remove(heir);
+                    c.Ships.Insert(0, heir);
+                }
                 heir.Leader = null;
                 heir.Voyage = ship.Voyage;
                 heir.Role = ship.Role;

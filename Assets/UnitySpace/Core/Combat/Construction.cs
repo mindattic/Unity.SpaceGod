@@ -142,7 +142,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Whether a facility of <paramref name="kind"/> could ever go into this hull: one a yard fits, allowed on
         /// its category, and no bigger than its free space.</summary>
-        public bool CanCarry(FacilityKind kind) => kind != null && kind.Fittable && kind.AllowedOn(Category) && kind.Size <= SpareSpace + 1e-9;
+        public bool CanCarry(FacilityKind kind) => kind != null && kind.Fittable && kind.AllowedOn(Category, Class) && kind.Size <= SpareSpace + 1e-9;
 
         /// <summary>Every hardpoint the frame offers, in its loadout's slot order.</summary>
         public IReadOnlyList<Hardpoint> Hardpoints => hardpoints ??= MakeHardpoints();

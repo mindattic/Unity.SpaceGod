@@ -112,6 +112,14 @@ namespace Unity.SpaceGod.Core
             foreach (var c in Categories) if (c == category) return true;
             return false;
         }
+
+        /// <summary>Which ship classes within its categories may fit it (null: any of them), for a facility that only some
+        /// hulls of a category take: the FTL drive goes in a command cruiser but not a plain cruiser, both warships
+        /// (U.SPC-T472). Asked with the hull's class, or null for a station or satellite.</summary>
+        public Func<ShipClass?, bool> ClassFilter { get; set; }
+
+        /// <summary>Whether a hull of <paramref name="category"/> and <paramref name="cls"/> may carry it at all.</summary>
+        public bool AllowedOn(HullCategory category, ShipClass? cls) => AllowedOn(category) && (ClassFilter == null || ClassFilter(cls));
     }
 
     /// <summary>
@@ -145,6 +153,14 @@ namespace Unity.SpaceGod.Core
 
         static readonly HullCategory[] Capitals = { HullCategory.Warship, HullCategory.Battleship, HullCategory.Carrier };
 
+        /// <summary>
+        /// A self-contained FTL drive (U.SPC-T472): what lets a hull whose class carries one only when its design fits it
+        /// (<see cref="FtlAccess.Fitted"/>: battleships, and command cruisers when they are a class) cross between the stars
+        /// under its own power (<see cref="CruiseDrives.Of(Ship)"/>). The stock battleship is designed with one; a yard can
+        /// strip it out for two more sections of plate or racks, and the hull then travels by the gates like a cruiser.
+        /// </summary>
+        public const string FtlDrive = "ftl-drive";
+
         static FacilityKinds()
         {
             Register(Structure(Bridge, "Bridge", 1, CompartmentKind.Bridge));
@@ -175,6 +191,14 @@ namespace Unity.SpaceGod.Core
                 new[] { (Good.Electronics, 50.0), (Good.Alloys, 10.0) }, Capitals));
             Register(new FacilityKind(TargetingComputers, "Targeting computers", 1, 40, false,
                 new[] { (Good.Electronics, 40.0), (Good.Machinery, 5.0) }, Capitals));
+            // Only the classes the owner's roster lets carry a drive when fitted (battleships, command cruisers) may fit it
+            // (U.SPC-T472); a carrier has its own already, a cruiser or destroyer none.
+            Register(new FacilityKind(FtlDrive, "FTL drive", 2, 900, true,
+                new[] { (Good.Alloys, 260.0), (Good.Machinery, 90.0), (Good.Electronics, 60.0), (Good.HeliumThree, 20.0) },
+                new[] { HullCategory.Battleship, HullCategory.Warship })
+            {
+                ClassFilter = c => c is ShipClass k && FtlRoster.Of(k) == FtlAccess.Fitted,
+            });
         }
 
         static FacilityKind Structure(string id, string name, double size, CompartmentKind compartment) =>
@@ -277,6 +301,8 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Battery, "Aft battery", -0.28), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.42),
                 new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.11, 0.1, 3),
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.0, -0.06, 2, 260),
+                // Designed with its own FTL drive (U.SPC-T472): a fitting, so a yard may strip it for the space.
+                new FacilitySite(FacilityKinds.FtlDrive, "FTL drive", -0.36, 0, FacilitySite.Amidships),
             },
             [ShipClass.Cruiser] = new[]
             {
@@ -309,6 +335,8 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.TargetingComputers, "Fire-control centre", 0.0),
                 new FacilitySite(FacilityKinds.TargetingComputers, "Fire-control centre", -0.02),
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.12, -0.05, 2, 120),
+                // Designed with its own FTL drive, as a battleship is (U.SPC-T472): a fitting a yard may strip.
+                new FacilitySite(FacilityKinds.FtlDrive, "FTL drive", -0.3, 0, FacilitySite.Amidships),
             },
             [ShipClass.Freighter] = new[]
             {

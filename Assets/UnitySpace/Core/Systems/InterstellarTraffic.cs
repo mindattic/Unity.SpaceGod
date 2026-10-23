@@ -495,8 +495,9 @@ namespace Unity.SpaceGod.Core
             var going = new List<Ship>();
             foreach (var e in world.Fleet.Ships)
             {
-                // An escort still fighting, or left a hulk, stays behind.
-                if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict) continue;
+                // An escort still fighting, or left a hulk, stays behind; so does one that never leaves its home system
+                // (a corvette, U.SPC-T472). Every other hull crosses by the gate, drive or none.
+                if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict || !FtlRoster.LeavesHome(e)) continue;
                 going.Add(e);
             }
             foreach (var e in going)
@@ -612,7 +613,9 @@ namespace Unity.SpaceGod.Core
 
         // ---------------------------------------------------------------- under its own drive (U.SPC-T412)
 
-        /// <summary>Whether <paramref name="ship"/> carries a cruise drive, and so can cross between the stars without a gate.</summary>
+        /// <summary>Whether <paramref name="ship"/> carries a cruise drive, and so can cross between the stars without a gate: by the
+        /// owner's roster (U.SPC-T472, <see cref="FtlRoster"/>) a carrier, a battleship fitted with one or an explorer, never a
+        /// cruiser, destroyer or lane interdictor, whose voyages here go by the gates.</summary>
         public static bool CanCruise(Ship ship) => CruiseDrives.Of(ship) != null;
 
         /// <summary>
@@ -836,7 +839,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// Now and then a band goes out under its own drive to lie in wait on an FTL route with a gravity projector
         /// (U.SPC-T421): a system's pirates on the line between it and another settled system, its navy, when at war, on the
-        /// approach from the enemy's. Only hulls with a drive of their own go; none goes while one from here is still out.
+        /// approach from the enemy's. Only hulls with a drive of their own go (U.SPC-T472: a carrier or a battleship with one
+        /// fitted, so a raider band of cruisers and destroyers keeps to the gates and lies in wait off them and on their lanes
+        /// instead); none goes while one from here is still out.
         /// </summary>
         void DispatchAmbush(StarSystem from, List<StarSystem> settled, double jd)
         {
@@ -1190,7 +1195,9 @@ namespace Unity.SpaceGod.Core
             // Nor one dry in port waiting on a tanker: it would go back for its old trip first.
             && !s.OutOfPropellant
             // Nor a raider band lying in wait off a gate: it is on its own job until the watch is up.
-            && s.StakeoutKm == null;
+            && s.StakeoutKm == null
+            // Nor a hull that never leaves its home system (a corvette, U.SPC-T472).
+            && FtlRoster.LeavesHome(s);
 
         /// <summary>The body a ship in port is at (its ring's world when landed).</summary>
         internal static int PortOf(Ship s) => s.Phase == ShipPhase.Landed && s.Ring != null ? s.Ring.Body : s.Orbit.Body;

@@ -35,7 +35,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void ACourseFromBeyondTheRimIsTheJumpTheHelmThenFlies()
         {
             var (g, a, b) = Relays(4);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, BeyondRim(a), DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, BeyondRim(a), DVec3.UnitX);
             var at = ship.Orbit.Center;
             double tanks = ship.Propellant;
             var course = FtlCourse.Plot(g, a, ship, at, FtlTarget.OfStar(b), StartJd);
@@ -63,7 +63,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (g, a, b) = Relays(4);
             var from = new DVec3(5e7, 3e7, 0);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, from, DVec3.UnitY);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, from, DVec3.UnitY);
             var course = FtlCourse.Plot(g, a, ship, from, FtlTarget.OfStar(b), StartJd);
             Assert.That(course.Flyable, Is.True, course.Refusal);
             Assert.That(course.NeedsOutRun, Is.True);
@@ -91,9 +91,9 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (g, a, b) = Relays(4);
             var fighter = Spawn(a, "Gnat", ShipClass.Fighter, BeyondRim(a), DVec3.UnitX);
-            Assert.That(FtlCourse.Plot(g, a, fighter, fighter.Orbit.Center, FtlTarget.OfStar(b), StartJd).Refusal, Does.Contain("too small"));
+            Assert.That(FtlCourse.Plot(g, a, fighter, fighter.Orbit.Center, FtlTarget.OfStar(b), StartJd).Refusal, Does.Contain("no FTL drive"));
 
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, BeyondRim(a), DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, BeyondRim(a), DVec3.UnitX);
             Assert.That(FtlCourse.Plot(g, a, ship, ship.Orbit.Center, FtlTarget.OfStar(a), StartJd).Refusal, Does.Contain("within a system"));
             Assert.That(FtlCourse.Plot(g, a, ship, ship.Orbit.Center, null, StartJd).Refusal, Does.Contain("No star"));
 
@@ -115,7 +115,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void AGravityProjectorOnTheLineIsPlottedAndTheTripKeepsToThePlot()
         {
             var (g, a, b) = Relays(4);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, BeyondRim(a), DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, BeyondRim(a), DVec3.UnitX);
             var at = ship.Orbit.Center;
             // Off the 0.05-day step grid's points (U.SPC-T457: a step that ends inside a field misses it).
             var mid = GalacticPosition.FromLy(new DVec3(2.02, 0, 0));
@@ -149,7 +149,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (g, a, b) = Relays(4);
             var from = new DVec3(5e7, 0, 0);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, from, DVec3.UnitY);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, from, DVec3.UnitY);
             var course = FtlCourse.Plot(g, a, ship, from, FtlTarget.OfStar(b), StartJd);
             double tanks = ship.Propellant;
             var pilot = new FtlAutopilot();
@@ -191,7 +191,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (g, a, b) = Relays(4);
             var from = new DVec3(5e7, 0, 0);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, from, DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, from, DVec3.UnitX);
             var course = FtlCourse.Plot(g, a, ship, from, FtlTarget.OfStar(b), StartJd);
             var pilot = new FtlAutopilot();
             Assert.That(pilot.Engage(course, from, true, StartJd), Is.False, "nor will it take the helm in one");

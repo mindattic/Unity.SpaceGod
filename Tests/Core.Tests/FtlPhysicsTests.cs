@@ -75,7 +75,7 @@ namespace Unity.SpaceGod.Core.Tests
             g.NearbyStars.Add(new NearbyStar("Midway", new DVec3(4, 0, 0), "G2V", 5, 5800));
             var mid = g.NearbyStars[0];
             double well = FtlRules.StarWell(mid).RadiusKm;
-            var ship = Hull("TNS Meridian", ShipClass.Cruiser, Navy());
+            var ship = Hull("TNS Meridian", ShipClass.Battleship, Navy());
             var from = DeepSpace.DeparturePointKm(a, b.Origin);
             var c = g.DeepSpace.Launch(new[] { ship }, a, from, b, CruiseDrives.Capital, StartJd);
             double plain = c.ArriveJd;
@@ -126,7 +126,7 @@ namespace Unity.SpaceGod.Core.Tests
                 return pulled;
             }
 
-            Assert.That(Pulled(g, a, b, Hull("TNS Meridian", ShipClass.Cruiser, Navy())), Is.True, "the projector never pulled the navy out");
+            Assert.That(Pulled(g, a, b, Hull("TNS Meridian", ShipClass.Battleship, Navy())), Is.True, "the projector never pulled the navy out");
             Assert.That(g.DeepSpace.Events.Any(e => e.Text.Contains("the gravity projector Snare")), Is.True);
 
             // Its own side's hulls fly through it.
@@ -143,7 +143,7 @@ namespace Unity.SpaceGod.Core.Tests
             // At the helm, inside a live field the drive will not even spool.
             projector.Active = true;
             projector.Position = a2.At(BeyondRim(a2));
-            var helm = Spawn(a2, "TNS Helm", ShipClass.Cruiser, Navy(), BeyondRim(a2), DVec3.UnitX);
+            var helm = Spawn(a2, "TNS Helm", ShipClass.Battleship, Navy(), BeyondRim(a2), DVec3.UnitX);
             var ftl = new HelmFtl();
             Assert.That(ftl.Spool(helm, a2, FtlTarget.OfStar(b2), helm.Orbit.Center, DVec3.UnitX, false, StartJd, g2), Is.False);
             Assert.That(ftl.AbortReason, Does.Contain("gravity projector"));
@@ -153,7 +153,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void AfterAJumpTheDriveCoolsBeforeItCanChargeAgainAndEveryJumpBurnsReactionMass()
         {
             var (g, a, b) = Relays(4);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, Navy(), BeyondRim(a), DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, Navy(), BeyondRim(a), DVec3.UnitX);
             var drive = CruiseDrives.Capital;
             var ftl = new HelmFtl();
 
@@ -189,7 +189,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void AGroupThatDroppedOutWaitsForItsDrivesToCoolBeforeItCharges()
         {
             var (g, a, b) = Relays(4);
-            var ship = Hull("TNS Meridian", ShipClass.Cruiser, Navy());
+            var ship = Hull("TNS Meridian", ShipClass.Battleship, Navy());
             ship.FtlCoolUntilJd = StartJd + 1;
             var c = g.DeepSpace.Launch(new[] { ship }, a, DeepSpace.DeparturePointKm(a, b.Origin), b, CruiseDrives.Capital, StartJd);
             Assert.That(c.Profile.SpoolDays, Is.EqualTo(1 + CruiseDrives.Capital.SpoolDays).Within(1e-9));
@@ -201,7 +201,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void TheHullComesOutOfFtlWithTheMomentumItWentInWith()
         {
             var (g, a, b) = Relays(4);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, Navy(), BeyondRim(a), DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, Navy(), BeyondRim(a), DVec3.UnitX);
             var ftl = new HelmFtl();
             Assert.That(ftl.Spool(ship, a, FtlTarget.OfStar(b), ship.Orbit.Center, DVec3.UnitX, false, StartJd), Is.True, ftl.AbortReason);
             var v = new DVec3(12.5, -3, 0.25);
@@ -242,7 +242,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(settings.Select(s => s.Key).Distinct().Count(), Is.EqualTo(settings.Length));
 
             var drive = CruiseDrives.Capital;
-            var ship = Hull("TNS Meridian", ShipClass.Cruiser, Navy());
+            var ship = Hull("TNS Meridian", ShipClass.Battleship, Navy());
             double earth = FtlRules.WellRadiusKm(398600.4418);
             try
             {

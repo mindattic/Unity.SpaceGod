@@ -100,15 +100,17 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
-    /// The helm's own FTL drive, I-War 2 style (U.SPC-T417): a capital ship or a deep-space explorer (anything carrying a
-    /// <see cref="CruiseDriveSpec"/>, U.SPC-T419) is pointed at another star, spools its drive while the nose is held on it, engages,
+    /// The helm's own FTL drive, I-War 2 style (U.SPC-T417): a carrier, a battleship fitted with a drive or a deep-space
+    /// explorer (anything carrying a <see cref="CruiseDriveSpec"/> by the owner's roster, <see cref="FtlRoster"/>, U.SPC-T472)
+    /// is pointed at another star, spools its drive while the nose is held on it, engages,
     /// and is handed to <see cref="DeepSpace"/>, which flies it across open space as it does every other group under its
     /// own drive and drops it out at the edge of that star's well.
     ///
     /// Canon and lore (U.SPC-T455): jumping is impossible inside a solar system's gravity wells. A hull must first fly
     /// beyond the system's outer rim (<see cref="RimKm"/>, the same edge the jump gates stand toward and the cruise drives
-    /// engage at), and the drive only ever jumps to another star, never to somewhere in the same system. Small craft carry
-    /// no drive and are refused at the helm: the jump gates and lanes are their way, or a berth aboard a capital ship. The
+    /// engage at), and the drive only ever jumps to another star, never to somewhere in the same system. Cruisers, destroyers
+    /// and small craft carry no drive and are refused at the helm: the jump gates and lanes are their way, or a berth aboard
+    /// a carrier. The
     /// helm's own escorts go with it (U.SPC-T419): those with drives of their own alongside, fighters and small craft
     /// docked aboard as far as the hangars have room (<see cref="FtlCarriage"/>).
     ///
@@ -152,9 +154,9 @@ namespace Unity.SpaceGod.Core
         {
             if (ship == null || ship.Spec == null) return "No ship at the helm";
             if (ship.Destroyed || ship.Derelict) return "The " + ship.Name + " is in no state to jump";
-            if (CruiseDrives.Of(ship) == null)
-                return "The " + ship.Spec.Class.ToString().ToLowerInvariant() + " is too small to carry an FTL drive: the jump gates and lanes are its way, or a berth aboard a capital ship";
-            return null;
+            // Who has a drive of their own is the owner's roster (U.SPC-T472): a cruiser or destroyer has none, a
+            // battleship only when fitted with one.
+            return FtlRoster.NoDriveReason(ship);
         }
 
         /// <summary>Why no jump can be made from <paramref name="fromKm"/> in <paramref name="here"/> (inside the rim), or null.</summary>

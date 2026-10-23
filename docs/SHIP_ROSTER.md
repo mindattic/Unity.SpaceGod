@@ -112,14 +112,14 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 
 | Canon | In the game now | Closed by |
 | --- | --- | --- |
-| Cruisers and destroyers have no FTL; carriers and gate breakers always do, battleships and command cruisers only when fitted | Cruisers and destroyers have their own FTL drives in `FtlCarriage` | U.SPC-T472 |
+| Cruisers and destroyers have no FTL; carriers and gate breakers always do, battleships and command cruisers only when fitted | In: the roster is data (`FtlRoster` in `Core/Systems/CruiseDrive.cs`); carriers and explorers always have a drive, a battleship or command cruiser only while its design fits the FTL drive facility (two sections; each stock design has one, a yard can strip it), cruisers, destroyers and the lane interdictor have none and no berths and cross by the gates; gate breakers and corvettes (which never leave home) slot in as roster entries when they are classes | U.SPC-T472 |
 | Carriers clamp a few escorts to the hull; a lost carrier strands its wings | Not modelled | U.SPC-T473 |
 | Gate fleets and jump strike groups, used differently | Navies do not yet raise the two kinds of force | U.SPC-T474 |
 | The Breacher is a fired marine round | A flown assault craft that rams its drill prow home | U.SPC-T466 |
 | Marines live in a Marine Habitat | In: a hull's marines are what its habitats quarter, they muster from its barracks and train in it; the AI's designs do not yet fit extra habitats | U.SPC-T465 |
 | Boarding the player takes part in | Boarding only resolves on its own | U.SPC-T468 |
 | Frigate, corvette, gate breaker | Not yet classes (the command cruiser landed in U.SPC-T477) | U.SPC-T475, U.SPC-T476, U.SPC-T478 |
-| The lane interdictor, a sub-capital, has no FTL of its own | It shares the destroyer's own FTL drive, so a raider band crossing between the stars keeps its interdictor | U.SPC-T472 |
+| The lane interdictor, a sub-capital, has no FTL of its own | In: no drive of its own; a raider band (a cruiser or destroyer and its escorts) crosses between the stars by the gates, its interdictor with it, and only hulls with a drive go out to lie in wait on FTL routes; the projector as equipment is U.SPC-T507 | U.SPC-T472 |
 | Truss-and-pod freighters; ice hauler / ore tug | Not yet | U.SPC-T482, U.SPC-T483 |
 | Recon / EW fighter; boarding shuttle | Not yet classes (the interceptor, space superiority fighter and bomber are hulls of their own since U.SPC-T484) | U.SPC-T485, U.SPC-T486 |
 | Antimatter / photon torpedoes, flak, interceptor missiles | In: battleships and carriers carry an antimatter torpedo launcher (a frigate takes one in a tube when it is a class); destroyers carry two rotary flak cannons and an interceptor launcher beside their point defence and keep between their capital and the threat; tunables in Settings > Weapons | U.SPC-T489 |

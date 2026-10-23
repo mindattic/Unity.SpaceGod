@@ -125,11 +125,106 @@ namespace Unity.SpaceGod.Core
         }
     }
 
+    /// <summary>How a class of hull crosses between the stars (U.SPC-T472; docs/SHIP_ROSTER.md, "Who has their own FTL").</summary>
+    public enum FtlAccess
+    {
+        /// <summary>Always carries a self-contained FTL drive: carriers, gate breakers, deep-space explorers.</summary>
+        Own,
+
+        /// <summary>Carries one only when its design fits the FTL drive facility (<see cref="FacilityKinds.FtlDrive"/>), and
+        /// otherwise goes by the gates: battleships, command cruisers.</summary>
+        Fitted,
+
+        /// <summary>No FTL of its own: it crosses by the jump gates, or docked on a carrier's hull: cruisers, destroyers,
+        /// frigates, the lane interdictor, couriers, freighters and the other small and civil hulls.</summary>
+        Gates,
+
+        /// <summary>Crosses between the stars inside a carrier's hangar (or through a gate with its group): fighters, bombers.</summary>
+        Hangar,
+
+        /// <summary>Never leaves its home system, by gate, drive or carriage: corvettes.</summary>
+        HomeSystem,
+    }
+
     /// <summary>
-    /// Which hulls carry a cruise (FTL) drive, and the menu's FTL tuning (U.SPC-T412, U.SPC-T419). The capital classes
-    /// (carrier, battleship, cruiser, destroyer) carry the heavy drive; the deep-space explorer, the hull the survey
-    /// services send out past the gates, carries the lighter, faster survey drive. Everything else (fighters, couriers,
-    /// breachers, freighters, haulers) cannot leave a system except by a gate, or docked aboard a capital ship that can
+    /// The owner's roster of who has their own FTL (U.SPC-T472), as data: carriers and gate breakers always have a
+    /// self-contained drive; battleships and command cruisers only when the design fits one (a drive facility taking
+    /// hull space, <see cref="FacilityKinds.FtlDrive"/>); cruisers, destroyers and frigates have none and travel by gate,
+    /// or docked on a carrier; corvettes never leave their home system; fighters and bombers travel inside a carrier's
+    /// hangar. Explorers (U.SPC-T419) are long-legged survey ships and keep their own. A new class slots in with one
+    /// <see cref="Register"/> call (and, if it has a drive, <see cref="CruiseDrives.Register"/>), never an edit to the
+    /// systems that move fleets between the stars, which all ask <see cref="CruiseDrives.Of(Ship)"/> and
+    /// <see cref="LeavesHome"/>.
+    /// </summary>
+    public static class FtlRoster
+    {
+        static readonly Dictionary<ShipClass, FtlAccess> byClass = new Dictionary<ShipClass, FtlAccess>
+        {
+            [ShipClass.Carrier] = FtlAccess.Own,
+            [ShipClass.Explorer] = FtlAccess.Own,
+            [ShipClass.Battleship] = FtlAccess.Fitted,
+            [ShipClass.CommandCruiser] = FtlAccess.Fitted,
+            [ShipClass.Cruiser] = FtlAccess.Gates,
+            [ShipClass.Destroyer] = FtlAccess.Gates,
+            // A sub-capital (U.SPC-T479): its band crosses by the gates (its projector becomes equipment in U.SPC-T507).
+            [ShipClass.Interdictor] = FtlAccess.Gates,
+            [ShipClass.Fighter] = FtlAccess.Hangar,
+            [ShipClass.Interceptor] = FtlAccess.Hangar,
+            [ShipClass.Bomber] = FtlAccess.Hangar,
+        };
+
+        /// <summary>Sets how hulls of <paramref name="cls"/> cross between the stars: how a new class slots in.</summary>
+        public static void Register(ShipClass cls, FtlAccess access) => byClass[cls] = access;
+
+        /// <summary>How hulls of <paramref name="cls"/> cross between the stars. A class not on the roster has its own drive
+        /// if one is registered for it (<see cref="CruiseDrives.Register"/>), and otherwise goes by the gates.</summary>
+        public static FtlAccess Of(ShipClass cls) =>
+            byClass.TryGetValue(cls, out var a) ? a : CruiseDrives.Of(cls) != null ? FtlAccess.Own : FtlAccess.Gates;
+
+        /// <summary>Whether a hull of <paramref name="cls"/> ever leaves its home system (a corvette never does).</summary>
+        public static bool LeavesHome(ShipClass cls) => Of(cls) != FtlAccess.HomeSystem;
+
+        /// <summary>Whether <paramref name="ship"/> ever leaves its home system.</summary>
+        public static bool LeavesHome(Ship ship) => ship?.Spec == null || LeavesHome(ship.Spec.Class);
+
+        /// <summary>Whether <paramref name="ship"/>'s hull has the FTL drive facility in it now: its refitted loadout's, or
+        /// its design's as laid down (<see cref="FacilityLayouts.For"/>) if it was never refitted.</summary>
+        public static bool DriveFitted(Ship ship)
+        {
+            if (ship?.Spec == null) return false;
+            if (ship.Loadout != null) return ship.Loadout.CountFacility(FacilityKinds.FtlDrive) > 0;
+            foreach (var f in FacilityLayouts.For(ship.Spec.Class))
+                if (string.Equals(f.Kind, FacilityKinds.FtlDrive, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>Why <paramref name="ship"/> cannot cross between the stars under its own power, by its roster entry, or
+        /// null if it has a drive.</summary>
+        public static string NoDriveReason(Ship ship)
+        {
+            if (ship?.Spec == null) return "No ship";
+            if (CruiseDrives.Of(ship) != null) return null;
+            string cls = ShipClassSpec.Of(ship.Spec.Class)?.DisplayName?.ToLowerInvariant() ?? ship.Spec.Class.ToString().ToLowerInvariant();
+            switch (Of(ship.Spec.Class))
+            {
+                case FtlAccess.Fitted:
+                    return "The " + ship.Name + " has no FTL drive fitted: a yard can fit one into its free space; until then the jump gates are its way";
+                case FtlAccess.Hangar:
+                    return "A " + cls + " carries no FTL drive: it crosses between the stars in a carrier's hangar, or through the jump gates";
+                case FtlAccess.HomeSystem:
+                    return "A " + cls + " carries no FTL drive and never leaves its home system";
+                default:
+                    return "A " + cls + " carries no FTL drive of its own: the jump gates and lanes are its way, or docked aboard a carrier";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Which hulls carry a cruise (FTL) drive, and the menu's FTL tuning (U.SPC-T412, U.SPC-T419, U.SPC-T472). Who has a
+    /// drive is the owner's roster (<see cref="FtlRoster"/>): carriers always carry the heavy capital drive, battleships
+    /// and command cruisers only when their design fits the FTL drive facility, and the deep-space explorer, the hull the survey services send
+    /// out past the gates, the lighter, faster survey drive. Everything else (cruisers, destroyers, fighters, couriers,
+    /// breachers, freighters, haulers) cannot leave a system except by a gate, or docked aboard a hull that can
     /// (see <see cref="FtlCarriage"/>).
     /// </summary>
     [SettingsSource]
@@ -148,28 +243,39 @@ namespace Unity.SpaceGod.Core
         static readonly Dictionary<ShipClass, CruiseDriveSpec> byClass = new Dictionary<ShipClass, CruiseDriveSpec>
         {
             [ShipClass.Carrier] = Capital,
+            // Only a battleship (or command cruiser) whose design fits the drive facility carries it (FtlAccess.Fitted, U.SPC-T472).
             [ShipClass.Battleship] = Capital,
-            [ShipClass.Cruiser] = Capital,
-            [ShipClass.Destroyer] = Capital,
-            // A destroyer-sized hull (U.SPC-T479): it crosses with its band, never left at the well's edge.
-            [ShipClass.Interdictor] = Capital,
-            // A battlecruiser fitted with a drive, like a battleship (U.SPC-T477).
+            // A command cruiser, like a battleship, only when its design fits the drive facility (U.SPC-T477, U.SPC-T472).
             [ShipClass.CommandCruiser] = Capital,
             [ShipClass.Explorer] = Survey,
         };
 
-        /// <summary>Gives every hull of <paramref name="cls"/> <paramref name="drive"/> (null takes it away): how a new drive or a new hull plugs in.</summary>
+        /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="drive"/> (null takes it away): how a new drive or a
+        /// new hull plugs in. Whether a given hull carries it is its class's <see cref="FtlRoster"/> entry.</summary>
         public static void Register(ShipClass cls, CruiseDriveSpec drive)
         {
             if (drive == null) byClass.Remove(cls);
             else byClass[cls] = drive;
         }
 
-        /// <summary>The drive hulls of <paramref name="cls"/> carry, or null.</summary>
+        /// <summary>The drive hulls of <paramref name="cls"/> carry (for a class that carries one only when fitted, the one
+        /// it carries then), or null.</summary>
         public static CruiseDriveSpec Of(ShipClass cls) => byClass.TryGetValue(cls, out var d) ? d : null;
 
-        /// <summary>The drive <paramref name="ship"/> carries, or null if it cannot cross between the stars on its own.</summary>
-        public static CruiseDriveSpec Of(Ship ship) => ship?.Spec == null ? null : Of(ship.Spec.Class);
+        /// <summary>The drive <paramref name="ship"/> carries, or null if it cannot cross between the stars on its own: by its
+        /// class's roster entry (<see cref="FtlRoster"/>), and for a battleship whether its design has the drive fitted.</summary>
+        public static CruiseDriveSpec Of(Ship ship)
+        {
+            if (ship?.Spec == null) return null;
+            var drive = Of(ship.Spec.Class);
+            if (drive == null) return null;
+            switch (FtlRoster.Of(ship.Spec.Class))
+            {
+                case FtlAccess.Own: return drive;
+                case FtlAccess.Fitted: return FtlRoster.DriveFitted(ship) ? drive : null;
+                default: return null;
+            }
+        }
 
         /// <summary>The settings menu's FTL tuning: every cruise drive's speed, as a multiple of its rated speed.</summary>
         public static readonly RangeSetting SpeedScale = new RangeSetting("ftl.cruiseSpeedScale", SettingGroups.Ftl,
@@ -191,11 +297,11 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
-    /// What a hull with an FTL drive can take with it docked aboard (U.SPC-T419): carriers and the other capital ships
-    /// have hangar berths, and fighters and small craft that cannot cross between the stars on their own ride in them,
-    /// so a fleet can strike or explore off the gate network with its wings. Data, not code: a hull's berths and a
-    /// craft's size are registered (<see cref="RegisterBerths"/>, <see cref="RegisterCraft"/>), never threaded through
-    /// the cruise.
+    /// What a hull with an FTL drive can take with it docked aboard (U.SPC-T419): carriers, and battleships and command cruisers
+    /// with a drive fitted, have hangar berths, and fighters and small craft that cannot cross between the stars on their own ride in
+    /// them, so a fleet can strike or explore off the gate network with its wings. Cruisers and destroyers have no drive
+    /// and no berths (U.SPC-T472): they cross by the gates. Data, not code: a hull's berths and a craft's size are
+    /// registered (<see cref="RegisterBerths"/>, <see cref="RegisterCraft"/>), never threaded through the cruise.
     /// </summary>
     public static class FtlCarriage
     {
@@ -204,8 +310,6 @@ namespace Unity.SpaceGod.Core
         {
             [ShipClass.Carrier] = 12,
             [ShipClass.Battleship] = 4,
-            [ShipClass.Cruiser] = 3,
-            [ShipClass.Destroyer] = 2,
             [ShipClass.CommandCruiser] = 3,
         };
 

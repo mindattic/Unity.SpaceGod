@@ -37,10 +37,14 @@ namespace Unity.SpaceGod.Core.Tests
         public void CapitalShipsAndSurveyHullsCanJumpUnderTheirOwnPowerAndSmallCraftCannot()
         {
             var navy = Navy();
-            foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Explorer })
+            // The owner's roster (U.SPC-T472): carriers, battleships designed with a drive and explorers jump; cruisers and
+            // destroyers have no FTL of their own.
+            foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Explorer })
                 Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Is.Null, c.ToString());
+            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Interdictor })
+                Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Does.Contain("no FTL drive").And.Contain("gates"), c.ToString());
             foreach (var c in Enum.GetValues(typeof(ShipClass)).Cast<ShipClass>().Where(c => CruiseDrives.Of(c) == null))
-                Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Does.Contain("too small"), c.ToString());
+                Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Does.Contain("no FTL drive"), c.ToString());
 
             // And the helm will not even start the charge for one, even beyond the rim.
             var (g, a, b) = Relays();
@@ -67,7 +71,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(targets.Any(t => t.Name == "Mars" || t.Name == "Earth"), Is.False);
 
             // Beside Earth, nose on the far star: refused, the rim named.
-            var ship = Spawn(sol, "TNS Meridian", ShipClass.Cruiser, Navy(), sol.Ephemeris.HelioAt(sol.Catalog["Earth"].Index, StartJd) + new DVec3(0, 0, 2e6), DVec3.UnitZ);
+            var ship = Spawn(sol, "TNS Meridian", ShipClass.Battleship, Navy(), sol.Ephemeris.HelioAt(sol.Catalog["Earth"].Index, StartJd) + new DVec3(0, 0, 2e6), DVec3.UnitZ);
             var at = ship.Orbit.Center;
             var nose = HelmFtl.Bearing(FtlTarget.OfStar(far), sol, at, out _);
             Assert.That(HelmFtl.BeyondRim(sol, at), Is.False);
@@ -114,7 +118,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void TheChargeHoldsOnlyWhileTheNoseIsHeldOnTheStarAndOutOfAFight()
         {
             var (g, a, b) = Relays();
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, Navy(), BeyondRim(a), DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, Navy(), BeyondRim(a), DVec3.UnitX);
             var target = FtlTarget.OfStar(b);
             var at = ship.Orbit.Center;
             var ftl = new HelmFtl();
@@ -144,7 +148,7 @@ namespace Unity.SpaceGod.Core.Tests
             var (g, a, b) = Relays(4);
             var navy = Navy();
             var bystander = Spawn(a, "TNS Bystander", ShipClass.Freighter, navy, new DVec3(1e8, 5e7, 0), DVec3.UnitX);
-            var ship = Spawn(a, "TNS Meridian", ShipClass.Cruiser, navy, BeyondRim(a), DVec3.UnitX);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, navy, BeyondRim(a), DVec3.UnitX);
             var after = Spawn(a, "TNS After", ShipClass.Freighter, navy, new DVec3(1e8, -5e7, 0), DVec3.UnitX);
             var escort = Spawn(a, "TNS Gnat", ShipClass.Fighter, navy, BeyondRim(a) + new DVec3(0, 10, 0), DVec3.UnitX);
             escort.Leader = ship;

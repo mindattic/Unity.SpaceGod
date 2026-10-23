@@ -551,7 +551,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>Why <paramref name="kind"/> could or could not go into this hull's free space now.</summary>
         public OutfitOutcome CanAdd(FacilityKind kind)
         {
-            if (kind == null || !kind.Fittable || !kind.AllowedOn(Category)) return OutfitOutcome.WontFit;
+            if (kind == null || !kind.Fittable || !kind.AllowedOn(Category, Class)) return OutfitOutcome.WontFit;
             if (kind.Size > FreeSpace + 1e-9) return OutfitOutcome.NoRoom;
             return OutfitOutcome.Ok;
         }

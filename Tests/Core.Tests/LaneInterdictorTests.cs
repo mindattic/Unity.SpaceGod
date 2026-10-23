@@ -102,7 +102,9 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(FlightModelRegistry.CreateDefault().FamilyOf(ShipClass.Interdictor), Is.EqualTo(FlightFamily.Capital));
             Assert.That(Crews.Complement(ShipClass.Interdictor), Is.GreaterThan(0).And.LessThan(Crews.Complement(ShipClass.Destroyer)));
             Assert.That(Economy.HullCost(ShipClass.Interdictor), Is.GreaterThan(Economy.HullCost(ShipClass.Destroyer)), "the projector costs more than a destroyer's guns");
-            Assert.That(CruiseDrives.Of(ShipClass.Interdictor), Is.SameAs(CruiseDrives.Capital), "it crosses between the stars with its band");
+            // A sub-capital with no FTL of its own (U.SPC-T472): it crosses between the stars by the gates with its band.
+            Assert.That(CruiseDrives.Of(ShipClass.Interdictor), Is.Null);
+            Assert.That(FtlRoster.Of(ShipClass.Interdictor), Is.EqualTo(FtlAccess.Gates));
             Assert.That(LaneInterdictors.Emits(ShipClass.Interdictor), Is.True);
             Assert.That(LaneInterdictors.Emits(ShipClass.Destroyer), Is.False);
         }
