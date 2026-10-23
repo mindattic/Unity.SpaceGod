@@ -405,6 +405,34 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void TurningTheAiVolleySettingOffAndBackOnLeavesTheCaptainFiringAndAngling()
+        {
+            bool saved = Broadsides.AiVolleys.Value;
+            try
+            {
+                Broadsides.AiVolleys.Set(false);
+                var off = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
+                var offBlue = off.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
+                off.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
+                Run(off, 2);
+                Assert.That(offBlue.Broadside[Facing.Starboard], Is.EqualTo(BatteryOrder.FireAtWill), "off: the beam fires at will");
+
+                Broadsides.AiVolleys.Set(true);
+                var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
+                var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
+                var red = b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
+                Run(b, 2);
+                Assert.That(blue.Broadside[Facing.Starboard], Is.EqualTo(BatteryOrder.Volley));
+                Assert.That(blue.Broadside[Facing.Port], Is.EqualTo(BatteryOrder.Volley));
+                Assert.That(blue.Broadside.ShieldTrim, Is.EqualTo(Facings.Toward(blue, red.Pos)), "shields still angled to the enemy");
+            }
+            finally
+            {
+                Broadsides.AiVolleys.Set(saved);
+            }
+        }
+
+        [Test]
         public void SmallCraftHaveNoBroadsideOrders()
         {
             var b = new Battle(0, 3, "Test", DVec3.Zero, StartJd, 1);
