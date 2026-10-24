@@ -298,6 +298,8 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.Fighter, FlightFamily.LightFighter);
             r.Assign(ShipClass.Interceptor, FlightFamily.Interceptor);
             r.Assign(ShipClass.Bomber, FlightFamily.Bomber);
+            // The recon fighter (U.SPC-T485) is an interceptor's airframe and flies as one.
+            r.Assign(ShipClass.Recon, FlightFamily.Interceptor);
             r.Assign(ShipClass.Courier, FlightFamily.LightFighter);
             r.Assign(ShipClass.Gunship, FlightFamily.HeavyFighter);
             r.Assign(ShipClass.Breacher, FlightFamily.Ballistic);

@@ -175,6 +175,7 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Fighter] = FtlAccess.Hangar,
             [ShipClass.Interceptor] = FtlAccess.Hangar,
             [ShipClass.Bomber] = FtlAccess.Hangar,
+            [ShipClass.Recon] = FtlAccess.Hangar,
         };
 
         /// <summary>Sets how hulls of <paramref name="cls"/> cross between the stars: how a new class slots in.</summary>
@@ -329,6 +330,7 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Fighter] = 1,
             [ShipClass.Interceptor] = 1,
             [ShipClass.Bomber] = 2,
+            [ShipClass.Recon] = 1,
             [ShipClass.Courier] = 2,
             [ShipClass.Breacher] = 2,
             [ShipClass.Gunship] = 2,

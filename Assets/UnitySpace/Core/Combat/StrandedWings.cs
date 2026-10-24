@@ -40,7 +40,7 @@ namespace Unity.SpaceGod.Core
         public static int Room(Battle b, BattleUnit haven)
         {
             if (IsStation(haven)) return int.MaxValue;
-            int room = haven.Combat.Spec.Squadrons * 6 - haven.Combat.Fighters;
+            int room = haven.Combat.Spec.HangarCraft - haven.Combat.Fighters;
             foreach (var o in b.Units)
                 if (o.Kind == UnitKind.Fighter && o.Present && o.Fighter != null && o.Fighter.LandsOn == haven) room--;
             return room;

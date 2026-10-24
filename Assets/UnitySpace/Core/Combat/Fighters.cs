@@ -107,33 +107,44 @@ namespace Unity.SpaceGod.Core
             foreach (var s in carrier.Combat.Subsystems)
                 if (s.Kind == SubsystemKind.Hangar && !s.Destroyed) hangars++;
             if (hangars == 0) return;
-            var rng = b.Rng;
             int count = carrier.Combat.Fighters;
             carrier.Combat.Fighters = 0;
+            // The recon flight goes first, out ahead of the strike (U.SPC-T485, see ElectronicWarfare); the squadrons follow.
+            int recon = Math.Min(Math.Max(0, carrier.Combat.Spec.ReconCraft), count);
+            count -= recon;
             int squadrons = (count + SquadronSize - 1) / SquadronSize;
             carrier.Basis(out var right, out var up);
             for (int q = 0; q < squadrons; q++)
             {
                 var craft = FighterCraft.Of(FighterCraft.RoleOfSquadron(q));
-                bool bomber = craft.Role == FighterRole.Bomber;
                 BattleUnit lead = null;
                 for (int k = 0; k < SquadronSize && count > 0; k++, count--)
-                {
-                    // Out of the bow and side bays, fanning ahead of the carrier.
-                    var pos = carrier.PointOf(carrier.Combat.Subsystems.Find(s => s.Kind == SubsystemKind.Hangar && !s.Destroyed).Def)
-                              + carrier.Forward * (0.3 + 0.15 * k) + right * ((q - 1) * 0.6 + (k % 2 == 0 ? 0.1 : -0.1) * k) + up * (0.05 * k);
-                    var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(craft.Spec, craft.Class), craft.LengthKm, pos, carrier.Forward);
-                    u.Vel = carrier.Vel + carrier.Forward * 0.25;
-                    u.Power = new PowerDistribution();
-                    u.Fighter = new FighterState
-                    {
-                        Carrier = carrier, Lead = lead, Squadron = q, Slot = k, Bomber = bomber, Role = craft.Role, Phase = FighterPhase.Launch,
-                        Skill = 0.4 + rng.NextDouble() * 0.6, Reaction = 0.4 + rng.NextDouble() * 1.4, Discipline = 0.45 + rng.NextDouble() * 0.5,
-                        Seed = rng.NextDouble() * 1000,
-                    };
-                    if (lead == null) lead = u;
-                }
+                    lead = LaunchCraft(b, carrier, craft, q, k, lead, right, up, FighterPhase.Launch);
             }
+            // Squadron numbers after the carrier's own, so the flight keeps to itself.
+            BattleUnit reconLead = null;
+            for (int k = 0; k < recon; k++)
+                reconLead = LaunchCraft(b, carrier, FighterCraft.Recon, squadrons, k, reconLead, right, up, FighterPhase.Approach);
+        }
+
+        /// <summary>One craft of <paramref name="craft"/>'s class out of the bays as slot <paramref name="k"/> of squadron
+        /// <paramref name="q"/>, under <paramref name="lead"/> (none: it leads); returns the squadron's lead.</summary>
+        static BattleUnit LaunchCraft(Battle b, BattleUnit carrier, FighterCraft craft, int q, int k, BattleUnit lead, DVec3 right, DVec3 up, FighterPhase phase)
+        {
+            var rng = b.Rng;
+            // Out of the bow and side bays, fanning ahead of the carrier.
+            var pos = carrier.PointOf(carrier.Combat.Subsystems.Find(s => s.Kind == SubsystemKind.Hangar && !s.Destroyed).Def)
+                      + carrier.Forward * (0.3 + 0.15 * k) + right * ((q - 1) * 0.6 + (k % 2 == 0 ? 0.1 : -0.1) * k) + up * (0.05 * k);
+            var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(craft.Spec, craft.Class), craft.LengthKm, pos, carrier.Forward);
+            u.Vel = carrier.Vel + carrier.Forward * 0.25;
+            u.Power = new PowerDistribution();
+            u.Fighter = new FighterState
+            {
+                Carrier = carrier, Lead = lead, Squadron = q, Slot = k, Bomber = craft.Role == FighterRole.Bomber, Role = craft.Role, Phase = phase,
+                Skill = 0.4 + rng.NextDouble() * 0.6, Reaction = 0.4 + rng.NextDouble() * 1.4, Discipline = 0.45 + rng.NextDouble() * 0.5,
+                Seed = rng.NextDouble() * 1000,
+            };
+            return lead ?? u;
         }
 
         public static void Step(Battle b, BattleUnit u, double dt)
@@ -205,6 +216,12 @@ namespace Unity.SpaceGod.Core
         {
             var f = u.Fighter;
             var rng = b.Rng;
+            // A recon fighter holds off its mark, jamming and painting, instead of flying runs (U.SPC-T485).
+            if (f.Role == FighterRole.Recon)
+            {
+                Recon(b, u, dt, pinned);
+                return;
+            }
             if (pinned != null)
             {
                 if (u.Target != pinned)
@@ -305,6 +322,38 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
+        /// A recon fighter on its own (U.SPC-T485, see <see cref="ElectronicWarfare"/>): it scouts out ahead to its mark (the
+        /// capital its bombers are going for, else the one most worth painting, or <paramref name="pinned"/> when its lead has
+        /// told it), and holds off it at <see cref="ElectronicWarfare.StandoffKm"/> on the side it came from, edging round it
+        /// and matching its drift, where it jams everything near it and paints it for the bombers. It never closes to fight.
+        /// </summary>
+        static void Recon(Battle b, BattleUnit u, double dt, BattleUnit pinned)
+        {
+            var f = u.Fighter;
+            if (f.Phase != FighterPhase.Approach) Switch(f, FighterPhase.Approach);
+            if (pinned != null && pinned.Kind != UnitKind.Fighter) u.Target = pinned;
+            else if (!Fair(b, u, u.Target) || b.Rng.NextDouble() < dt / 20) u.Target = ElectronicWarfare.ChooseMark(b, u);
+            var t = u.Target;
+            double speed = u.Combat.Spec.MaxSpeed;
+            if (t == null)
+            {
+                var home = f.LandsOn.Present ? f.LandsOn.Pos : DVec3.Zero;
+                Steer(b, u, home + new DVec3(Math.Cos(b.Seconds * 0.1 + f.Seed), Math.Sin(b.Seconds * 0.1 + f.Seed), 0.2) * 3, speed * 0.6, dt);
+                return;
+            }
+            var from = u.Pos - t.Pos;
+            if (from.LengthSquared < 1e-12) from = -t.Forward;
+            var dir = from.Normalized;
+            var round = DVec3.Cross(dir, DVec3.UnitZ);
+            if (round.LengthSquared < 1e-9) round = DVec3.UnitX;
+            // Edging round the mark, so its gunners never have a steady line on it.
+            dir = (dir + round.Normalized * (0.15 * (Math.Sin(f.Seed) >= 0 ? 1 : -1))).Normalized;
+            var station = t.Pos + dir * (ElectronicWarfare.StandoffKm + t.Radius) + t.Vel * 2;
+            bool there = (station - u.Pos).Length < 3;
+            Steer(b, u, station, speed, dt, there ? t.Vel : (DVec3?)null);
+        }
+
+        /// <summary>
         /// What a pilot goes after (U.SPC-T484): the nearest worthwhile hostile, weighed by its craft's class. Fighters are
         /// preferred by <see cref="FighterCraft.HuntsFightersKm"/> (an interceptor's hunt), and more so when one is closing
         /// on a bomber of its own side (<see cref="FighterCraft.ScreensBombers"/>); a bomber never picks a fighter, and goes
@@ -313,6 +362,7 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public static BattleUnit ChooseTarget(Battle b, BattleUnit u)
         {
+            if (u.Fighter.Role == FighterRole.Recon) return ElectronicWarfare.ChooseMark(b, u);
             bool bomber = u.Fighter.Bomber;
             var craft = FighterCraft.Of(u.Fighter.Role);
             BattleUnit best = null;
@@ -334,6 +384,8 @@ namespace Unity.SpaceGod.Core
                 {
                     score -= o.Combat.Spec.Hull / 3000.0;
                     if (bomber && WeakPoints.IsCapital(o) && StrikeTorpedoes.ShieldDownToward(o, u.Pos)) score -= BareHullBonusKm;
+                    // A capital its own recon fighters are painting is where its torpedoes run truest (U.SPC-T485).
+                    if (bomber && ElectronicWarfare.Painted(b, o, u.Side)) score -= ElectronicWarfare.PaintBonusKm;
                 }
                 score *= 0.8 + b.Rng.NextDouble() * 0.4;
                 if (score < bestScore)

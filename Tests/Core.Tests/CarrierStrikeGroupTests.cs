@@ -132,8 +132,8 @@ namespace Unity.SpaceGod.Core.Tests
             var spare = b.AddShip(spareHull, 0, new DVec3(14, 6, 0), -DVec3.UnitX);
             var enemy = b.AddShip(Hull("Red Bulwark", ShipClass.Battleship, red, 3), 1, new DVec3(-40, 0, 0), DVec3.UnitX);
             var wing = b.Units.Where(u => u.Kind == UnitKind.Fighter && u.Fighter.Carrier == lost).ToList();
-            Assert.That(wing.Count, Is.EqualTo(18));
-            int room = spareHull.Combat.Spec.Squadrons * 6 - 6;
+            Assert.That(wing.Count, Is.EqualTo(20), "three squadrons and the recon pair (U.SPC-T485)");
+            int room = spareHull.Combat.Spec.HangarCraft - 6;
 
             // The carrier is lost with its wing out.
             lost.Dead = true;
@@ -148,7 +148,7 @@ namespace Unity.SpaceGod.Core.Tests
             enemy.Fled = true;
             for (int i = 0; i < 4000 && !b.Over; i++) b.Advance(1);
             Assert.That(b.Over, Is.True);
-            Assert.That(spare.Combat.Fighters, Is.LessThanOrEqualTo(spareHull.Combat.Spec.Squadrons * 6));
+            Assert.That(spare.Combat.Fighters, Is.LessThanOrEqualTo(spareHull.Combat.Spec.HangarCraft));
             Assert.That(rehomed.Count(u => u.Docked), Is.GreaterThan(0), "no stray landed on the other carrier");
             Assert.That(stranded.Any(u => u.Docked), Is.False, "a craft with nowhere to land landed anyway");
         }

@@ -238,11 +238,12 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (b, _, _, _) = CarrierFight(duel: false);
             var seats = Embodiables.SeatsIn(null, b);
-            Assert.That(seats.Count, Is.EqualTo(18), "with no world, only the cockpits (a helm needs the world it is flown in)");
+            Assert.That(seats.Count, Is.EqualTo(20), "with no world, three squadrons and the recon pair, only the cockpits (a helm needs the world it is flown in)");
+            int last = seats.Count - 1;
             Assert.That(Embodiables.Cycle(seats, null, 1), Is.EqualTo(seats[0]));
-            Assert.That(Embodiables.Cycle(seats, null, -1), Is.EqualTo(seats[17]));
-            Assert.That(Embodiables.Cycle(seats, seats[17], 1), Is.EqualTo(seats[0]));
-            Assert.That(Embodiables.Cycle(seats, Embodiables.FighterOf(b, ((FighterSeat)seats[0]).Unit), -1), Is.EqualTo(seats[17]), "found by what it is, not by which object");
+            Assert.That(Embodiables.Cycle(seats, null, -1), Is.EqualTo(seats[last]));
+            Assert.That(Embodiables.Cycle(seats, seats[last], 1), Is.EqualTo(seats[0]));
+            Assert.That(Embodiables.Cycle(seats, Embodiables.FighterOf(b, ((FighterSeat)seats[0]).Unit), -1), Is.EqualTo(seats[last]), "found by what it is, not by which object");
             Assert.That(Embodiables.Cycle(new List<IEmbodiable>(), null, 1), Is.Null);
         }
 

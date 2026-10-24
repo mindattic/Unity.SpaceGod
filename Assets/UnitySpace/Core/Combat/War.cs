@@ -3037,7 +3037,7 @@ namespace Unity.SpaceGod.Core
             {
                 if (s.Destroyed || (s != leader && s.Leader != leader)) continue;
                 have += s.Combat.Fighters;
-                full += s.Combat.Spec.Squadrons * 6;
+                full += s.Combat.Spec.HangarCraft;
             }
             return full > 0 && have < full * 0.5;
         }
@@ -3282,7 +3282,7 @@ namespace Unity.SpaceGod.Core
                     s.Faction.Treasury -= marines * 40000;
                     if (marines + crew > 0) inside.Muster(inside.Crew + crew, inside.Marines + marines);
                 }
-                int fighters = s.Combat.Spec.Squadrons * 6 - s.Combat.Fighters;
+                int fighters = s.Combat.Spec.HangarCraft - s.Combat.Fighters;
                 if (fighters > 0 && yard.Stock[(int)Good.Electronics] > 30)
                 {
                     int add = Math.Min(fighters, 4);

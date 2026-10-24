@@ -78,7 +78,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (b, _, _) = Fight();
             var aloft = b.Units.Where(u => u.Kind == UnitKind.Fighter).ToList();
-            Assert.That(aloft.Count, Is.EqualTo(18));
+            Assert.That(aloft.Count, Is.EqualTo(20), "three squadrons and the recon pair (U.SPC-T485)");
             Assert.That(aloft.Where(u => u.Fighter.Squadron == 0).All(u => u.Fighter.Role == FighterRole.Interceptor), Is.True);
             Assert.That(aloft.Where(u => u.Fighter.Squadron == 1).All(u => u.Fighter.Role == FighterRole.SpaceSuperiority), Is.True);
             Assert.That(aloft.Where(u => u.Fighter.Squadron == 2).All(u => u.Fighter.Role == FighterRole.Bomber && u.Fighter.Bomber), Is.True);

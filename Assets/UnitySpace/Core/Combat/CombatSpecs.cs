@@ -408,6 +408,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Fighter squadrons a carrier can launch (6 craft each).</summary>
         public int Squadrons;
 
+        /// <summary>Recon fighters a carrier flies ahead of its squadrons (U.SPC-T485, see <see cref="ElectronicWarfare"/>),
+        /// berthed in its hangars beside them.</summary>
+        public int ReconCraft;
+
+        /// <summary>Every craft its hangars hold: six to a squadron, and its recon flight.</summary>
+        public int HangarCraft => Squadrons * 6 + ReconCraft;
+
         /// <summary>People aboard: the ship's company, and the marines who board and repel boarders. The marines are the
         /// complement its marine habitats quarter (U.SPC-T465, <see cref="FacilityLayouts.Complement(ShipClass, CombatSpec)"/>).</summary>
         public double Crew, Marines;
@@ -426,7 +433,7 @@ namespace Unity.SpaceGod.Core
                 DesignName = "Carrier", LengthKm = 3.2,
                 MassKt = 40000, MainThrustMN = 100000, RetroThrustMN = 75000, LateralThrustMN = 35000, VerticalThrustMN = 35000, PitchYawTorqueMNKm = 4770000, RollTorqueMNKm = 1190000,
                 Hull = 26000, Shield = 11000, ShieldRegen = 75, Armor = 6, MaxSpeed = 0.07, Accel = 0.0025, Decel = 0.0025,
-                BoostSpeedMultiplier = 1.3, BoostDurationS = 30, TurnRateDegS = 4, Squadrons = 3,
+                BoostSpeedMultiplier = 1.3, BoostDurationS = 30, TurnRateDegS = 4, Squadrons = 3, ReconCraft = 2,
                 Crew = 3800,
                 DryMassTonnes = 140000, PropellantTonnes = 70000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
@@ -796,6 +803,27 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, -0.05, 0, -0.45),
                     new SubsystemDef(SubsystemKind.Engine, 0.05, 0, -0.45),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
+                },
+            } },
+            [ShipClass.Recon] = new[] { new CombatSpec
+            {
+                // The recon / EW fighter (U.SPC-T485): an interceptor's airframe stretched round a sensor and jamming suite,
+                // a pilot and an electronic warfare officer, and one light gun. It scouts, jams and paints targets for the
+                // bombers (ElectronicWarfare); it does not fight.
+                DesignName = "Recon", LengthKm = 0.08,
+                MassKt = 2.8, MainThrustMN = 190, RetroThrustMN = 140, LateralThrustMN = 95, VerticalThrustMN = 95, PitchYawTorqueMNKm = 70, RollTorqueMNKm = 18,
+                Hull = 900, Shield = 500, ShieldRegen = 12, Armor = 0, MaxSpeed = 0.36, Accel = 0.024, Decel = 0.026,
+                BoostSpeedMultiplier = 1.8, BoostDurationS = 14, TurnRateDegS = 30,
+                Crew = 2,
+                DryMassTonnes = 40, PropellantTonnes = 30, ExhaustVelocityKmS = 3300,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.15, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.03, 0.1),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, 0.03, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.44),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
                 },
             } },
             [ShipClass.GatePicket] = new[] { new CombatSpec

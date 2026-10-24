@@ -165,10 +165,10 @@ namespace Unity.SpaceGod.Core.Tests
         public void ACarrierLaunchesItsSquadronsAsHullsOfTheirOwnClasses()
         {
             var (b, blue, red) = NewBattle();
-            b.AddShip(Hull(ShipClass.Carrier, blue, 0, fighters: 24), 0, new DVec3(14, 0, 0), -DVec3.UnitX);
+            b.AddShip(Hull(ShipClass.Carrier, blue, 0, fighters: 26), 0, new DVec3(14, 0, 0), -DVec3.UnitX);
             b.AddShip(Hull(ShipClass.Battleship, red, 1), 1, new DVec3(-14, 0, 0), DVec3.UnitX);
             var aloft = b.Units.Where(u => u.Kind == UnitKind.Fighter).ToList();
-            Assert.That(aloft.Count, Is.EqualTo(24));
+            Assert.That(aloft.Count, Is.EqualTo(26), "four squadrons and the recon pair (U.SPC-T485)");
             var roles = new[] { FighterRole.Interceptor, FighterRole.SpaceSuperiority, FighterRole.Bomber, FighterRole.HeavyFighter };
             for (int q = 0; q < roles.Length; q++)
                 Assert.That(aloft.Where(u => u.Fighter.Squadron == q).All(u => u.Fighter.Role == roles[q]), Is.True, "squadron " + q + " flies " + roles[q]);
@@ -196,7 +196,7 @@ namespace Unity.SpaceGod.Core.Tests
             enemy.Surrendering = true;
             for (int i = 0; i < 600 && b.Units.Any(u => u.Kind == UnitKind.Fighter && u.Present); i++) b.Advance(1);
             Assert.That(b.Units.Where(u => u.Kind == UnitKind.Fighter).All(u => !u.Present), Is.True, "every craft is back aboard");
-            Assert.That(carrier.Combat.Fighters, Is.EqualTo(18), "and counted back into the hangar");
+            Assert.That(carrier.Combat.Fighters, Is.EqualTo(carrier.Combat.Spec.HangarCraft), "and counted back into the hangar");
         }
 
         // ------------------------------------------------------------ pilots pick their fights

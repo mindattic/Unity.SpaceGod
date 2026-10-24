@@ -68,6 +68,8 @@ namespace Unity.SpaceGod.Core
             // short boost -- it runs fighters down. The bomber: slow, steady, a short boost to get clear.
             [ShipClass.Interceptor] = new PilotTuning(0.48, 180, 2.4, 12, 9, 1.6),
             [ShipClass.Bomber] = new PilotTuning(0.3, 85, 1.6, 12, 8, 2.4),
+            // The recon fighter (U.SPC-T485): an interceptor's pace on a longer boost, a little wider in the turn for its pods.
+            [ShipClass.Recon] = new PilotTuning(0.46, 160, 2.4, 16, 9, 1.6),
             // A truss freighter (U.SPC-T482): a weak drive for its mass, so its cruise drive takes twice a hauler's time to spool.
             [ShipClass.Freighter] = new PilotTuning(0.18, 75, 1.6, 36, 8, 6.0),
             [ShipClass.Miner] = new PilotTuning(0.16, 70, 1.6, 38, 8, 3.0),
@@ -109,6 +111,7 @@ namespace Unity.SpaceGod.Core
             {
                 case ShipClass.Fighter:
                 case ShipClass.Interceptor:
+                case ShipClass.Recon:
                 case ShipClass.Courier:
                     return PilotControl.FreeAim;
                 case ShipClass.Breacher:

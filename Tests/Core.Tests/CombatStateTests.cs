@@ -344,10 +344,12 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void RestoreFightersCapsAtSixPerSquadron()
+        public void RestoreFightersCapsAtWhatTheHangarsHold()
         {
             var combat = Make(ShipClass.Carrier);
-            int max = combat.Spec.Squadrons * 6;
+            // Six to a squadron and the recon flight (U.SPC-T485).
+            int max = combat.Spec.HangarCraft;
+            Assert.That(max, Is.EqualTo(combat.Spec.Squadrons * 6 + combat.Spec.ReconCraft));
             combat.Fighters = 0;
 
             combat.RestoreFighters(max - 2);

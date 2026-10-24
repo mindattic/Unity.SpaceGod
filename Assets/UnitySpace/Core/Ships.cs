@@ -79,6 +79,13 @@ namespace Unity.SpaceGod.Core
         /// it rides the hyper lanes of its home system as local law enforcement, hails and scans traffic and runs down the
         /// smugglers and pirates working its beat, and it never leaves that system (see <see cref="Corvettes"/>).</summary>
         Corvette,
+
+        /// <summary>The recon / electronic warfare fighter (U.SPC-T485): a fast, lightly armed strike craft packed with
+        /// sensors and jammers. Carriers fly a pair of them ahead of their squadrons (see <see cref="ElectronicWarfare"/>):
+        /// they scout ahead, jam the targeting of every enemy ship near them so it fires less accurately, and paint a capital
+        /// ship for the bombers, whose torpedoes then home on it harder and are not drawn off by its decoys. Carried aboard, they
+        /// stretch the carrier's own sensor reach.</summary>
+        Recon,
     }
 
     public enum ShipRole
@@ -181,6 +188,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Frigate, "Frigate", 0.6, true),
             // A patrol hull (U.SPC-T476): quick enough to run a smuggler down inside its system, no frigate's sprinter.
             new ShipClassSpec(ShipClass.Corvette, "Corvette", 0.7, true),
+            // The recon fighter (U.SPC-T485): as quick as an interceptor, it has to get ahead of the strike.
+            new ShipClassSpec(ShipClass.Recon, "Recon fighter", 1.3, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

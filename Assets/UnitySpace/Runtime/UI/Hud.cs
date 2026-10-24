@@ -2014,7 +2014,7 @@ namespace Unity.SpaceGod.UI
                 int lost = 0;
                 foreach (var hp in combat.Subsystems) if (hp.Destroyed) lost++;
                 if (lost > 0) lines.Add(("Damage", lost + " of " + combat.Subsystems.Count + " hardpoints destroyed"));
-                if (combat.Spec.Squadrons > 0) lines.Add(("Fighters", combat.Fighters + " of " + combat.Spec.Squadrons * 6 + " aboard"));
+                if (combat.Spec.Squadrons > 0) lines.Add(("Fighters", combat.Fighters + " of " + combat.Spec.HangarCraft + " aboard"));
                 var inside = combat.Interior;
                 lines.Add(("Aboard", inside.Crew.ToString("0", CultureInfo.InvariantCulture) + " crew, " + inside.Marines.ToString("0", CultureInfo.InvariantCulture) + " marines" +
                     (combat.Disabled ? "  ·  DISABLED" : "")));

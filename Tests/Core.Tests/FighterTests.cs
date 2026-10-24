@@ -32,10 +32,11 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var b = CarrierAction(5);
             var fighters = b.Units.Where(u => u.Kind == UnitKind.Fighter).ToList();
-            Assert.That(fighters.Count, Is.EqualTo(18));
+            // Three squadrons and the recon pair (U.SPC-T485).
+            Assert.That(fighters.Count, Is.EqualTo(20));
             Assert.That(b.Units[0].Combat.Fighters, Is.EqualTo(0));
             Assert.That(fighters.Count(f => f.Fighter.Bomber), Is.EqualTo(6));
-            Assert.That(fighters.Count(f => f.Fighter.Lead == null), Is.EqualTo(3));
+            Assert.That(fighters.Count(f => f.Fighter.Lead == null), Is.EqualTo(4));
 
             var phases = new HashSet<FighterPhase>();
             bool guns = false;

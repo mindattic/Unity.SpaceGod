@@ -74,6 +74,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.CommandCruiser: BuildCommandCruiser(b); break;
                 case ShipClass.Frigate: BuildFrigate(b); break;
                 case ShipClass.Corvette: BuildCorvette(b); break;
+                case ShipClass.Recon: BuildRecon(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -303,6 +304,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Fighter: BuildFighter(b); break;
                 case ShipClass.Bomber: BuildBomber(b); break;
                 case ShipClass.Gunship: BuildGunship(b); break;
+                case ShipClass.Recon: BuildRecon(b); break;
                 default:
                     b.Frustum(-0.45f, 0.5f, new Vector2(0.16f, 0.12f), new Vector2(0.02f, 0.02f), 0, b.Hull);
                     b.Frustum(-0.35f, 0.05f, new Vector2(0.95f, 0.025f), new Vector2(0.12f, 0.02f), 0, b.Accent);
@@ -959,6 +961,20 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0.07f, 0.15f), new Vector3(0.09f, 0.04f, 0.18f), b.Glow(new Color(0.6f, 0.85f, 1f)));
             b.Nozzle(new Vector3(-0.07f, 0, -0.47f), 0.05f, 0.06f);
             b.Nozzle(new Vector3(0.07f, 0, -0.47f), 0.05f, 0.06f);
+        }
+
+        /// <summary>A recon / EW fighter (U.SPC-T485): an interceptor's needle on a wider delta, a sensor pod at each wing
+        /// tip, a jamming blister glowing under the keel and a short antenna spine behind the canopy.</summary>
+        static void BuildRecon(Builder b)
+        {
+            b.Frustum(-0.44f, 0.5f, new Vector2(0.11f, 0.08f), new Vector2(0.015f, 0.015f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.055f, 0.12f), new Vector3(0.045f, 0.025f, 0.12f), b.Glow(new Color(0.55f, 0.85f, 1f)));
+            b.Frustum(-0.38f, 0f, new Vector2(0.72f, 0.016f), new Vector2(0.1f, 0.016f), 0, b.Accent);
+            foreach (float side in new[] { -1f, 1f })
+                b.Box(new Vector3(side * 0.34f, 0, -0.2f), new Vector3(0.03f, 0.03f, 0.2f), b.Dark);
+            b.Box(new Vector3(0, -0.06f, -0.05f), new Vector3(0.06f, 0.035f, 0.18f), b.Glow(new Color(1f, 0.55f, 0.85f)));
+            b.Box(new Vector3(0, 0.07f, -0.12f), new Vector3(0.01f, 0.06f, 0.16f), b.Dark);
+            b.Nozzle(new Vector3(0, 0, -0.44f), 0.04f, 0.05f);
         }
 
         /// <summary>A gate picket (U.SPC-T480): a slim hull carrying a tall sensor mast and a broad search dish, more

@@ -127,13 +127,14 @@ namespace Unity.SpaceGod.Core
         /// scanner suites.</summary>
         public const double ArrayScanners = 3;
 
-        /// <summary>The suite <paramref name="s"/> carries: its hull's base, more with each scanner fitted, and much more
-        /// with a sensor array inside it.</summary>
+        /// <summary>The suite <paramref name="s"/> carries: its hull's base, more with each scanner fitted, much more
+        /// with a sensor array inside it, and more again with recon fighters aboard to scout ahead (U.SPC-T485).</summary>
         public static SensorSuite Of(Ship s)
         {
             if (s == null) return Civil;
             var b = s.Spec == null ? Civil : BaseOf(s.Spec.Class, s.Spec.IsMilitary);
-            double n = (s.Loadout?.Count(ModuleKind.Scanner) ?? 0) + ArrayScanners * FleetCoordination.Count(s, FacilityKinds.SensorArray);
+            double n = (s.Loadout?.Count(ModuleKind.Scanner) ?? 0) + ArrayScanners * FleetCoordination.Count(s, FacilityKinds.SensorArray)
+                       + ElectronicWarfare.SensorScanners * ElectronicWarfare.ReconAboard(s);
             return new SensorSuite(b.RangeKm * (1 + ScannerRangeShare * n), b.Resolution + ScannerResolution * n);
         }
 

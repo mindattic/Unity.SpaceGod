@@ -27,6 +27,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>A space superiority fighter (<see cref="ShipClass.Fighter"/>, U.SPC-T484): the balanced workhorse, guns
         /// and a pair of missile racks, as ready to fight craft as to strafe a hull.</summary>
         SpaceSuperiority,
+
+        /// <summary>A recon / electronic warfare fighter (<see cref="ShipClass.Recon"/>, U.SPC-T485): flown ahead of the
+        /// squadrons in a carrier's recon flight, it jams the enemy's targeting and paints a capital for the bombers (see
+        /// <see cref="ElectronicWarfare"/>). Never in <see cref="FighterCraft.SquadronMix"/>.</summary>
+        Recon,
     }
 
     /// <summary>
@@ -146,6 +151,20 @@ namespace Unity.SpaceGod.Core
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },
         });
+
+        /// <summary>The recon / EW fighter (U.SPC-T485): an interceptor's pace, a light gun for its own defence, flares, and
+        /// the rest of it sensors and jammers (<see cref="ElectronicWarfare"/>). It never hunts fighters: it holds off its
+        /// mark, jamming and painting.</summary>
+        public static readonly FighterCraft Recon = Add(FighterRole.Recon, "recon fighter", ShipClass.Recon, 0.017, 0.014, 360, 1.6, 7, new CombatSpec
+        {
+            Hull = 65, Shield = 40, ShieldRegen = 2.5, Armor = 0, MaxSpeed = 0.34, Accel = 0.24, TurnRateDegS = 110,
+            Layout = new[]
+            {
+                new SubsystemDef(SubsystemKind.FighterGuns, 0, -0.05, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
+            },
+        }, huntsFightersKm: 0);
 
         /// <summary>
         /// Gives <paramref name="spec"/> a real hull for the flight models: <paramref name="massKt"/>, a main drive that

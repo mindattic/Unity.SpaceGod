@@ -481,6 +481,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Flare-and-chaff clouds burning in the battle (U.SPC-T424).</summary>
         public readonly List<Decoy> Decoys = new List<Decoy>();
+
+        /// <summary>The recon fighters in the fight this step (U.SPC-T485, see <see cref="ElectronicWarfare.Sweep"/>): who jams and paints.</summary>
+        public readonly List<BattleUnit> ReconAloft = new List<BattleUnit>();
         public readonly List<Embedded> Embedded = new List<Embedded>();
 
         /// <summary>Gun mounts the player has taken (U.SPC-T18, see <see cref="MountedTurret"/>): each is laid and fired by
@@ -663,6 +666,8 @@ namespace Unity.SpaceGod.Core
             TallySideStrength();
             // Who fights under which command ship this step, and who has just lost theirs (U.SPC-T477).
             FleetCoordination.Step(this, dt);
+            // Which recon fighters are up to jam and paint this step (U.SPC-T485).
+            ElectronicWarfare.Sweep(this);
             for (int i = 0; i < Units.Count; i++)
             {
                 var u = Units[i];
@@ -1267,7 +1272,8 @@ namespace Unity.SpaceGod.Core
             // Knocked out by a pulse or an EMP: no gun on the hull fires until its systems come back.
             if (u.Captured || u.Surrendering || u.Stunned > 0) return;
             // Surer under a command ship's targeting computers, worse in the confusion after losing it (U.SPC-T477).
-            double accuracyScale = (c.BridgeIntact ? 1 : 0.6) * FleetCoordination.AccuracyFactor(u);
+            // Worse again with an enemy recon fighter jamming it (U.SPC-T485).
+            double accuracyScale = (c.BridgeIntact ? 1 : 0.6) * FleetCoordination.AccuracyFactor(u) * ElectronicWarfare.JamFactor(this, u);
             // The shared sensor picture: gunners lay on the command ship's track, not their own (U.SPC-T477).
             double picture = FleetCoordination.SharedPicture(u);
             // A small craft's weapons reload as fast as the power it gives them (U.SPC-T424).
@@ -1857,7 +1863,8 @@ namespace Unity.SpaceGod.Core
             foreach (var m in Missiles)
             {
                 if (m.Gone || m.Target != u || m.Decoy != null || (m.Pos - u.Pos).Length > Countermeasures.ReachKm) continue;
-                if (rng.NextDouble() < Countermeasures.SeduceChance(m.Kind)) m.Decoy = decoy;
+                // A bomber's torpedo riding a recon fighter's paint is seldom fooled (U.SPC-T485).
+                if (rng.NextDouble() < ElectronicWarfare.SeduceChance(this, m)) m.Decoy = decoy;
             }
         }
 
@@ -2453,7 +2460,8 @@ namespace Unity.SpaceGod.Core
                 var lead = aim + t.Vel * Math.Min(dist / Math.Max(m.Speed, 1e-6), 20);
                 var want = (lead - m.Pos).Normalized * m.Speed;
                 var dv = want - m.Vel;
-                double turn = m.Speed * 0.6 * dt;
+                // A bomber's torpedo on a target a recon fighter is painting steers onto it that much harder (U.SPC-T485).
+                double turn = m.Speed * 0.6 * dt * ElectronicWarfare.Guidance(this, m);
                 m.Vel += dv.Length > turn ? dv.Normalized * turn : dv;
                 var start = m.Pos;
                 m.Pos += m.Vel * dt;

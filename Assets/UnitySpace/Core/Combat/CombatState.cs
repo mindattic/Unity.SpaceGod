@@ -92,7 +92,7 @@ namespace Unity.SpaceGod.Core
         {
             Spec = spec;
             Hull = spec.Hull;
-            Fighters = spec.Squadrons * 6;
+            Fighters = spec.HangarCraft;
             for (int i = 0; i < spec.Layout.Length; i++) Subsystems.Add(new Subsystem(spec.Layout[i], i));
             double ratings = GeneratorRatings;
             if (ratings > 0)
@@ -114,7 +114,7 @@ namespace Unity.SpaceGod.Core
             var c = new ShipCombat(spec, hull, interior ?? Interior)
             {
                 Hull = spec.Hull * HullFraction,
-                Fighters = Math.Min(spec.Squadrons * 6, Fighters),
+                Fighters = Math.Min(spec.HangarCraft, Fighters),
                 BoostFraction = BoostFraction,
                 Readiness = Readiness,
                 PhaserTuning = PhaserTuning,
@@ -314,6 +314,6 @@ namespace Unity.SpaceGod.Core
             Interior.Muster(Spec.Crew, Spec.Marines);
         }
 
-        public void RestoreFighters(int count) => Fighters = Math.Min(Spec.Squadrons * 6, Fighters + count);
+        public void RestoreFighters(int count) => Fighters = Math.Min(Spec.HangarCraft, Fighters + count);
     }
 }
