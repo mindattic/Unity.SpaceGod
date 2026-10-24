@@ -170,6 +170,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Interdictor] = FtlAccess.Gates,
             // No drive of its own (U.SPC-T475): the gates, or clamped to a carrier's hull (FtlCarriage).
             [ShipClass.Frigate] = FtlAccess.Gates,
+            // System defence (U.SPC-T476): no drive, no gate, no carriage; it never leaves its home system.
+            [ShipClass.Corvette] = FtlAccess.HomeSystem,
             [ShipClass.Fighter] = FtlAccess.Hangar,
             [ShipClass.Interceptor] = FtlAccess.Hangar,
             [ShipClass.Bomber] = FtlAccess.Hangar,
@@ -306,7 +308,7 @@ namespace Unity.SpaceGod.Core
     /// them, so a fleet can strike or explore off the gate network with its wings. Cruisers and destroyers have no drive
     /// and no berths (U.SPC-T472): they cross by the gates, or clamped to a carrier's hull. A carrier, besides its hangars,
     /// has docking clamps on the outside of its hull (U.SPC-T473) that take a few escorts too big for a berth (destroyers
-    /// and frigates, and corvettes once they are a class) through its own jump, so a jump strike group is a carrier, the
+    /// and frigates; never a corvette, which does not leave its home system, U.SPC-T476) through its own jump, so a jump strike group is a carrier, the
     /// capitals with drives of their own, and the escorts clamped to it. Data, not code: a hull's berths and clamps and a
     /// craft's size are registered (<see cref="RegisterBerths"/>, <see cref="RegisterCraft"/>, <see cref="RegisterClamps"/>,
     /// <see cref="RegisterClampable"/>), never threaded through the cruise.
@@ -333,7 +335,7 @@ namespace Unity.SpaceGod.Core
         };
 
         /// <summary>Docking clamps on the outside of each class of drive-carrying hull (U.SPC-T473): a carrier's four take
-        /// two destroyers or four frigates (or, once it is a class, corvettes).</summary>
+        /// two destroyers or four frigates.</summary>
         static readonly Dictionary<ShipClass, int> clamps = new Dictionary<ShipClass, int>
         {
             [ShipClass.Carrier] = 4,
@@ -370,7 +372,7 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>Lets escorts of <paramref name="cls"/> ride clamped to a hull, taking <paramref name="size"/> clamps (0 says
-        /// they cannot be): how a frigate or corvette slots in once it is a class (U.SPC-T473).</summary>
+        /// they cannot be): how a frigate slotted in (U.SPC-T473, U.SPC-T475).</summary>
         public static void RegisterClampable(ShipClass cls, int size)
         {
             if (size <= 0) clampSizes.Remove(cls);

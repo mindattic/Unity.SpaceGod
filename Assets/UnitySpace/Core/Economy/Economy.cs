@@ -383,6 +383,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.CommandCruiser: return 52000;
                 // Smaller than a destroyer, but its engines and antimatter magazines are dear (U.SPC-T475).
                 case ShipClass.Frigate: return 10000;
+                // A small hull with no drive room: cheap enough to keep one at every port (U.SPC-T476).
+                case ShipClass.Corvette: return 6000;
                 default: return 3000;
             }
         }

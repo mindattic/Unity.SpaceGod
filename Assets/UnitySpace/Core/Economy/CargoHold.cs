@@ -36,6 +36,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Destroyer] = new CargoHoldSpec(6, 5),
             // Magazines, not holds (U.SPC-T475): a frigate's stores fit a locker.
             [ShipClass.Frigate] = new CargoHoldSpec(4, 3),
+            // An impound hold for what its patrol seizes (U.SPC-T476).
+            [ShipClass.Corvette] = new CargoHoldSpec(5, 4),
             [ShipClass.Interdictor] = new CargoHoldSpec(5, 4),
             [ShipClass.Cruiser] = new CargoHoldSpec(7, 6),
             [ShipClass.CommandCruiser] = new CargoHoldSpec(8, 6),

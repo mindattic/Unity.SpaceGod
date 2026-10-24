@@ -95,6 +95,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.CommandCruiser] = new PilotTuning(0.12, 14, 1.35, 30, 5.5, 4.5),
             // The frigate (U.SPC-T475): the fastest warship hull, quick to flip end for end, with a long, hard boost for its runs.
             [ShipClass.Frigate] = new PilotTuning(0.38, 40, 1.6, 30, 8, 3.0),
+            // The corvette (U.SPC-T476): a patrol hull, handier than a destroyer, for running down a smuggler in its system.
+            [ShipClass.Corvette] = new PilotTuning(0.3, 34, 1.5, 26, 7.5, 3.2),
         };
 
         public static PilotTuning Of(ShipClass c) =>

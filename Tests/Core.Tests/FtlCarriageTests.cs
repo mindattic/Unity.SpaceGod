@@ -34,8 +34,10 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(FtlRoster.Of(c), Is.EqualTo(FtlAccess.Gates), c.ToString());
             foreach (var c in new[] { ShipClass.Fighter, ShipClass.Interceptor, ShipClass.Bomber })
                 Assert.That(FtlRoster.Of(c), Is.EqualTo(FtlAccess.Hangar), c.ToString());
+            // A corvette never leaves its home system (U.SPC-T476); every other hull does, one way or another.
+            Assert.That(FtlRoster.Of(ShipClass.Corvette), Is.EqualTo(FtlAccess.HomeSystem));
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
-                Assert.That(FtlRoster.LeavesHome(c), Is.True, c + ": only a corvette never leaves its home system, and it is not a class yet");
+                Assert.That(FtlRoster.LeavesHome(c), Is.EqualTo(c != ShipClass.Corvette), c + ": only a corvette never leaves its home system");
 
             var navy = Navy();
             Assert.That(CruiseDrives.Of(Hull("x", ShipClass.Carrier, navy)), Is.SameAs(CruiseDrives.Capital));

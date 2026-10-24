@@ -942,6 +942,36 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.32),
                 },
             } },
+            [ShipClass.Corvette] = new[] { new CombatSpec
+            {
+                // The corvette (U.SPC-T476, see Corvettes): system defence with no FTL drive, the weight a drive room would
+                // take going to patrol instead. Smaller than a frigate, it carries tanks as deep as its dry mass for weeks
+                // on its beat, a patrol search suite (Sensors), and a brawler's battery for the smugglers and raiders it
+                // stops: a spinal light railgun, two laser turrets that bear all round, a missile rack and point defence,
+                // behind a destroyer's plate.
+                DesignName = "Corvette", LengthKm = 0.22,
+                MassKt = 160, MainThrustMN = 3300, RetroThrustMN = 2480, LateralThrustMN = 1400, VerticalThrustMN = 1400, PitchYawTorqueMNKm = 3200, RollTorqueMNKm = 800,
+                Hull = 3200, Shield = 1500, ShieldRegen = 20, Armor = 3, MaxSpeed = 0.3, Accel = 0.014, Decel = 0.016,
+                BoostSpeedMultiplier = 1.5, BoostDurationS = 24, TurnRateDegS = 18,
+                Crew = 70,
+                DryMassTonnes = 2600, PropellantTonnes = 2600, ExhaustVelocityKmS = 4000,
+                Layout = new[]
+                {
+                    // The spinal light railgun for a fleeing hull's drive, and the laser turrets dorsal and ventral.
+                    new SubsystemDef(SubsystemKind.LightRailgun, 0, -0.02, 0.4, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.05, 0.15),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, -0.05, -0.1),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.05, -0.2, arcCenterDeg: 0, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0.04, 0.03, 0.25),
+                    new SubsystemDef(SubsystemKind.PointDefense, -0.04, 0.03, -0.25),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.05, 0.05),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, 0.2, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, -0.3, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, -0.04, 0, -0.47),
+                    new SubsystemDef(SubsystemKind.Engine, 0.04, 0, -0.47),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.28),
+                },
+            } },
         };
 
         /// <summary>Every class's marines are what its design's habitats quarter (U.SPC-T465, <see cref="MarineHabitats"/>), not

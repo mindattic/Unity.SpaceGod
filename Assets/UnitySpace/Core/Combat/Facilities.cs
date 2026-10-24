@@ -405,6 +405,14 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Battery, "Missile magazine", 0.12), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
                 new FacilitySite(FacilityKinds.Engineering, "Engine rooms", -0.34), Buried(3),
             },
+            // The corvette (U.SPC-T476): no FTL drive room; its space goes to an impound hold for what it seizes, crew
+            // quarters for weeks on patrol and the big tanks round its engineering spaces.
+            [ShipClass.Corvette] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bow, "Bow", 0.38), new FacilitySite(FacilityKinds.Hold, "Impound hold", 0.18),
+                new FacilitySite(FacilityKinds.Quarters, "Crew quarters", 0.0), new FacilitySite(FacilityKinds.Midships, "Midships", -0.12),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.34), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.05, 0.05, 2),
+            },
             // A truss freighter (U.SPC-T482): the cockpit at the bow, the pod gantry down the spine, the pods and spheres clamped
             // along it (no space of their own: nobody walks into a pod) and the engine room astern.
             [ShipClass.Freighter] = BulkFreighters.StockLayout(),
@@ -533,7 +541,9 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.OreTug:
                 case ShipClass.GatePicket:
                 // Its magazines and engine rooms fill a frigate (U.SPC-T475).
-                case ShipClass.Frigate: return 2;
+                case ShipClass.Frigate:
+                // The space a drive room would take, kept free for a corvette's patrol fit (U.SPC-T476).
+                case ShipClass.Corvette: return 2;
                 default: return 1;
             }
         }

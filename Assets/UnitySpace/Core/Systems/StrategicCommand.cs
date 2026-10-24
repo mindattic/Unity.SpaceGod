@@ -391,9 +391,10 @@ namespace Unity.SpaceGod.Core
             return list;
         }
 
-        /// <summary>A group <paramref name="f"/>'s command can give an objective: its own navy group's flagship, flying (not the helm's, not a supply convoy).</summary>
+        /// <summary>A group <paramref name="f"/>'s command can give an objective: its own navy group's flagship, flying (not the helm's,
+        /// not a supply convoy, not a corvette stationed for good at its port, U.SPC-T476).</summary>
         static bool Commandable(World w, Ship s, Faction f) =>
-            !s.Destroyed && !s.IsEscort && !s.Derelict && s.Faction == f && s.Spec.IsMilitary && !s.Convoy && s != w.PilotedShip &&
+            !s.Destroyed && !s.IsEscort && !s.Derelict && s.Faction == f && s.Spec.IsMilitary && !s.Convoy && !Corvettes.Stationed(s) && s != w.PilotedShip &&
             (w.Holdings == null || !w.Holdings.Owns(s));
 
         /// <summary>The world <paramref name="ship"/> is in, or null (inside a gate, or gone).</summary>

@@ -74,7 +74,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(FtlCarriage.Stow(new[] { carrier }, pickets), Is.Empty);
             try
             {
-                // As a frigate or corvette will when it is a class: one clamp each.
+                // As a frigate does: one clamp each (a corvette never leaves its home system, U.SPC-T476).
                 FtlCarriage.RegisterClampable(ShipClass.GatePicket, 1);
                 var aboard = FtlCarriage.Stow(new[] { carrier }, pickets);
                 Assert.That(aboard.Count, Is.EqualTo(FtlCarriage.ClampsOf(ShipClass.Carrier)));

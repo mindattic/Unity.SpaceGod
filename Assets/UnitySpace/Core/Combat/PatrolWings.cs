@@ -14,6 +14,7 @@ namespace Unity.SpaceGod.Core
     /// its beat when an enemy turns up there, hunts raiders seen working them, and puts in at a yard to repair, but it never
     /// strikes out at an enemy port, is never merged into a battle group, sent through a gate on a campaign, or counted
     /// against the yards' warship cap (<see cref="Ship.PatrolWing"/>).</para>
+    /// <para>A navy's corvettes fly as wings do, each stationed for good at one of its ports (U.SPC-T476, see <see cref="Corvettes"/>).</para>
     /// <para>Beside its wings a navy runs supply convoys (U.SPC-T375): one of its own freighters carrying naval stores
     /// round a run of its ports under two fighters, flown as a wing is but never turning aside to defend or hunt
     /// (<see cref="Ship.Convoy"/>).</para>
@@ -127,7 +128,7 @@ namespace Unity.SpaceGod.Core
                 // Call signs run on across every system the navy holds, so no two of its wings share one.
                 int sign = 0;
                 foreach (var s in w.Polities.Navy(f))
-                    if (s.PatrolWing && !s.IsEscort && !s.Convoy) sign++;
+                    if (s.PatrolWing && !s.IsEscort && !s.Convoy && !Corvettes.Stationed(s)) sign++;
                 for (int i = 0; i < wings; i++)
                 {
                     var classes = Composition(i);
@@ -170,6 +171,8 @@ namespace Unity.SpaceGod.Core
                     leaders.Add(leader);
                 }
             }
+            // And its corvettes, stationed for good at its ports to police the lanes of the system (U.SPC-T476).
+            Corvettes.Raise(w, jd);
             return leaders;
         }
 

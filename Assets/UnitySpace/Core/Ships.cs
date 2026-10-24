@@ -73,6 +73,12 @@ namespace Unity.SpaceGod.Core
         /// <see cref="AlphaStrike"/>): burn in, loose one devastating volley, flip and burn back out, trusting to speed and
         /// distance rather than armour. No FTL drive: it crosses by the gates, or clamped to a carrier's hull.</summary>
         Frigate,
+
+        /// <summary>A corvette (U.SPC-T476): system defence with no FTL drive, the weight saved going to patrol (deep tanks, a
+        /// patrol search suite, a brawler's guns). Stationed for good at one of its navy's ports (a planet, moon or station),
+        /// it rides the hyper lanes of its home system as local law enforcement, hails and scans traffic and runs down the
+        /// smugglers and pirates working its beat, and it never leaves that system (see <see cref="Corvettes"/>).</summary>
+        Corvette,
     }
 
     public enum ShipRole
@@ -173,6 +179,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.CommandCruiser, "Command cruiser", 0.3, true),
             // An engine-heavy frigate (U.SPC-T475): the fastest warship hull short of a strike craft.
             new ShipClassSpec(ShipClass.Frigate, "Frigate", 0.6, true),
+            // A patrol hull (U.SPC-T476): quick enough to run a smuggler down inside its system, no frigate's sprinter.
+            new ShipClassSpec(ShipClass.Corvette, "Corvette", 0.7, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];
@@ -620,6 +628,14 @@ namespace Unity.SpaceGod.Core
         /// <summary>A gate picket's post, km off the system root: just inside its gate's exit.</summary>
         public DVec3 PicketPostKm;
 
+        /// <summary>
+        /// The body a corvette is stationed at for good (U.SPC-T476, see <see cref="Corvettes"/>): one of its navy's ports, a
+        /// planet, moon or station, or -1 for any other hull. A corvette flies as a <see cref="PatrolWing"/> (never merged,
+        /// sent away or counted as a warship) on a beat of that port and the ports down the hyper lanes from it
+        /// (<see cref="Route"/>), and never leaves its home system.
+        /// </summary>
+        public int CorvetteStation = -1;
+
         /// <summary>What sort of local craft this is when it is <see cref="ShipRole.Commuter"/> traffic (U.SPC-T375), or
         /// <see cref="CivilCraft.None"/>.</summary>
         public CivilCraft Civil;
@@ -727,6 +743,7 @@ namespace Unity.SpaceGod.Core
             StakeoutUntilJd = 0;
             PatrolWing = false;
             Convoy = false;
+            CorvetteStation = -1;
             Civil = CivilCraft.None;
             Wander = false;
             Ring = null;

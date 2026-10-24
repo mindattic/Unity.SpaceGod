@@ -2013,6 +2013,7 @@ namespace Unity.SpaceGod.Core
             // A fresh plan: a lane picket planned earlier and not yet reached no longer stands (U.SPC-T479).
             leader.LurkLane = null;
             if (leader.PicketGate != null) return DecidePicket(leader, here, jd, withdrawing);
+            if (Corvettes.Stationed(leader)) return DecideCorvette(leader, here, jd, withdrawing);
             if (leader.PatrolWing) return DecideWing(leader, here, jd, withdrawing);
             // A fresh plan: a gate it was holding is held again only if it is still the order (U.SPC-T374).
             var held = leader.StakeoutKm;
@@ -2359,6 +2360,59 @@ namespace Unity.SpaceGod.Core
             }
             return new GroupOrder { Kind = OrderKind.Patrol, Body = Catalog.Root.Index };
         }
+
+        /// <summary>
+        /// A corvette's orders (U.SPC-T476, see <see cref="Corvettes"/>): to a yard when it is hurt or out of missiles; to
+        /// defend the port on its beat nearest to it that has enemies at it; to run down the pirates or smugglers its navy has
+        /// seen at a port on its beat or anywhere round its home planet, the nearest first; otherwise on round its beat, back
+        /// to its station between runs down the lanes. It takes no objective from its polity's command: it is stationed for
+        /// good, and never leaves its home system.
+        /// </summary>
+        GroupOrder DecideCorvette(Ship leader, int here, double jd, bool withdrawing)
+        {
+            var f = leader.Faction;
+            if (withdrawing || GroupDamage(leader) > Corvettes.RepairDamage || MissilesLow(leader) || !leader.Combat.Armed)
+            {
+                int yard = NearestYard(f, here, jd);
+                if (yard >= 0) return new GroupOrder { Kind = OrderKind.Repair, Body = yard };
+            }
+            var beat = leader.Route ?? new[] { leader.CorvetteStation };
+            int threatened = -1;
+            double bestDays = double.MaxValue;
+            foreach (int body in beat)
+            {
+                if (!EnemiesAt(body, f)) continue;
+                double days = body == here ? 0 : Fleet.EstimateTravelDays(leader, here, body, jd);
+                if (days < bestDays)
+                {
+                    bestDays = days;
+                    threatened = body;
+                }
+            }
+            if (threatened >= 0) return new GroupOrder { Kind = OrderKind.Defend, Body = threatened };
+            // The pirates and smugglers working its ground, as its navy's picture has them: the nearest first.
+            var at = world.Sensors?.HelioOf(leader, jd) ?? default;
+            var ground = new List<int>(beat);
+            foreach (var s in Economy.Settlements)
+                if (!ground.Contains(s.Body) && Corvettes.Polices(world, leader, s.Body)) ground.Add(s.Body);
+            int mark = -1;
+            bestDays = double.MaxValue;
+            foreach (int body in ground)
+            {
+                if (body == here || !PiratesSeenAt(body, f, at, jd)) continue;
+                double days = Fleet.EstimateTravelDays(leader, here, body, jd);
+                if (days < bestDays)
+                {
+                    bestDays = days;
+                    mark = body;
+                }
+            }
+            if (mark >= 0) return new GroupOrder { Kind = OrderKind.Hunt, Body = mark };
+            return new GroupOrder { Kind = OrderKind.Patrol, Body = Corvettes.NextOnBeat(leader, here) };
+        }
+
+        /// <summary>When each navy here went short of its corvettes (U.SPC-T476, see <see cref="Corvettes.Upkeep"/>).</summary>
+        public readonly Dictionary<Faction, double> CorvettesShortSince = new Dictionary<Faction, double>();
 
         /// <summary>The strength of the raider bands navy <paramref name="f"/> (looking from <paramref name="at"/>) knows to be
         /// lying in wait off <paramref name="gate"/>, or 0.</summary>
@@ -3038,6 +3092,8 @@ namespace Unity.SpaceGod.Core
             Scans(jd);
             HavenAssaults(jd);
             RebuildPlatforms(jd);
+            // The navies' corvettes: reposted when their ports change hands, and replaced when lost (U.SPC-T476).
+            Corvettes.Upkeep(world, CorvettesShortSince, jd);
             PirateRecruiting(jd);
             DiplomacyCycle(jd);
 

@@ -42,7 +42,7 @@ namespace Unity.SpaceGod.Rendering
         }
 
         public static bool IsWarship(ShipClass c) => c == ShipClass.Carrier || c == ShipClass.Battleship || c == ShipClass.Cruiser || c == ShipClass.Destroyer
-                                                    || c == ShipClass.CommandCruiser || c == ShipClass.Frigate;
+                                                    || c == ShipClass.CommandCruiser || c == ShipClass.Frigate || c == ShipClass.Corvette;
 
         /// <summary>The whole hull (both sections).</summary>
         public static Mesh Get(ShipClass shipClass, Faction faction) => GetSection(shipClass, faction, WholeHull);
@@ -73,6 +73,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.GatePicket: BuildPicket(b); break;
                 case ShipClass.CommandCruiser: BuildCommandCruiser(b); break;
                 case ShipClass.Frigate: BuildFrigate(b); break;
+                case ShipClass.Corvette: BuildCorvette(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -652,6 +653,34 @@ namespace Unity.SpaceGod.Rendering
             // A sensor housing low on the spine amidships, plated over: the bridge is buried at the centre of the hull
             // beneath it, with no viewports (U.SPC-T492).
             b.Box(new Vector3(0, 0.04f, -0.02f), new Vector3(0.035f, 0.02f, 0.06f), b.Hull);
+        }
+
+        /// <summary>A corvette (U.SPC-T476): a short, stocky patrol hull with no drive room, broad saddle tanks either side for
+        /// its weeks on the beat, a spinal light railgun under the nose, a laser turret above and below, a search mast over the
+        /// bridge and twin bells astern.</summary>
+        static void BuildCorvette(Builder b)
+        {
+            b.Frustum(-0.42f, 0.46f, new Vector2(0.13f, 0.08f), new Vector2(0.03f, 0.025f), 0, b.Hull);
+            // The saddle tanks: the patrol's endurance, where a drive room would be.
+            foreach (float side in new[] { -1f, 1f })
+                b.Box(new Vector3(side * 0.1f, 0, -0.16f), new Vector3(0.07f, 0.07f, 0.34f), b.Accent);
+            // The spinal light railgun slung under the nose.
+            b.Box(new Vector3(0, -0.035f, 0.32f), new Vector3(0.025f, 0.022f, 0.3f), b.Dark);
+            // The laser turrets, dorsal forward and ventral aft, with their twin barrels.
+            foreach (float y in new[] { 1f, -1f })
+            {
+                float z = y > 0 ? 0.15f : -0.1f;
+                b.Box(new Vector3(0, y * 0.06f, z), new Vector3(0.06f, 0.025f, 0.06f), b.Dark);
+                foreach (float side in new[] { -1f, 1f })
+                    b.Box(new Vector3(side * 0.014f, y * 0.065f, z + 0.06f), new Vector3(0.009f, 0.009f, 0.07f), b.Light);
+            }
+            // The bridge, its glazing and the patrol search mast over it.
+            b.Box(new Vector3(0, 0.055f, 0.05f), new Vector3(0.05f, 0.025f, 0.08f), b.Hull);
+            b.Box(new Vector3(0, 0.07f, 0.08f), new Vector3(0.05f, 0.008f, 0.02f), b.Glow(new Color(0.55f, 0.85f, 1f)));
+            b.Box(new Vector3(0, 0.11f, 0.0f), new Vector3(0.012f, 0.08f, 0.012f), b.Dark);
+            b.Cylinder(new Vector3(0, 0.15f, 0.0f), 0.045f, 0.01f, b.Light, segments: 10);
+            foreach (float x in new[] { -0.04f, 0.04f })
+                b.Nozzle(new Vector3(x, 0, -0.47f), 0.025f, 0.045f);
         }
 
         static void BuildDestroyer(Builder b)

@@ -25,8 +25,8 @@ namespace Unity.SpaceGod.Core.Tests
             return w;
         }
 
-        /// <summary>The wings' leaders (not the supply convoys that fly as wings do, U.SPC-T375).</summary>
-        static List<Ship> Wings(World w) => w.Fleet.Ships.Where(s => s.PatrolWing && !s.Destroyed && !s.IsEscort && !s.Convoy).ToList();
+        /// <summary>The wings' leaders (not the supply convoys that fly as wings do, U.SPC-T375, nor the corvettes, U.SPC-T476).</summary>
+        static List<Ship> Wings(World w) => w.Fleet.Ships.Where(s => s.PatrolWing && !s.Destroyed && !s.IsEscort && !s.Convoy && !Corvettes.Stationed(s)).ToList();
 
         static HashSet<int> PortsOf(World w, Faction f) =>
             new HashSet<int>(w.Economy.Settlements.Where(s => s.Owner == f && s.Kind != SettlementKind.Haven).Select(s => s.Body));

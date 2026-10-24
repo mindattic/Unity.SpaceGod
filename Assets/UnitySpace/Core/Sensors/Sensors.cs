@@ -104,11 +104,16 @@ namespace Unity.SpaceGod.Core
         /// resolution, so it makes out a raider lying dark off its gate and an arrival's class as it comes through.</summary>
         public static readonly SensorSuite Picket = new SensorSuite(2.4e6, 3);
 
+        /// <summary>A corvette's patrol search suite (U.SPC-T476): twice a warship's reach and a finer look, to pick out the
+        /// smugglers and raiders working its beat (and a hull running silent past it) before they are gone.</summary>
+        public static readonly SensorSuite Patrol = new SensorSuite(8e5, 2.25);
+
         /// <summary>Hull classes built round a suite of their own rather than the civil or military base (the extension
         /// point: register a class's suite, see <see cref="RegisterBase"/>).</summary>
         static readonly Dictionary<ShipClass, SensorSuite> baseByClass = new Dictionary<ShipClass, SensorSuite>
         {
             [ShipClass.GatePicket] = Picket,
+            [ShipClass.Corvette] = Patrol,
         };
 
         /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="suite"/> as their base suite.</summary>
