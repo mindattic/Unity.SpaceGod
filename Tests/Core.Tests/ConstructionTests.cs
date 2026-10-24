@@ -42,7 +42,8 @@ namespace Unity.SpaceGod.Core.Tests
                 {
                     var d = f.Design.Layout[h.LayoutIndex];
                     Assert.That((h.X, h.Y, h.Z), Is.EqualTo((d.X, d.Y, d.Z)), f.Id + " " + h.Socket);
-                    Assert.That(h.ArcWidthDeg, Is.EqualTo(d.ArcWidthDeg));
+                    Assert.That(h.ConeAxis, Is.EqualTo(d.ConeAxis), f.Id + " " + h.Socket + ": the hull frame's own cone");
+                    Assert.That(h.ConeHalfDeg, Is.EqualTo(d.ConeHalfDeg));
                 }
                 Assert.That(f.Hardpoints.All(h => h.LayoutIndex >= 0), Is.True, f.Id + ": every hardpoint is a place on the hull");
                 Assert.That(f.NewLoadout().FreeSpace, Is.EqualTo(f.SpareSpace), f.Id);

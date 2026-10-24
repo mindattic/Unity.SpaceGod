@@ -107,9 +107,9 @@ namespace Unity.SpaceGod.Core
             Hull = 70, Shield = 30, ShieldRegen = 2, Armor = 0, MaxSpeed = 0.35, Accel = 0.25, TurnRateDegS = 120,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0.2, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.FighterGuns, -0.2, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.1, 0.1, arcWidthDeg: 40) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
+                new SubsystemDef(SubsystemKind.FighterGuns, 0.2, 0, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
+                new SubsystemDef(SubsystemKind.FighterGuns, -0.2, 0, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
+                new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.1, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
                 new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },
@@ -122,10 +122,10 @@ namespace Unity.SpaceGod.Core
             Hull = 100, Shield = 45, ShieldRegen = 2.5, Armor = 0.5, MaxSpeed = 0.32, Accel = 0.22, TurnRateDegS = 100,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0.22, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.FighterGuns, -0.22, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.MissileLauncher, 0.12, -0.1, 0.1, arcWidthDeg: 40) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
-                new SubsystemDef(SubsystemKind.MissileLauncher, -0.12, -0.1, 0.1, arcWidthDeg: 40) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
+                new SubsystemDef(SubsystemKind.FighterGuns, 0.22, 0, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
+                new SubsystemDef(SubsystemKind.FighterGuns, -0.22, 0, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
+                new SubsystemDef(SubsystemKind.MissileLauncher, 0.12, -0.1, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
+                new SubsystemDef(SubsystemKind.MissileLauncher, -0.12, -0.1, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
                 new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },
@@ -136,10 +136,10 @@ namespace Unity.SpaceGod.Core
             Hull = 140, Shield = 60, ShieldRegen = 3, Armor = 1, MaxSpeed = 0.3, Accel = 0.2, TurnRateDegS = 90,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0.25, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.FighterGuns, -0.25, 0, 0.4, arcWidthDeg: 28),
-                new SubsystemDef(SubsystemKind.MissileLauncher, 0.15, -0.1, 0.1, arcWidthDeg: 40) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
-                new SubsystemDef(SubsystemKind.MissileLauncher, -0.15, -0.1, 0.1, arcWidthDeg: 40) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
+                new SubsystemDef(SubsystemKind.FighterGuns, 0.25, 0, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
+                new SubsystemDef(SubsystemKind.FighterGuns, -0.25, 0, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
+                new SubsystemDef(SubsystemKind.MissileLauncher, 0.15, -0.1, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
+                new SubsystemDef(SubsystemKind.MissileLauncher, -0.15, -0.1, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20) { Weapon = WeaponSpec.DogfightMissile, MaxHp = 30 },
                 new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },
@@ -150,7 +150,7 @@ namespace Unity.SpaceGod.Core
             Hull = 130, Shield = 50, ShieldRegen = 2, Armor = 1, MaxSpeed = 0.26, Accel = 0.15, TurnRateDegS = 80,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0, 0.05, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.FighterGuns, 0, 0.05, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
                 new SubsystemDef(SubsystemKind.Torpedo, 0, -0.1, 0),
                 new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
@@ -165,7 +165,7 @@ namespace Unity.SpaceGod.Core
             Hull = 65, Shield = 40, ShieldRegen = 2.5, Armor = 0, MaxSpeed = 0.34, Accel = 0.24, TurnRateDegS = 110,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.FighterGuns, 0, -0.05, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.FighterGuns, 0, -0.05, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 14),
                 new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },

@@ -54,7 +54,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var at = new[] { new DVec3(12, 0, 0) };
             var (b, me, them) = Fight(at);
-            var bow = me.Combat.Subsystems.Where(s => s.Def.Weapon != null && !s.Def.Weapon.Missile && !s.Def.Weapon.AntiSmall && s.Def.ContainsYaw(0)).ToList();
+            var bow = me.Combat.Subsystems.Where(s => s.Def.Weapon != null && !s.Def.Weapon.Missile && !s.Def.Weapon.AntiSmall && me.BearsAlong(s.Def, me.Forward)).ToList();
             Assert.That(bow, Is.Not.Empty);
             bool fired = false;
             for (int i = 0; i < 100 && !fired; i++)
@@ -72,7 +72,7 @@ namespace Unity.SpaceGod.Core.Tests
             var at = new[] { new DVec3(0, -10, 0) };   // dead abeam to starboard
             var (b, me, them) = Fight(at);
             me.PlayerVolleyAim = -DVec3.UnitY;
-            var starboard = me.Combat.Subsystems.Where(s => s.Def.Weapon != null && !s.Def.Weapon.Missile && !s.Def.Weapon.AntiSmall && !s.Def.Weapon.Supporting && s.Def.ContainsYaw(90)).ToList();
+            var starboard = me.Combat.Subsystems.Where(s => s.Def.Weapon != null && !s.Def.Weapon.Missile && !s.Def.Weapon.AntiSmall && !s.Def.Weapon.Supporting && me.BearsAlong(s.Def, -DVec3.UnitY)).ToList();
             Assert.That(starboard, Is.Not.Empty, "the battleship has no starboard battery to fire");
 
             me.PlayerFireHeld = true;

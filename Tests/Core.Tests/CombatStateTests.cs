@@ -7,7 +7,7 @@ namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// Covers U.SPC-T34: <see cref="ShipCombat"/>'s shield bookkeeping, status thresholds, repair and
-    /// resupply, plus <see cref="SubsystemDef.ContainsYaw"/> and the <see cref="CombatSpec"/> lookup
+    /// resupply, plus <see cref="FireCones"/> (U.SPC-T533) and the <see cref="CombatSpec"/> lookup
     /// fallbacks.
     /// </summary>
     [TestFixture]
@@ -33,34 +33,85 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(combat.Shield, Is.EqualTo(spec.Shield).Within(1e-6));
         }
 
-        // ---------------------------------------------------------------- ContainsYaw
+        // ---------------------------------------------------------------- fire cones (U.SPC-T533)
 
-        [Test]
-        public void ContainsYawRespectsItsWidthAroundAZeroCenter()
+        static DVec3 At(double yawDeg, double pitchDeg)
         {
-            var def = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0, 0, arcCenterDeg: 0, arcWidthDeg: 90);
-
-            Assert.That(def.ContainsYaw(0), Is.True);
-            Assert.That(def.ContainsYaw(45), Is.True);
-            Assert.That(def.ContainsYaw(46), Is.False);
-            Assert.That(def.ContainsYaw(315), Is.True); // -45, the lower edge, wrapped
-            Assert.That(def.ContainsYaw(314), Is.False);
-            Assert.That(def.ContainsYaw(180), Is.False);
+            double y = yawDeg * Astro.Deg2Rad, p = pitchDeg * Astro.Deg2Rad;
+            return new DVec3(Math.Sin(y) * Math.Cos(p), Math.Sin(p), Math.Cos(y) * Math.Cos(p));
         }
 
         [Test]
-        public void ContainsYawWrapsAcrossTheZeroThreeSixtyBoundary()
+        public void AConeCoversItsHalfAngleRoundItsAxisInEveryDirectionAboveAndBelowAsWellAsToTheSide()
         {
-            var def = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0, 0, arcCenterDeg: 350, arcWidthDeg: 60);
+            var def = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0, 0, coneAxis: FireCones.Bow, coneHalfDeg: 45);
+            var spec = CombatSpec.Of(ShipClass.Cruiser);
 
-            Assert.That(def.ContainsYaw(350), Is.True);
-            Assert.That(def.ContainsYaw(0), Is.True);
-            Assert.That(def.ContainsYaw(15), Is.True);
-            Assert.That(def.ContainsYaw(320), Is.True); // lower edge
-            Assert.That(def.ContainsYaw(20), Is.True);  // upper edge, wrapped past 360
-            Assert.That(def.ContainsYaw(319), Is.False);
-            Assert.That(def.ContainsYaw(21), Is.False);
-            Assert.That(def.ContainsYaw(200), Is.False);
+            Assert.That(def.Covers(spec, At(0, 0)), Is.True);
+            Assert.That(def.Covers(spec, At(45, 0)), Is.True, "the edge, to starboard");
+            Assert.That(def.Covers(spec, At(46, 0)), Is.False);
+            Assert.That(def.Covers(spec, At(-45, 0)), Is.True, "and to port");
+            Assert.That(def.Covers(spec, At(0, 44)), Is.True, "above the bow");
+            Assert.That(def.Covers(spec, At(0, -44)), Is.True, "and below it");
+            Assert.That(def.Covers(spec, At(0, 46)), Is.False);
+            Assert.That(def.Covers(spec, At(30, 30)), Is.True, "up and off to the side together");
+            Assert.That(def.Covers(spec, At(40, 40)), Is.False, "the cone is round, not a box");
+            Assert.That(def.Covers(spec, At(180, 0)), Is.False);
+        }
+
+        [Test]
+        public void ATurretAimsAboutItsMountsNormalAndAFixedMountAlongTheKeel()
+        {
+            var spec = CombatSpec.Of(ShipClass.Cruiser);
+            var dorsal = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.08, 0.1);
+            Assert.That((dorsal.AxisOn(spec) - FireCones.Dorsal).Length, Is.LessThan(1e-9), "a turret on the back of the hull faces up");
+            Assert.That(dorsal.HalfDeg, Is.EqualTo(ModuleSpec.Of(ModuleKind.LaserTurret).ConeHalfDeg), "its module's wide cone");
+            Assert.That(dorsal.Covers(spec, At(90, 0)) && dorsal.Covers(spec, At(180, 0)) && dorsal.Covers(spec, At(0, -10)), Is.True,
+                "all round the horizon and a little below it");
+            Assert.That(dorsal.Covers(spec, FireCones.Ventral), Is.False, "never straight down through its own hull");
+            var side = new SubsystemDef(SubsystemKind.LaserTurret, 0.1, 0, 0);
+            Assert.That((side.AxisOn(spec) - FireCones.Starboard).Length, Is.LessThan(1e-9), "one on the beam faces out to starboard");
+            var nose = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0, 0.5);
+            Assert.That((nose.AxisOn(spec) - FireCones.Bow).Length, Is.LessThan(1e-9), "one at the very bow faces ahead");
+
+            var rail = new SubsystemDef(SubsystemKind.Railgun, 0.05, 0.05, 0.2);
+            Assert.That(FireCones.IsFixed(rail), Is.True);
+            Assert.That((rail.AxisOn(spec) - FireCones.Bow).Length, Is.LessThan(1e-9), "a fixed gun lies along the keel wherever it sits");
+            Assert.That(rail.HalfDeg, Is.LessThanOrEqualTo(15), "a narrow cone");
+            var tube = new SubsystemDef(SubsystemKind.TorpedoTube, 0, 0, -0.45, facesAft: true);
+            Assert.That((tube.AxisOn(spec) - FireCones.Stern).Length, Is.LessThan(1e-9), "a stern tube along the keel aft");
+            Assert.That(new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.1, 0).BearsEverywhere, Is.True, "an emitter aims nothing");
+        }
+
+        [Test]
+        public void TheConeSettingsScaleTurretsAndFixedMountsApart()
+        {
+            var turret = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.08, 0, coneHalfDeg: 60);
+            var spinal = new SubsystemDef(SubsystemKind.Railgun, 0, 0, 0.4, coneHalfDeg: 10);
+            double t = FireCones.TurretTraverse.Value, f = FireCones.FixedCone.Value;
+            try
+            {
+                FireCones.TurretTraverse.Set(0.5);
+                FireCones.FixedCone.Set(2);
+                Assert.That(turret.HalfDeg, Is.EqualTo(30).Within(1e-9));
+                Assert.That(spinal.HalfDeg, Is.EqualTo(20).Within(1e-9));
+                FireCones.TurretTraverse.Set(1.75);
+                Assert.That(new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.08, 0).HalfDeg, Is.EqualTo(180), "never wider than the whole sky");
+            }
+            finally
+            {
+                FireCones.TurretTraverse.Set(t);
+                FireCones.FixedCone.Set(f);
+            }
+        }
+
+        [Test]
+        public void ADirectionOutsideAConeIsBroughtOntoItsEdge()
+        {
+            var clamped = FireCones.Clamp(At(90, 0), FireCones.Bow, 30);
+            Assert.That(Math.Acos(DVec3.Dot(clamped, FireCones.Bow)) * Astro.Rad2Deg, Is.EqualTo(30).Within(1e-6));
+            Assert.That(clamped.X, Is.GreaterThan(0), "on the way round to it");
+            Assert.That((FireCones.Clamp(At(10, 10), FireCones.Bow, 30) - At(10, 10)).Length, Is.LessThan(1e-9), "inside it, unchanged");
         }
 
         // ---------------------------------------------------------------- EmitterFor (U.SPC-T501)
@@ -211,7 +262,7 @@ namespace Unity.SpaceGod.Core.Tests
             spec.Layout = spec.Layout.Concat(new[]
             {
                 new SubsystemDef(SubsystemKind.PointDefense, 0, 0.07, 0),
-                new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true, arcCenterDeg: 180),
+                new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true),
             }).ToArray();
             var combat = new ShipCombat(spec, ShipClass.Freighter);
             Assert.That((combat.Subsystems).Any(s => s.Kind == SubsystemKind.PointDefense), Is.True);

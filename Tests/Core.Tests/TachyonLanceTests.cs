@@ -80,9 +80,9 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(def.Weapon, Is.SameAs(WeaponSpec.TachyonLance));
             Assert.That(def.Weapon.Lance, Is.True);
             Assert.That(def.Weapon.MuzzleSpeedKmS, Is.EqualTo(0), "no round to fly: it lands the instant it is fired");
-            Assert.That(def.ArcWidthDeg, Is.LessThanOrEqualTo(TachyonLances.ArcWidthDeg), "the hull must lay it, not a turret");
-            Assert.That(def.ContainsYaw(0), Is.True);
-            Assert.That(def.ContainsYaw(30), Is.False);
+            Assert.That(def.HalfDeg, Is.LessThanOrEqualTo(TachyonLances.ConeHalfDeg), "the hull must lay it, not a turret");
+            Assert.That(def.Covers(ship.Combat.Spec, FireCones.Bow), Is.True);
+            Assert.That(def.Covers(ship.Combat.Spec, new DVec3(0.5, 0, 0.866)), Is.False);
             foreach (var w in new[] { WeaponSpec.Railgun, WeaponSpec.Missiles, WeaponSpec.HeavyTorpedo, WeaponSpec.Heavy })
                 Assert.That(def.Weapon.RangeKm, Is.GreaterThan(w.RangeKm), "longer-ranged than every other weapon");
             Assert.That(def.Weapon.Cooldown, Is.GreaterThan(WeaponSpec.Railgun.Cooldown * 3), "a long recharge");

@@ -59,9 +59,9 @@ namespace Unity.SpaceGod.Core
     /// heaviest incoming fire and present fresh shields instead. It weighs where the fire is coming from (every armed hostile,
     /// heavier for its firepower, lighter beyond its reach, heavier with a broadside building on this hull,
     /// <see cref="IncomingFireOn"/>) against which patches face each way (<see cref="Exposure(BattleUnit, IReadOnlyList{IncomingFire})"/>),
-    /// and trades that against keeping its own batteries bearing (<see cref="Protection"/>): it rolls about the line to its
-    /// target, which keeps the battery bearing exactly, or turns another battery to the enemy if that shows it fresher shields
-    /// for what firepower it gives up. An AI captain does this by doctrine (<see cref="AiRolls"/>); at the helm the player sees
+    /// and trades that against keeping its own guns bearing (<see cref="Protection"/>): it rolls about the line to its
+    /// target, which keeps the target where it lies in every gun's fire cone (U.SPC-T533), or turns its hull to another
+    /// heading that brings other guns' cones onto the enemy if that shows it fresher shields for what firepower it gives up. An AI captain does this by doctrine (<see cref="AiRolls"/>); at the helm the player sees
     /// which patches are weak and which faces the fire (<see cref="Readout"/>), and can order the helm assist to roll them away
     /// (<see cref="BroadsideCommand.RollWeakPatches"/>), steering the nose themselves. Every figure is a setting in Broadsides.
     /// </summary>
@@ -96,8 +96,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>The rolls a captain weighs, evenly round the full turn.</summary>
         public const int RollSteps = 12;
 
-        /// <summary>No battery turned to a target: the hull rolls about its bow alone.</summary>
-        public const int NoArc = int.MinValue;
+        /// <summary>No heading turned to a target: the hull rolls about its bow alone.</summary>
+        public const int NoBearing = int.MinValue;
 
         // ------------------------------------------------------------ who rolls
 
@@ -175,7 +175,7 @@ namespace Unity.SpaceGod.Core
                 double reach = ReachKm(c);
                 if (reach > 0 && d > reach) w *= reach / d * (reach / d);
                 var cmd = o.Broadside;
-                if (cmd != null && cmd.Readying != null && cmd.ReadyingOn == u) w *= 1 + cmd.ReadyingLoaded;
+                if (cmd != null && cmd.ReadyingOn == u) w *= 1 + cmd.ReadyingLoaded;
                 list.Add(new IncomingFire(to / d, w));
             }
             return list;
@@ -329,16 +329,17 @@ namespace Unity.SpaceGod.Core
             return DVec3.Cross(right, f);
         }
 
-        /// <summary>The frame of one attitude: with a battery (<paramref name="arc"/>) turned to a target along
-        /// <paramref name="toTarget"/>, the level bow for it rolled <paramref name="rollDeg"/> about the line to the target
-        /// (so the battery bears all the same); with none, <paramref name="face"/> rolled about itself.</summary>
-        static void Frame(DVec3 face, DVec3? toTarget, int arc, double rollDeg, out DVec3 forward, out DVec3 roof)
+        /// <summary>The frame of one attitude: with the hull turned so a target along <paramref name="toTarget"/> lies
+        /// <paramref name="bearing"/> off its bow (<see cref="Battle.BowFor"/>), the level bow for it rolled
+        /// <paramref name="rollDeg"/> about the line to the target (so the same guns' cones hold it all the same); with none,
+        /// <paramref name="face"/> rolled about itself.</summary>
+        static void Frame(DVec3 face, DVec3? toTarget, int bearing, double rollDeg, out DVec3 forward, out DVec3 roof)
         {
             DVec3 f0, axis;
-            if (arc != NoArc && toTarget is DVec3 t)
+            if (bearing != NoBearing && toTarget is DVec3 t)
             {
                 axis = t.Normalized;
-                f0 = Battle.BowFor(axis, arc).Normalized;
+                f0 = Battle.BowFor(axis, bearing).Normalized;
             }
             else
             {
@@ -352,20 +353,21 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// The attitude <paramref name="u"/>'s captain wants this step to keep its weak patches out of the heaviest fire,
-        /// <paramref name="face"/> being where it would point its bow otherwise. With <paramref name="arcs"/> (its batteries'
-        /// firepower by arc, <see cref="Battle.ArcFirepower"/>) and a target along <paramref name="toTarget"/> it weighs every
-        /// battery it could turn to the target, each rolled every way about the line to it; with none, every roll about the
-        /// bow alone. Each attitude scores the share of its batteries' firepower that bears, less <see cref="Protection"/>
+        /// <paramref name="face"/> being where it would point its bow otherwise. With <paramref name="bearings"/> (the firepower
+        /// its guns' fire cones would bring to bear from each heading, by the bearing the target would lie on,
+        /// <see cref="Battle.ConeFirepower"/>) and a target along <paramref name="toTarget"/> it weighs every such heading, each
+        /// rolled every way about the line to the target; with none, every roll about the bow alone. Each attitude scores the
+        /// share of its guns' firepower that bears, less <see cref="Protection"/>
         /// times the weak share of the face it shows the fire (<see cref="IncomingFireOn"/>), less a little for straying from
         /// <paramref name="rest"/> (null: level). The choice is weighed every <see cref="ReconsiderSeconds"/> and changed only
         /// for a better one by <see cref="Hysteresis"/>, so the hull settles instead of hunting.
         /// </summary>
-        public static void Orient(Battle b, BattleUnit u, DVec3 face, IReadOnlyDictionary<int, double> arcs, DVec3? toTarget, DVec3? rest, double dt,
+        public static void Orient(Battle b, BattleUnit u, DVec3 face, IReadOnlyDictionary<int, double> bearings, DVec3? toTarget, DVec3? rest, double dt,
             out DVec3 forward, out DVec3 roof)
         {
             if (face.LengthSquared < 1e-18) face = u.Forward;
             var cmd = Broadsides.Of(u);
-            bool aiming = arcs != null && arcs.Count > 0 && toTarget is DVec3 t0 && t0.LengthSquared > 1e-18;
+            bool aiming = bearings != null && bearings.Count > 0 && toTarget is DVec3 t0 && t0.LengthSquared > 1e-18;
             if (cmd == null || !HasPatches(u.Combat))
             {
                 forward = face.Normalized;
@@ -373,16 +375,16 @@ namespace Unity.SpaceGod.Core
                 return;
             }
             cmd.RollReconsider -= dt;
-            bool valid = cmd.RollChosen && (aiming ? arcs.ContainsKey(cmd.RollArc) : cmd.RollArc == NoArc);
+            bool valid = cmd.RollChosen && (aiming ? bearings.ContainsKey(cmd.RollBearing) : cmd.RollBearing == NoBearing);
             if (!valid || cmd.RollReconsider <= 0)
             {
                 cmd.RollReconsider = ReconsiderSeconds;
-                Choose(b, u, cmd, face, aiming ? arcs : null, aiming ? toTarget : null, rest);
+                Choose(b, u, cmd, face, aiming ? bearings : null, aiming ? toTarget : null, rest);
             }
-            Frame(face, aiming ? toTarget : null, aiming ? cmd.RollArc : NoArc, cmd.RollDeg, out forward, out roof);
+            Frame(face, aiming ? toTarget : null, aiming ? cmd.RollBearing : NoBearing, cmd.RollDeg, out forward, out roof);
         }
 
-        static void Choose(Battle b, BattleUnit u, BroadsideCommand cmd, DVec3 face, IReadOnlyDictionary<int, double> arcs, DVec3? toTarget, DVec3? rest)
+        static void Choose(Battle b, BattleUnit u, BroadsideCommand cmd, DVec3 face, IReadOnlyDictionary<int, double> bearings, DVec3? toTarget, DVec3? rest)
         {
             var c = u.Combat;
             var fire = IncomingFireOn(b, u);
@@ -390,39 +392,39 @@ namespace Unity.SpaceGod.Core
             var weak = WeaknessOf(c, PatchesOf(c, samples));
             double protect = Protection.Value;
             double most = 0;
-            if (arcs != null)
-                foreach (var kv in arcs)
+            if (bearings != null)
+                foreach (var kv in bearings)
                     most = Math.Max(most, kv.Value);
             var keys = new List<int>();
-            if (arcs != null) keys.AddRange(arcs.Keys);
-            else keys.Add(NoArc);
+            if (bearings != null) keys.AddRange(bearings.Keys);
+            else keys.Add(NoBearing);
             double best = double.NegativeInfinity;
-            int bestArc = keys[0];
+            int bestBearing = keys[0];
             double bestDeg = 0;
             double step = 360.0 / RollSteps;
-            foreach (int arc in keys)
+            foreach (int bearing in keys)
             {
-                double battery = arcs == null ? 1 : most > 0 ? arcs[arc] / most : 1;
+                double battery = bearings == null ? 1 : most > 0 ? bearings[bearing] / most : 1;
                 for (int k = 0; k < RollSteps; k++)
                 {
                     double deg = k * step;
-                    Frame(face, toTarget, arc, deg, out var f, out var up);
+                    Frame(face, toTarget, bearing, deg, out var f, out var up);
                     var right = DVec3.Cross(f, up).Normalized;
                     double score = battery;
                     if (fire.Count > 0 && protect > 0) score -= protect * Exposure(samples, weak, fire, right, up, f);
                     var at = rest ?? LevelRoof(f);
                     var restUp = at - f * DVec3.Dot(at, f);
                     if (restUp.LengthSquared > 1e-18) score -= RestBias * (1 - DVec3.Dot(up, restUp.Normalized)) * 0.5;
-                    if (cmd.RollChosen && arc == cmd.RollArc && Math.Abs(Astro.WrapDegrees360(deg - cmd.RollDeg + 180) - 180) < step * 0.5) score += Hysteresis;
+                    if (cmd.RollChosen && bearing == cmd.RollBearing && Math.Abs(Astro.WrapDegrees360(deg - cmd.RollDeg + 180) - 180) < step * 0.5) score += Hysteresis;
                     if (score > best + 1e-12)
                     {
                         best = score;
-                        bestArc = arc;
+                        bestBearing = bearing;
                         bestDeg = deg;
                     }
                 }
             }
-            cmd.RollArc = bestArc;
+            cmd.RollBearing = bestBearing;
             cmd.RollDeg = bestDeg;
             cmd.RollChosen = true;
         }

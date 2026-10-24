@@ -207,7 +207,7 @@ namespace Unity.SpaceGod.Core
         /// once it has tried, U.SPC-T424).</summary>
         public bool PlayerDecoyRequested;
 
-        /// <summary>A capital ship's orders in the broadside game (U.SPC-T425): battery orders by arc, focus fire on a weakened shield patch, the
+        /// <summary>A capital ship's orders in the broadside game (U.SPC-T425): orders to its guns, focus fire on a weakened shield patch, the
         /// brace, damage control and the formation it leads, given by the player at the helm or by its captain's doctrine.
         /// Null for anything smaller (see <see cref="Broadsides.Of"/>).</summary>
         public BroadsideCommand Broadside;
@@ -223,7 +223,7 @@ namespace Unity.SpaceGod.Core
         public DVec3 Roof;
 
         /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north, or the helm's
-        /// own roof, <see cref="Up"/>, or its captain's, <see cref="Roof"/>): the frame its arcs, bearings and hardpoints are reckoned in.</summary>
+        /// own roof, <see cref="Up"/>, or its captain's, <see cref="Roof"/>): the frame its fire cones, bearings and hardpoints are reckoned in.</summary>
         public void Basis(out DVec3 right, out DVec3 up)
         {
             var roof = PlayerControlled ? Up : Roof;
@@ -279,6 +279,27 @@ namespace Unity.SpaceGod.Core
             if (spec == null) return local;
             return ShieldEmitters.StrikePoint(spec, local, incoming.HasValue ? DirToLocal(incoming.Value) : (DVec3?)null);
         }
+
+        /// <summary>A direction in this hull's frame (right, up, forward) as a battle-local direction, unscaled.</summary>
+        public DVec3 LocalDirToWorld(DVec3 local)
+        {
+            Basis(out var right, out var up);
+            return right * local.X + up * local.Y + Forward * local.Z;
+        }
+
+        /// <summary>Whether the mount <paramref name="d"/> on this hull bears on a battle-local point: the point lies inside its
+        /// fire cone seen from where the mount sits, above or below the hull as well as to the side (U.SPC-T533).</summary>
+        public bool Bears(SubsystemDef d, DVec3 point)
+        {
+            if (d.BearsEverywhere) return true;
+            var to = point - PointOf(d);
+            if (to.LengthSquared < 1e-18) to = point - Pos;
+            return d.Covers(Combat?.Spec, DirToLocal(to));
+        }
+
+        /// <summary>Whether the mount <paramref name="d"/> on this hull bears along a battle-local direction (a line of sight
+        /// off the hull, with no point at its end).</summary>
+        public bool BearsAlong(SubsystemDef d, DVec3 dir) => d.BearsEverywhere || d.Covers(Combat?.Spec, DirToLocal(dir));
 
         /// <summary>Yaw angle (degrees) of a battle-local point relative to this hull's own facing:
         /// 0 = dead ahead, 90 = starboard, 180 = astern, 270 = port.</summary>
@@ -1101,8 +1122,8 @@ namespace Unity.SpaceGod.Core
             if (WeakPatches.Steers(u))
             {
                 // A capital's captain rolls and turns its hull to keep its weak patches out of the heaviest fire (U.SPC-T502).
-                var arcs = broadside ? ArcFirepower(u) : null;
-                WeakPatches.Orient(this, u, face, arcs, arcs != null ? (u.Target.Pos - u.Pos).Normalized : (DVec3?)null, null, dt,
+                var bearings = broadside ? ConeFirepower(u, (u.Target.Pos - u.Pos).Normalized) : null;
+                WeakPatches.Orient(this, u, face, bearings, bearings != null ? (u.Target.Pos - u.Pos).Normalized : (DVec3?)null, null, dt,
                     out face, out var roof);
                 TurnToward(u, face, c.Spec.TurnRateDegS, dt);
                 WeakPatches.RollToward(u, roof, c.Spec.TurnRateDegS, dt);
@@ -1249,43 +1270,73 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// Which way to point the bow so the hull's strongest ready battery (not on cooldown, with
-        /// ammo, its mount not destroyed) bears on the target — a broadside warship turns a flank in,
-        /// not its nose. A hull with no real arc spread (every weapon omnidirectional, today's default)
-        /// has a single candidate centred on the bow, so it simply points its nose at the target.
+        /// Which way to point the bow so the guns whose fire cones can take the target carry the most firepower onto it
+        /// (U.SPC-T533, see <see cref="ConeFirepower"/>). So a broadside warship turns a flank in, not its nose, while a hull
+        /// whose guns bear best ahead, or bear as well any way (or any hull with <see cref="FireCones.AiBringsGunsToBear"/>
+        /// off), simply points its nose at the target.
         /// </summary>
         DVec3 BroadsideFacing(BattleUnit u, DVec3 toTarget)
         {
-            var byArc = ArcFirepower(u);
-            if (byArc == null) return toTarget;
-            int bestArc = 0;
+            var byBearing = ConeFirepower(u, toTarget);
+            if (byBearing == null) return toTarget;
+            int bestBearing = 0;
             double best = -1;
-            foreach (var kv in byArc)
-                if (kv.Value > best) { best = kv.Value; bestArc = kv.Key; }
-            return BowFor(toTarget, bestArc);
+            foreach (var kv in byBearing)
+                if (kv.Value > best + 1e-9) { best = kv.Value; bestBearing = kv.Key; }
+            return BowFor(toTarget, bestBearing);
         }
 
-        /// <summary>The firepower (damage a second) of <paramref name="u"/>'s ready guns by the bearing their arcs are
-        /// centred on, whole degrees from the bow; null for a hull with none: the batteries a captain can turn to the enemy.</summary>
-        public static Dictionary<int, double> ArcFirepower(BattleUnit u)
+        /// <summary>
+        /// The headings a captain could turn its hull to so its guns bear on a target along <paramref name="toTarget"/>
+        /// (U.SPC-T533): by the bearing off the bow the target would then lie on, whole degrees (0 = the bow on it, 90 =
+        /// starboard; see <see cref="BowFor"/>), the firepower (damage a second) of every ready gun (not on cooldown, with
+        /// ammo, its mount not destroyed) whose fire cone would hold the target from that heading, in 3D. The candidates are
+        /// the bow and each ready gun's cone axis swung round onto the target; a cone centred straight up or down off the hull
+        /// is brought to bear by no turn of the bow. Null for a hull with no ready guns; just the bow with
+        /// <see cref="FireCones.AiBringsGunsToBear"/> off.
+        /// </summary>
+        public static Dictionary<int, double> ConeFirepower(BattleUnit u, DVec3 toTarget)
         {
-            Dictionary<int, double> byArc = null;
+            if (toTarget.LengthSquared < 1e-18) return null;
+            var spec = u.Combat.Spec;
+            List<(SubsystemDef def, double fire)> guns = null;
             foreach (var s in u.Combat.Subsystems)
             {
                 if (!s.Def.IsWeapon || s.Destroyed || s.Def.Weapon.AntiSmall || s.Kind == SubsystemKind.BoardingPods || s.Def.Weapon.Supporting) continue;
                 var w = s.Def.Weapon;
                 if (w.Missile && s.Ammo <= 0) continue;
-                byArc ??= new Dictionary<int, double>();
-                int key = (int)Math.Round(Astro.WrapDegrees360(s.Def.ArcCenterDeg));
-                byArc.TryGetValue(key, out double sum);
-                byArc[key] = sum + w.Damage * w.Salvo / w.Cooldown;
+                guns ??= new List<(SubsystemDef, double)>();
+                guns.Add((s.Def, w.Damage * w.Salvo / w.Cooldown));
             }
-            return byArc;
+            if (guns == null) return null;
+            var t = toTarget.Normalized;
+            double Score(int bearing)
+            {
+                var f = BowFor(t, bearing).Normalized;
+                var up = WeakPatches.LevelRoof(f);
+                var right = DVec3.Cross(f, up).Normalized;
+                var local = new DVec3(DVec3.Dot(t, right), DVec3.Dot(t, up), DVec3.Dot(t, f));
+                double sum = 0;
+                foreach (var (def, fire) in guns)
+                    if (def.Covers(spec, local)) sum += fire;
+                return sum;
+            }
+            var byBearing = new Dictionary<int, double> { [0] = Score(0) };
+            if (!FireCones.AiBringsGunsToBear.Value) return byBearing;
+            foreach (var (def, _) in guns)
+            {
+                var axis = def.AxisOn(spec);
+                if (axis.X * axis.X + axis.Z * axis.Z < 0.01) continue;
+                int bearing = (int)Math.Round(Astro.WrapDegrees360(Math.Atan2(axis.X, axis.Z) * Astro.Rad2Deg)) % 360;
+                if (!byBearing.ContainsKey(bearing)) byBearing[bearing] = Score(bearing);
+            }
+            return byBearing;
         }
 
-        /// <summary>The way to point the bow, held level, so a target along <paramref name="toTarget"/> lies on the battery
-        /// whose arc is centred <paramref name="arcDeg"/> from the bow.</summary>
-        public static DVec3 BowFor(DVec3 toTarget, int arcDeg) => RotateYaw(toTarget, arcDeg);
+        /// <summary>The way to point the bow, held level, so a target along <paramref name="toTarget"/> lies
+        /// <paramref name="bearingDeg"/> off it (0 = dead ahead, 90 = starboard): the heading that turns the guns whose cones
+        /// are centred there onto the target.</summary>
+        public static DVec3 BowFor(DVec3 toTarget, int bearingDeg) => RotateYaw(toTarget, bearingDeg);
 
         /// <summary>Rotates a direction by an angle (degrees) around the battle's vertical (ecliptic) axis.</summary>
         static DVec3 RotateYaw(DVec3 v, double angleDeg)
@@ -1374,7 +1425,7 @@ namespace Unity.SpaceGod.Core
             }
             // A braced crew is holding on, not working its guns: they load, but only point defence fires (U.SPC-T425).
             bool braced = !Broadsides.Fires(u);
-            // Which arcs' broadsides go this step, now every gun is as loaded as it will be (U.SPC-T425).
+            // The volleys are worked out afresh this step, now every gun is as loaded as it will be (U.SPC-T425).
             Broadsides.BeginVolleys(u);
             // The captain tunes the phaser arrays for the fight as it stands: a lance or a sweep (U.SPC-T488).
             EnergyWeapons.Step(this, u);
@@ -1442,7 +1493,7 @@ namespace Unity.SpaceGod.Core
                 BattleUnit target;
                 bool helm = u.PlayerControlled && u.PlayerHelm;
                 if (helm && HelmVolley(u, s, origin, w, accuracyScale)) continue;
-                if (u.PlayerControlled && !helm && IsPlayerAimable(s.Def))
+                if (u.PlayerControlled && !helm && IsPlayerAimable(u, s.Def))
                 {
                     // The player's own nose guns: no AI target selection, no autofire. Side/aft
                     // batteries (a broadside hull's real firepower) fall through to the branch below
@@ -1460,27 +1511,27 @@ namespace Unity.SpaceGod.Core
                 else
                 {
                     target = ChooseWeaponTarget(u, origin, w);
-                    // At a capital ship's helm the crews go for the hull the player has locked, wherever it is in their arc and reach.
+                    // At a capital ship's helm the crews go for the hull the player has locked, wherever it is in their fire cones and reach.
                     if (helm && LockedFor(u, s, origin, w) is BattleUnit locked) target = locked;
                     // Hold fire on a prize our own people are boarding or closing on.
                     if (target != null && IsPrize(u, target)) target = null;
                 }
-                // A mount with a real firing arc (a broadside battery, fixed-forward fighter guns) can
-                // only engage a target that actually falls within it.
-                if (target != null && s.Def.ArcWidthDeg < 360 && !s.Def.ContainsYaw(u.YawDegOf(target.Pos))) target = null;
-                // A capital ship's batteries fire under the order of the arc the target lies in (U.SPC-T425): held, not at
-                // all; in a volley, a gun holds until its battery goes together, surer and harder.
+                // Every mount aims within its fire cone (U.SPC-T533): a turret's wide one round its mount's normal, a spinal
+                // mount's or fixed tube's narrow one along the keel. It engages only a target that lies inside it, in 3D.
+                if (target != null && !u.Bears(s.Def, target.Pos)) target = null;
+                // A capital ship's mounts fire under their own orders (U.SPC-T425, given to the guns that bear where the captain
+                // looks): held, not at all; in a volley, a gun holds until every gun of the volley bearing on the same hull is
+                // loaded, and they go together, surer and harder.
                 double volley = 1;
-                if (target != null && u.Broadside != null && !w.AntiSmall && !w.Supporting && s.Kind != SubsystemKind.BoardingPods)
+                if (target != null && u.Broadside != null && Broadsides.IsOrdered(s))
                 {
-                    var arc = Facings.Toward(u, target.Pos);
-                    var order = u.Broadside[arc];
+                    var order = u.Broadside.OrderOf(s);
                     if (order == BatteryOrder.HoldFire) target = null;
                     else if (order == BatteryOrder.Volley && Broadsides.IsBatteryGun(s))
                     {
-                        if (!u.Broadside.Releases(arc))
+                        if (!Broadsides.Releases(u, target))
                         {
-                            Broadsides.Holding(u, arc, target);
+                            Broadsides.Holding(u, target);
                             s.Aim = (target.Pos - origin).Normalized;
                             continue;
                         }
@@ -1656,8 +1707,9 @@ namespace Unity.SpaceGod.Core
         /// a forward-centred hardpoint, as opposed to a side or aft battery a crew works autonomously.</summary>
         // Point defence is never the player's to aim: it keeps engaging missiles and small craft on its own.
         // Nor is an auto turret (U.SPC-T278): its own fire control works it, whoever flies the hull.
-        static bool IsPlayerAimable(SubsystemDef d) =>
-            !(d.Weapon != null && d.Weapon.AntiSmall) && d.Kind != SubsystemKind.AutoTurret && Math.Abs(Astro.WrapDegrees360(d.ArcCenterDeg)) < 0.01;
+        // A forward mount is one whose fire cone takes in dead ahead (U.SPC-T533).
+        static bool IsPlayerAimable(BattleUnit u, SubsystemDef d) =>
+            !(d.Weapon != null && d.Weapon.AntiSmall) && d.Kind != SubsystemKind.AutoTurret && d.Covers(u.Combat?.Spec, FireCones.Bow);
 
         /// <summary>
         /// One of the player's guns fires down the crosshair (U.SPC-T270): swung off the nose as far as its
@@ -1691,7 +1743,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// A gun mount the player has taken (U.SPC-T18, <see cref="MountedTurret"/>): it traverses toward their aim
-        /// at its own rate, never past its arc (a spinal railgun never past its gimbal), and on the trigger fires
+        /// at its own rate, never past its fire cone (a spinal railgun never past its gimbal), and on the trigger fires
         /// down its barrel at its own rhythm, an aimed shot that hits only what it meets (<see cref="ResolveShot"/>).
         /// </summary>
         void FireManned(BattleUnit u, Subsystem s, MountControl m, WeaponSpec w, double dt, double accuracyScale)
@@ -1841,7 +1893,7 @@ namespace Unity.SpaceGod.Core
         {
             if (w.Missile || w.AntiSmall || w.Supporting || u.PlayerVolleyAim.LengthSquared < 1e-12) return false;
             var look = u.PlayerVolleyAim.Normalized;
-            if (!s.Def.ContainsYaw(u.YawDegOf(u.Pos + look))) return false;
+            if (!u.BearsAlong(s.Def, look)) return false;
             if (u.PlayerVolleyRelease)
             {
                 var target = VolleyTarget(u, look, w.RangeKm);
@@ -1884,14 +1936,14 @@ namespace Unity.SpaceGod.Core
             return best;
         }
 
-        /// <summary>The player's locked hull, if this mount can reach it and it lies in the mount's arc.</summary>
+        /// <summary>The player's locked hull, if this mount can reach it and it lies in the mount's fire cone.</summary>
         BattleUnit LockedFor(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w)
         {
             var t = u.PlayerLockTarget;
             if (t == null || !Hostile(u, t) || t.Surrendering || t.Captured) return null;
             if ((t.Pos - origin).Length - t.Radius > w.RangeKm) return null;
             if (w.AntiSmall && t.Kind != UnitKind.Fighter) return null;
-            return s.Def.ArcWidthDeg >= 360 || s.Def.ContainsYaw(u.YawDegOf(t.Pos)) ? t : null;
+            return u.Bears(s.Def, t.Pos) ? t : null;
         }
 
         // ---------------------------------------------------------------- the dogfight arsenal (U.SPC-T271)
@@ -2461,20 +2513,10 @@ namespace Unity.SpaceGod.Core
                 }
             }
             if (sub != null && exposed > 1) damage *= exposed;
-            // A capital ship's crew braced for the broadside shrugs off part of it, and a hull angled to the line of fire
-            // meets the shot obliquely: thicker armour, part of the hit turned aside (U.SPC-T425).
+            // A capital ship's crew braced for the broadside shrugs off part of it (U.SPC-T425). There is no angling the
+            // armour to a facing any more (U.SPC-T533): everything fights in full 3D, and the belt is the belt.
             double armour = c.Spec.Armor;
-            if (Broadsides.Commands(target))
-            {
-                damage *= Broadsides.BraceFactor(target);
-                // A weak point struck from its open side has no armour to angle (U.SPC-T424).
-                if (incoming.HasValue && !(sub != null && exposed > 1))
-                {
-                    var (thicker, through) = Broadsides.Angling(target, incoming.Value);
-                    armour *= thicker;
-                    damage *= through;
-                }
-            }
+            if (Broadsides.Commands(target)) damage *= Broadsides.BraceFactor(target);
             damage = Math.Max(damage * 0.15, damage - armour);
             Emit(FxKind.Impact, at, at, damage, target.Side, target, sub?.Index ?? -1);
             if (sub != null && !sub.Destroyed)

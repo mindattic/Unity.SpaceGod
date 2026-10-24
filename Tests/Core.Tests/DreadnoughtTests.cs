@@ -46,9 +46,10 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (var s in spinal)
             {
                 Assert.That(s.Def.Z, Is.GreaterThan(0.45), "its muzzle is at the bow");
-                Assert.That(s.Def.ArcWidthDeg, Is.LessThanOrEqualTo(SpinalMounts.ArcWidthDeg), "the hull lays it");
-                Assert.That(s.Def.ContainsYaw(0), Is.True);
-                Assert.That(s.Def.ContainsYaw(30), Is.False);
+                Assert.That(s.Def.HalfDeg, Is.LessThanOrEqualTo(SpinalMounts.ConeHalfDeg), "the hull lays it: a narrow cone along the keel");
+                Assert.That(s.Def.Covers(ship.Combat.Spec, FireCones.Bow), Is.True);
+                Assert.That(s.Def.Covers(ship.Combat.Spec, new DVec3(0.5, 0, 0.866)), Is.False, "30 deg off the bow");
+                Assert.That(s.Def.Covers(ship.Combat.Spec, new DVec3(0, 0.5, 0.866)), Is.False, "nor 30 deg above it");
                 // Further than any other gun or launcher the hull carries.
                 foreach (var o in ship.Combat.Subsystems.Where(o => o.Def.IsWeapon && !o.Def.Spinal && !o.Def.Weapon.Lance))
                     Assert.That(s.Def.Weapon.RangeKm, Is.GreaterThan(o.Def.Weapon.RangeKm), s.Kind + " outranges the " + o.Kind);
@@ -108,7 +109,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(plasma.Def.Weapon, Is.SameAs(SpinalMounts.Plasma));
             Assert.That(plasma.Def.Weapon.RangeKm, Is.GreaterThan(EnergyWeapons.PlasmaCannon.RangeKm));
             Assert.That(plasma.Def.Weapon.DamageAt(plasma.Def.Weapon.RangeKm), Is.LessThan(plasma.Def.Weapon.Damage), "it bleeds off");
-            Assert.That(plasma.Def.ArcWidthDeg, Is.LessThanOrEqualTo(SpinalMounts.ArcWidthDeg));
+            Assert.That(plasma.Def.HalfDeg, Is.LessThanOrEqualTo(SpinalMounts.ConeHalfDeg));
 
             // And a tachyon lance in place of the railgun, at a yard great enough to build one.
             int railSlot = SpinalSlots(l).First(i => l.Fitted[i] == ModuleKind.Railgun);
@@ -203,7 +204,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(range, Is.LessThanOrEqualTo(SpinalMounts.ReachKm(dread.Combat)), "every spinal gun still bears");
             Assert.That((escort.Pos - enemy.Pos).Length, Is.LessThan(range), "its escort fights in front of it");
             double off = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(dread.Forward, (enemy.Pos - dread.Pos).Normalized)))) * Astro.Rad2Deg;
-            Assert.That(off, Is.LessThan(SpinalMounts.ArcWidthDeg * 0.5), "its bow laid on the mark");
+            Assert.That(off, Is.LessThan(SpinalMounts.ConeHalfDeg), "its bow laid on the mark");
             Assert.That(spinalFired, Is.True, "it sniped with its spinal guns");
         }
 

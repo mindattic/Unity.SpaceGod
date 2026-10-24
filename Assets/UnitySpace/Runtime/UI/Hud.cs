@@ -919,24 +919,23 @@ namespace Unity.SpaceGod.UI
         }
 
         /// <summary>
-        /// At a capital ship's helm (U.SPC-T272): which battery bears where the player is looking, how many of its guns
-        /// are loaded, the volley building while the trigger is held, and the hull it will be fired at.
+        /// At a capital ship's helm (U.SPC-T272): how many guns bear where the player is looking (their fire cones take that
+        /// line in, U.SPC-T533) and how many of them are loaded, the volley building while the trigger is held, and the hull
+        /// it will be fired at.
         /// </summary>
         void DrawBroadside(Battle battle, BattleUnit me, float x, float y)
         {
             var look = app.PilotLookDirection;
-            double yaw = me.YawDegOf(me.Pos + look);
-            string side = yaw < 45 || yaw >= 315 ? "BOW" : yaw < 135 ? "STARBOARD" : yaw < 225 ? "STERN" : "PORT";
             int loaded = 0, bearing = 0;
             foreach (var s in me.Combat.Subsystems)
             {
                 var w = s.Def.Weapon;
-                if (s.Destroyed || w == null || w.Missile || w.AntiSmall || w.Supporting || !s.Def.ContainsYaw(yaw)) continue;
+                if (s.Destroyed || w == null || w.Missile || w.AntiSmall || w.Supporting || !me.BearsAlong(s.Def, look)) continue;
                 bearing++;
                 if (s.Cooldown <= 0) loaded++;
             }
             float built = (float)(me.VolleyCharge / Battle.VolleyBuildSeconds);
-            string text = side + " BATTERY  " + loaded + "/" + bearing + " loaded" + (me.PlayerFireHeld ? "  ·  VOLLEY " + Mathf.RoundToInt(built * 100) + "%  (let go to fire)" : "  ·  hold left mouse to build a volley");
+            string text = (bearing == 0 ? "NO GUN BEARS HERE" : "BATTERY BEARING  " + loaded + "/" + bearing + " loaded") + (me.PlayerFireHeld ? "  ·  VOLLEY " + Mathf.RoundToInt(built * 100) + "%  (let go to fire)" : "  ·  hold left mouse to build a volley");
             DrawLabel(text, new Vector2(x, y), me.PlayerFireHeld ? LockColor : Dim, true);
 
             // The hull the volley will go at: the locked one near the line, else the hostile nearest it.
@@ -957,7 +956,8 @@ namespace Unity.SpaceGod.UI
         }
 
         /// <summary>
-        /// The captain's orders at a capital ship's helm (U.SPC-T425), above the gauges: each battery's order, whether the gunners focus a weakened shield patch
+        /// The captain's orders at a capital ship's helm (U.SPC-T425), above the gauges: the order of the guns bearing where the
+        /// player is looking (U.SPC-T533), whether the gunners focus a weakened shield patch
         /// (U.SPC-T501), the brace, damage control and the line's formation, the turning circle at this speed, and a hostile
         /// broadside building on this hull, which is the moment to brace.
         /// </summary>
@@ -965,9 +965,10 @@ namespace Unity.SpaceGod.UI
         {
             var cmd = me.Broadside;
             if (cmd == null) return;
-            string Order(Facing f) => Facings.Label(f).ToUpperInvariant().Substring(0, 1) + ":" + (cmd[f] == BatteryOrder.HoldFire ? "HOLD" : cmd[f] == BatteryOrder.Volley ? "VOLLEY" : "AT WILL");
+            var (order, mounts) = Broadsides.OrderAlong(me, app.PilotLookDirection);
+            string battery = mounts == 0 ? "none bear here" : order == null ? "mixed" : order == BatteryOrder.HoldFire ? "HOLD" : order == BatteryOrder.Volley ? "VOLLEY" : "AT WILL";
             string brace = cmd.Braced ? "BRACED" : cmd.BraceCooldown > 0 ? "brace in " + Mathf.CeilToInt((float)cmd.BraceCooldown) + "s" : "3 brace";
-            string orders = "1 BATTERIES " + Order(Facing.Bow) + " " + Order(Facing.Starboard) + " " + Order(Facing.Stern) + " " + Order(Facing.Port)
+            string orders = "1 BATTERY " + battery + (mounts > 0 ? " (" + mounts + ")" : "")
                 + "    2 GUNNERS " + (cmd.SpreadFire ? "spread" : "focus")
                 + "    " + brace
                 + "    4 DAMAGE CONTROL " + Broadsides.Label(cmd.Focus) + " (" + Broadsides.Teams(me) + " teams)"
@@ -994,13 +995,12 @@ namespace Unity.SpaceGod.UI
             var incoming = Broadsides.IncomingBroadside(battle, me);
             if (incoming == null)
                 foreach (var o in battle.Units)
-                    if (battle.Hostile(me, o) && o.Broadside?.Readying != null && o.Broadside.ReadyingOn == me) { incoming = o; break; }
+                    if (battle.Hostile(me, o) && o.Broadside != null && o.Broadside.Readying && o.Broadside.ReadyingOn == me) { incoming = o; break; }
             if (incoming != null)
             {
                 var r = incoming.Broadside;
-                string side = r?.Readying != null ? Facings.Label(r.Readying.Value).ToUpperInvariant() + " " : "";
                 int loaded = r != null ? Mathf.RoundToInt((float)r.ReadyingLoaded * 100) : 100;
-                DrawLabel("INCOMING BROADSIDE  ·  " + incoming.Name + " " + side + "BATTERY " + loaded + "%  ·  3 BRACE",
+                DrawLabel("INCOMING BROADSIDE  ·  " + incoming.Name + " VOLLEY " + loaded + "%  ·  3 BRACE",
                     new Vector2(Screen.width * 0.5f - 160, Screen.height * 0.28f), HostileColor, false);
             }
         }
@@ -1067,7 +1067,8 @@ namespace Unity.SpaceGod.UI
             foreach (var s in c.Subsystems)
             {
                 var w = s.Def.Weapon;
-                if (s.Destroyed || w == null || w.Missile || w.AntiSmall || Math.Abs(Astro.WrapDegrees360(s.Def.ArcCenterDeg)) > 0.01) continue;
+                // The guns the player lays down the nose: those whose fire cones take in dead ahead (U.SPC-T533).
+                if (s.Destroyed || w == null || w.Missile || w.AntiSmall || !s.Def.Covers(c.Spec, FireCones.Bow)) continue;
                 speed = Math.Max(speed, w.MuzzleSpeedKmS);
             }
             return speed;

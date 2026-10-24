@@ -7,7 +7,7 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// Spinal mounts (U.SPC-T490, docs/SHIP_ROSTER.md "Dreadnought / Battleship"): a battleship is built around one or two
     /// guns as long as the hull itself, laid along the keel with their muzzles at the bow, fed by a large power plant inside
-    /// the hull. A spinal mount cannot traverse (<see cref="ArcWidthDeg"/>): the hull lays it on the target. Four weapons go
+    /// the hull. A spinal mount cannot traverse (<see cref="ConeHalfDeg"/>): the hull lays it on the target. Four weapons go
     /// in one: a spinal railgun (the longest kinetic reach and the hardest slug in the game, on a slow recharge), a coilgun
     /// (a shorter reach, a lighter, slower slug, but cycling twice as fast), a tachyon lance (U.SPC-T487) and a plasma
     /// spinal cannon (an enormous bolt that bleeds off over distance, U.SPC-T488). Each spinal mount draws on a spinal power
@@ -93,9 +93,9 @@ namespace Unity.SpaceGod.Core
 
         // ------------------------------------------------------------ the mount
 
-        /// <summary>How wide a spinal mount's arc is either side of the bow together, degrees: it cannot traverse, so the hull
+        /// <summary>How far off the keel a spinal mount's narrow cone reaches, deg (U.SPC-T533): it cannot traverse, so the hull
         /// lays it.</summary>
-        public const double ArcWidthDeg = 20;
+        public const double ConeHalfDeg = 10;
 
         /// <summary>A spinal mount is a gun the length of the hull, built heavier than any turret: its hardpoint takes this many
         /// times a turret's damage before it is shot away.</summary>
@@ -181,7 +181,7 @@ namespace Unity.SpaceGod.Core
         public static SubsystemDef Mount(ModuleKind m, double x, double y, double z)
         {
             var k = Of(m) ?? throw new ArgumentException(m + " does not go in a spinal mount", nameof(m));
-            var def = new SubsystemDef(k.Subsystem, x, y, z, false, 0, ArcWidthDeg) { Spinal = true, Weapon = k.Weapon() };
+            var def = new SubsystemDef(k.Subsystem, x, y, z, false, FireCones.Bow, ConeHalfDeg) { Spinal = true, Weapon = k.Weapon() };
             def.MaxHp *= HpFactor;
             return def;
         }

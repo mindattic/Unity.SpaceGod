@@ -5,34 +5,26 @@ using System.Globalization;
 namespace Unity.SpaceGod.Core
 {
     // The capital-ship broadside game (U.SPC-T425): commanding a capital ship as a naval battle, Black Flag / Rebel Galaxy
-    // style. Batteries are ordered by the arc they fire into, a volley is called and telegraphed, the gun crews go for a
-    // weakened patch of the enemy's shields or spread their fire (shields are emitters on the hull, not arcs: U.SPC-T501,
-    // see ShieldEmitters), the hull is angled so shots strike its armour obliquely, the crew braces for a broadside and damage control
-    // teams patch mounts under fire and bring back shield emitters and gun mounts shot away, and the flagship orders its line into formation. AI captains use the same commands
-    // by doctrine. The handling itself (engine telegraph, steerage, keel, full 3D) is the capital flight model's
-    // (U.SPC-T499, docs/FLIGHT_MODELS.md); this file is everything a captain does on top of it.
+    // style. Every gun aims within its own fire cone (U.SPC-T533, see FireCones), so the captain's orders go to the guns that
+    // bear where the captain looks, a volley is called and telegraphed, the gun crews go for a weakened patch of the enemy's
+    // shields or spread their fire (shields are emitters on the hull, not arcs: U.SPC-T501, see ShieldEmitters), the crew
+    // braces for a broadside and damage control teams patch mounts under fire and bring back shield emitters and gun mounts
+    // shot away, and the flagship orders its line into formation. AI captains use the same commands by doctrine. There are no
+    // bow, starboard, stern and port arcs and no angling the armour to one: everything fights in full 3D. The handling itself
+    // (engine telegraph, steerage, keel, full 3D) is the capital flight model's (U.SPC-T499, docs/FLIGHT_MODELS.md); this
+    // file is everything a captain does on top of it.
 
-    /// <summary>The four arcs a capital ship's batteries and armour are ordered by (U.SPC-T425). Shields have no arcs: they are
-    /// emitters on the hull, each covering its own patch of it (U.SPC-T501, see <see cref="ShieldEmitters"/>).</summary>
-    public enum Facing
-    {
-        Bow,
-        Starboard,
-        Stern,
-        Port,
-    }
-
-    /// <summary>What a battery's crews do with a target in its arc (U.SPC-T425).</summary>
+    /// <summary>What a gun's crew does with a target in its fire cone (U.SPC-T425, U.SPC-T533).</summary>
     public enum BatteryOrder
     {
         /// <summary>Every gun fires as it bears and is loaded (what a crew does on its own).</summary>
         FireAtWill,
 
-        /// <summary>No gun fires into the arc.</summary>
+        /// <summary>The gun does not fire.</summary>
         HoldFire,
 
-        /// <summary>The guns hold until the battery is loaded, then fire together: a broadside, telegraphed to the target
-        /// while it builds, surer and harder than fire at will.</summary>
+        /// <summary>The gun holds until every gun of the volley bearing on the same hull is loaded, then they fire together: a
+        /// broadside, telegraphed to the target while it builds, surer and harder than fire at will.</summary>
         Volley,
     }
 
@@ -72,50 +64,30 @@ namespace Unity.SpaceGod.Core
         EngageAtWill,
     }
 
-    /// <summary>The arcs: which one a bearing lies in, and their names.</summary>
-    public static class Facings
-    {
-        public const int Count = 4;
-
-        public static readonly Facing[] All = { Facing.Bow, Facing.Starboard, Facing.Stern, Facing.Port };
-
-        /// <summary>The arc's centre, deg (0 bow, 90 starboard, 180 stern, 270 port).</summary>
-        public static double CenterDeg(Facing f) => (int)f * 90;
-
-        /// <summary>The arc a bearing (deg from the bow, clockwise from above) lies in: each covers 90 deg about its centre.</summary>
-        public static Facing Of(double yawDeg)
-        {
-            double y = Astro.WrapDegrees360(yawDeg);
-            return y < 45 || y >= 315 ? Facing.Bow : y < 135 ? Facing.Starboard : y < 225 ? Facing.Stern : Facing.Port;
-        }
-
-        /// <summary>The arc of <paramref name="u"/> a battle-local point lies in.</summary>
-        public static Facing Toward(BattleUnit u, DVec3 point) => Of(u.YawDegOf(point));
-
-        /// <summary>How far a bearing lies from an arc's centre, deg (0-180).</summary>
-        public static double OffDeg(double yawDeg, Facing f)
-        {
-            double d = Astro.WrapDegrees360(yawDeg - CenterDeg(f));
-            return d > 180 ? 360 - d : d;
-        }
-
-        public static string Label(Facing f) => f == Facing.Bow ? "bow" : f == Facing.Starboard ? "starboard" : f == Facing.Stern ? "stern" : "port";
-    }
-
     /// <summary>
     /// A capital ship's standing orders and state in the broadside game (U.SPC-T425), on its <see cref="BattleUnit"/>: the
-    /// order each arc's battery fires under, whether its gun crews go for a weakened patch of the enemy's shields, its crew's brace, where damage control
-    /// works, the formation it has ordered its line into, and the broadside it is building (its telegraph).
+    /// order each of its guns fires under (given to the guns that bear where the captain looks, U.SPC-T533), whether its gun
+    /// crews go for a weakened patch of the enemy's shields, its crew's brace, where damage control works, the formation it
+    /// has ordered its line into, and the broadside it is building (its telegraph).
     /// </summary>
     public sealed class BroadsideCommand
     {
-        readonly BatteryOrder[] orders = new BatteryOrder[Facings.Count];
+        BatteryOrder[] orders = new BatteryOrder[0];
 
-        public BatteryOrder this[Facing f]
+        /// <summary>The order the mount at <paramref name="index"/> in the hull's layout fires under (fire at will unless given another).</summary>
+        public BatteryOrder this[int index]
         {
-            get => orders[(int)f];
-            set => orders[(int)f] = value;
+            get => index >= 0 && index < orders.Length ? orders[index] : BatteryOrder.FireAtWill;
+            set
+            {
+                if (index < 0) return;
+                if (index >= orders.Length) Array.Resize(ref orders, index + 1);
+                orders[index] = value;
+            }
         }
+
+        /// <summary>The order <paramref name="s"/> fires under.</summary>
+        public BatteryOrder OrderOf(Subsystem s) => this[s.Index];
 
         /// <summary>The gun crews spread their fire over the enemy's hull instead of going for the patch of it whose shield field
         /// is weakest (U.SPC-T501, see <see cref="ShieldEmitters.FocusWeight"/>): false (focus) unless the captain orders it.</summary>
@@ -131,12 +103,14 @@ namespace Unity.SpaceGod.Core
         /// <summary>The formation this hull has ordered its line into (it leads it).</summary>
         public FleetFormation Formation;
 
-        /// <summary>The telegraph: the arc a volley is building on, the hull it will go at, and the share of its guns loaded
-        /// (1 fires it). Null while no volley is building.</summary>
-        public Facing? Readying;
-
+        /// <summary>The telegraph: the hull a volley is building on and the share of the guns of the volley bearing on it that
+        /// are loaded (1 fires it). <see cref="ReadyingOn"/> is null while no volley is building.</summary>
         public BattleUnit ReadyingOn;
+
         public double ReadyingLoaded;
+
+        /// <summary>Whether a volley is building (the telegraph is up).</summary>
+        public bool Readying => ReadyingOn != null;
 
         /// <summary>Keep the guns and drive at full however hot the hull gets (U.SPC-T491, see <see cref="Radiators"/>): past
         /// the heat sinks' limit the crew and systems take the heat instead of the crew throttling down.</summary>
@@ -152,33 +126,27 @@ namespace Unity.SpaceGod.Core
         /// to keep its weak patches out of the heaviest fire (an AI captain does so by doctrine, <see cref="WeakPatches.AiRolls"/>).</summary>
         public bool RollWeakPatches;
 
-        /// <summary>The attitude the captain last settled on to shield its weak patches (U.SPC-T502): the battery it turns to
-        /// the enemy (<see cref="WeakPatches.NoArc"/> for a roll about the bow alone) and how far it is rolled from level
-        /// about the line it turns on, deg; and seconds until it weighs the fire again.</summary>
-        public int RollArc = WeakPatches.NoArc;
+        /// <summary>The attitude the captain last settled on to shield its weak patches (U.SPC-T502): the bearing off its bow
+        /// it turns the enemy onto, so the guns whose fire cones hold it there bear (U.SPC-T533,
+        /// <see cref="WeakPatches.NoBearing"/> for a roll about the bow alone), and how far it is rolled from level about the
+        /// line it turns on, deg; and seconds until it weighs the fire again.</summary>
+        public int RollBearing = WeakPatches.NoBearing;
 
         public double RollDeg, RollReconsider;
 
-        /// <summary>Whether <see cref="RollArc"/> and <see cref="RollDeg"/> hold a choice yet.</summary>
+        /// <summary>Whether <see cref="RollBearing"/> and <see cref="RollDeg"/> hold a choice yet.</summary>
         public bool RollChosen;
 
-        /// <summary>This step: the arcs whose volley goes now.</summary>
-        internal readonly bool[] Releasing = new bool[Facings.Count];
-
-        public bool Releases(Facing f) => Releasing[(int)f];
+        /// <summary>This step: whether the volley on each hull goes now, worked out the first time one of its guns asks.</summary>
+        internal readonly Dictionary<BattleUnit, bool> Releasing = new Dictionary<BattleUnit, bool>();
     }
 
-    /// <summary>The broadside game's rules (U.SPC-T425): batteries, focus fire on a weakened shield patch, armour angling, the brace, damage
-    /// control, formations and turning circles. Tunables are declared settings.</summary>
+    /// <summary>The broadside game's rules (U.SPC-T425): batteries (the guns whose fire cones bear together, U.SPC-T533), focus
+    /// fire on a weakened shield patch, the brace, damage control, formations and turning circles. Tunables are declared settings.</summary>
     [SettingsSource]
     public static class Broadsides
     {
         // ------------------------------------------------------------ settings
-
-        public static readonly RangeSetting ArmourAngling = new RangeSetting("broadside.armourAngling", SettingGroups.Broadsides,
-            "Armour angling", 0.4, 0, 1, 0.05,
-            "How much a hull angled to the line of fire turns shots aside: the share of a hit lost to a fully glancing strike, and how much thicker the belt reads end-on (0 turns angling off).",
-            v => (v * 100).ToString("0", CultureInfo.InvariantCulture) + "%", "armor armour angle glance belt broadside capital");
 
         public static readonly RangeSetting BraceReduction = new RangeSetting("broadside.brace", SettingGroups.Broadsides,
             "Brace", 0.5, 0, 0.9, 0.05,
@@ -192,7 +160,7 @@ namespace Unity.SpaceGod.Core
 
         public static readonly ToggleSetting AiVolleys = new ToggleSetting("broadside.aiVolleys", SettingGroups.Broadsides,
             "AI captains fire broadsides", true,
-            "AI capital ships hold their beam batteries for a volley and fire them together, telegraphing it, as the player can.",
+            "AI capital ships hold the guns whose fire cones bear together for a volley and fire them together, telegraphing it, as the player can; a gun that bears alone fires at will.",
             "volley broadside ai doctrine");
 
         public static readonly ToggleSetting AiFocusFire = new ToggleSetting("broadside.aiFocusFire", SettingGroups.Broadsides,
@@ -216,7 +184,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>How much harder, and surer, a crew's volley is than the same guns at will.</summary>
         public const double CrewVolleyDamageBonus = 0.2, CrewVolleyAccuracyBonus = 0.2;
 
-        /// <summary>How loaded a battery building a volley on a hull must be before that hull's AI captain braces.</summary>
+        /// <summary>How loaded the guns of a volley building on a hull must be before that hull's AI captain braces.</summary>
         public const double BraceAtLoaded = 0.75;
 
         /// <summary>People per damage control team, the most teams any hull musters, the hit points a team puts back a
@@ -224,9 +192,6 @@ namespace Unity.SpaceGod.Core
         public const double CrewPerTeam = 250, RepairHpPerTeamS = 1.5, FieldRepairCap = 0.85;
 
         public const int MaxTeams = 8;
-
-        /// <summary>The thinnest a hit can find the armour by angle: obliquity no more than this multiplies it.</summary>
-        public const double MaxObliquity = 3;
 
         // ------------------------------------------------------------ who commands
 
@@ -242,79 +207,142 @@ namespace Unity.SpaceGod.Core
         public static bool IsBatteryGun(Subsystem s)
         {
             var w = s.Def.Weapon;
-            // A spinal mount is no battery: the hull lays it, not the arc's gun crews (U.SPC-T490).
+            // A spinal mount is no battery: the hull lays it, not its gun crews (U.SPC-T490).
             return w != null && !s.Destroyed && !w.Missile && !w.AntiSmall && !w.Supporting && s.Kind != SubsystemKind.BoardingPods && !s.Def.Spinal;
         }
 
-        /// <summary>Whether a mount covers an arc's centre: the guns that make up that arc's battery.</summary>
-        public static bool Bears(SubsystemDef d, Facing f) => d.ArcWidthDeg >= 360 || d.ContainsYaw(Facings.CenterDeg(f));
+        /// <summary>A mount that takes the captain's orders: a live weapon that is not point defence, a support mount or a pod
+        /// launcher (missile launchers and spinal mounts hold or fire under them like any gun).</summary>
+        public static bool IsOrdered(Subsystem s)
+        {
+            var w = s.Def.Weapon;
+            return w != null && !s.Destroyed && !w.AntiSmall && !w.Supporting && s.Kind != SubsystemKind.BoardingPods;
+        }
 
-        /// <summary>The guns of <paramref name="u"/>'s <paramref name="f"/> battery, and how many are loaded.</summary>
-        public static (int loaded, int guns) Battery(BattleUnit u, Facing f)
+        /// <summary>The battery bearing along a battle-local direction off <paramref name="u"/> (where the captain looks): its
+        /// guns whose fire cones take that line in (U.SPC-T533), and how many are loaded.</summary>
+        public static (int loaded, int guns) Battery(BattleUnit u, DVec3 dir)
         {
             int loaded = 0, guns = 0;
             foreach (var s in u.Combat.Subsystems)
             {
-                if (!IsBatteryGun(s) || !Bears(s.Def, f)) continue;
+                if (!IsBatteryGun(s) || !u.BearsAlong(s.Def, dir)) continue;
                 guns++;
                 if (s.Cooldown <= 0) loaded++;
             }
             return (loaded, guns);
         }
 
-        /// <summary>The order the guns of <paramref name="u"/> fire into the arc of a point under (fire at will if it has none).</summary>
-        public static BatteryOrder OrderToward(BattleUnit u, DVec3 point) =>
-            u.Broadside == null ? BatteryOrder.FireAtWill : u.Broadside[Facings.Toward(u, point)];
-
-        /// <summary>Steps <paramref name="f"/>'s battery to its next order (at will, hold, volley); returns the new one.</summary>
-        public static BatteryOrder CycleOrder(BattleUnit u, Facing f)
+        /// <summary>The volley bearing on <paramref name="target"/>: the guns under a volley order whose cones hold it, and how
+        /// many of them are loaded.</summary>
+        public static (int loaded, int guns) VolleyOn(BattleUnit u, BattleUnit target)
         {
-            var cmd = Of(u);
-            if (cmd == null) return BatteryOrder.FireAtWill;
-            cmd[f] = (BatteryOrder)(((int)cmd[f] + 1) % 3);
-            return cmd[f];
+            int loaded = 0, guns = 0;
+            var cmd = u.Broadside;
+            if (cmd == null) return (0, 0);
+            foreach (var s in u.Combat.Subsystems)
+            {
+                if (!IsBatteryGun(s) || cmd.OrderOf(s) != BatteryOrder.Volley || !u.Bears(s.Def, target.Pos)) continue;
+                guns++;
+                if (s.Cooldown <= 0) loaded++;
+            }
+            return (loaded, guns);
         }
 
-        /// <summary>Puts every battery under <paramref name="order"/>.</summary>
+        /// <summary>
+        /// The order the mounts bearing along a battle-local direction off <paramref name="u"/> fire under: theirs if they share
+        /// one, null if they differ; and how many there are (0 if none bears there).
+        /// </summary>
+        public static (BatteryOrder? order, int mounts) OrderAlong(BattleUnit u, DVec3 dir)
+        {
+            BatteryOrder? order = null;
+            int n = 0;
+            var cmd = u.Broadside;
+            foreach (var s in u.Combat.Subsystems)
+            {
+                if (!IsOrdered(s) || !u.BearsAlong(s.Def, dir)) continue;
+                var o = cmd?.OrderOf(s) ?? BatteryOrder.FireAtWill;
+                if (n == 0) order = o;
+                else if (order != o) order = null;
+                n++;
+            }
+            return (n == 0 ? BatteryOrder.FireAtWill : order, n);
+        }
+
+        /// <summary>Puts every mount bearing along a battle-local direction off <paramref name="u"/> under
+        /// <paramref name="order"/>; returns how many heard it.</summary>
+        public static int OrderAlong(BattleUnit u, DVec3 dir, BatteryOrder order)
+        {
+            var cmd = Of(u);
+            if (cmd == null) return 0;
+            int n = 0;
+            foreach (var s in u.Combat.Subsystems)
+            {
+                if (!IsOrdered(s) || !u.BearsAlong(s.Def, dir)) continue;
+                cmd[s.Index] = order;
+                n++;
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// Steps the battery bearing along a battle-local direction off <paramref name="u"/> (where the captain looks) to its
+        /// next order (at will, hold, volley), every mount whose cone takes that line in together; returns the new order and
+        /// how many mounts took it (none: no gun bears there, and nothing changes). Mounts under different orders all go to
+        /// fire at will first.
+        /// </summary>
+        public static (BatteryOrder order, int mounts) CycleOrder(BattleUnit u, DVec3 dir)
+        {
+            if (Of(u) == null) return (BatteryOrder.FireAtWill, 0);
+            var (now, n) = OrderAlong(u, dir);
+            if (n == 0) return (BatteryOrder.FireAtWill, 0);
+            var next = (BatteryOrder)(((int)(now ?? BatteryOrder.Volley) + 1) % 3);
+            OrderAlong(u, dir, next);
+            return (next, n);
+        }
+
+        /// <summary>Puts every mount under <paramref name="order"/>.</summary>
         public static void SetAll(BattleUnit u, BatteryOrder order)
         {
             var cmd = Of(u);
             if (cmd == null) return;
-            foreach (var f in Facings.All) cmd[f] = order;
+            foreach (var s in u.Combat.Subsystems) cmd[s.Index] = order;
         }
 
-        /// <summary>
-        /// Before a hull's guns fire this step: which arcs' volleys go now. A volley goes once the guns covering its arc's
-        /// centre are all loaded (with none, as soon as any gun into it is), and every loaded gun firing into the arc goes
-        /// with it. The telegraph is cleared, to be raised again by the guns still holding (<see cref="Holding"/>).
-        /// </summary>
+        /// <summary>Before a hull's guns fire this step: the telegraph and last step's volleys are cleared, to be worked out
+        /// again by the guns that hold or release this step (<see cref="Releases"/>, <see cref="Holding"/>).</summary>
         public static void BeginVolleys(BattleUnit u)
         {
             var cmd = u.Broadside;
             if (cmd == null) return;
-            cmd.Readying = null;
             cmd.ReadyingOn = null;
             cmd.ReadyingLoaded = 0;
-            foreach (var f in Facings.All)
-            {
-                if (cmd[f] != BatteryOrder.Volley)
-                {
-                    cmd.Releasing[(int)f] = false;
-                    continue;
-                }
-                var (loaded, guns) = Battery(u, f);
-                cmd.Releasing[(int)f] = guns == 0 ? true : loaded == guns;
-            }
+            cmd.Releasing.Clear();
         }
 
-        /// <summary>A gun holds its fire for the volley building on <paramref name="target"/> in <paramref name="f"/>: the
-        /// telegraph shows it, with how loaded the battery is.</summary>
-        public static void Holding(BattleUnit u, Facing f, BattleUnit target)
+        /// <summary>
+        /// Whether the volley on <paramref name="target"/> goes this step: once every gun under a volley order whose cone holds
+        /// the target is loaded (with none, at once), and every loaded one goes with it. Worked out once a step, before any of
+        /// them fires.
+        /// </summary>
+        public static bool Releases(BattleUnit u, BattleUnit target)
         {
             var cmd = u.Broadside;
-            if (cmd == null || cmd.Readying != null) return;
-            var (loaded, guns) = Battery(u, f);
-            cmd.Readying = f;
+            if (cmd == null || target == null) return true;
+            if (cmd.Releasing.TryGetValue(target, out bool go)) return go;
+            var (loaded, guns) = VolleyOn(u, target);
+            go = guns == 0 || loaded == guns;
+            cmd.Releasing[target] = go;
+            return go;
+        }
+
+        /// <summary>A gun holds its fire for the volley building on <paramref name="target"/>: the telegraph shows it, with how
+        /// loaded the guns of the volley bearing on it are.</summary>
+        public static void Holding(BattleUnit u, BattleUnit target)
+        {
+            var cmd = u.Broadside;
+            if (cmd == null || cmd.Readying) return;
+            var (loaded, guns) = VolleyOn(u, target);
             cmd.ReadyingOn = target;
             cmd.ReadyingLoaded = guns == 0 ? 1 : (double)loaded / guns;
         }
@@ -341,45 +369,6 @@ namespace Unity.SpaceGod.Core
             if (shooter == null) return false;
             if (shooter.Broadside != null && shooter.Broadside.SpreadFire) return false;
             return shooter.PlayerControlled || AiFocusFire.Value;
-        }
-
-        // ------------------------------------------------------------ armour
-
-        /// <summary>Armour per face, as a share of the hull's own rating: the bow is heavier, the stern (the engines) lighter.</summary>
-        public static double BowArmour = 1.25, BeamArmour = 1, SternArmour = 0.6;
-
-        /// <summary>
-        /// How a hit travelling along <paramref name="incoming"/> meets <paramref name="target"/>'s armour: which face it
-        /// strikes (the side, unless it comes in within a few degrees of end-on, the hull being five times as long as it is
-        /// broad) and how squarely. Returns the multiplier on the hull's armour rating (the face's thickness over the
-        /// cosine of the strike, at most <see cref="MaxObliquity"/>, scaled by <see cref="ArmourAngling"/>) and the share
-        /// of the hit that is not turned aside (a fully glancing strike loses <see cref="ArmourAngling"/> of it).
-        /// </summary>
-        public static (double armour, double through) Angling(BattleUnit target, DVec3 incoming)
-        {
-            double k = ArmourAngling.Value;
-            if (k <= 0 || incoming.LengthSquared < 1e-18) return (1, 1);
-            var d = incoming.Normalized;
-            target.Basis(out var right, out var up);
-            double dx = DVec3.Dot(d, right), dy = DVec3.Dot(d, up), dz = DVec3.Dot(d, target.Forward);
-            double lateral = Math.Sqrt(dx * dx + dy * dy), along = Math.Abs(dz);
-            double beam = target.Ship?.Combat?.Spec?.BeamFraction ?? 0.2;
-            double face, cos;
-            if (lateral >= along * beam)
-            {
-                face = BeamArmour;
-                cos = lateral;
-            }
-            else
-            {
-                // Coming in from ahead the shot travels aft along the hull and meets the bow.
-                face = dz < 0 ? BowArmour : SternArmour;
-                cos = along;
-            }
-            double obliquity = Math.Min(MaxObliquity, 1 / Math.Max(cos, 1 / MaxObliquity));
-            double armour = 1 + (face * obliquity - 1) * k;
-            double through = 1 - k * (1 - cos);
-            return (Math.Max(0, armour), Math.Max(0, Math.Min(1, through)));
         }
 
         // ------------------------------------------------------------ the brace
@@ -413,7 +402,7 @@ namespace Unity.SpaceGod.Core
             {
                 if (!b.Hostile(u, o) || o.Stunned > 0 || o.Surrendering || o.Captured) continue;
                 var cmd = o.Broadside;
-                if (cmd != null && cmd.Readying != null && cmd.ReadyingOn == u && cmd.ReadyingLoaded >= BraceAtLoaded) return o;
+                if (cmd != null && cmd.Readying && cmd.ReadyingOn == u && cmd.ReadyingLoaded >= BraceAtLoaded) return o;
                 if (o.PlayerControlled && o.PlayerHelm && o.PlayerFireHeld && o.VolleyCharge >= Battle.VolleyBuildSeconds * 0.5 && o.PlayerVolleyAim.LengthSquared > 1e-12)
                 {
                     var to = u.Pos - o.Pos;
@@ -573,15 +562,28 @@ namespace Unity.SpaceGod.Core
             StepDamageControl(u, dt);
         }
 
-        /// <summary>What an AI captain orders on its own (each part a setting): its beam batteries fire in volleys and its
-        /// bow and stern at will, and it braces for a broadside about to come in.</summary>
+        /// <summary>
+        /// What an AI captain orders on its own (each part a setting): the guns whose fire cones overlap another gun's, those
+        /// that can bear on a hull together, fire in volleys (<see cref="AiVolleys"/>), and a gun that bears alone fires at
+        /// will (U.SPC-T533); and it braces for a broadside about to come in.
+        /// </summary>
         static void Doctrine(Battle b, BattleUnit u, BroadsideCommand cmd)
         {
-            var beam = AiVolleys.Value ? BatteryOrder.Volley : BatteryOrder.FireAtWill;
-            cmd[Facing.Bow] = BatteryOrder.FireAtWill;
-            cmd[Facing.Stern] = BatteryOrder.FireAtWill;
-            cmd[Facing.Starboard] = beam;
-            cmd[Facing.Port] = beam;
+            var subs = u.Combat.Subsystems;
+            var spec = u.Combat.Spec;
+            foreach (var s in subs)
+            {
+                if (!IsOrdered(s)) continue;
+                bool together = false;
+                if (AiVolleys.Value && IsBatteryGun(s))
+                    foreach (var o in subs)
+                        if (o != s && IsBatteryGun(o) && FireCones.Overlap(s.Def, o.Def, spec))
+                        {
+                            together = true;
+                            break;
+                        }
+                cmd[s.Index] = together ? BatteryOrder.Volley : BatteryOrder.FireAtWill;
+            }
             if (AiBraces.Value && !cmd.Braced && cmd.BraceCooldown <= 0 && IncomingBroadside(b, u) != null) Brace(u);
         }
 
@@ -699,11 +701,12 @@ namespace Unity.SpaceGod.Core
         public static double ComeAboutSeconds(double turnDegS) => turnDegS <= 0 ? double.PositiveInfinity : 180 / turnDegS;
 
         /// <summary>How long <paramref name="u"/>, turning at <paramref name="turnDegS"/>, takes to swing
-        /// <paramref name="target"/>'s bearing onto the centre of its <paramref name="f"/> arc, s.</summary>
-        public static double SecondsToBear(BattleUnit u, BattleUnit target, Facing f, double turnDegS)
+        /// <paramref name="target"/> into <paramref name="gun"/>'s fire cone, s (0 if it already bears).</summary>
+        public static double SecondsToBear(BattleUnit u, BattleUnit target, Subsystem gun, double turnDegS)
         {
+            if (u.Bears(gun.Def, target.Pos)) return 0;
             if (turnDegS <= 0) return double.PositiveInfinity;
-            return Facings.OffDeg(u.YawDegOf(target.Pos), f) / turnDegS;
+            return FireCones.OutsideDeg(gun.Def, u.Combat.Spec, u.DirToLocal(target.Pos - u.Pos)) / turnDegS;
         }
     }
 }

@@ -141,13 +141,13 @@ namespace Unity.SpaceGod.Core.Tests
         public void AMountIsNeverLaidOutsideItsArcNorASpinalGunPastItsGimbal()
         {
             var u = new BattleUnit { Forward = DVec3.UnitX, LengthKm = 0.5 };
-            var starboard = new SubsystemDef(SubsystemKind.LaserTurret, 0.2, 0, 0, arcCenterDeg: 90, arcWidthDeg: 90);
+            var starboard = new SubsystemDef(SubsystemKind.LaserTurret, 0.2, 0, 0, coneAxis: FireCones.Starboard, coneHalfDeg: 45);
             var bounded = MountedTurret.Bound(u, starboard, DVec3.UnitX);
             Assert.That(u.YawDegOf(u.Pos + bounded), Is.EqualTo(45).Within(1e-6), "bow is outside a starboard battery's arc: held at its forward edge");
             var inside = MountedTurret.Bound(u, starboard, -DVec3.UnitY);
             Assert.That(AngleDeg(inside, -DVec3.UnitY), Is.LessThan(1e-9), "straight out to starboard is inside it");
 
-            var spinal = new SubsystemDef(SubsystemKind.Railgun, 0, 0, 0.4, arcCenterDeg: 0, arcWidthDeg: 360);
+            var spinal = new SubsystemDef(SubsystemKind.Railgun, 0, 0, 0.4);
             Assert.That(AngleDeg(MountedTurret.Bound(u, spinal, DVec3.UnitY), DVec3.UnitX), Is.EqualTo(Gunnery.RailgunGimbalDeg).Within(1e-6));
         }
 

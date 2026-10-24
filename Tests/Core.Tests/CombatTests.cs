@@ -259,7 +259,9 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var layout = CombatSpec.Of(ShipClass.Destroyer).Layout;
             var rail = Expect.Single(layout, s => s.Kind == SubsystemKind.Railgun);
-            Assert.That(rail.ArcWidthDeg < 360, Is.True, "a railgun should be a fixed spinal mount, not omnidirectional");
+            Assert.That(rail.BearsEverywhere, Is.False, "a railgun should be a fixed spinal mount, not omnidirectional");
+            Assert.That(FireCones.IsFixed(rail), Is.True, "laid along the keel by the hull");
+            Assert.That(rail.Covers(CombatSpec.Of(ShipClass.Destroyer), FireCones.Bow), Is.True);
 
             var w = rail.Weapon;
             Assert.That(w, Is.Not.Null);

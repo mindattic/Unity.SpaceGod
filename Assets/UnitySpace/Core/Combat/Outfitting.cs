@@ -113,8 +113,14 @@ namespace Unity.SpaceGod.Core
         /// only on a mount that bears on the bow or is a fixed launcher (<see cref="OutfitSlot.Spinal"/>).</summary>
         public readonly bool Spinal;
 
-        ModuleSpec(ModuleKind kind, string name, double mass, bool scaled, MountType? mount, HardpointSize size, bool spinal, params (Good, double)[] bill)
+        /// <summary>How far a weapon of this module can bear off its mount's axis, deg (U.SPC-T533, see <see cref="FireCones"/>): a
+        /// turret's wide cone round its mount's normal, a spinal or fixed part's narrow one along the keel (180 for a part that
+        /// aims nothing). A hull frame may give a hardpoint its own (<see cref="SubsystemDef.ConeHalfDeg"/>).</summary>
+        public readonly double ConeHalfDeg;
+
+        ModuleSpec(ModuleKind kind, string name, double mass, bool scaled, MountType? mount, HardpointSize size, bool spinal, double coneHalfDeg, params (Good, double)[] bill)
         {
+            ConeHalfDeg = coneHalfDeg;
             Kind = kind;
             Name = name;
             MassTonnes = mass;
@@ -129,46 +135,48 @@ namespace Unity.SpaceGod.Core
         const HardpointSize S = HardpointSize.Small, M = HardpointSize.Medium, L = HardpointSize.Large;
 
         // Each module's mount type and size (U.SPC-T508): the light guns and launchers (and a phaser array, light enough
-        // for a point-defence mount) are small, the heavy guns, tubes and launchers medium, the tachyon lance large.
+        // for a point-defence mount) are small, the heavy guns, tubes and launchers medium, the tachyon lance large. Then its
+        // fire cone's half-angle (U.SPC-T533): turrets wide (a hemisphere and more round the mount's normal, the heavy guns'
+        // and the light railgun's slower mountings less), the spinal and fixed parts narrow along the keel.
         static readonly ModuleSpec[] All =
         {
-            new ModuleSpec(ModuleKind.LaserTurret, "Laser turret", 120, false, E, S, false, (Good.Alloys, 40), (Good.Electronics, 12), (Good.Machinery, 6)),
-            new ModuleSpec(ModuleKind.HeavyLaser, "Heavy laser", 300, false, E, M, false, (Good.Alloys, 90), (Good.Electronics, 30), (Good.Machinery, 14)),
-            new ModuleSpec(ModuleKind.Railgun, "Railgun", 420, false, B, M, true, (Good.Alloys, 120), (Good.Electronics, 20), (Good.Machinery, 30)),
+            new ModuleSpec(ModuleKind.LaserTurret, "Laser turret", 120, false, E, S, false, 110, (Good.Alloys, 40), (Good.Electronics, 12), (Good.Machinery, 6)),
+            new ModuleSpec(ModuleKind.HeavyLaser, "Heavy laser", 300, false, E, M, false, 100, (Good.Alloys, 90), (Good.Electronics, 30), (Good.Machinery, 14)),
+            new ModuleSpec(ModuleKind.Railgun, "Railgun", 420, false, B, M, true, 10, (Good.Alloys, 120), (Good.Electronics, 20), (Good.Machinery, 30)),
             // A launcher comes with its first full load: 16 rounds at the 1.5 t a round a yard rearms at.
-            new ModuleSpec(ModuleKind.MissileLauncher, "Missile launcher", 160, false, Mi, S, false, (Good.Alloys, 50), (Good.Electronics, 15), (Good.Machinery, 10), (Good.Munitions, 24)),
-            new ModuleSpec(ModuleKind.PointDefense, "Point defence", 40, false, E, S, false, (Good.Alloys, 15), (Good.Electronics, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
-            new ModuleSpec(ModuleKind.ShieldGenerator, "Shield generator", 60, true, Sh, S, false, (Good.Alloys, 30), (Good.Electronics, 20)),
-            new ModuleSpec(ModuleKind.HardenedShield, "Hardened shield", 90, true, Sh, S, false, (Good.Alloys, 50), (Good.Electronics, 45), (Good.Machinery, 5)),
-            new ModuleSpec(ModuleKind.Engine, "Fusion drive", 150, true, En, S, false, (Good.Alloys, 60), (Good.Machinery, 30), (Good.Electronics, 5)),
-            new ModuleSpec(ModuleKind.TorchEngine, "Torch drive", 190, true, En, S, false, (Good.Alloys, 90), (Good.Machinery, 55), (Good.Electronics, 12)),
-            new ModuleSpec(ModuleKind.ArmourPlating, "Armour plating", 450, true, null, S, false, (Good.Alloys, 300), (Good.Machinery, 4)),
-            new ModuleSpec(ModuleKind.CargoRack, "Cargo racks", 120, true, null, S, false, (Good.Alloys, 80), (Good.Machinery, 10)),
-            new ModuleSpec(ModuleKind.Scanner, "Scanner suite", 25, false, null, S, false, (Good.Electronics, 25), (Good.Alloys, 10)),
-            new ModuleSpec(ModuleKind.Brig, "Brig", 80, false, null, S, false, (Good.Alloys, 40), (Good.Electronics, 6), (Good.Machinery, 4)),
-            new ModuleSpec(ModuleKind.Autocannon, "Autocannon", 20, false, B, S, false, (Good.Alloys, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
-            new ModuleSpec(ModuleKind.LightRailgun, "Light railgun", 35, false, B, S, false, (Good.Alloys, 12), (Good.Electronics, 6), (Good.Machinery, 5)),
-            new ModuleSpec(ModuleKind.EmpLauncher, "EMP launcher", 25, false, Mi, S, false, (Good.Alloys, 6), (Good.Electronics, 14), (Good.Munitions, 2)),
-            new ModuleSpec(ModuleKind.MineLayer, "Mine layer", 40, false, Mi, S, false, (Good.Alloys, 10), (Good.Machinery, 4), (Good.Munitions, 9)),
-            new ModuleSpec(ModuleKind.AutoTurret, "Auto turret", 30, false, B, S, false, (Good.Alloys, 10), (Good.Electronics, 9), (Good.Machinery, 4), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.MissileLauncher, "Missile launcher", 160, false, Mi, S, false, 120, (Good.Alloys, 50), (Good.Electronics, 15), (Good.Machinery, 10), (Good.Munitions, 24)),
+            new ModuleSpec(ModuleKind.PointDefense, "Point defence", 40, false, E, S, false, 120, (Good.Alloys, 15), (Good.Electronics, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.ShieldGenerator, "Shield generator", 60, true, Sh, S, false, 180, (Good.Alloys, 30), (Good.Electronics, 20)),
+            new ModuleSpec(ModuleKind.HardenedShield, "Hardened shield", 90, true, Sh, S, false, 180, (Good.Alloys, 50), (Good.Electronics, 45), (Good.Machinery, 5)),
+            new ModuleSpec(ModuleKind.Engine, "Fusion drive", 150, true, En, S, false, 180, (Good.Alloys, 60), (Good.Machinery, 30), (Good.Electronics, 5)),
+            new ModuleSpec(ModuleKind.TorchEngine, "Torch drive", 190, true, En, S, false, 180, (Good.Alloys, 90), (Good.Machinery, 55), (Good.Electronics, 12)),
+            new ModuleSpec(ModuleKind.ArmourPlating, "Armour plating", 450, true, null, S, false, 180, (Good.Alloys, 300), (Good.Machinery, 4)),
+            new ModuleSpec(ModuleKind.CargoRack, "Cargo racks", 120, true, null, S, false, 180, (Good.Alloys, 80), (Good.Machinery, 10)),
+            new ModuleSpec(ModuleKind.Scanner, "Scanner suite", 25, false, null, S, false, 180, (Good.Electronics, 25), (Good.Alloys, 10)),
+            new ModuleSpec(ModuleKind.Brig, "Brig", 80, false, null, S, false, 180, (Good.Alloys, 40), (Good.Electronics, 6), (Good.Machinery, 4)),
+            new ModuleSpec(ModuleKind.Autocannon, "Autocannon", 20, false, B, S, false, 110, (Good.Alloys, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.LightRailgun, "Light railgun", 35, false, B, S, false, 90, (Good.Alloys, 12), (Good.Electronics, 6), (Good.Machinery, 5)),
+            new ModuleSpec(ModuleKind.EmpLauncher, "EMP launcher", 25, false, Mi, S, false, 110, (Good.Alloys, 6), (Good.Electronics, 14), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.MineLayer, "Mine layer", 40, false, Mi, S, false, 180, (Good.Alloys, 10), (Good.Machinery, 4), (Good.Munitions, 9)),
+            new ModuleSpec(ModuleKind.AutoTurret, "Auto turret", 30, false, B, S, false, 120, (Good.Alloys, 10), (Good.Electronics, 9), (Good.Machinery, 4), (Good.Munitions, 2)),
             // A tube comes with its six torpedoes at 6 t a round.
-            new ModuleSpec(ModuleKind.TorpedoTube, "Torpedo tube", 260, false, Mi, M, true, (Good.Alloys, 70), (Good.Electronics, 18), (Good.Machinery, 16), (Good.Munitions, 36)),
+            new ModuleSpec(ModuleKind.TorpedoTube, "Torpedo tube", 260, false, Mi, M, true, 15, (Good.Alloys, 70), (Good.Electronics, 18), (Good.Machinery, 16), (Good.Munitions, 36)),
             // The tachyon lance (U.SPC-T487): its own power plant and capacitor banks, and the platinum and rare earths of
             // its emitter, some eight times a railgun's worth.
-            new ModuleSpec(ModuleKind.TachyonLance, "Tachyon lance", 950, false, E, L, true, (Good.Alloys, 260), (Good.Electronics, 180), (Good.Machinery, 90), (Good.Platinum, 30), (Good.RareEarths, 45)),
+            new ModuleSpec(ModuleKind.TachyonLance, "Tachyon lance", 950, false, E, L, true, 10, (Good.Alloys, 260), (Good.Electronics, 180), (Good.Machinery, 90), (Good.Platinum, 30), (Good.RareEarths, 45)),
             // Energy weapons (U.SPC-T488): an array is mostly emitters and their power conditioning; a plasma cannon a
             // magnetic bottle, its injectors and heavy plate round both.
-            new ModuleSpec(ModuleKind.PhaserArray, "Phaser array", 200, false, E, S, false, (Good.Alloys, 55), (Good.Electronics, 40), (Good.Machinery, 10)),
-            new ModuleSpec(ModuleKind.PlasmaCannon, "Plasma cannon", 380, false, E, M, false, (Good.Alloys, 120), (Good.Electronics, 30), (Good.Machinery, 28)),
+            new ModuleSpec(ModuleKind.PhaserArray, "Phaser array", 200, false, E, S, false, 110, (Good.Alloys, 55), (Good.Electronics, 40), (Good.Machinery, 10)),
+            new ModuleSpec(ModuleKind.PlasmaCannon, "Plasma cannon", 380, false, E, M, false, 90, (Good.Alloys, 120), (Good.Electronics, 30), (Good.Machinery, 28)),
 
             // Four antimatter rounds at 9 t a round: the containment is most of the price.
-            new ModuleSpec(ModuleKind.AntimatterTorpedo, "Antimatter torpedo", 300, false, Mi, M, true, (Good.Alloys, 80), (Good.Electronics, 40), (Good.Machinery, 18), (Good.Munitions, 36)),
-            new ModuleSpec(ModuleKind.FlakCannon, "Flak cannon", 70, false, B, S, false, (Good.Alloys, 25), (Good.Electronics, 6), (Good.Machinery, 8), (Good.Munitions, 6)),
+            new ModuleSpec(ModuleKind.AntimatterTorpedo, "Antimatter torpedo", 300, false, Mi, M, true, 15, (Good.Alloys, 80), (Good.Electronics, 40), (Good.Machinery, 18), (Good.Munitions, 36)),
+            new ModuleSpec(ModuleKind.FlakCannon, "Flak cannon", 70, false, B, S, false, 120, (Good.Alloys, 25), (Good.Electronics, 6), (Good.Machinery, 8), (Good.Munitions, 6)),
             // Twenty interceptors at 0.6 t a round.
-            new ModuleSpec(ModuleKind.InterceptorMissile, "Interceptor missiles", 90, false, Mi, S, false, (Good.Alloys, 25), (Good.Electronics, 16), (Good.Machinery, 5), (Good.Munitions, 12)),
+            new ModuleSpec(ModuleKind.InterceptorMissile, "Interceptor missiles", 90, false, Mi, S, false, 120, (Good.Alloys, 25), (Good.Electronics, 16), (Good.Machinery, 5), (Good.Munitions, 12)),
             // A spinal coilgun (U.SPC-T490): the coils and their capacitors down a battleship's keel, a little cheaper than a
             // spinal railgun's rails. Only a spinal mount takes one.
-            new ModuleSpec(ModuleKind.Coilgun, "Coilgun", 1400, false, B, L, true, (Good.Alloys, 380), (Good.Electronics, 90), (Good.Machinery, 110)),
+            new ModuleSpec(ModuleKind.Coilgun, "Coilgun", 1400, false, B, L, true, 10, (Good.Alloys, 380), (Good.Electronics, 90), (Good.Machinery, 110)),
         };
 
         public static ModuleSpec Of(ModuleKind k) => All[(int)k];
@@ -280,7 +288,7 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// What is fitted into a hull (U.SPC-T65), over the design it was built as, in two kinds of part (U.SPC-T470).
-    /// Its hardpoints (<see cref="Slots"/>) are places on the hull's surface with a position and an arc: each refittable
+    /// Its hardpoints (<see cref="Slots"/>) are places on the hull's surface with a position and a fire cone: each refittable
     /// mount of the design (guns and launchers, point defence, torpedo tubes, shield generators, engines). Its
     /// facilities (<see cref="Facilities"/>) are inside the body of the ship and have only a size: the structure the
     /// hull is designed with (bridge, engineering, quarters, hangar, holds) and whatever a yard fits into the free
@@ -338,7 +346,7 @@ namespace Unity.SpaceGod.Core
                 if (!(StockOf(d.Kind) is ModuleKind stock) || !(ModuleSpec.Of(stock).Mount is MountType type)) continue;
                 // A spinal mount is its own type of hardpoint, whatever gun is in it, and large (U.SPC-T490).
                 if (d.Spinal) Slots.Add(new OutfitSlot(MountType.Spinal, HardpointSize.Large, i, stock, true));
-                else Slots.Add(new OutfitSlot(type, MountSize(d.Kind, stock, smallCraft, design.LengthKm), i, stock, d.ContainsYaw(0)));
+                else Slots.Add(new OutfitSlot(type, MountSize(d.Kind, stock, smallCraft, design.LengthKm), i, stock, d.Covers(design, FireCones.Bow)));
             }
             Fitted = new ModuleKind?[Slots.Count];
             for (int i = 0; i < Slots.Count; i++) Fitted[i] = Slots[i].Stock;
@@ -540,7 +548,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// The hull's fighting spec with this loadout: each refitted hardpoint swapped in place (same position and
-        /// arc), shield and regen shared by the generators' grades, hull and armour raised by plate, each facility's own
+        /// hull-frame fire cone), shield and regen shared by the generators' grades, hull and armour raised by plate, each facility's own
         /// <see cref="FacilityKind.Effect"/>, the drive's thrust by its engines' mean grade, and every added tonne of dry
         /// mass slowing it.
         /// </summary>
@@ -567,11 +575,16 @@ namespace Unity.SpaceGod.Core
                     spec.Layout[slot.LayoutIndex] = SpinalMounts.Mount(m, was);
                     continue;
                 }
-                var def = new SubsystemDef(ModuleSpec.SubsystemOf(m), was.X, was.Y, was.Z, was.FacesAft, was.ArcCenterDeg, was.ArcWidthDeg) { Rating = rating };
+                // The hull frame's own cone for the hardpoint carries over; where it has none, the new part's module gives it (U.SPC-T533).
+                var def = new SubsystemDef(ModuleSpec.SubsystemOf(m), was.X, was.Y, was.Z, was.FacesAft, was.ConeAxis, was.ConeHalfDeg) { Rating = rating };
                 if (m == ModuleKind.HardenedShield) def.MaxHp *= 1.4;
                 if (m == ModuleKind.TorchEngine) def.MaxHp *= 1.2;
-                // A lance is spinal: whatever the mount's arc was, it fires only down the bow (U.SPC-T487).
-                if (m == ModuleKind.TachyonLance) def.ArcWidthDeg = Math.Min(was.ArcWidthDeg, TachyonLances.ArcWidthDeg);
+                // A lance is spinal: whatever the mount's cone was, it fires only down the keel (U.SPC-T487).
+                if (m == ModuleKind.TachyonLance)
+                {
+                    def.ConeAxis = FireCones.Bow;
+                    def.ConeHalfDeg = Math.Min(was.ConeHalfDeg ?? TachyonLances.ConeHalfDeg, TachyonLances.ConeHalfDeg);
+                }
                 spec.Layout[slot.LayoutIndex] = def;
             }
             if (baseGenerators > 0)

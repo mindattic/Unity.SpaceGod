@@ -1678,7 +1678,7 @@ namespace Unity.SpaceGod
             unit.Pos = pilotOffsetKm - ship.Battle.Anchor;
             unit.Vel = pilotVelKmS;
             unit.Forward = pilotForward;
-            // Rolled at the helm, its arcs roll with it (U.SPC-T499).
+            // Rolled at the helm, its fire cones roll with it (U.SPC-T499, U.SPC-T533).
             unit.Up = pilot.Up;
             // No firing while cruising -- the cruise drive is a travel tier, not a combat one.
             // Nor while a pulse has the hull's systems down.

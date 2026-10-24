@@ -92,7 +92,8 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(t.Weapon.Ammo, Is.GreaterThan(WeaponSpec.AntimatterTorpedo.Ammo), "a deep magazine");
             }
             // Every launcher bears forward: it strikes nose-on.
-            Assert.That(racks.Concat(tubes).All(d => d.ContainsYaw(0) && !d.ContainsYaw(180)), Is.True);
+            var frigate = CombatSpec.Of(ShipClass.Frigate);
+            Assert.That(racks.Concat(tubes).All(d => d.Covers(frigate, FireCones.Bow) && !d.Covers(frigate, FireCones.Stern)), Is.True);
 
             // A hull keeps its deep magazines: a new hull's launchers are loaded to them.
             var ship = Hull(ShipClass.Frigate, Blue, 1);

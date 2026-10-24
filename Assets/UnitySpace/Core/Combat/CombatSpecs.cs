@@ -221,10 +221,15 @@ namespace Unity.SpaceGod.Core
         /// <summary>Turrets facing aft rest pointing backwards.</summary>
         public bool FacesAft;
 
-        /// <summary>Yaw-plane mount arc, degrees (0 = bow, 90 = starboard, 180 = stern, 270 = port): for a weapon, the arc it
-        /// can fire into. The default (0, 360) covers every direction, matching omnidirectional coverage. A shield emitter has
-        /// no arc: its field covers the patch of hull around where it sits (U.SPC-T501, see <see cref="ShipCombat.PatchAt"/>).</summary>
-        public double ArcCenterDeg, ArcWidthDeg = 360;
+        /// <summary>The hull frame's own aiming direction for a weapon on this hardpoint (U.SPC-T533, see <see cref="FireCones"/>),
+        /// unit, in the hull frame (right, up, forward), or null for the mount's own normal (along the keel for a fixed
+        /// mount). A shield emitter aims nothing: its field covers the patch of hull around where it sits (U.SPC-T501, see
+        /// <see cref="ShipCombat.PatchAt"/>).</summary>
+        public DVec3? ConeAxis;
+
+        /// <summary>The hull frame's own half-angle for a weapon on this hardpoint, deg, or null for the module's
+        /// (<see cref="ModuleSpec.ConeHalfDeg"/>). 180 bears everywhere.</summary>
+        public double? ConeHalfDeg;
 
         /// <summary>The grade of what is fitted here (U.SPC-T65), 1 for the design's own part: a hardened
         /// shield generator's share of the hull's shield and regen against a stock one's, or a torch drive's
@@ -239,28 +244,35 @@ namespace Unity.SpaceGod.Core
         /// with its muzzle at the bow, that the hull itself lays on the target and a spinal power plant feeds.</summary>
         public bool Spinal;
 
-        public SubsystemDef(SubsystemKind kind, double x, double y, double z, bool facesAft = false, double arcCenterDeg = 0, double arcWidthDeg = 360)
+        /// <param name="coneAxis">The hull frame's aiming direction for the hardpoint (see <see cref="ConeAxis"/>), or null for the mount's normal.</param>
+        /// <param name="coneHalfDeg">The hull frame's half-angle for it (see <see cref="ConeHalfDeg"/>), or null for its module's.</param>
+        public SubsystemDef(SubsystemKind kind, double x, double y, double z, bool facesAft = false, DVec3? coneAxis = null, double? coneHalfDeg = null)
         {
             Kind = kind;
             X = x;
             Y = y;
             Z = z;
             FacesAft = facesAft;
-            ArcCenterDeg = arcCenterDeg;
-            ArcWidthDeg = arcWidthDeg;
+            ConeAxis = coneAxis;
+            ConeHalfDeg = coneHalfDeg;
             MaxHp = DefaultHp(kind);
             Weapon = DefaultWeapon(kind);
         }
 
         public bool IsWeapon => Weapon != null;
 
-        /// <summary>Whether a yaw angle (degrees, 0 = bow) falls within this mount's arc.</summary>
-        public bool ContainsYaw(double yawDeg)
-        {
-            double diff = Astro.WrapDegrees360(yawDeg - ArcCenterDeg);
-            if (diff > 180) diff -= 360;
-            return Math.Abs(diff) <= ArcWidthDeg * 0.5;
-        }
+        /// <summary>How far this mount can bear off its axis, deg, at the settings' scale (see <see cref="FireCones.HalfDeg"/>).</summary>
+        public double HalfDeg => FireCones.HalfDeg(this);
+
+        /// <summary>Whether this mount bears everywhere (a cone as wide as the sky).</summary>
+        public bool BearsEverywhere => HalfDeg >= 180;
+
+        /// <summary>The direction this mount aims about on a hull of <paramref name="spec"/>'s beam, hull frame (see <see cref="FireCones.Axis(SubsystemDef, CombatSpec)"/>).</summary>
+        public DVec3 AxisOn(CombatSpec spec) => FireCones.Axis(this, spec);
+
+        /// <summary>Whether a direction in the hull frame (right, up, forward) lies inside this mount's cone on a hull of
+        /// <paramref name="spec"/>'s beam (U.SPC-T533).</summary>
+        public bool Covers(CombatSpec spec, DVec3 dirLocal) => FireCones.Covers(this, spec, dirLocal);
 
         /// <summary>Hardpoints are built to take punishment; a capital ship loses guns one at a time.</summary>
         /// <summary>A radiator panel is the exception (U.SPC-T491): a thin sheet out in the open, not built to take a hit.</summary>
@@ -470,10 +482,10 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Hangar, 0, 0.012, 0.44),
                     new SubsystemDef(SubsystemKind.Hangar, 0.125, -0.01, 0.12),
                     new SubsystemDef(SubsystemKind.Hangar, -0.125, -0.01, 0.12),
-                    new SubsystemDef(SubsystemKind.LaserTurret, 0.09, 0.055, 0.3, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.LaserTurret, -0.09, 0.055, 0.3, arcCenterDeg: 270, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.12, 0.035, -0.06, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.12, 0.035, -0.06, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0.09, 0.055, 0.3, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.LaserTurret, -0.09, 0.055, 0.3, coneAxis: FireCones.Port, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.12, 0.035, -0.06, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.12, 0.035, -0.06, coneAxis: FireCones.Port, coneHalfDeg: 75),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.1, 0.055, 0.42),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.1, 0.055, 0.42),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.12, 0.035, -0.3),
@@ -492,7 +504,7 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, 0.075, 0, -0.49),
                     new SubsystemDef(SubsystemKind.Reactor, 0, -0.01, -0.3),
                     // A dorsal antimatter torpedo launcher on the bow (U.SPC-T489): a capital's heavy guided warhead.
-                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0, 0.06, 0.36, arcCenterDeg: 0, arcWidthDeg: 90),
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0, 0.06, 0.36, coneAxis: FireCones.Bow, coneHalfDeg: 45),
                 },
             } },
             [ShipClass.Battleship] = new[] { new CombatSpec
@@ -506,13 +518,13 @@ namespace Unity.SpaceGod.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.045, -0.3),
-                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.045, 0.20, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.06, 0.07, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.045, -0.28, true, arcCenterDeg: 180, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.LaserTurret, 0.06, 0.05, -0.02, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.LaserTurret, -0.06, 0.05, -0.02, arcCenterDeg: 270, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.07, 0.0, 0.14, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.07, 0.0, 0.14, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.045, 0.20, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.06, 0.07, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.045, -0.28, true, coneAxis: FireCones.Stern, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0.06, 0.05, -0.02, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.LaserTurret, -0.06, 0.05, -0.02, coneAxis: FireCones.Port, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.07, 0.0, 0.14, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.07, 0.0, 0.14, coneAxis: FireCones.Port, coneHalfDeg: 75),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.075, 0.03, 0.27),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.075, 0.03, 0.27),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.075, 0.03, -0.36),
@@ -531,10 +543,10 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, 0.042, 0, -0.48),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.22),
                     // A pair of bow torpedo tubes under the forward heavy battery (U.SPC-T377).
-                    new SubsystemDef(SubsystemKind.TorpedoTube, 0.03, -0.025, 0.46, arcCenterDeg: 0, arcWidthDeg: 60),
-                    new SubsystemDef(SubsystemKind.TorpedoTube, -0.03, -0.025, 0.46, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.TorpedoTube, 0.03, -0.025, 0.46, coneAxis: FireCones.Bow, coneHalfDeg: 30),
+                    new SubsystemDef(SubsystemKind.TorpedoTube, -0.03, -0.025, 0.46, coneAxis: FireCones.Bow, coneHalfDeg: 30),
                     // A dorsal antimatter torpedo launcher ahead of the forward battery (U.SPC-T489).
-                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0, 0.05, 0.33, arcCenterDeg: 0, arcWidthDeg: 90),
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0, 0.05, 0.33, coneAxis: FireCones.Bow, coneHalfDeg: 45),
                     // The two ship-length spinal mounts it is built around (U.SPC-T490, see SpinalMounts): a railgun down the
                     // dorsal keel and a coilgun down the ventral, their muzzles at the bow, each fed by a spinal power plant.
                     SpinalMounts.Mount(ModuleKind.Railgun, 0, 0.025, 0.5),
@@ -552,10 +564,10 @@ namespace Unity.SpaceGod.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.03, 0.05),
-                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.15, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.0, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.1, 0.014, -0.05, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.1, 0.014, -0.05, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.15, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.03, 0.0, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.1, 0.014, -0.05, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.1, 0.014, -0.05, coneAxis: FireCones.Port, coneHalfDeg: 75),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.045, 0.025, 0.3),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.045, 0.025, 0.3),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
@@ -571,7 +583,7 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Engine, -0.1, 0, -0.225),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
                     // One bow torpedo tube in the keel (U.SPC-T377).
-                    new SubsystemDef(SubsystemKind.TorpedoTube, 0, -0.02, 0.45, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.TorpedoTube, 0, -0.02, 0.45, coneAxis: FireCones.Bow, coneHalfDeg: 30),
                 },
             } },
             [ShipClass.Destroyer] = new[] { new CombatSpec
@@ -587,8 +599,8 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.035, 0.0),
                     // A fixed spinal railgun rather than a turret: the Destroyer's whole identity is
                     // closing fast to bring its nose to bear, then landing one hard shot.
-                    new SubsystemDef(SubsystemKind.Railgun, 0, 0.03, 0.3, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.07, -0.25, arcCenterDeg: 0, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.Railgun, 0, 0.03, 0.3, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.07, -0.25, coneAxis: FireCones.Bow, coneHalfDeg: 75),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.05, 0.02, 0.2),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.05, 0.02, 0.2),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
@@ -660,7 +672,7 @@ namespace Unity.SpaceGod.Core
                 {
                     new SubsystemDef(SubsystemKind.Drill, 0, 0, 0.45),
                     // A heavy forward gun to clear its way in, piloted the same way as any other forward-mounted gun.
-                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.03, 0.3, arcCenterDeg: 0, arcWidthDeg: 50),
+                    new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.03, 0.3, coneAxis: FireCones.Bow, coneHalfDeg: 25),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, 0.05),
                     // Its utility mount: an auto turret on the spine, covering it from fighters while it closes to latch (U.SPC-T278).
                     new SubsystemDef(SubsystemKind.AutoTurret, 0, 0.06, -0.2),
@@ -685,7 +697,7 @@ namespace Unity.SpaceGod.Core
                     // The "light fighter": the fastest, most agile hull in the game carries the
                     // fastest-firing forward gun to match -- rapid, low-damage autocannon fire, not a
                     // single hard-hitting shot.
-                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.01, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.01, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20),
                     // Its utility mount: an EMP launcher to stop what it cannot outgun (U.SPC-T271).
                     new SubsystemDef(SubsystemKind.EmpLauncher, 0, -0.03, 0),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.035, 0.05),
@@ -707,8 +719,8 @@ namespace Unity.SpaceGod.Core
                 {
                     // A dedicated dogfighter: twin forward guns rather than the Courier's single gun,
                     // traded against a lighter hull than either existing "fighter" archetype.
-                    new SubsystemDef(SubsystemKind.Autocannon, -0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
-                    new SubsystemDef(SubsystemKind.Autocannon, 0.09, 0, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, -0.09, 0, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0.09, 0, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20),
                     // Its utility mount: a missile rack (U.SPC-T271).
                     new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.03, 0),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.035, 0.05),
@@ -730,7 +742,7 @@ namespace Unity.SpaceGod.Core
                 DryMassTonnes = 2400, PropellantTonnes = 2600, ExhaustVelocityKmS = 4500,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.35, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.35, coneAxis: FireCones.Bow, coneHalfDeg: 30),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.05, 0.1),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.06, 0.2),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, 0.2),
@@ -753,7 +765,7 @@ namespace Unity.SpaceGod.Core
                 DryMassTonnes = 1400, PropellantTonnes = 700, ExhaustVelocityKmS = 3500,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.LightRailgun, 0, -0.02, 0.4, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.LightRailgun, 0, -0.02, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 20),
                     new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.06, 0.1),
                     new SubsystemDef(SubsystemKind.LaserTurret, 0, -0.06, -0.05),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.06, -0.2),
@@ -801,8 +813,8 @@ namespace Unity.SpaceGod.Core
                 DryMassTonnes = 35, PropellantTonnes = 25, ExhaustVelocityKmS = 3200,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.Autocannon, -0.07, 0, 0.12, arcCenterDeg: 0, arcWidthDeg: 40),
-                    new SubsystemDef(SubsystemKind.Autocannon, 0.07, 0, 0.12, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, -0.07, 0, 0.12, coneAxis: FireCones.Bow, coneHalfDeg: 20),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0.07, 0, 0.12, coneAxis: FireCones.Bow, coneHalfDeg: 20),
                     new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.03, 0),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.03, 0.08),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, 0.03),
@@ -824,9 +836,9 @@ namespace Unity.SpaceGod.Core
                 DryMassTonnes = 160, PropellantTonnes = 70, ExhaustVelocityKmS = 3000,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.TorpedoTube, -0.08, -0.03, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
-                    new SubsystemDef(SubsystemKind.TorpedoTube, 0.08, -0.03, 0.1, arcCenterDeg: 0, arcWidthDeg: 40),
-                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.3, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.TorpedoTube, -0.08, -0.03, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20),
+                    new SubsystemDef(SubsystemKind.TorpedoTube, 0.08, -0.03, 0.1, coneAxis: FireCones.Bow, coneHalfDeg: 20),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.3, coneAxis: FireCones.Bow, coneHalfDeg: 20),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.04, -0.3),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.04, 0.15),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, 0.05),
@@ -849,7 +861,7 @@ namespace Unity.SpaceGod.Core
                 DryMassTonnes = 40, PropellantTonnes = 30, ExhaustVelocityKmS = 3300,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.15, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.15, coneAxis: FireCones.Bow, coneHalfDeg: 20),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.03, 0.1),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, 0.03),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, -0.2),
@@ -892,7 +904,7 @@ namespace Unity.SpaceGod.Core
                 DryMassTonnes = 700, PropellantTonnes = 500, ExhaustVelocityKmS = 3500,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.3, arcCenterDeg: 0, arcWidthDeg: 60),
+                    new SubsystemDef(SubsystemKind.Autocannon, 0, -0.02, 0.3, coneAxis: FireCones.Bow, coneHalfDeg: 30),
                     new SubsystemDef(SubsystemKind.PointDefense, 0, 0.05, 0.05),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.04, 0.15),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, 0.15),
@@ -936,10 +948,10 @@ namespace Unity.SpaceGod.Core
                 DryMassTonnes = 70000, PropellantTonnes = 35000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
                 {
-                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.04, 0.22, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.04, -0.3, true, arcCenterDeg: 180, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.09, 0.02, 0.0, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.09, 0.02, 0.0, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.04, 0.22, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.04, -0.3, true, coneAxis: FireCones.Stern, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.09, 0.02, 0.0, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.09, 0.02, 0.0, coneAxis: FireCones.Port, coneHalfDeg: 75),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.05, 0.03, 0.3),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.05, 0.03, 0.3),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.06, 0.03, -0.32),
@@ -976,13 +988,13 @@ namespace Unity.SpaceGod.Core
                 Layout = new[]
                 {
                     // The anti-ship missile racks, either side of the spine, bearing forward.
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.06, 0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
-                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.06, 0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.06, -0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
-                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.06, -0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.06, 0.035, 0.15, coneAxis: FireCones.Bow, coneHalfDeg: 75) { Weapon = AlphaStrike.AntiShipMissile },
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.06, 0.035, 0.15, coneAxis: FireCones.Bow, coneHalfDeg: 75) { Weapon = AlphaStrike.AntiShipMissile },
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.06, -0.035, 0.15, coneAxis: FireCones.Bow, coneHalfDeg: 75) { Weapon = AlphaStrike.AntiShipMissile },
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.06, -0.035, 0.15, coneAxis: FireCones.Bow, coneHalfDeg: 75) { Weapon = AlphaStrike.AntiShipMissile },
                     // Two antimatter (photon) torpedo launchers in the bow.
-                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0.03, 0, 0.42, arcCenterDeg: 0, arcWidthDeg: 90) { Weapon = AlphaStrike.MagazineTorpedo },
-                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, -0.03, 0, 0.42, arcCenterDeg: 0, arcWidthDeg: 90) { Weapon = AlphaStrike.MagazineTorpedo },
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0.03, 0, 0.42, coneAxis: FireCones.Bow, coneHalfDeg: 45) { Weapon = AlphaStrike.MagazineTorpedo },
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, -0.03, 0, 0.42, coneAxis: FireCones.Bow, coneHalfDeg: 45) { Weapon = AlphaStrike.MagazineTorpedo },
                     new SubsystemDef(SubsystemKind.PointDefense, 0.04, 0.03, 0.28),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.04, 0.03, -0.2),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
@@ -1012,10 +1024,10 @@ namespace Unity.SpaceGod.Core
                 Layout = new[]
                 {
                     // The spinal light railgun for a fleeing hull's drive, and the laser turrets dorsal and ventral.
-                    new SubsystemDef(SubsystemKind.LightRailgun, 0, -0.02, 0.4, arcCenterDeg: 0, arcWidthDeg: 40),
+                    new SubsystemDef(SubsystemKind.LightRailgun, 0, -0.02, 0.4, coneAxis: FireCones.Bow, coneHalfDeg: 20),
                     new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.05, 0.15),
                     new SubsystemDef(SubsystemKind.LaserTurret, 0, -0.05, -0.1),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.05, -0.2, arcCenterDeg: 0, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.05, -0.2, coneAxis: FireCones.Bow, coneHalfDeg: 75),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.04, 0.03, 0.25),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.04, 0.03, -0.25),
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.05, 0.05),
@@ -1045,14 +1057,14 @@ namespace Unity.SpaceGod.Core
                     // The shuttle deck, ventral amidships: two boarding shuttles and their marine teams.
                     new SubsystemDef(SubsystemKind.Hangar, 0, -0.045, -0.05),
                     // The siege batteries: plasma cannons, a pair bearing ahead and three down either beam.
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.04, 0.05, 0.3, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.04, 0.05, 0.3, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, 0.15, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, -0.02, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, -0.2, arcCenterDeg: 90, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, 0.15, arcCenterDeg: 270, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, -0.02, arcCenterDeg: 270, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, -0.2, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.04, 0.05, 0.3, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.04, 0.05, 0.3, coneAxis: FireCones.Bow, coneHalfDeg: 60),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, 0.15, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, -0.02, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, -0.2, coneAxis: FireCones.Starboard, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, 0.15, coneAxis: FireCones.Port, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, -0.02, coneAxis: FireCones.Port, coneHalfDeg: 75),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, -0.2, coneAxis: FireCones.Port, coneHalfDeg: 75),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.07, 0.04, 0.36),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.07, 0.04, 0.36),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.07, 0.04, -0.34),

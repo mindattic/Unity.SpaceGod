@@ -51,7 +51,7 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (ShipClass cls in Enum.GetValues(typeof(ShipClass)))
             foreach (var spec in CombatSpec.DesignsOf(cls))
             foreach (var d in spec.Layout.Where(d => d.Kind == SubsystemKind.ShieldGenerator))
-                Assert.That(d.ArcWidthDeg, Is.EqualTo(360), spec.DesignName + "'s emitters cover their patch, not an arc");
+                Assert.That(d.BearsEverywhere, Is.True, spec.DesignName + "'s emitters cover their patch, not an arc or a cone");
         }
 
         [Test]

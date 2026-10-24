@@ -87,7 +87,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             // A truss freighter carries no weapons and no mines (U.SPC-T482); bolted onto one, a mine layer still leaves it unarmed.
             var spec = CombatSpec.Of(ShipClass.Freighter).Clone();
-            spec.Layout = spec.Layout.Concat(new[] { new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true, arcCenterDeg: 180) }).ToArray();
+            spec.Layout = spec.Layout.Concat(new[] { new SubsystemDef(SubsystemKind.MineLayer, 0, -0.04, -0.45, facesAft: true) }).ToArray();
             var c = new ShipCombat(spec, ShipClass.Freighter);
             Assert.That(c.Subsystems.Any(s => s.Kind == SubsystemKind.MineLayer), Is.True);
             Assert.That(c.Armed, Is.False, "mines are a way to get away, not to fight");

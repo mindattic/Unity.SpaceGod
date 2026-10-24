@@ -244,21 +244,26 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void ARolledHullsBroadsideBearsOnAShipAboveOrBelowIt()
         {
-            // Flown at the helm: the arcs are reckoned in the hull's own rolled frame.
+            // Flown at the helm: the fire cones are reckoned in the hull's own rolled frame (U.SPC-T533).
             var u = new BattleUnit { LengthKm = 1, Forward = DVec3.UnitX, PlayerControlled = true };
+            var starboard = new SubsystemDef(SubsystemKind.LaserTurret, 0.1, 0, 0, coneAxis: FireCones.Starboard, coneHalfDeg: 75);
+            var port = new SubsystemDef(SubsystemKind.LaserTurret, -0.1, 0, 0, coneAxis: FireCones.Port, coneHalfDeg: 75);
             var above = DVec3.UnitZ * 10;
             var below = -DVec3.UnitZ * 10;
             u.Up = DVec3.UnitZ;
-            Assert.That(Facings.Toward(u, above + DVec3.UnitY * -10), Is.EqualTo(Facing.Starboard), "level, a ship above and to starboard is on the starboard beam");
-            Assert.That(Facings.Toward(u, below + DVec3.UnitY * 10), Is.EqualTo(Facing.Port), "and one below and to port on the port beam");
+            Assert.That(u.Bears(starboard, above + DVec3.UnitY * -10), Is.True, "level, a ship above and to starboard is in the starboard battery's cone");
+            Assert.That(u.Bears(port, below + DVec3.UnitY * 10), Is.True, "and one below and to port in the port battery's");
+            Assert.That(u.Bears(starboard, above), Is.False, "but one straight overhead is in neither");
+            Assert.That(u.Bears(port, below), Is.False);
 
             // Rolled 90 deg to port (starboard side up): the starboard battery looks straight up, the port one straight down.
             u.Up = DVec3.UnitY;
             Assert.That(u.Up, Is.Not.EqualTo(DVec3.Zero));
             u.Basis(out var right, out _);
             Assert.That(AngleDeg(right, DVec3.UnitZ), Is.LessThan(1e-6));
-            Assert.That(Facings.Toward(u, above), Is.EqualTo(Facing.Starboard), "rolled, the starboard broadside bears on a ship overhead");
-            Assert.That(Facings.Toward(u, below), Is.EqualTo(Facing.Port), "and the port one on a ship beneath");
+            Assert.That(u.Bears(starboard, above), Is.True, "rolled, the starboard broadside bears on a ship overhead");
+            Assert.That(u.Bears(port, below), Is.True, "and the port one on a ship beneath");
+            Assert.That(u.Bears(port, above), Is.False);
 
             // A hull the battle flies is held level whatever roof it was last given.
             u.PlayerControlled = false;

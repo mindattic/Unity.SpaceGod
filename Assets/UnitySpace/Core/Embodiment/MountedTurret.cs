@@ -15,7 +15,7 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// One gun mount on a hull or station in a battle, as an <see cref="IEmbodiable"/> (U.SPC-T18): a ship's
     /// battery, a defence platform's heavy laser, a fort's point defence. Taken, it traverses toward the
-    /// player's aim at its own rate within its own arc and fires down its barrel on the trigger, every shot a
+    /// player's aim at its own rate within its own fire cone and fires down its barrel on the trigger, every shot a
     /// real aimed one (see <see cref="Battle.FireManned"/>); every other mount on the hull goes on under its
     /// crew, and the hull itself flies as before. Handed back, its crew works it again.
     /// </summary>
@@ -82,42 +82,33 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>Where a mount points at rest: along the centre of its arc (astern for an aft turret).</summary>
+        /// <summary>
+        /// Where a mount points at rest (U.SPC-T533): along its cone's axis, in the battle's frame; a turret whose cone is
+        /// centred straight up or down off the hull (a dorsal or ventral turret) rests trained fore (aft for one facing
+        /// aft) inside that cone instead of pointing at the sky.
+        /// </summary>
         public static DVec3 RestAim(BattleUnit u, SubsystemDef d)
         {
-            if (d.FacesAft) return -u.Forward;
-            u.Basis(out var right, out _);
-            double c = d.ArcCenterDeg * Astro.Deg2Rad;
-            return (right * Math.Sin(c) + u.Forward * Math.Cos(c)).Normalized;
+            var axis = d.AxisOn(u.Combat?.Spec);
+            if (!FireCones.IsFixed(d) && Math.Abs(axis.Y) > 0.7)
+            {
+                var along = d.FacesAft ? FireCones.Stern : FireCones.Bow;
+                axis = FireCones.Clamp(along, axis, d.HalfDeg);
+            }
+            return u.LocalDirToWorld(axis).Normalized;
         }
 
         /// <summary>
-        /// <paramref name="aim"/> (unit) brought within where the mount can point: a spinal railgun only within
-        /// its gimbal of the nose, a mount with a firing arc only within that arc's yaw (its elevation kept).
+        /// <paramref name="aim"/> (unit) brought within where the mount can point: a spinal railgun only within its gimbal of
+        /// the keel, any other mount only within its fire cone (U.SPC-T533), swung back onto the cone's edge on the way to it.
         /// </summary>
         public static DVec3 Bound(BattleUnit u, SubsystemDef d, DVec3 aim)
         {
             // A spinal mount, whatever gun is in it, swings only within the same gimbal (U.SPC-T490).
             if (SpinalMounts.HullLaid(d)) return Gunnery.Gimbal(aim, RestAim(u, d), Gunnery.RailgunGimbalDeg);
-            if (d.ArcWidthDeg >= 360) return aim;
-            u.Basis(out var right, out var up);
-            double x = DVec3.Dot(aim, right), y = DVec3.Dot(aim, up), z = DVec3.Dot(aim, u.Forward);
-            double h = Math.Sqrt(x * x + z * z);
-            if (h < 1e-9) return aim;
-            double yaw = Astro.WrapDegrees360(Math.Atan2(x, z) * Astro.Rad2Deg);
-            if (d.ContainsYaw(yaw)) return aim;
-            double half = d.ArcWidthDeg * 0.5;
-            double lo = d.ArcCenterDeg - half, hi = d.ArcCenterDeg + half;
-            double edge = Off(yaw, lo) <= Off(yaw, hi) ? lo : hi;
-            double r = edge * Astro.Deg2Rad;
-            return (right * (h * Math.Sin(r)) + up * y + u.Forward * (h * Math.Cos(r))).Normalized;
-        }
-
-        /// <summary>The unsigned angle between two yaws, deg.</summary>
-        static double Off(double a, double b)
-        {
-            double d = Astro.WrapDegrees360(a - b);
-            return d > 180 ? 360 - d : d;
+            if (d.BearsEverywhere) return aim;
+            var axis = u.LocalDirToWorld(d.AxisOn(u.Combat?.Spec));
+            return FireCones.Clamp(aim, axis, d.HalfDeg);
         }
 
         public EmbodimentPose PoseAt(double jd)

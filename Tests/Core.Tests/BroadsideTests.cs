@@ -6,9 +6,11 @@ using NUnit.Framework;
 namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
-    /// The capital-ship broadside game (U.SPC-T425): batteries ordered by the arc they fire into, volleys that hold for the
-    /// battery and telegraph themselves, gunners focusing a weakened shield patch, armour that turns oblique hits, the brace,
-    /// damage control and its emergency repair crews, formations a flagship orders its line into, turning circles, and AI captains using the same commands.
+    /// The capital-ship broadside game (U.SPC-T425): every gun aiming within its own fire cone in 3D (U.SPC-T533), orders
+    /// given to the guns that bear where the captain looks, volleys that hold for the guns bearing on the same hull and
+    /// telegraph themselves, gunners focusing a weakened shield patch, no armour angling, the brace, damage control and its
+    /// emergency repair crews, formations a flagship orders its line into, turning circles, and AI captains using the same
+    /// commands and bringing the guns whose cones can take their target to bear.
     /// </summary>
     [TestFixture]
     public class BroadsideTests
@@ -51,75 +53,100 @@ namespace Unity.SpaceGod.Core.Tests
             return (b, me, enemy);
         }
 
+        /// <summary>The battle-local direction <paramref name="bearingDeg"/> off <paramref name="u"/>'s bow, level, clockwise from above.</summary>
+        static DVec3 Dir(BattleUnit u, double bearingDeg) => (Bearing(u, bearingDeg, 1) - u.Pos).Normalized;
+
+        static Subsystem Sponson(BattleUnit u, SubsystemKind kind, DVec3 axis) =>
+            u.Combat.Subsystems.First(s => s.Kind == kind && s.Def.ConeAxis.Equals(axis));
+
         static void Run(Battle b, double seconds, double dt = 0.1)
         {
             for (double t = 0; t < seconds - 1e-9 && !b.Over; t += dt) b.Advance(dt);
         }
 
-        // ------------------------------------------------------------ arcs and batteries
+        // ------------------------------------------------------------ fire cones and batteries (U.SPC-T533)
 
         [Test]
-        public void ABearingLiesInOneOfFourArcs()
-        {
-            Assert.That(Facings.Of(0), Is.EqualTo(Facing.Bow));
-            Assert.That(Facings.Of(44), Is.EqualTo(Facing.Bow));
-            Assert.That(Facings.Of(90), Is.EqualTo(Facing.Starboard));
-            Assert.That(Facings.Of(180), Is.EqualTo(Facing.Stern));
-            Assert.That(Facings.Of(270), Is.EqualTo(Facing.Port));
-            Assert.That(Facings.Of(-30), Is.EqualTo(Facing.Bow));
-            Assert.That(Facings.OffDeg(350, Facing.Bow), Is.EqualTo(10).Within(1e-9));
-        }
-
-        [Test]
-        public void ABatteryIsTheGunsCoveringItsArc()
+        public void AGunBearsOnWhatLiesInsideItsConeAboveAndBelowTheHullAsWellAsToTheSide()
         {
             var (_, me, _) = Helm(90);
-            var (_, starboard) = Broadsides.Battery(me, Facing.Starboard);
-            var (_, bow) = Broadsides.Battery(me, Facing.Bow);
-            Assert.That(starboard, Is.EqualTo(1), "the starboard laser turret (missiles and point defence are no battery)");
-            Assert.That(bow, Is.EqualTo(2), "the two forward heavy lasers");
+            var turret = Sponson(me, SubsystemKind.LaserTurret, FireCones.Starboard);
+            me.Basis(out var right, out var up);
+            Assert.That(me.BearsAlong(turret.Def, right), Is.True, "straight out to starboard");
+            Assert.That(me.BearsAlong(turret.Def, (right + up).Normalized), Is.True, "45 deg above the beam");
+            Assert.That(me.BearsAlong(turret.Def, (right - up).Normalized), Is.True, "and 45 deg below it");
+            Assert.That(me.BearsAlong(turret.Def, up), Is.False, "but not straight overhead, past its cone");
+            Assert.That(me.BearsAlong(turret.Def, me.Forward), Is.False, "nor dead ahead");
+            Assert.That(me.BearsAlong(turret.Def, -right), Is.False, "nor across the hull to port");
+            var spinal = me.Combat.Subsystems.First(s => s.Def.Spinal);
+            Assert.That(me.BearsAlong(spinal.Def, me.Forward), Is.True, "a spinal mount bears down the keel");
+            Assert.That(me.BearsAlong(spinal.Def, Dir(me, 20)), Is.False, "and only there: the hull lays it");
         }
 
         [Test]
-        public void ABatteryHeldDoesNotFireIntoItsArcAndFiresAgainAtWill()
+        public void ABatteryIsTheGunsWhoseConesTakeInTheLine()
+        {
+            var (_, me, _) = Helm(90);
+            var (_, starboard) = Broadsides.Battery(me, Dir(me, 90));
+            var (_, bow) = Broadsides.Battery(me, me.Forward);
+            var (_, between) = Broadsides.Battery(me, Dir(me, 50));
+            Assert.That(starboard, Is.EqualTo(1), "the starboard laser turret (missiles, point defence and spinal mounts are no battery)");
+            Assert.That(bow, Is.EqualTo(2), "the two forward heavy lasers");
+            Assert.That(between, Is.EqualTo(3), "at 50 deg the turret's cone and the heavies' overlap: all three bear");
+        }
+
+        [Test]
+        public void AHeldBatteryDoesNotFireAndFiresAgainAtWill()
         {
             var (b, me, enemy) = Helm(90);
-            me.Broadside[Facing.Starboard] = BatteryOrder.HoldFire;
+            Assert.That(Broadsides.OrderAlong(me, Dir(me, 90), BatteryOrder.HoldFire), Is.GreaterThan(0));
             double before = Health(enemy);
             Run(b, 30);
-            Assert.That(Health(enemy), Is.EqualTo(before).Within(1e-6), "nothing fires into a held arc");
-            Assert.That(Broadsides.CycleOrder(me, Facing.Starboard), Is.EqualTo(BatteryOrder.Volley));
-            Assert.That(Broadsides.CycleOrder(me, Facing.Starboard), Is.EqualTo(BatteryOrder.FireAtWill));
+            Assert.That(Health(enemy), Is.EqualTo(before).Within(1e-6), "nothing that bears on it fires");
+            Assert.That(Broadsides.CycleOrder(me, Dir(me, 90)).order, Is.EqualTo(BatteryOrder.Volley));
+            Assert.That(Broadsides.CycleOrder(me, Dir(me, 90)).order, Is.EqualTo(BatteryOrder.FireAtWill));
             Run(b, 30);
             Assert.That(Health(enemy), Is.LessThan(before), "at will, the starboard battery fires");
         }
 
         [Test]
-        public void HoldingOneArcLeavesTheOthersFiring()
+        public void HoldingTheGunsBearingOneWayLeavesTheOthersFiring()
         {
             var (b, me, enemy) = Helm(0, 12);
-            me.Broadside[Facing.Starboard] = BatteryOrder.HoldFire;
-            me.Broadside[Facing.Port] = BatteryOrder.HoldFire;
+            Broadsides.OrderAlong(me, Dir(me, 90), BatteryOrder.HoldFire);
+            Broadsides.OrderAlong(me, Dir(me, 270), BatteryOrder.HoldFire);
+            Assert.That(Broadsides.OrderAlong(me, me.Forward).order, Is.EqualTo(BatteryOrder.FireAtWill), "no gun bearing on the bow was held");
             double before = Health(enemy);
             Run(b, 30);
             Assert.That(Health(enemy), Is.LessThan(before), "the bow battery is not held");
         }
 
         [Test]
-        public void AVolleyHoldsUntilItsBatteryIsLoadedTelegraphsItAndThenFiresTogether()
+        public void NoGunBearsWhereNoConeReaches()
         {
-            // At 50 deg off the bow the enemy lies in the starboard arc, under both forward heavy lasers and the starboard turret.
+            var (_, me, _) = Helm(90);
+            me.Basis(out _, out var up);
+            var (order, mounts) = Broadsides.CycleOrder(me, -up);
+            Assert.That(mounts, Is.EqualTo(0), "nothing on the battleship looks straight down under its keel");
+            Assert.That(order, Is.EqualTo(BatteryOrder.FireAtWill));
+        }
+
+        [Test]
+        public void AVolleyHoldsUntilEveryGunBearingOnTheHullIsLoadedTelegraphsItAndThenFiresTogether()
+        {
+            // At 50 deg off the bow the enemy lies in the starboard turret's cone and both forward heavy lasers'.
             var (b, me, enemy) = Helm(50);
-            me.Broadside[Facing.Starboard] = BatteryOrder.Volley;
-            var turret = me.Combat.Subsystems.First(s => s.Kind == SubsystemKind.LaserTurret && Math.Abs(s.Def.ArcCenterDeg - 90) < 1);
-            var heavies = me.Combat.Subsystems.Where(s => s.Kind == SubsystemKind.HeavyLaser && s.Def.ArcCenterDeg == 0).ToList();
+            Broadsides.OrderAlong(me, Dir(me, 50), BatteryOrder.Volley);
+            var turret = Sponson(me, SubsystemKind.LaserTurret, FireCones.Starboard);
+            var heavies = me.Combat.Subsystems.Where(s => s.Kind == SubsystemKind.HeavyLaser && s.Def.ConeAxis.Equals(FireCones.Bow)).ToList();
+            Assert.That(heavies.Count, Is.EqualTo(2));
             turret.Cooldown = 4;
             double before = Health(enemy);
             Run(b, 2);
             Assert.That(Health(enemy), Is.EqualTo(before).Within(1e-6), "the loaded heavies hold for the turret");
-            Assert.That(me.Broadside.Readying, Is.EqualTo(Facing.Starboard), "the volley building shows");
+            Assert.That(me.Broadside.Readying, Is.True, "the volley building shows");
             Assert.That(me.Broadside.ReadyingOn, Is.SameAs(enemy));
-            Assert.That(me.Broadside.ReadyingLoaded, Is.EqualTo(0).Within(1e-9), "the starboard turret is still loading");
+            Assert.That(me.Broadside.ReadyingLoaded, Is.EqualTo(2.0 / 3).Within(1e-9), "two of the three guns bearing are loaded");
             Assert.That(heavies.All(h => h.Cooldown <= 0), Is.True, "the heavies wait loaded");
 
             bool fired = false;
@@ -129,7 +156,7 @@ namespace Unity.SpaceGod.Core.Tests
                 b.Advance(0.1);
                 fired = turret.Cooldown > was;
             }
-            Assert.That(fired, Is.True, "the volley goes once the battery is loaded");
+            Assert.That(fired, Is.True, "the volley goes once every gun bearing is loaded");
             Assert.That(heavies.All(h => h.Cooldown > 0), Is.True, "every loaded gun bearing went with it, in the same step");
         }
 
@@ -149,24 +176,7 @@ namespace Unity.SpaceGod.Core.Tests
         // ------------------------------------------------------------ armour
 
         [Test]
-        public void AHitStrikingTheBeltObliquelyMeetsThickerArmourAndPartlyGlances()
-        {
-            var (_, me, _) = Helm(90);
-            me.Basis(out var right, out _);
-            var square = Broadsides.Angling(me, -right);
-            Assert.That(square.armour, Is.EqualTo(1).Within(1e-9), "beam-on: the belt as rated");
-            Assert.That(square.through, Is.EqualTo(1).Within(1e-9));
-            var angled = Broadsides.Angling(me, (-right - me.Forward).Normalized);
-            Assert.That(angled.armour, Is.GreaterThan(1.1));
-            Assert.That(angled.through, Is.LessThan(0.95));
-            var bow = Broadsides.Angling(me, -me.Forward);
-            var stern = Broadsides.Angling(me, me.Forward);
-            Assert.That(bow.armour, Is.GreaterThan(1), "the bow is the heaviest face");
-            Assert.That(stern.armour, Is.LessThan(1), "the engines are the thinnest");
-        }
-
-        [Test]
-        public void AngledToTheLineOfFireAHullTakesLessFromTheSameHit()
+        public void ThereIsNoAnglingTheArmourTheSameHitDoesTheSameFromAnyDirection()
         {
             double Loss(DVec3 incoming)
             {
@@ -178,19 +188,10 @@ namespace Unity.SpaceGod.Core.Tests
             }
             var right = new DVec3(0, -1, 0);
             double beamOn = Loss(-right);
-            double angled = Loss((-right - DVec3.UnitX).Normalized);
-            Assert.That(angled, Is.LessThan(beamOn * 0.92), "the same shot at 45 deg glances and meets more plate");
-
-            double saved = Broadsides.ArmourAngling.Value;
-            try
-            {
-                Broadsides.ArmourAngling.Set(0);
-                Assert.That(Loss((-right - DVec3.UnitX).Normalized), Is.EqualTo(beamOn).Within(1e-9), "angling off: the angle makes no difference");
-            }
-            finally
-            {
-                Broadsides.ArmourAngling.Set(saved);
-            }
+            Assert.That(beamOn, Is.GreaterThan(0));
+            Assert.That(Loss((-right - DVec3.UnitX).Normalized), Is.EqualTo(beamOn).Within(1e-9), "at 45 deg");
+            Assert.That(Loss(-DVec3.UnitX), Is.EqualTo(beamOn).Within(1e-9), "on the bow");
+            Assert.That(Loss(DVec3.UnitZ), Is.EqualTo(beamOn).Within(1e-9), "from below");
         }
 
         // ------------------------------------------------------------ the brace
@@ -240,7 +241,6 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (b, me, enemy) = Helm(90);
             var cmd = Broadsides.Of(enemy);
-            cmd.Readying = Facing.Port;
             cmd.ReadyingOn = me;
             cmd.ReadyingLoaded = 0.5;
             enemy.Stunned = 0;
@@ -365,14 +365,18 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(Broadsides.ComeAboutSeconds(PilotTuning.Of(ShipClass.Destroyer).TurnRateDegS), Is.LessThan(Broadsides.ComeAboutSeconds(turn)),
                 "the destroyer comes about quicker than the battleship");
             var (_, me, enemy) = Helm(90);
-            Assert.That(Broadsides.SecondsToBear(me, enemy, Facing.Starboard, 5), Is.EqualTo(0).Within(1e-6), "already on the beam");
-            Assert.That(Broadsides.SecondsToBear(me, enemy, Facing.Bow, 5), Is.EqualTo(18).Within(1e-6), "90 deg to swing the bow on at 5 deg/s");
+            var turret = Sponson(me, SubsystemKind.LaserTurret, FireCones.Starboard);
+            var heavy = Sponson(me, SubsystemKind.HeavyLaser, FireCones.Bow);
+            var spinal = me.Combat.Subsystems.First(s => s.Def.Spinal);
+            Assert.That(Broadsides.SecondsToBear(me, enemy, turret, 5), Is.EqualTo(0).Within(1e-6), "already in the turret's cone");
+            Assert.That(Broadsides.SecondsToBear(me, enemy, heavy, 5), Is.EqualTo(6).Within(1e-6), "30 deg past the heavy laser's 60 deg cone at 5 deg/s");
+            Assert.That(Broadsides.SecondsToBear(me, enemy, spinal, 5), Is.EqualTo(16).Within(1e-6), "80 deg to lay a spinal mount's 10 deg cone on it");
         }
 
         // ------------------------------------------------------------ AI captains
 
         [Test]
-        public void AnAiCaptainFiresBroadsidesFromItsBeamAndItsGunnersFocusAWeakenedPatch()
+        public void AnAiCaptainFiresTheGunsThatBearTogetherInVolleysAndItsGunnersFocusAWeakenedPatch()
         {
             var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
             var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
@@ -380,11 +384,58 @@ namespace Unity.SpaceGod.Core.Tests
             Run(b, 2);
             var cmd = blue.Broadside;
             Assert.That(cmd, Is.Not.Null);
-            Assert.That(cmd[Facing.Starboard], Is.EqualTo(BatteryOrder.Volley));
-            Assert.That(cmd[Facing.Port], Is.EqualTo(BatteryOrder.Volley));
-            Assert.That(cmd[Facing.Bow], Is.EqualTo(BatteryOrder.FireAtWill));
+            var starboard = Sponson(blue, SubsystemKind.LaserTurret, FireCones.Starboard);
+            var port = Sponson(blue, SubsystemKind.LaserTurret, FireCones.Port);
+            var heavy = Sponson(blue, SubsystemKind.HeavyLaser, FireCones.Bow);
+            Assert.That(cmd.OrderOf(starboard), Is.EqualTo(BatteryOrder.Volley), "its cone overlaps the bow heavies'");
+            Assert.That(cmd.OrderOf(port), Is.EqualTo(BatteryOrder.Volley));
+            Assert.That(cmd.OrderOf(heavy), Is.EqualTo(BatteryOrder.Volley));
+            Assert.That(cmd.OrderOf(Sponson(blue, SubsystemKind.MissileLauncher, FireCones.Starboard)), Is.EqualTo(BatteryOrder.FireAtWill), "a launcher is no battery");
             Assert.That(blue.Target, Is.SameAs(red));
             Assert.That(Broadsides.FocusesFire(blue), Is.True, "its gunners go for a weakened shield patch");
+        }
+
+        [Test]
+        public void AnAiCaptainLetsAGunThatBearsAloneFireAtWill()
+        {
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
+            var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
+            b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
+            var aft = Sponson(blue, SubsystemKind.HeavyLaser, FireCones.Stern);
+            foreach (var s in blue.Combat.Subsystems)
+                if (s != aft && Broadsides.IsBatteryGun(s)) s.Hp = 0;
+            Run(b, 0.5);
+            Assert.That(blue.Broadside.OrderOf(aft), Is.EqualTo(BatteryOrder.FireAtWill), "no other gun's cone overlaps the stern heavy's now");
+        }
+
+        [Test]
+        public void AnAiCaptainBringsTheGunsWhoseConesCanTakeItsTargetToBear()
+        {
+            double OffBowDeg(bool bring)
+            {
+                bool saved = FireCones.AiBringsGunsToBear.Value;
+                try
+                {
+                    FireCones.AiBringsGunsToBear.Set(bring);
+                    var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
+                    var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
+                    var red = b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
+                    red.Stunned = 1e6;
+                    // Its bow guns and spinal mounts shot away: what it has left bears on the beams.
+                    foreach (var s in blue.Combat.Subsystems)
+                        if (s.Def.IsWeapon && s.Def.Covers(blue.Combat.Spec, FireCones.Bow)) s.Hp = 0;
+                    Run(b, 60, 0.5);
+                    var to = (red.Pos - blue.Pos).Normalized;
+                    return Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(blue.Forward, to)))) * Astro.Rad2Deg;
+                }
+                finally
+                {
+                    FireCones.AiBringsGunsToBear.Set(saved);
+                }
+            }
+            double flank = OffBowDeg(true);
+            Assert.That(flank, Is.InRange(45.0, 135.0), "it turns a flank in, its sponsons' cones on the target");
+            Assert.That(OffBowDeg(false), Is.LessThan(20), "with the setting off it points its bow at the target");
         }
 
         [Test]
@@ -398,15 +449,15 @@ namespace Unity.SpaceGod.Core.Tests
                 var offBlue = off.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
                 off.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
                 Run(off, 2);
-                Assert.That(offBlue.Broadside[Facing.Starboard], Is.EqualTo(BatteryOrder.FireAtWill), "off: the beam fires at will");
+                Assert.That(offBlue.Broadside.OrderOf(Sponson(offBlue, SubsystemKind.LaserTurret, FireCones.Starboard)), Is.EqualTo(BatteryOrder.FireAtWill), "off: every gun fires at will");
 
                 Broadsides.AiVolleys.Set(true);
                 var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
                 var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
                 b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
                 Run(b, 2);
-                Assert.That(blue.Broadside[Facing.Starboard], Is.EqualTo(BatteryOrder.Volley));
-                Assert.That(blue.Broadside[Facing.Port], Is.EqualTo(BatteryOrder.Volley));
+                Assert.That(blue.Broadside.OrderOf(Sponson(blue, SubsystemKind.LaserTurret, FireCones.Starboard)), Is.EqualTo(BatteryOrder.Volley));
+                Assert.That(blue.Broadside.OrderOf(Sponson(blue, SubsystemKind.LaserTurret, FireCones.Port)), Is.EqualTo(BatteryOrder.Volley));
                 Assert.That(Broadsides.FocusesFire(blue), Is.True, "its gunners still focus a weakened patch");
             }
             finally
@@ -427,8 +478,12 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void TheBroadsideSettingsAreInTheMenu()
         {
-            Assert.That(Broadsides.ArmourAngling.Group, Is.EqualTo(SettingGroups.Broadsides));
-            Assert.That(SettingsRegistry.Default.Find("broadside.armourAngling"), Is.SameAs(Broadsides.ArmourAngling));
+            Assert.That(Broadsides.BraceReduction.Group, Is.EqualTo(SettingGroups.Broadsides));
+            Assert.That(SettingsRegistry.Default.Find("broadside.armourAngling"), Is.Null, "there is no armour angling any more (U.SPC-T533)");
+            Assert.That(SettingsRegistry.Default.Find("cone.turretTraverse"), Is.SameAs(FireCones.TurretTraverse));
+            Assert.That(SettingsRegistry.Default.Find("cone.fixed"), Is.SameAs(FireCones.FixedCone));
+            Assert.That(SettingsRegistry.Default.Find("cone.aiBearing"), Is.SameAs(FireCones.AiBringsGunsToBear));
+            Assert.That(FireCones.TurretTraverse.Group, Is.EqualTo(SettingGroups.Weapons));
             Assert.That(SettingsRegistry.Default.Find("broadside.brace"), Is.SameAs(Broadsides.BraceReduction));
             Assert.That(SettingsRegistry.Default.Find("broadside.damageControl"), Is.SameAs(Broadsides.DamageControlRate));
             Assert.That(SettingsRegistry.Default.Find("broadside.aiVolleys"), Is.SameAs(Broadsides.AiVolleys));

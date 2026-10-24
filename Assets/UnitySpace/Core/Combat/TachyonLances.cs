@@ -7,8 +7,8 @@ namespace Unity.SpaceGod.Core
     /// The tachyon lance (U.SPC-T487, docs/SHIP_ROSTER.md "Weapons by tier"): a capital ship's spinal weapon whose
     /// shot crosses its whole reach at once, so there is no travel time and no lead to lay. It ignores light-speed
     /// delay, and it outranges every other gun. That would change the whole doctrine, so it is held in check: only a
-    /// capital hull can carry one, in a bow mount the hull itself must lay on the target (a narrow spinal arc,
-    /// <see cref="ArcWidthDeg"/>); it is dear to build and only the greatest yards can build it
+    /// capital hull can carry one, in a bow mount the hull itself must lay on the target (a narrow spinal cone,
+    /// <see cref="ConeHalfDeg"/>); it is dear to build and only the greatest yards can build it
     /// (<see cref="YardBuilds"/>); it recharges slowly; and while it charges it draws on the reactor so hard that the
     /// hull's shields recover more slowly (<see cref="ShieldRegenFactor"/>). Kinetics and missiles stay the weapons
     /// of the line. Its tunables are declared settings.
@@ -51,8 +51,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>The lance's weapon, at the settings' figures.</summary>
         public static WeaponSpec Spec => WeaponSpec.TachyonLance;
 
-        /// <summary>How wide a lance's arc is either side of the bow together, degrees: spinal, so the hull lays it.</summary>
-        public const double ArcWidthDeg = 20;
+        /// <summary>How far off the keel a lance's narrow cone reaches, deg (U.SPC-T533): spinal, so the hull lays it.</summary>
+        public const double ConeHalfDeg = 10;
 
         /// <summary>The hulls that can carry a lance: the capital ships, the only ones with the power plant to feed it. A new
         /// capital class joins by being added here.</summary>

@@ -19,11 +19,11 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// One hardpoint of a hull frame (U.SPC-T377): a place on the hull's surface -- where it sits (hull lengths, nose +Z,
-    /// up +Y), which way it faces and fires (its yaw arc), its type and size (Ballistic, Missile or Energy, or a shield or
+    /// up +Y), which way it fires (its fire cone, U.SPC-T533), its type and size (Ballistic, Missile or Energy, or a shield or
     /// engine mount, U.SPC-T508: the kind and the biggest part it takes) and what the design
     /// builds onto it. The positions are the same ones the battle fires from, so a model library that sets a turret,
     /// launcher or tube on each socket puts it exactly where the fight thinks it is. What is inside the hull is not a
-    /// hardpoint but a facility (<see cref="FacilitySite"/>, U.SPC-T470), with a size and no arc.
+    /// hardpoint but a facility (<see cref="FacilitySite"/>, U.SPC-T470), with a size and no fire cone.
     /// </summary>
     public sealed class Hardpoint
     {
@@ -40,7 +40,12 @@ namespace Unity.SpaceGod.Core
         public readonly HardpointSize Size;
         public readonly double X, Y, Z;
         public readonly bool FacesAft;
-        public readonly double ArcCenterDeg, ArcWidthDeg;
+
+        /// <summary>The hull frame's own fire cone for the hardpoint (U.SPC-T533, see <see cref="FireCones"/>): its aiming
+        /// direction in the hull frame and half-angle, deg; null where the mount's normal and its module's cone stand.</summary>
+        public readonly DVec3? ConeAxis;
+
+        public readonly double? ConeHalfDeg;
 
         /// <summary>A mount that bears on the bow.</summary>
         public readonly bool BearsOnBow;
@@ -72,10 +77,9 @@ namespace Unity.SpaceGod.Core
                 Y = def.Y;
                 Z = def.Z;
                 FacesAft = def.FacesAft;
-                ArcCenterDeg = def.ArcCenterDeg;
-                ArcWidthDeg = def.ArcWidthDeg;
+                ConeAxis = def.ConeAxis;
+                ConeHalfDeg = def.ConeHalfDeg;
             }
-            else ArcWidthDeg = 360;
         }
 
         /// <summary>Whether a gun, launcher or tube goes here (a Ballistic, Missile or Energy mount; not a shield or an engine).</summary>
@@ -91,7 +95,7 @@ namespace Unity.SpaceGod.Core
     /// designs (fighters, couriers and breachers, freighters and ore haulers, destroyers and cruisers, battleships and
     /// carriers), stations and satellites alike. A frame has two kinds of part (U.SPC-T470): its hardpoints on the hull's
     /// surface (<see cref="Hardpoints"/>: guns, launchers, torpedo tubes, point defence, shields, engines, each with a
-    /// position and an arc) and its facilities inside the body (<see cref="Facilities"/>: bridge, engineering, quarters,
+    /// position and a fire cone) and its facilities inside the body (<see cref="Facilities"/>: bridge, engineering, quarters,
     /// hangar, holds), with the free internal space beyond them (<see cref="SpareSpace"/>) for the facilities a yard fits.
     /// A yard fits them exactly as it refits a ship (<see cref="Outfitting"/>), and a <see cref="ConstructionPlan"/>
     /// builds one from scratch.
@@ -268,14 +272,14 @@ namespace Unity.SpaceGod.Core
             Crew = 1400, Marines = FacilityLayouts.Complement(FacilityLayouts.Station, 1), DryMassTonnes = 400000,
             Layout = new[]
             {
-                new SubsystemDef(SubsystemKind.HeavyLaser, 0.35, 0.05, 0, arcCenterDeg: 90, arcWidthDeg: 180),
-                new SubsystemDef(SubsystemKind.HeavyLaser, -0.35, 0.05, 0, arcCenterDeg: 270, arcWidthDeg: 180),
-                new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.05, 0.35, arcCenterDeg: 0, arcWidthDeg: 180),
-                new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.05, -0.35, true, arcCenterDeg: 180, arcWidthDeg: 180),
+                new SubsystemDef(SubsystemKind.HeavyLaser, 0.35, 0.05, 0, coneAxis: FireCones.Starboard, coneHalfDeg: 90),
+                new SubsystemDef(SubsystemKind.HeavyLaser, -0.35, 0.05, 0, coneAxis: FireCones.Port, coneHalfDeg: 90),
+                new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.05, 0.35, coneAxis: FireCones.Bow, coneHalfDeg: 90),
+                new SubsystemDef(SubsystemKind.HeavyLaser, 0, 0.05, -0.35, true, coneAxis: FireCones.Stern, coneHalfDeg: 90),
                 new SubsystemDef(SubsystemKind.MissileLauncher, 0.25, 0.08, 0.25),
                 new SubsystemDef(SubsystemKind.MissileLauncher, -0.25, 0.08, -0.25),
-                new SubsystemDef(SubsystemKind.TorpedoTube, 0, 0, 0.42, arcCenterDeg: 0, arcWidthDeg: 90),
-                new SubsystemDef(SubsystemKind.TorpedoTube, 0, 0, -0.42, true, arcCenterDeg: 180, arcWidthDeg: 90),
+                new SubsystemDef(SubsystemKind.TorpedoTube, 0, 0, 0.42, coneAxis: FireCones.Bow, coneHalfDeg: 45),
+                new SubsystemDef(SubsystemKind.TorpedoTube, 0, 0, -0.42, true, coneAxis: FireCones.Stern, coneHalfDeg: 45),
                 new SubsystemDef(SubsystemKind.PointDefense, 0.3, 0.1, 0.3),
                 new SubsystemDef(SubsystemKind.PointDefense, -0.3, 0.1, 0.3),
                 new SubsystemDef(SubsystemKind.PointDefense, 0.3, 0.1, -0.3),
