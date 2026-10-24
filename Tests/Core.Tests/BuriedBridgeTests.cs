@@ -17,7 +17,7 @@ namespace Unity.SpaceGod.Core.Tests
 
         static readonly ShipClass[] Warships =
         {
-            ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Interdictor,
+            ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer,
             ShipClass.CommandCruiser, ShipClass.Frigate,
         };
 

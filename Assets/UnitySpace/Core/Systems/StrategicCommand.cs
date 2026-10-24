@@ -119,6 +119,14 @@ namespace Unity.SpaceGod.Core
         /// <summary>The navy kept, as a share of the system's cap (<see cref="World.NavyCap"/>).</summary>
         public readonly double NavyShare;
 
+        /// <summary>
+        /// Heavy equipment the plan wants in every group its yards build up (U.SPC-T507): facility kind ids, each fitted to a
+        /// newly launched hull able to take it whose group does not carry one yet (see <see cref="War.LaunchWarship"/>). Lane
+        /// security fits a field projector (<see cref="FacilityKinds.FieldProjector"/>), making a lane interdictor of a
+        /// destroyer or cruiser rather than laying down a class of its own. Empty for most plans.
+        /// </summary>
+        public string[] GroupFittings { get; private set; } = new string[0];
+
         BuildPlan(string name, string description, ShipClass[] cycle, double navyShare)
         {
             Name = name;
@@ -135,6 +143,13 @@ namespace Unity.SpaceGod.Core
         }
 
         public static BuildPlan Find(string name) => all.Find(p => p.Name == name);
+
+        /// <summary>This plan, with <paramref name="facilities"/> fitted to one hull of every group it builds up.</summary>
+        public BuildPlan WithGroupFittings(params string[] facilities)
+        {
+            GroupFittings = facilities ?? new string[0];
+            return this;
+        }
 
         /// <summary>What every navy builds unless told otherwise: a command cruiser among them to lead a group (U.SPC-T477).</summary>
         public static readonly BuildPlan Balanced = Register("Balanced fleet", "Destroyers, cruisers, a battleship, a command cruiser and a carrier in turn", 1,
@@ -154,10 +169,11 @@ namespace Unity.SpaceGod.Core
         public static readonly BuildPlan Screens = Register("Screens", "Destroyers: cheap, quick hulls in numbers", 1,
             ShipClass.Destroyer, ShipClass.Destroyer, ShipClass.Cruiser);
 
-        /// <summary>Lane security (U.SPC-T479): lane interdictors with destroyers and cruisers to fight what they pull out,
-        /// groups that hold pickets on the hyperlanes raiders work.</summary>
-        public static readonly BuildPlan LaneSecurity = Register("Lane security", "Lane interdictors and their destroyers: pickets on the hyperlanes", 1,
-            ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Cruiser, ShipClass.Destroyer);
+        /// <summary>Lane security (U.SPC-T479): destroyers and cruisers, one hull of every group fitted with a field projector
+        /// as its lane interdictor (U.SPC-T507), the rest to fight what it pulls out: groups that hold pickets on the
+        /// hyperlanes raiders work.</summary>
+        public static readonly BuildPlan LaneSecurity = Register("Lane security", "Destroyers and cruisers, each group with a lane interdictor's field projector: pickets on the hyperlanes", 1,
+            ShipClass.Destroyer, ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer).WithGroupFittings(FacilityKinds.FieldProjector);
 
         public static readonly BuildPlan Mobilise = Register("Mobilise", "A balanced fleet half again as big", 1.5,
             ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.CommandCruiser, ShipClass.Carrier);

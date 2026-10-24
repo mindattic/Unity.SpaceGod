@@ -625,7 +625,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Whether <paramref name="ship"/> carries a cruise drive, and so can cross between the stars without a gate: by the
         /// owner's roster (U.SPC-T472, <see cref="FtlRoster"/>) a carrier, a battleship fitted with one or an explorer, never a
-        /// cruiser, destroyer or lane interdictor, whose voyages here go by the gates.</summary>
+        /// cruiser or destroyer, whose voyages here go by the gates.</summary>
         public static bool CanCruise(Ship ship) => CruiseDrives.Of(ship) != null;
 
         /// <summary>

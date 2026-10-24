@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, scout, halo, pennant, arrow, badge, shuttle, white, prograde, retrograde, blip, lost, singularity;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, scout, pennant, arrow, badge, shuttle, white, prograde, retrograde, blip, lost, singularity;
 
         public static Texture2D White => white ??= Solid();
 
@@ -87,8 +87,6 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Bomber: return broad ??= Draw(p => Triangle(new Vector2(p.x * 1.1f, p.y * 1.3f), 0.7f));
                 // The recon fighter (U.SPC-T485): the interceptor's needle inside a ring, its sensor sweep.
                 case ShipClass.Recon: return scout ??= Draw(p => Mathf.Min(Ring(p, 0.8f, 0.1f), Triangle(new Vector2(p.x * 3.2f, p.y * 1.3f), 0.75f)));
-                // The lane interdictor (U.SPC-T479): its projector ring round a solid core.
-                case ShipClass.Interdictor: return halo ??= Draw(p => Mathf.Min(Ring(p, 0.7f, 0.14f), p.magnitude - 0.22f));
                 // The command cruiser (U.SPC-T477): a cruiser's triangle inside the ring of its command reach.
                 case ShipClass.CommandCruiser: return pennant ??= Draw(p => Mathf.Min(Ring(p, 0.82f, 0.1f), Triangle(p * 1.45f, 0.8f)));
                 // The frigate (U.SPC-T475): a slim arrowhead, a strike boat's mark.
@@ -118,7 +116,6 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Bomber:
                 case ShipClass.AssaultShuttle: return 10;
                 case ShipClass.Recon: return 8;
-                case ShipClass.Interdictor: return 13;
                 case ShipClass.CommandCruiser: return 18;
                 case ShipClass.Frigate: return 11;
                 case ShipClass.Corvette: return 10;

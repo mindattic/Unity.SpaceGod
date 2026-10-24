@@ -202,6 +202,15 @@ namespace Unity.SpaceGod.Core
         // What clamps along a truss freighter's spine (U.SPC-T482, see BulkFreighters).
         public const string CargoPod = "cargo-pod", FuelSphere = "fuel-sphere";
 
+        /// <summary>
+        /// An interdiction field projector (U.SPC-T507, see <see cref="LaneInterdictors"/>): the heavy equipment that disrupts
+        /// a hyperlane's magnetic field and throws the ships riding past out of it, with the reactor that feeds it, two
+        /// sections deep. Any warship, capital or freighter hull big enough to carry it and its reactor load
+        /// (<see cref="LaneInterdictors.CanCarry(ShipClass)"/>) may fit it; a yard fits and strips it like any other fitting,
+        /// and its ring shows on whatever hull carries it.
+        /// </summary>
+        public const string FieldProjector = "field-projector";
+
         static FacilityKinds()
         {
             Register(Structure(Bridge, "Bridge", 1, CompartmentKind.Bridge));
@@ -256,6 +265,15 @@ namespace Unity.SpaceGod.Core
                 new[] { HullCategory.Battleship }, effect: (spec, l, n) => spec.SpinalPlants = Math.Max(0, spec.SpinalPlants + n))
             {
                 ClassFilter = c => SpinalMounts.CanCarry(c),
+            });
+
+            // The interdiction field projector (U.SPC-T507): the emitter ring, its capacitors and the reactor that feeds them,
+            // one fixed fitting whatever the hull. Only a hull with the reactor load to spare may carry it (LaneInterdictors).
+            Register(new FacilityKind(FieldProjector, "Interdiction field projector", 2, LaneInterdictors.ProjectorMassTonnes, false,
+                new[] { (Good.Alloys, 180.0), (Good.Machinery, 90.0), (Good.Electronics, 110.0), (Good.HeliumThree, 10.0) },
+                LaneInterdictors.Hulls)
+            {
+                ClassFilter = c => c is ShipClass k && LaneInterdictors.CanCarry(k),
             });
 
             // A truss freighter's standard modules (U.SPC-T482): a pod is a share of its hold, a sphere a share of its tanks.
@@ -394,12 +412,6 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.25), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), Buried(1),
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", -0.05, -0.04, 1, 50),
-            },
-            // The lane interdictor (U.SPC-T479): its projector room amidships inside the ring, between its two reactors.
-            [ShipClass.Interdictor] = new[]
-            {
-                new FacilitySite(FacilityKinds.Bow, "Bow", 0.3), new FacilitySite(FacilityKinds.Midships, "Projector room", -0.05),
-                new FacilitySite(FacilityKinds.Engineering, "Reactor rooms", -0.3), Buried(1),
             },
             // The command cruiser (U.SPC-T477): the sensor array forward under its mast, the flag bridge buried at the centre with
             // the communications suite and the fire-control centre's targeting computers either side of it, and the staff's
@@ -570,8 +582,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Destroyer:
                 case ShipClass.Miner:
                 case ShipClass.Explorer:
-                case ShipClass.LaneTender:
-                case ShipClass.Interdictor: return 3;
+                case ShipClass.LaneTender: return 3;
                 case ShipClass.Breacher:
                 case ShipClass.AssaultShuttle:
                 case ShipClass.Gunship:

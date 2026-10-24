@@ -27,15 +27,25 @@ namespace Unity.SpaceGod.Core
         /// <summary>The most ports on one wing's beat.</summary>
         public const int BeatLength = 3;
 
-        /// <summary>The kinds of wing, in the order a navy raises them: light wing, heavy-fighter wing, lane picket (a
-        /// destroyer and a lane interdictor that lie in wait on the lanes between the ports of its beat for raiders,
-        /// U.SPC-T479), destroyer wing.</summary>
+        /// <summary>The kinds of wing, in the order a navy raises them: light wing, heavy-fighter wing, lane picket (two
+        /// destroyers, the second fitted with a field projector as the wing's lane interdictor, that lie in wait on the lanes
+        /// between the ports of its beat for raiders, U.SPC-T479, U.SPC-T507), destroyer wing.</summary>
         static readonly ShipClass[][] Compositions =
         {
             new[] { ShipClass.Fighter, ShipClass.Fighter, ShipClass.Fighter },
             new[] { ShipClass.Gunship, ShipClass.Fighter, ShipClass.Fighter },
-            new[] { ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Fighter, ShipClass.Fighter },
+            new[] { ShipClass.Destroyer, ShipClass.Destroyer, ShipClass.Fighter, ShipClass.Fighter },
             new[] { ShipClass.Destroyer, ShipClass.Gunship, ShipClass.Fighter, ShipClass.Fighter },
+        };
+
+        /// <summary>The heavy equipment each kind of wing fits to its hulls as it is raised (U.SPC-T507): which member (0 the
+        /// leader) takes which facility. The lane picket's second destroyer carries the field projector.</summary>
+        static readonly (int member, string facility)[][] Fittings =
+        {
+            new (int, string)[0],
+            new (int, string)[0],
+            new[] { (1, FacilityKinds.FieldProjector) },
+            new (int, string)[0],
         };
 
         static readonly string[] CallSigns =
@@ -80,6 +90,16 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The classes of the <paramref name="index"/>th wing a navy raises, its leader first.</summary>
         public static ShipClass[] Composition(int index) => Compositions[index % Compositions.Length];
+
+        /// <summary>The facilities the <paramref name="index"/>th wing a navy raises fits to its hulls: which member (0 the
+        /// leader, then its wingmen in <see cref="Composition"/>'s order) takes which facility kind.</summary>
+        public static IReadOnlyList<(int member, string facility)> FittingsOf(int index) => Fittings[index % Fittings.Length];
+
+        static void Fit(Ship ship, int index, int member)
+        {
+            foreach (var (m, facility) in FittingsOf(index))
+                if (m == member && FacilityKinds.Of(facility) is FacilityKind kind) Outfitting.Install(ship, kind);
+        }
 
         /// <summary>The bodies of <paramref name="f"/>'s standing ports in <paramref name="w"/>, the most populous first.</summary>
         public static List<int> Ports(World w, Faction f)
@@ -138,10 +158,12 @@ namespace Unity.SpaceGod.Core
                     leader.PatrolWing = true;
                     leader.Route = Beat(ports, i, wings);
                     leader.RouteIndex = 0;
+                    Fit(leader, i, 0);
                     for (int k = 1; k < classes.Length; k++)
                     {
                         var e = w.Fleet.AddShip(call + " " + Wingmen[(k - 1) % Wingmen.Length], classes[k], f, ShipRole.Escort);
                         e.PatrolWing = true;
+                        Fit(e, i, k);
                         w.Fleet.AddEscort(leader, e, Fleet.SlotFor(k - 1));
                     }
                     w.Fleet.Station(leader, leader.Route[0], jd);

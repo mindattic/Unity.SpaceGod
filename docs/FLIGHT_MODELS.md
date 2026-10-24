@@ -36,7 +36,7 @@ To add a way of flying: write an `IFlightModel` and its handling struct, then ca
 | Gunship | Heavy fighter | Newtonian, until its own model lands |
 | Breacher (a fired round) | Ballistic | `BallisticFlightModel` (see [Fired rounds](#fired-rounds-the-breacher)) |
 | Freighter, Miner | Hauler | Newtonian, until its own model lands |
-| Carrier, Battleship, Cruiser, Destroyer (and the Interdictor, Command cruiser and Frigate) | Capital | `CapitalFlightModel`, each class on its own `CapitalHandling` (see [Capital ships](#capital-ships-black-flag-or-rebel-galaxy)) |
+| Carrier, Battleship, Cruiser, Destroyer (and the Command cruiser and Frigate) | Capital | `CapitalFlightModel`, each class on its own `CapitalHandling` (see [Capital ships](#capital-ships-black-flag-or-rebel-galaxy)) |
 
 With flight assist off, every family flies the Newtonian hull. Drifting and turn-and-burn remain available to every pilot. The family models change only what the flight computer does with assist on.
 
@@ -92,7 +92,7 @@ Tunables (`HeavyFighterHandling`): turn-rate cap fraction, settle time, strafe f
 
 ## Capital ships: Black Flag or Rebel Galaxy
 
-**Implemented** (U.SPC-T499, `CapitalFlightModel` and `CapitalHandling` in `Core/Combat/FlightModels.cs`, tests in `Tests/Core.Tests/CapitalFlightTests.cs`; see [What landed](#what-landed)). Applies to the Carrier, Battleship, Cruiser and Destroyer, and the other capital classes (Interdictor, Command cruiser, Frigate). The helm controls already shipped in T269.
+**Implemented** (U.SPC-T499, `CapitalFlightModel` and `CapitalHandling` in `Core/Combat/FlightModels.cs`, tests in `Tests/Core.Tests/CapitalFlightTests.cs`; see [What landed](#what-landed)). Applies to the Carrier, Battleship, Cruiser and Destroyer, and the other capital classes (Command cruiser, Frigate). The helm controls already shipped in T269.
 
 ### What each reference does
 
@@ -133,7 +133,7 @@ Tunables (`CapitalHandling`, with per-class overrides): telegraph speed fraction
 2. **Steerage** (`SteerageFactor`): the turn rate runs from the pivot at Stop (`PivotFactor`, 25% of the peak) up to the peak at Half, down to `FullFactor` (0.7) at Full and `FlankFactor` (0.6) at Flank speed and beyond, linearly with the hull's speed either way.
 3. **The keel**: slip across the hull, and gravity across it, is killed with up to `Keel` (0.75) times top speed times the peak turn rate, far more than the manoeuvre thrusters, so a come-about at Half or a turn at Full leaves the track on the nose and traces a turning circle. Past Full (and on the destroyer, which keeps more of its turn at speed, from Full) the turn can outrun the keel and the hull slips a little.
 4. **Full 3D**: pitch, yaw and roll are all free. `PitchFactor` (1) sets pitch against yaw, so a come-about over the top takes as long as one to starboard, and nothing levels the hull or holds it to a plane. Roll is held to the roll keys at `RollFactor` (1) times the peak turn rate and stays where it is left.
-5. **The come-about is the fit, not a result.** The peak turn rate is solved from the class's `ComeAboutS` and its angular acceleration: a turn that spins up at α, swings at r and brakes takes π/r + r/α, so r is the smaller root of r² - αTr + απ = 0 (`PeakTurnRateDegS`). If a design's own attitude thrusters could not make the come-about at all, the helm uses the least angular acceleration that can, with a quarter to spare. Measured in the tests: Destroyer 6.0 s, Cruiser 10.0 s, Battleship 14.0 s, Carrier 18.0 s (the Interdictor 7, Command cruiser 12 and Frigate 5 are set the same way).
+5. **The come-about is the fit, not a result.** The peak turn rate is solved from the class's `ComeAboutS` and its angular acceleration: a turn that spins up at α, swings at r and brakes takes π/r + r/α, so r is the smaller root of r² - αTr + απ = 0 (`PeakTurnRateDegS`). If a design's own attitude thrusters could not make the come-about at all, the helm uses the least angular acceleration that can, with a quarter to spare. Measured in the tests: Destroyer 6.0 s, Cruiser 10.0 s, Battleship 14.0 s, Carrier 18.0 s (the Command cruiser 12 and Frigate 5 are set the same way).
 6. **The Destroyer is the skirmisher**: its Half is 0.35 of its top speed, so its turning circle is the tightest of the line (about 300 m across at Half against 370 to 410 m), it keeps more of its turn at Full (0.85) and Flank (0.7), its Flank is the fastest of the four, and its engines answer quickest.
 
 At the helm the heading leads the nose by what this model's own swing needs (`AimLeadRad`), and the broadside HUD's turning circle and come-about time are this model's at the speed the hull is making (`TurnRateAt`, `ComeAboutSecondsAt`). With flight assist off the hull is the Newtonian one, as for every family; the telegraph keeps its step for when assist comes back on.

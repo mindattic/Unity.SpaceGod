@@ -345,7 +345,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// A group lying in wait beside its lane, pulse at the ready: a raider band, or a navy's lane picket (U.SPC-T479),
-        /// that still carries a working field projector (see <see cref="LaneInterdictors"/>; a band whose interdictor was lost
+        /// that still carries a working field projector (see <see cref="LaneInterdictors"/>; a band whose projector was lost or stripped
         /// lies there with nothing to pulse). Not one in a fight, at the helm, or off running the player down (U.SPC-T273),
         /// which has left its station however its schedule still reads.
         /// </summary>
@@ -2102,7 +2102,7 @@ namespace Unity.SpaceGod.Core
             if (!IsHomeGuard(leader) && AssaultTarget(leader, here, jd) is Settlement mark)
                 return new GroupOrder { Kind = OrderKind.Assault, Body = mark.Body };
 
-            // A group carrying a lane interdictor may hold a picket on a troubled lane out of the system (U.SPC-T479).
+            // A group with a field projector fitted to one of its hulls may hold a picket on a troubled lane out of the system (U.SPC-T479, U.SPC-T507).
             if (!IsHomeGuard(leader) && LanePicket(leader, here, PatrolWings.Ports(world, f), false) is GroupOrder picket) return picket;
 
             return new GroupOrder { Kind = OrderKind.Patrol, Body = NextPatrol(leader, here) };
@@ -2480,7 +2480,7 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
-        /// A navy group's lane picket (U.SPC-T479): with a lane interdictor in the group (see <see cref="LaneInterdictors"/>)
+        /// A navy group's lane picket (U.SPC-T479): with a field projector fitted to a hull of the group (see <see cref="LaneInterdictors"/>)
         /// and nothing more pressing, now and then (<see cref="LaneInterdictors.PicketChance"/>) it lies in wait part-way along
         /// the most troubled hyperlane out of its system, where raiders have struck lately, bound for one of
         /// <paramref name="ports"/> at its far end, to pull the raiders and enemies riding it out into a fight (see
@@ -3443,17 +3443,19 @@ namespace Unity.SpaceGod.Core
                 FleetPatterns.Commission(e, slips, null);
                 Fleet.AddEscort(leader, e, Fleet.SlotFor(i));
             }
-            // Every raider band keeps a lane interdictor to pull its marks out of the hyperlanes (U.SPC-T479): no pulse without one.
-            var interdictor = Fleet.AddShip(Name(), ShipClass.Interdictor, pirates, ShipRole.Escort);
+            // Every raider band keeps a lane interdictor to pull its marks out of the hyperlanes (U.SPC-T479): a destroyer with
+            // a field projector fitted into its free space (U.SPC-T507). No pulse without one.
+            var interdictor = Fleet.AddShip(Name(), ShipClass.Destroyer, pirates, ShipRole.Escort);
+            LaneInterdictors.Fit(interdictor);
             Fleet.AddEscort(leader, interdictor, Fleet.SlotFor(escorts));
             Fleet.Station(leader, body, jd);
-            double hands = Crews.Complement(leader.Spec.Class) + escorts * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Interdictor);
+            double hands = Crews.Complement(leader.Spec.Class) + (escorts + 1) * Crews.Complement(ShipClass.Destroyer);
             Crews.Draft(pirates, hands);
             world.NotifyAdded(leader);
         }
 
-        /// <summary>The most hands a new raider band can need (a cruiser, two destroyers and a lane interdictor).</summary>
-        static double BandComplement => Crews.Complement(ShipClass.Cruiser) + 2 * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Interdictor);
+        /// <summary>The most hands a new raider band can need (a cruiser, two destroyers and the destroyer fitted as its lane interdictor).</summary>
+        static double BandComplement => Crews.Complement(ShipClass.Cruiser) + 3 * Crews.Complement(ShipClass.Destroyer);
 
         void PirateRecruiting(double jd)
         {
@@ -3643,9 +3645,36 @@ namespace Unity.SpaceGod.Core
                 ship.Route = own.ToArray();
                 world.Launch(ship, yard, jd);
             }
+            // The heavy equipment its polity's build plan wants in every group, fitted to this hull if its group carries none
+            // yet and it can take it (U.SPC-T507: lane security's field projector makes it the group's lane interdictor).
+            FitGroupEquipment(ship, group ?? ship, world.Polities?.Command?.BuildPlanOf(yard.Owner) ?? BuildPlan.Balanced);
             string joins = group == null ? "" : ship.IsEscort ? $", joining {group.Name}" : $", taking command of {group.Name}'s group";
             world.Log(jd, $"{yard.Name} commissions the {ShipClassSpec.Of(cls).DisplayName.ToLowerInvariant()} {ship.Name}" + joins, WorldEventKind.Launch, yard.Body);
             return ship;
+        }
+
+        /// <summary>Fits <paramref name="ship"/>, newly launched into the group led by <paramref name="leader"/>, with each
+        /// facility <paramref name="plan"/> wants in every group (<see cref="BuildPlan.GroupFittings"/>) that no hull of the
+        /// group carries yet, as far as it can take them (no yard bill: the hull's price covers it).</summary>
+        void FitGroupEquipment(Ship ship, Ship leader, BuildPlan plan)
+        {
+            if (plan?.GroupFittings == null) return;
+            foreach (var id in plan.GroupFittings)
+            {
+                var kind = FacilityKinds.Of(id);
+                if (kind == null || GroupCarries(leader, id)) continue;
+                Outfitting.Install(ship, kind);
+            }
+        }
+
+        /// <summary>Whether a hull of the group led by <paramref name="leader"/> (the leader or a live escort) carries a
+        /// facility of kind <paramref name="id"/>.</summary>
+        bool GroupCarries(Ship leader, string id)
+        {
+            if (FleetCoordination.Count(leader, id) > 0) return true;
+            foreach (var s in Fleet.Ships)
+                if (s.Leader == leader && !s.Destroyed && FleetCoordination.Count(s, id) > 0) return true;
+            return false;
         }
 
         /// <summary>Whether the group <paramref name="leader"/> leads carries a command ship (U.SPC-T477): the leader or a

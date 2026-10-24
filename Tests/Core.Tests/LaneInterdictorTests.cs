@@ -4,11 +4,12 @@ using NUnit.Framework;
 namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
-    /// The lane interdictor (U.SPC-T479): the interdiction pulse comes from a dedicated hull carrying a field projector, not
-    /// from any raider lying beside a lane. Raider bands sail with one for their lane ambushes and navies fly one in a lane
+    /// The lane interdictor (U.SPC-T479): the interdiction pulse comes from a hull carrying a field projector, not from any
+    /// raider lying beside a lane. The projector is heavy equipment, a facility fitted into a hull big enough for it and its
+    /// reactor load, not a ship class (U.SPC-T507). Raider bands fit one for their lane ambushes and navies fit one in a lane
     /// picket, and ships its pulse throws out of the lane drop into the battle beside it as before.
     /// </summary>
-    // Not run beside other fixtures: one test fits a projector to another class for a moment, a static the save code walks.
+    // Not run beside other fixtures: one test changes the picket chance for a moment, a static the save code walks.
     [TestFixture, NonParallelizable]
     public class LaneInterdictorTests
     {
@@ -66,6 +67,17 @@ namespace Unity.SpaceGod.Core.Tests
             return leader;
         }
 
+        /// <summary><paramref name="s"/> fitted out as a lane interdictor: a field projector in its free space.</summary>
+        static Ship Fitted(Ship s)
+        {
+            Assert.That(LaneInterdictors.Fit(s), Is.True, s.Name + " took no projector");
+            return s;
+        }
+
+        /// <summary>The escort of <paramref name="leader"/> of class <paramref name="c"/>, fitted with a projector.</summary>
+        static Ship FitEscort(Setup t, Ship leader, ShipClass c = ShipClass.Destroyer) =>
+            Fitted(t.W.Fleet.Ships.First(s => s.Leader == leader && s.Spec.Class == c));
+
         static Ship Ride(Setup t, string name, ShipClass c, Faction f)
         {
             var s = Hull(t.W, name, c, f);
@@ -86,42 +98,74 @@ namespace Unity.SpaceGod.Core.Tests
             return false;
         }
 
-        // ---------------------------------------------------------------- the class
+        // ---------------------------------------------------------------- heavy equipment, not a class
 
-        [Test]
-        public void TheInterdictorIsAWarshipClassWithItsOwnFrameFlightFamilyCrewAndCost()
+        static readonly Faction Navy = new Faction("Navy", "NS", new Rgb(0, 0, 1)) { IsMilitary = true };
+
+        static Ship Bare(ShipClass c, int id = 1)
         {
-            var spec = ShipClassSpec.Of(ShipClass.Interdictor);
-            Assert.That(spec.Class, Is.EqualTo(ShipClass.Interdictor));
-            Assert.That(spec.DisplayName, Is.EqualTo("Lane interdictor"));
-            Assert.That(spec.IsMilitary, Is.True);
-            Assert.That(CombatSpec.Of(ShipClass.Interdictor).DesignName, Is.EqualTo("Lane interdictor"), "its own design, not the destroyer's fallback");
-            var frame = HullFrames.ForClass(ShipClass.Interdictor);
-            Assert.That(frame, Is.Not.Null);
-            Assert.That(frame.Category, Is.EqualTo(HullCategory.Warship));
-            Assert.That(FlightModelRegistry.CreateDefault().FamilyOf(ShipClass.Interdictor), Is.EqualTo(FlightFamily.Capital));
-            Assert.That(Crews.Complement(ShipClass.Interdictor), Is.GreaterThan(0).And.LessThan(Crews.Complement(ShipClass.Destroyer)));
-            Assert.That(Economy.HullCost(ShipClass.Interdictor), Is.GreaterThan(Economy.HullCost(ShipClass.Destroyer)), "the projector costs more than a destroyer's guns");
-            // A sub-capital with no FTL of its own (U.SPC-T472): it crosses between the stars by the gates with its band.
-            Assert.That(CruiseDrives.Of(ShipClass.Interdictor), Is.Null);
-            Assert.That(FtlRoster.Of(ShipClass.Interdictor), Is.EqualTo(FtlAccess.Gates));
-            Assert.That(LaneInterdictors.Emits(ShipClass.Interdictor), Is.True);
-            Assert.That(LaneInterdictors.Emits(ShipClass.Destroyer), Is.False);
+            Navy.Treasury = 1e12;
+            return new Ship { Id = id, Name = c.ToString() + id, Spec = ShipClassSpec.Of(c), Faction = Navy, Combat = new ShipCombat(CombatSpec.Of(c), c) };
         }
 
         [Test]
-        public void AnotherClassCanBeFittedWithAProjector()
+        public void TheProjectorIsHeavyEquipmentNotAShipClass()
         {
-            try
+            Assert.That(System.Enum.GetNames(typeof(ShipClass)), Has.No.Member("Interdictor"), "no lane interdictor class");
+            Assert.That(HullFrames.Catalogue.Select(f => f.Name), Has.No.Member("Lane interdictor"), "no lane interdictor hull frame");
+            var kind = LaneInterdictors.Kind;
+            Assert.That(kind, Is.Not.Null);
+            Assert.That(kind.Id, Is.EqualTo(FacilityKinds.FieldProjector));
+            Assert.That(kind.Fittable, Is.True, "a yard fits and strips it");
+            Assert.That(kind.Size, Is.GreaterThanOrEqualTo(2), "the projector and the reactor that feeds it");
+            Assert.That(kind.Bill, Is.Not.Empty);
+
+            // Any hull big enough to carry it and its reactor load may be fitted out as an interdictor ...
+            foreach (var c in new[] { ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Freighter, ShipClass.CommandCruiser, ShipClass.Battleship, ShipClass.Carrier })
             {
-                LaneInterdictors.RegisterEmitter(ShipClass.Cruiser);
-                Assert.That(LaneInterdictors.Emits(ShipClass.Cruiser), Is.True);
+                Assert.That(LaneInterdictors.CanCarry(c), Is.True, c + " is big enough");
+                Assert.That(HullFrames.ForClass(c).CanCarry(kind), Is.True, c + "'s frame takes it");
             }
-            finally
+            // ... and nothing smaller.
+            foreach (var c in new[] { ShipClass.Frigate, ShipClass.Corvette, ShipClass.Fighter, ShipClass.Gunship, ShipClass.Courier, ShipClass.Breacher, ShipClass.GatePicket, ShipClass.LaneTender, ShipClass.OreTug })
+                Assert.That(HullFrames.ForClass(c).CanCarry(kind), Is.False, c + " is too small for its reactor load");
+
+            // No stock design carries one: a hull is fitted out as an interdictor by choice.
+            foreach (ShipClass c in System.Enum.GetValues(typeof(ShipClass)))
+                Assert.That(FacilityLayouts.CountOf(FacilityLayouts.For(c), FacilityKinds.FieldProjector), Is.Zero, c.ToString());
+            Assert.That(LaneInterdictors.Carries(Bare(ShipClass.Destroyer)), Is.False);
+        }
+
+        [Test]
+        public void AYardFitsAndStripsTheProjectorAndTheHullBecomesAnInterdictorAndBackAgain()
+        {
+            var economy = new Economy(new Diplomacy(), 0);
+            var yard = economy.Add("Yard", body: 3, SettlementKind.Station, Navy, 0);
+            yard.Facilities.Add(new Facility(Recipe.Of(IndustryKind.Shipyard), 2));
+            foreach (var g in new[] { Good.Alloys, Good.Electronics, Good.Machinery, Good.HeliumThree })
+                yard.Stock[(int)g] = 1e6;
+            yard.RefreshPrices();
+
+            foreach (var c in new[] { ShipClass.Destroyer, ShipClass.Cruiser })
             {
-                LaneInterdictors.RegisterEmitter(ShipClass.Cruiser, false);
+                var ship = Bare(c);
+                var wing = new[] { ship };
+                Assert.That(LaneInterdictors.Fielded(ship, wing), Is.False);
+                double before = Navy.Treasury;
+                Assert.That(Outfitting.FitFacility(economy, ship, yard, LaneInterdictors.Kind, out var quote), Is.EqualTo(OutfitOutcome.Ok), c + " fitted");
+                Assert.That(quote.Net, Is.GreaterThan(0));
+                Assert.That(Navy.Treasury, Is.LessThan(before), "the yard's bill");
+                Assert.That(LaneInterdictors.Carries(ship), Is.True);
+                Assert.That(LaneInterdictors.EmitterOf(ship, wing), Is.SameAs(ship), "the " + c + " is now the group's interdictor");
+
+                int at = Outfitting.LoadoutOf(ship).Facilities.FindIndex(f => f.Kind == FacilityKinds.FieldProjector);
+                Assert.That(Outfitting.StripFacility(economy, ship, yard, at, out _), Is.EqualTo(OutfitOutcome.Ok), c + " stripped");
+                Assert.That(LaneInterdictors.Carries(ship), Is.False);
+                Assert.That(LaneInterdictors.Fielded(ship, wing), Is.False, "stripped, it pulses no more");
             }
-            Assert.That(LaneInterdictors.Emits(ShipClass.Cruiser), Is.False);
+
+            // A frigate has neither the room nor the reactor for one.
+            Assert.That(Outfitting.FitFacility(economy, Bare(ShipClass.Frigate, 2), yard, LaneInterdictors.Kind, out _), Is.EqualTo(OutfitOutcome.WontFit));
         }
 
         // ---------------------------------------------------------------- the pulse comes from the interdictor
@@ -141,8 +185,8 @@ namespace Unity.SpaceGod.Core.Tests
         public void TheBandsInterdictorPulsesAndItsMarkDropsIntoTheFightBesideTheLane()
         {
             var t = Create();
-            var raider = Lurk(t, "Shade", ShipClass.Destroyer, t.W.Pirates, ShipClass.Interdictor);
-            var emitter = t.W.Fleet.Ships.Single(s => s.Leader == raider && s.Spec.Class == ShipClass.Interdictor);
+            var raider = Lurk(t, "Shade", ShipClass.Destroyer, t.W.Pirates, ShipClass.Destroyer);
+            var emitter = FitEscort(t, raider);
             Assert.That(LaneInterdictors.EmitterOf(raider, t.W.Fleet.Ships), Is.SameAs(emitter));
             var mark = Ride(t, "Fat Purse", ShipClass.Freighter, t.W.Independents);
             Assert.That(RideOut(t, mark), Is.True, "the band's interdictor pulled it out");
@@ -162,7 +206,8 @@ namespace Unity.SpaceGod.Core.Tests
         public void LosingItsInterdictorEndsTheBandsLaneAmbush()
         {
             var t = Create();
-            var raider = Lurk(t, "Shade", ShipClass.Destroyer, t.W.Pirates, ShipClass.Interdictor);
+            var raider = Lurk(t, "Shade", ShipClass.Destroyer, t.W.Pirates, ShipClass.Destroyer);
+            FitEscort(t, raider);
             foreach (var s in t.W.Fleet.Ships.Where(s => s.Leader == raider)) s.Destroyed = true;
             var mark = Ride(t, "Fat Purse", ShipClass.Freighter, t.W.Independents);
             Assert.That(RideOut(t, mark), Is.False);
@@ -177,7 +222,13 @@ namespace Unity.SpaceGod.Core.Tests
             var bands = w.Fleet.Ships.Where(s => !s.Destroyed && !s.IsEscort && s.Faction == w.Pirates && s.Spec.IsMilitary && !s.Runner).ToList();
             Assert.That(bands, Is.Not.Empty);
             foreach (var band in bands)
+            {
                 Assert.That(LaneInterdictors.Fielded(band, w.Fleet.Ships), Is.True, band.Name + " has no interdictor");
+                // Fitted to a hull of the band, not a class of its own (U.SPC-T507).
+                var emitter = LaneInterdictors.EmitterOf(band, w.Fleet.Ships);
+                Assert.That(LaneInterdictors.CanCarry(emitter.Spec.Class), Is.True);
+                Assert.That(Outfitting.LoadoutOf(emitter).CountFacility(FacilityKinds.FieldProjector), Is.EqualTo(1));
+            }
         }
 
         // ---------------------------------------------------------------- navies field it
@@ -186,7 +237,8 @@ namespace Unity.SpaceGod.Core.Tests
         public void ANavysLanePicketPullsOutRaidersAndLetsLawfulTrafficRideOn()
         {
             var t = Create();
-            var picket = Lurk(t, "Vigil", ShipClass.Destroyer, t.W.Sol, ShipClass.Interdictor);
+            var picket = Lurk(t, "Vigil", ShipClass.Destroyer, t.W.Sol, ShipClass.Destroyer);
+            FitEscort(t, picket);
             var raider = Ride(t, "Gutter Knife", ShipClass.Breacher, t.W.Pirates);
             var trader = Ride(t, "Honest Margin", ShipClass.Freighter, t.W.Independents);
             Assert.That(t.W.War.Targets(picket, raider), Is.True);
@@ -205,8 +257,8 @@ namespace Unity.SpaceGod.Core.Tests
         public void ARaidersPulseSparesOtherRaidersAndANavysSparesItsOwn()
         {
             var t = Create();
-            var raider = Lurk(t, "Shade", ShipClass.Interdictor, t.W.Pirates);
-            var picket = Hull(t.W, "Vigil", ShipClass.Interdictor, t.W.Sol);
+            var raider = Fitted(Lurk(t, "Shade", ShipClass.Destroyer, t.W.Pirates));
+            var picket = Fitted(Hull(t.W, "Vigil", ShipClass.Destroyer, t.W.Sol));
             var mate = Hull(t.W, "Brother", ShipClass.Destroyer, t.W.Pirates);
             var own = Hull(t.W, "Sister", ShipClass.Destroyer, t.W.Sol);
             Assert.That(t.W.War.Targets(raider, mate), Is.False);
@@ -218,14 +270,17 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void ALanePicketWingCarriesAnInterdictorAndLiesInWaitOnALaneOfItsBeat()
         {
-            Assert.That(Enumerable.Range(0, 4).Any(i => PatrolWings.Composition(i).Contains(ShipClass.Interdictor)), Is.True, "no lane picket among the wings");
+            // The lane picket wing fits a projector to one of its destroyers (U.SPC-T507).
+            int picketWing = Enumerable.Range(0, 4).First(i => PatrolWings.FittingsOf(i).Any(f => f.facility == FacilityKinds.FieldProjector));
+            foreach (var (member, _) in PatrolWings.FittingsOf(picketWing))
+                Assert.That(LaneInterdictors.CanCarry(PatrolWings.Composition(picketWing)[member]), Is.True, "fitted to a hull that can carry it");
             var t = Create();
             // An older group, so the wing is not taken for the navy's home guard.
             Hull(t.W, "Old Guard", ShipClass.Destroyer, t.W.Sol);
             var wing = Hull(t.W, "Tripwire", ShipClass.Destroyer, t.W.Sol);
             wing.PatrolWing = true;
             wing.Route = new[] { t.Earth, t.Mars };
-            var e = Hull(t.W, "Tripwire Two", ShipClass.Interdictor, t.W.Sol, ShipRole.Escort);
+            var e = Fitted(Hull(t.W, "Tripwire Two", ShipClass.Destroyer, t.W.Sol, ShipRole.Escort));
             e.PatrolWing = true;
             t.W.Fleet.AddEscort(wing, e, Fleet.SlotFor(0));
             t.W.Fleet.Station(wing, t.Earth, StartJd);
@@ -255,10 +310,45 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void ALaneSecurityBuildPlanLaysDownInterdictors()
+        public void ARaisedLanePicketWingFliesAFittedDestroyer()
         {
-            Assert.That(BuildPlan.LaneSecurity.Cycle, Does.Contain(ShipClass.Interdictor));
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var w = World.CreateDefault(eph, StartJd);
+            var pickets = w.Fleet.Ships.Where(s => !s.Destroyed && s.PatrolWing && !s.IsEscort && !s.Convoy && LaneInterdictors.Fielded(s, w.Fleet.Ships)).ToList();
+            Assert.That(pickets, Is.Not.Empty, "a navy big enough for a lane picket wing flies one");
+            foreach (var leader in pickets)
+            {
+                var emitter = LaneInterdictors.EmitterOf(leader, w.Fleet.Ships);
+                Assert.That(emitter.Spec.Class, Is.EqualTo(ShipClass.Destroyer), leader.Name);
+                Assert.That(emitter.Leader, Is.SameAs(leader), "a wingman carries it");
+            }
+        }
+
+        [Test]
+        public void ALaneSecurityBuildPlanFitsAProjectorToAHullOfEachGroup()
+        {
             Assert.That(BuildPlan.All, Does.Contain(BuildPlan.LaneSecurity));
+            Assert.That(BuildPlan.LaneSecurity.GroupFittings, Does.Contain(FacilityKinds.FieldProjector));
+            Assert.That(BuildPlan.LaneSecurity.Cycle.Any(LaneInterdictors.CanCarry), Is.True, "it lays down hulls that can carry one");
+            Assert.That(BuildPlan.Balanced.GroupFittings, Is.Empty);
+
+            var t = Create();
+            var yard = t.W.Economy.Settlements.First(s => s.Owner == t.W.Sol && s.HasShipyard);
+            t.W.Polities.Command.SetBuild(t.W.Sol, BuildPlan.LaneSecurity);
+            var first = t.W.War.LaunchWarship(yard, ShipClass.Destroyer, StartJd);
+            Assert.That(LaneInterdictors.Carries(first), Is.True, "the group's first hull is its lane interdictor");
+            // A second hull launched while the first is parked at the yard joins its group, which has its projector already.
+            t.W.Fleet.Station(first, yard.Body, StartJd);
+            var second = t.W.War.LaunchWarship(yard, ShipClass.Destroyer, StartJd);
+            Assert.That(second.Leader, Is.SameAs(first), "it joins the group refitting there");
+            Assert.That(LaneInterdictors.Carries(second), Is.False, "one projector to a group");
+            Assert.That(LaneInterdictors.EmitterOf(first, t.W.Fleet.Ships), Is.SameAs(first));
+
+            // Under another plan, a hull is launched as designed.
+            t.W.Polities.Command.SetBuild(t.W.Sol, BuildPlan.Balanced);
+            var plain = t.W.War.LaunchWarship(yard, ShipClass.Destroyer, StartJd);
+            Assert.That(LaneInterdictors.Carries(plain), Is.False);
         }
     }
 }

@@ -74,7 +74,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void EveryCapitalClassFliesTheCapitalModelOnItsOwnHandling()
         {
             var reg = FlightModelRegistry.CreateDefault();
-            foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.CommandCruiser, ShipClass.Frigate })
+            foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.CommandCruiser, ShipClass.Frigate })
             {
                 Assert.That(reg.FamilyOf(c), Is.EqualTo(FlightFamily.Capital), c.ToString());
                 var model = reg.For(c) as CapitalFlightModel;

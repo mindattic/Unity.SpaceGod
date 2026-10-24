@@ -52,11 +52,6 @@ namespace Unity.SpaceGod.Core
         /// tenders matter in peace and are a prime mark in war.</summary>
         LaneTender,
 
-        /// <summary>A lane interdictor (U.SPC-T479): a destroyer-sized hull built round a field projector that disrupts a
-        /// hyperlane's magnetic field and throws every ship riding past out of it (see <see cref="LaneInterdictors"/>). The
-        /// pirate's and raider's favourite, since the lanes' routes are predictable; navies fly it as a lane picket against
-        /// them. Lightly armed: its reactor is spent on the emitter.</summary>
-        Interdictor,
         /// <summary>A gate picket (U.SPC-T480): a small, sensor-heavy hull stationed at a held jump gate's exit to give its
         /// owner early warning of whatever comes through the gate or drops out of FTL nearby (see <see cref="GatePickets"/>).
         /// Lightly armed and no match for a raider band, which goes for it first.</summary>
@@ -195,7 +190,6 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Interceptor, "Interceptor", 1.3, true),
             new ShipClassSpec(ShipClass.Bomber, "Bomber", 0.6, true),
             new ShipClassSpec(ShipClass.LaneTender, "Lane tender", 0.2, false),
-            new ShipClassSpec(ShipClass.Interdictor, "Lane interdictor", 0.35, true),
             new ShipClassSpec(ShipClass.GatePicket, "Gate picket", 0.8, true),
             new ShipClassSpec(ShipClass.CommandCruiser, "Command cruiser", 0.3, true),
             // An engine-heavy frigate (U.SPC-T475): the fastest warship hull short of a strike craft.

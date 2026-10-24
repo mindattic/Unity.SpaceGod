@@ -922,33 +922,6 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.1),
                 },
             } },
-            [ShipClass.Interdictor] = new[] { new CombatSpec
-            {
-                // The lane interdictor (U.SPC-T479): a destroyer-sized spine round the field projector that throws ships out
-                // of a hyperlane, two reactors to feed it, and little left over for guns: it pulls a mark out for the rest of
-                // its group to fight, and keeps itself alive with its shields and point defence.
-                DesignName = "Lane interdictor", LengthKm = 0.38,
-                MassKt = 500, MainThrustMN = 4200, RetroThrustMN = 3150, LateralThrustMN = 1700, VerticalThrustMN = 1700, PitchYawTorqueMNKm = 9000, RollTorqueMNKm = 2250,
-                Hull = 4200, Shield = 3000, ShieldRegen = 35, Armor = 3, MaxSpeed = 0.22, Accel = 0.008, Decel = 0.010,
-                BoostSpeedMultiplier = 1.4, BoostDurationS = 20, TurnRateDegS = 12,
-                Crew = 160,
-                DryMassTonnes = 7000, PropellantTonnes = 4500, ExhaustVelocityKmS = 4000,
-                Layout = new[]
-                {
-                    new SubsystemDef(SubsystemKind.Autocannon, 0, 0.04, 0.3, arcCenterDeg: 0, arcWidthDeg: 120),
-                    new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.06, -0.3, arcCenterDeg: 180, arcWidthDeg: 150),
-                    new SubsystemDef(SubsystemKind.PointDefense, 0.06, 0.02, 0.1),
-                    new SubsystemDef(SubsystemKind.PointDefense, -0.06, 0.02, 0.1),
-                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
-                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.2, arcCenterDeg: 0, arcWidthDeg: 180),
-                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
-                    new SubsystemDef(SubsystemKind.Engine, -0.035, 0, -0.47),
-                    new SubsystemDef(SubsystemKind.Engine, 0.035, 0, -0.47),
-                    // The field projector's two reactors, either side of the ring amidships.
-                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, 0.05),
-                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.15),
-                },
-            } },
             [ShipClass.CommandCruiser] = new[] { new CombatSpec
             {
                 // The command cruiser (U.SPC-T477): a battlecruiser's hull between a cruiser and a battleship, whose space and

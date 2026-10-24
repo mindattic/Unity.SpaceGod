@@ -58,7 +58,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(k.Berths, Is.EqualTo(MarineHabitats.BerthsPerScale));
             Assert.That(k.Bill.Length, Is.GreaterThan(0));
 
-            foreach (var c in new[] { ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Battleship, ShipClass.Carrier, ShipClass.Freighter, ShipClass.Interdictor, ShipClass.LaneTender })
+            foreach (var c in new[] { ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Battleship, ShipClass.Carrier, ShipClass.Freighter, ShipClass.LaneTender })
                 Assert.That(MarineHabitats.CanCarry(HullFrames.ForClass(c)), Is.True, c.ToString());
             foreach (var c in new[] { ShipClass.Fighter, ShipClass.Interceptor, ShipClass.Bomber, ShipClass.Gunship, ShipClass.Courier, ShipClass.Breacher })
             {
@@ -103,8 +103,8 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void FittingAHabitatGivesAHullMarinesAndStrippingOneTakesThemAway()
         {
-            // A lane interdictor is drawn with no marines; a habitat quarters fifty a unit of hull scale.
-            var plan = new ConstructionPlan(HullFrames.ForClass(ShipClass.Interdictor));
+            // A frigate is drawn with no marines; a habitat quarters fifty a unit of hull scale.
+            var plan = new ConstructionPlan(HullFrames.ForClass(ShipClass.Frigate));
             Assert.That(plan.Build().Marines, Is.EqualTo(0));
             double free = plan.FreeSpace;
             Assert.That(plan.FitFacility(Habitat), Is.EqualTo(ConstructionOutcome.Ok));
@@ -113,7 +113,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(plan.Build().Marines, Is.EqualTo(berths).Within(1e-9));
             Assert.That(MarineHabitats.Complement(plan.Loadout), Is.EqualTo(berths).Within(1e-9));
             Assert.That(MarineHabitats.Count(plan.Loadout), Is.EqualTo(1));
-            var ship = new Ship { Id = 1, Name = "LI", Spec = ShipClassSpec.Of(ShipClass.Interdictor), Faction = Navy };
+            var ship = new Ship { Id = 1, Name = "FF", Spec = ShipClassSpec.Of(ShipClass.Frigate), Faction = Navy };
             Assert.That(plan.Apply(ship), Is.True);
             Assert.That(ship.Combat.Interior.HasBarracks, Is.True);
             Assert.That(MarineHabitats.Ready(ship), Is.EqualTo(berths).Within(1e-9));

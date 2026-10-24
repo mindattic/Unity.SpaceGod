@@ -30,7 +30,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(FtlRoster.Of(ShipClass.Carrier), Is.EqualTo(FtlAccess.Own));
             Assert.That(FtlRoster.Of(ShipClass.Explorer), Is.EqualTo(FtlAccess.Own), "a long-legged survey ship keeps its drive");
             Assert.That(FtlRoster.Of(ShipClass.Battleship), Is.EqualTo(FtlAccess.Fitted));
-            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Courier, ShipClass.Freighter })
+            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Courier, ShipClass.Freighter })
                 Assert.That(FtlRoster.Of(c), Is.EqualTo(FtlAccess.Gates), c.ToString());
             foreach (var c in new[] { ShipClass.Fighter, ShipClass.Interceptor, ShipClass.Bomber })
                 Assert.That(FtlRoster.Of(c), Is.EqualTo(FtlAccess.Hangar), c.ToString());
@@ -43,7 +43,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(CruiseDrives.Of(Hull("x", ShipClass.Carrier, navy)), Is.SameAs(CruiseDrives.Capital));
             Assert.That(CruiseDrives.Of(Hull("x", ShipClass.Battleship, navy)), Is.SameAs(CruiseDrives.Capital), "the stock battleship is designed with one");
             Assert.That(CruiseDrives.Of(Hull("x", ShipClass.Explorer, navy)), Is.SameAs(CruiseDrives.Survey));
-            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Fighter, ShipClass.Bomber })
+            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Fighter, ShipClass.Bomber })
             {
                 Assert.That(CruiseDrives.Of(Hull("x", c, navy)), Is.Null, c.ToString());
                 Assert.That(InterstellarTraffic.CanCruise(Hull("x", c, navy)), Is.False, c.ToString());
@@ -102,7 +102,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             Assert.That(FtlCarriage.BerthsOf(ShipClass.Carrier), Is.GreaterThan(FtlCarriage.BerthsOf(ShipClass.Battleship)));
             Assert.That(FtlCarriage.BerthsOf(ShipClass.Battleship), Is.GreaterThan(0));
-            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Interdictor, ShipClass.Explorer })
+            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Explorer })
                 Assert.That(FtlCarriage.BerthsOf(c), Is.EqualTo(0), c + " has no berths");
             // Fighters and small craft can be carried; haulers cannot; anything with a drive of its own needs no carrying.
             foreach (var c in new[] { ShipClass.Fighter, ShipClass.Courier, ShipClass.Gunship, ShipClass.Breacher })

@@ -93,8 +93,6 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Cruiser] = new PilotTuning(0.14, 16, 1.4, 28, 6, 4.0),
             // Destroyer stays the nose-forward skirmisher (see Battle.BroadsideFacing).
             [ShipClass.Destroyer] = new PilotTuning(0.24, 28, 1.5, 25, 7, 3.5),
-            // The lane interdictor (U.SPC-T479): a destroyer's hull with the projector's mass amidships, a touch heavier at the helm.
-            [ShipClass.Interdictor] = new PilotTuning(0.2, 24, 1.4, 25, 7, 3.5),
             // The command cruiser (U.SPC-T477): a battlecruiser, between the cruiser and the battleship at the helm.
             [ShipClass.CommandCruiser] = new PilotTuning(0.12, 14, 1.35, 30, 5.5, 4.5),
             // The frigate (U.SPC-T475): the fastest warship hull, quick to flip end for end, with a long, hard boost for its runs.

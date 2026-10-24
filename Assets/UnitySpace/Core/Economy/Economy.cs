@@ -378,8 +378,6 @@ namespace Unity.SpaceGod.Core
                 // An interceptor's airframe round a sensor and jamming suite: the electronics are the price (U.SPC-T485).
                 case ShipClass.Recon: return 3800;
                 case ShipClass.LaneTender: return 6000;
-                // A destroyer's hull, dearer for the field projector and its reactors (U.SPC-T479).
-                case ShipClass.Interdictor: return 14000;
                 case ShipClass.GatePicket: return 2500;
                 // A battlecruiser's hull, its sensor array, communications suite and targeting computers dearer than guns (U.SPC-T477).
                 case ShipClass.CommandCruiser: return 52000;

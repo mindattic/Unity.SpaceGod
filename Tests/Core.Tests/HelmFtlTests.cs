@@ -41,7 +41,7 @@ namespace Unity.SpaceGod.Core.Tests
             // destroyers have no FTL of their own.
             foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Explorer })
                 Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Is.Null, c.ToString());
-            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Interdictor })
+            foreach (var c in new[] { ShipClass.Cruiser, ShipClass.Destroyer })
                 Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Does.Contain("no FTL drive").And.Contain("gates"), c.ToString());
             foreach (var c in Enum.GetValues(typeof(ShipClass)).Cast<ShipClass>().Where(c => CruiseDrives.Of(c) == null))
                 Assert.That(HelmFtl.Refusal(new Ship { Name = "x", Spec = ShipClassSpec.Of(c), Faction = navy }), Does.Contain("no FTL drive"), c.ToString());

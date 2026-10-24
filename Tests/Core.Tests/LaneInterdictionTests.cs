@@ -39,7 +39,9 @@ namespace Unity.SpaceGod.Core.Tests
             var ramp = lanes.RampHelio(lane, earth, StartJd);
             var hop = lanes.OnRampAt(ramp, StartJd).Value;
 
-            var lurker = Hull(w, "Shade", ShipClass.Interdictor, w.Pirates);
+            // A destroyer fitted out as a lane interdictor (U.SPC-T507).
+            var lurker = Hull(w, "Shade", ShipClass.Destroyer, w.Pirates);
+            Assert.That(LaneInterdictors.Fit(lurker), Is.True);
             w.Fleet.JoinLane(lurker, hop, ramp, StartJd);
             lurker.Phase = ShipPhase.Lurk;
             lurker.LaneHold = 0.5;

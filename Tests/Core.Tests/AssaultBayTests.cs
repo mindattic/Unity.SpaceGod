@@ -69,11 +69,12 @@ namespace Unity.SpaceGod.Core.Tests
             int habitat = cruiser.Facilities.ToList().FindIndex(f => f.Kind == FacilityKinds.MarineHabitat);
             Assert.That(cruiser.RemoveFacility(habitat), Is.EqualTo(ConstructionOutcome.WontFit));
 
-            // A lane interdictor is drawn with no habitat: no bay until one is fitted to supply it.
-            var interdictor = new ConstructionPlan(HullFrames.ForClass(ShipClass.Interdictor));
-            Assert.That(interdictor.FitFacility(bay), Is.EqualTo(ConstructionOutcome.WontFit));
-            Assert.That(interdictor.FitFacility(MarineHabitats.Kind), Is.EqualTo(ConstructionOutcome.Ok));
-            Assert.That(interdictor.FitFacility(bay), Is.EqualTo(ConstructionOutcome.Ok));
+            // A destroyer stripped of its habitat: no bay until one is fitted to supply it.
+            var stripped = new ConstructionPlan(HullFrames.ForClass(ShipClass.Destroyer));
+            Assert.That(stripped.RemoveFacility(stripped.Facilities.ToList().FindIndex(f => f.Kind == FacilityKinds.MarineHabitat)), Is.EqualTo(ConstructionOutcome.Ok));
+            Assert.That(stripped.FitFacility(bay), Is.EqualTo(ConstructionOutcome.WontFit));
+            Assert.That(stripped.FitFacility(MarineHabitats.Kind), Is.EqualTo(ConstructionOutcome.Ok));
+            Assert.That(stripped.FitFacility(bay), Is.EqualTo(ConstructionOutcome.Ok));
 
             // Fighters, small craft and haulers fire no rounds.
             foreach (var c in new[] { ShipClass.Gunship, ShipClass.Courier, ShipClass.Freighter, ShipClass.Fighter })
@@ -272,8 +273,8 @@ namespace Unity.SpaceGod.Core.Tests
             eph.Update(StartJd);
             var w = World.CreateDefault(eph, StartJd);
             Assert.That(w.Fleet.Ships.Any(x => x.Spec.Class == ShipClass.Breacher), Is.False, "a breacher was raised as a ship");
-            // A raider band's leader is the hull its lane interdictor keeps station on.
-            var leaders = w.Fleet.Ships.Where(x => x.Faction.IsPirate && w.Fleet.Ships.Any(e => e.Leader == x && e.Spec.Class == ShipClass.Interdictor)).ToList();
+            // A raider band's leader is the hull its lane interdictor (the escort fitted with a field projector) keeps station on.
+            var leaders = w.Fleet.Ships.Where(x => x.Faction.IsPirate && w.Fleet.Ships.Any(e => e.Leader == x && LaneInterdictors.Carries(e))).ToList();
             Assert.That(leaders, Is.Not.Empty);
             Expect.All(leaders, l => Assert.That(AssaultBays.Count(l), Is.EqualTo(1), l.Name + " leads a band with no assault bay"));
         }

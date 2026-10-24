@@ -358,8 +358,6 @@ namespace Unity.SpaceGod.Core
             // The skirmisher (as in Battle.BroadsideFacing): fights slower for its pace, so its circle is the tightest of the
             // line, and keeps more of its turn at Full and Flank to cut across a battleship's bow.
             [ShipClass.Destroyer] = Default.With(comeAboutS: 6, spoolS: 2.5, halfFraction: 0.35, pivotFactor: 0.35, fullFactor: 0.85, flankFactor: 0.7),
-            // A destroyer's hull with the projector's mass amidships: a beat slower to come about, without its edge at speed.
-            [ShipClass.Interdictor] = Default.With(comeAboutS: 7, spoolS: 3),
             // The battlecruiser, between the cruiser and the battleship.
             [ShipClass.CommandCruiser] = Default.With(comeAboutS: 12, spoolS: 4.5),
             // The frigate: the fastest warship hull, quick to flip end for end.
@@ -589,7 +587,6 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.Battleship, FlightFamily.Capital);
             r.Assign(ShipClass.Cruiser, FlightFamily.Capital);
             r.Assign(ShipClass.Destroyer, FlightFamily.Capital);
-            r.Assign(ShipClass.Interdictor, FlightFamily.Capital);
             r.Assign(ShipClass.CommandCruiser, FlightFamily.Capital);
             r.Assign(ShipClass.Frigate, FlightFamily.Capital);
             r.Assign(ShipClass.Corvette, FlightFamily.Capital);

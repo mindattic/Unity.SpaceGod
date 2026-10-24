@@ -30,7 +30,7 @@ namespace Unity.SpaceGod.Core.Tests
             // that fly from carriers' hangars as squadrons, and the recon fighter (U.SPC-T485) in a carrier's recon flight.
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
                 if (c != ShipClass.Breacher && c != ShipClass.Fighter && c != ShipClass.Explorer && c != ShipClass.Gunship
-                    && c != ShipClass.Interceptor && c != ShipClass.Bomber && c != ShipClass.LaneTender && c != ShipClass.Interdictor && c != ShipClass.GatePicket
+                    && c != ShipClass.Interceptor && c != ShipClass.Bomber && c != ShipClass.LaneTender && c != ShipClass.GatePicket
                     && c != ShipClass.CommandCruiser && c != ShipClass.Frigate && c != ShipClass.Corvette && c != ShipClass.Recon && c != ShipClass.AssaultShuttle) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
             Assert.That(fleet.Ships.Count >= 40, Is.True);
             Assert.That((fleet.Ships).Any(s => !s.IsEscort && s.Phase == ShipPhase.Transit), Is.True);

@@ -39,6 +39,18 @@ namespace Unity.SpaceGod.Rendering
         /// </summary>
         public static void Build(Ship ship, Transform parent, List<Renderer> renderers, out Transform stern, out Transform bow)
         {
+            BuildHull(ship, parent, renderers, out stern, out bow);
+            // Heavy equipment shows on whatever hull carries it (U.SPC-T507): a field projector's ring amidships. A yard's
+            // refit gives the ship a new combat state and its view is rebuilt, so the ring comes and goes with the fitting.
+            if (LaneInterdictors.Carries(ship))
+            {
+                var ring = Section(stern, renderers, ShipMeshFactory.GetFieldProjector(ship.Faction), "FieldProjector");
+                ring.localPosition = new Vector3(0, 0, -0.05f);
+            }
+        }
+
+        static void BuildHull(Ship ship, Transform parent, List<Renderer> renderers, out Transform stern, out Transform bow)
+        {
             bow = null;
             string kenney = KenneyModelFor(ship);
             if (kenney != null)

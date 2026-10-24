@@ -136,7 +136,7 @@ namespace Unity.SpaceGod.Core
         Fitted,
 
         /// <summary>No FTL of its own: it crosses by the jump gates, or docked on a carrier's hull: cruisers, destroyers,
-        /// frigates, the lane interdictor, couriers, freighters and the other small and civil hulls.</summary>
+        /// frigates, couriers, freighters and the other small and civil hulls.</summary>
         Gates,
 
         /// <summary>Crosses between the stars inside a carrier's hangar (or through a gate with its group): fighters, bombers.</summary>
@@ -166,8 +166,6 @@ namespace Unity.SpaceGod.Core
             [ShipClass.CommandCruiser] = FtlAccess.Fitted,
             [ShipClass.Cruiser] = FtlAccess.Gates,
             [ShipClass.Destroyer] = FtlAccess.Gates,
-            // A sub-capital (U.SPC-T479): its band crosses by the gates (its projector becomes equipment in U.SPC-T507).
-            [ShipClass.Interdictor] = FtlAccess.Gates,
             // No drive of its own (U.SPC-T475): the gates, or clamped to a carrier's hull (FtlCarriage).
             [ShipClass.Frigate] = FtlAccess.Gates,
             // System defence (U.SPC-T476): no drive, no gate, no carriage; it never leaves its home system.
