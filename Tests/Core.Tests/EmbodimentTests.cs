@@ -32,7 +32,8 @@ namespace Unity.SpaceGod.Core.Tests
             var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, seed);
             var port = new Settlement { Name = "Vesta Highport", Owner = blue };
             var station = b.AddPlatform(port, new ShipCombat(CombatSpec.Platform), 0, DVec3.Zero);
-            var enemy = b.AddShip(Hull(ShipClass.Battleship, red, 1), 1, enemyDir.Normalized * 8, -enemyDir.Normalized);
+            // A cruiser: a battleship would back off out of the platform's reach (U.SPC-T490).
+            var enemy = b.AddShip(Hull(ShipClass.Cruiser, red, 1), 1, enemyDir.Normalized * 8, -enemyDir.Normalized);
             var laser = station.Combat.Subsystems.First(s => s.Kind == SubsystemKind.HeavyLaser);
             foreach (var s in station.Combat.Subsystems)
                 if (s.Def.IsWeapon && s != laser) s.Hp = 0;

@@ -327,7 +327,9 @@ namespace Unity.SpaceGod.Core
                     var centre = RampHelio(spur, at, jd);
                     var n = RampDirection(spur, at, jd);
                     double d0 = DVec3.Dot(fromHelio - centre, n), d1 = DVec3.Dot(toHelio - centre, n);
-                    if (!(d0 < 0 && d1 >= 0)) continue;
+                    // d0 must be clearly behind the ring: a path lying in its plane is not a crossing, and float noise at
+                    // heliocentric magnitudes (~1e-7 km) must not read as one.
+                    if (!(d0 < -1e-4 && d1 >= 0)) continue;
                     var hit = fromHelio + (toHelio - fromHelio) * (d0 / (d0 - d1));
                     if ((hit - centre).Length <= GateRadiusKm) return new LaneHop(spur, at, spur.Other(at));
                 }

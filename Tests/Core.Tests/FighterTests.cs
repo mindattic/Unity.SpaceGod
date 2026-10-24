@@ -22,7 +22,8 @@ namespace Unity.SpaceGod.Core.Tests
             };
             Ship Hull(ShipClass c, Faction f, int id) => new Ship { Id = id, Name = c + "" + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(CombatSpec.Of(c), c) };
             b.AddShip(Hull(ShipClass.Carrier, blue, 0), 0, new DVec3(14, 0, 0), -DVec3.UnitX);
-            b.AddShip(Hull(ShipClass.Battleship, red, 1), 1, new DVec3(-14, 0, 0), DVec3.UnitX);
+            // A cruiser, not a battleship: a battleship now holds the rear line off its mark (U.SPC-T490), out of the squadrons' gun range.
+            b.AddShip(Hull(ShipClass.Cruiser, red, 1), 1, new DVec3(-14, 0, 0), DVec3.UnitX);
             b.AddShip(Hull(ShipClass.Destroyer, red, 2), 1, new DVec3(-14, 4, 0), DVec3.UnitX);
             return b;
         }

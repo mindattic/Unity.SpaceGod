@@ -151,7 +151,8 @@ namespace Unity.SpaceGod.Core
         {
             var w = gate.Home.World;
             var f = gate.Owner;
-            string name = gate.Name + " Picket" + (index > 0 ? " " + (index + 1) : "");
+            // Gates are named for where they lead, so two systems can each hold a "Centauri Gate"; the home system keeps hull names unique.
+            string name = gate.Name + " Picket" + (index > 0 ? " " + (index + 1) : "") + (gate.Home?.Name != null ? " (" + gate.Home.Name + ")" : "");
             var ship = new Ship
             {
                 Name = f.Prefix.Length > 0 ? f.Prefix + " " + name : name,
