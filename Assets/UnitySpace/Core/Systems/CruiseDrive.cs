@@ -168,6 +168,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Destroyer] = FtlAccess.Gates,
             // A sub-capital (U.SPC-T479): its band crosses by the gates (its projector becomes equipment in U.SPC-T507).
             [ShipClass.Interdictor] = FtlAccess.Gates,
+            // No drive of its own (U.SPC-T475): the gates, or clamped to a carrier's hull (FtlCarriage).
+            [ShipClass.Frigate] = FtlAccess.Gates,
             [ShipClass.Fighter] = FtlAccess.Hangar,
             [ShipClass.Interceptor] = FtlAccess.Hangar,
             [ShipClass.Bomber] = FtlAccess.Hangar,
@@ -322,6 +324,9 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Courier] = 2,
             [ShipClass.Breacher] = 2,
             [ShipClass.Gunship] = 2,
+            // A frigate rides clamped to a carrier's hull (U.SPC-T475): more berths than a battleship or command cruiser has,
+            // so only a carrier takes one, two at most.
+            [ShipClass.Frigate] = 5,
         };
 
         /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="count"/> berths (0 takes them away).</summary>

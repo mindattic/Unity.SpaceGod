@@ -67,6 +67,12 @@ namespace Unity.SpaceGod.Core
         /// action. Every ship on its side within its reach fights coordinated (see <see cref="FleetCoordination"/>); losing
         /// it throws them into confusion, so it is a priority target. Navies build it to lead their groups.</summary>
         CommandCruiser,
+
+        /// <summary>A frigate (U.SPC-T475): a fast, lightly armoured, engine-heavy missile and torpedo boat with deep magazines
+        /// of long-range anti-ship missiles and antimatter (photon) torpedoes. Its doctrine is the alpha strike (see
+        /// <see cref="AlphaStrike"/>): burn in, loose one devastating volley, flip and burn back out, trusting to speed and
+        /// distance rather than armour. No FTL drive: it crosses by the gates, or clamped to a carrier's hull.</summary>
+        Frigate,
     }
 
     public enum ShipRole
@@ -165,6 +171,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Interdictor, "Lane interdictor", 0.35, true),
             new ShipClassSpec(ShipClass.GatePicket, "Gate picket", 0.8, true),
             new ShipClassSpec(ShipClass.CommandCruiser, "Command cruiser", 0.3, true),
+            // An engine-heavy frigate (U.SPC-T475): the fastest warship hull short of a strike craft.
+            new ShipClassSpec(ShipClass.Frigate, "Frigate", 0.6, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

@@ -42,7 +42,7 @@ namespace Unity.SpaceGod.Rendering
         }
 
         public static bool IsWarship(ShipClass c) => c == ShipClass.Carrier || c == ShipClass.Battleship || c == ShipClass.Cruiser || c == ShipClass.Destroyer
-                                                    || c == ShipClass.CommandCruiser;
+                                                    || c == ShipClass.CommandCruiser || c == ShipClass.Frigate;
 
         /// <summary>The whole hull (both sections).</summary>
         public static Mesh Get(ShipClass shipClass, Faction faction) => GetSection(shipClass, faction, WholeHull);
@@ -72,6 +72,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Interdictor: BuildInterdictor(b); break;
                 case ShipClass.GatePicket: BuildPicket(b); break;
                 case ShipClass.CommandCruiser: BuildCommandCruiser(b); break;
+                case ShipClass.Frigate: BuildFrigate(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -623,6 +624,34 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0, -0.45f), new Vector3(0.12f, 0.055f, 0.05f), b.Dark);
             foreach (float x in new[] { -0.04f, 0f, 0.04f })
                 b.Nozzle(new Vector3(x, 0, -0.48f), 0.018f, 0.035f);
+        }
+
+        /// <summary>A frigate (U.SPC-T475): a slim, light spine with the two torpedo launchers' glowing mouths in its bow, the
+        /// four missile racks paired above and below it forward, and a big four-bell engine block astern that is a third of
+        /// the hull.</summary>
+        static void BuildFrigate(Builder b)
+        {
+            b.Frustum(-0.2f, 0.5f, new Vector2(0.07f, 0.045f), new Vector2(0.016f, 0.014f), 0, b.Hull);
+            // The engine block: wider than the spine, all drive.
+            b.Box(new Vector3(0, 0, -0.33f), new Vector3(0.15f, 0.1f, 0.26f), b.Dark);
+            b.Box(new Vector3(0, 0.052f, -0.33f), new Vector3(0.1f, 0.006f, 0.22f), b.Accent);
+            foreach (float x in new[] { -0.045f, 0.045f })
+                foreach (float y in new[] { -0.025f, 0.025f })
+                    b.Nozzle(new Vector3(x, y, -0.47f), 0.022f, 0.04f);
+            // The missile racks, a pair above the spine and a pair below, with their hatches.
+            foreach (float y in new[] { -0.035f, 0.035f })
+                foreach (float x in new[] { -0.06f, 0.06f })
+                {
+                    b.Box(new Vector3(x, y, 0.15f), new Vector3(0.04f, 0.022f, 0.16f), b.Hull);
+                    b.Box(new Vector3(x, y + Mathf.Sign(y) * 0.012f, 0.15f), new Vector3(0.03f, 0.003f, 0.12f), b.Dark);
+                }
+            // The torpedo launchers' mouths, lit with the antimatter's containment glow.
+            var glow = b.Glow(new Color(0.65f, 0.7f, 1f));
+            foreach (float x in new[] { -0.03f, 0.03f })
+                b.Cylinder(new Vector3(x, 0, 0.43f), 0.01f, 0.04f, glow);
+            // The bridge, low on the spine amidships.
+            b.Box(new Vector3(0, 0.04f, -0.02f), new Vector3(0.035f, 0.02f, 0.06f), b.Hull);
+            b.Box(new Vector3(0, 0.051f, 0.0f), new Vector3(0.036f, 0.004f, 0.015f), b.Dark);
         }
 
         static void BuildDestroyer(Builder b)

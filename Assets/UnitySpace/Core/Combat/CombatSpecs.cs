@@ -900,6 +900,42 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
                 },
             } },
+            [ShipClass.Frigate] = new[] { new CombatSpec
+            {
+                // The frigate (U.SPC-T475, see AlphaStrike): smaller and lighter than a destroyer, with a quarter again its
+                // drive on half its mass, so it is the fastest warship there is; it pays for it in plate (thin hull, light
+                // shields, almost no armour) and in guns (none but point defence). Its whole battery is forward-firing
+                // launchers fed from deep magazines: four long-range anti-ship missile racks and two antimatter (photon)
+                // torpedo launchers, loosed together in one alpha strike.
+                DesignName = "Frigate", LengthKm = 0.32,
+                MassKt = 350, MainThrustMN = 7000, RetroThrustMN = 5250, LateralThrustMN = 2800, VerticalThrustMN = 2800, PitchYawTorqueMNKm = 5400, RollTorqueMNKm = 1350,
+                Hull = 2600, Shield = 1400, ShieldRegen = 20, Armor = 1, MaxSpeed = 0.38, Accel = 0.02, Decel = 0.022,
+                BoostSpeedMultiplier = 1.6, BoostDurationS = 30, TurnRateDegS = 20,
+                Crew = 120,
+                DryMassTonnes = 4500, PropellantTonnes = 4000, ExhaustVelocityKmS = 4000,
+                Layout = new[]
+                {
+                    // The anti-ship missile racks, either side of the spine, bearing forward.
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.06, 0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.06, 0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
+                    new SubsystemDef(SubsystemKind.MissileLauncher, 0.06, -0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
+                    new SubsystemDef(SubsystemKind.MissileLauncher, -0.06, -0.035, 0.15, arcCenterDeg: 0, arcWidthDeg: 150) { Weapon = AlphaStrike.AntiShipMissile },
+                    // Two antimatter (photon) torpedo launchers in the bow.
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0.03, 0, 0.42, arcCenterDeg: 0, arcWidthDeg: 90) { Weapon = AlphaStrike.MagazineTorpedo },
+                    new SubsystemDef(SubsystemKind.AntimatterTorpedo, -0.03, 0, 0.42, arcCenterDeg: 0, arcWidthDeg: 90) { Weapon = AlphaStrike.MagazineTorpedo },
+                    new SubsystemDef(SubsystemKind.PointDefense, 0.04, 0.03, 0.28),
+                    new SubsystemDef(SubsystemKind.PointDefense, -0.04, 0.03, -0.2),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.045, -0.02),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.2, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.3, arcCenterDeg: 180, arcWidthDeg: 180),
+                    // Engine-heavy: four big bells astern, a third of the hull's length in engine rooms.
+                    new SubsystemDef(SubsystemKind.Engine, -0.045, 0.025, -0.47),
+                    new SubsystemDef(SubsystemKind.Engine, 0.045, 0.025, -0.47),
+                    new SubsystemDef(SubsystemKind.Engine, -0.045, -0.025, -0.47),
+                    new SubsystemDef(SubsystemKind.Engine, 0.045, -0.025, -0.47),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.32),
+                },
+            } },
         };
 
         /// <summary>Every class's marines are what its design's habitats quarter (U.SPC-T465, <see cref="MarineHabitats"/>), not

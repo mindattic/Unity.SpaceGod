@@ -381,6 +381,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.GatePicket: return 2500;
                 // A battlecruiser's hull, its sensor array, communications suite and targeting computers dearer than guns (U.SPC-T477).
                 case ShipClass.CommandCruiser: return 52000;
+                // Smaller than a destroyer, but its engines and antimatter magazines are dear (U.SPC-T475).
+                case ShipClass.Frigate: return 10000;
                 default: return 3000;
             }
         }

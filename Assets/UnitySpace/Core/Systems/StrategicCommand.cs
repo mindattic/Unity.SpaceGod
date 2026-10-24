@@ -143,8 +143,13 @@ namespace Unity.SpaceGod.Core
         public static readonly BuildPlan BattleLine = Register("Battle line", "Battleships and cruisers, with a command cruiser to lead them: the heaviest guns", 1,
             ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Battleship, ShipClass.Destroyer, ShipClass.CommandCruiser);
 
-        public static readonly BuildPlan Carriers = Register("Carrier groups", "Carriers and their screens", 1,
-            ShipClass.Carrier, ShipClass.Destroyer, ShipClass.Cruiser, ShipClass.Destroyer);
+        /// <summary>Carriers, their screens and the frigates that ride clamped to their hulls (U.SPC-T475).</summary>
+        public static readonly BuildPlan Carriers = Register("Carrier groups", "Carriers, their screens and frigates", 1,
+            ShipClass.Carrier, ShipClass.Destroyer, ShipClass.Frigate, ShipClass.Cruiser, ShipClass.Destroyer, ShipClass.Frigate);
+
+        /// <summary>Strike flotillas (U.SPC-T475): frigates that alpha-strike the enemy's capitals, with destroyers to screen them.</summary>
+        public static readonly BuildPlan Strike = Register("Strike flotillas", "Frigates and their destroyers: alpha strikes on the enemy's capitals", 1,
+            ShipClass.Frigate, ShipClass.Destroyer, ShipClass.Frigate, ShipClass.Frigate, ShipClass.Cruiser);
 
         public static readonly BuildPlan Screens = Register("Screens", "Destroyers: cheap, quick hulls in numbers", 1,
             ShipClass.Destroyer, ShipClass.Destroyer, ShipClass.Cruiser);

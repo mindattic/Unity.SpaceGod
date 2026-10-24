@@ -369,6 +369,14 @@ namespace Unity.SpaceGod.Core
                 // Designed with its own FTL drive, as a battleship is (U.SPC-T472): a fitting a yard may strip.
                 new FacilitySite(FacilityKinds.FtlDrive, "FTL drive", -0.3, 0, FacilitySite.Amidships),
             },
+            // The frigate (U.SPC-T475): its torpedo magazine behind the bow launchers and the missile magazine under the racks
+            // forward, the bridge off midships, and long engine rooms for its four big engines. No quarters for marines.
+            [ShipClass.Frigate] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bow, "Bow", 0.42), new FacilitySite(FacilityKinds.Battery, "Torpedo magazine", 0.3),
+                new FacilitySite(FacilityKinds.Battery, "Missile magazine", 0.12), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
+                new FacilitySite(FacilityKinds.Engineering, "Engine rooms", -0.34), new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.02, 0.045, 3),
+            },
             // A truss freighter (U.SPC-T482): the cockpit at the bow, the pod gantry down the spine, the pods and spheres clamped
             // along it (no space of their own: nobody walks into a pod) and the engine room astern.
             [ShipClass.Freighter] = BulkFreighters.StockLayout(),
@@ -495,7 +503,9 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Gunship:
                 case ShipClass.Courier:
                 case ShipClass.OreTug:
-                case ShipClass.GatePicket: return 2;
+                case ShipClass.GatePicket:
+                // Its magazines and engine rooms fill a frigate (U.SPC-T475).
+                case ShipClass.Frigate: return 2;
                 default: return 1;
             }
         }

@@ -159,6 +159,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>Seconds left in the confusion after the command ship coordinating it was lost (U.SPC-T477).</summary>
         public double Disrupted;
 
+        /// <summary>Where an alpha-striking hull (a frigate, U.SPC-T475) is in its run: burning in, or burning back out after its
+        /// volley (see <see cref="AlphaStrike"/>).</summary>
+        public StrikePhase Strike;
+
         public bool Present => !Dead && !Fled && !Docked;
         public double Radius => LengthKm * 0.5;
         public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : Fort != null ? Fort.Name + " fort" : "Fighter";
@@ -885,6 +889,8 @@ namespace Unity.SpaceGod.Core
                 if (o.Ship != null && !o.Combat.Disabled) score -= RaidDoctrine.TargetBias(u.Faction, o.Ship);
                 // A command ship is the priority target (U.SPC-T477): sink it and its whole fleet fights uncoordinated.
                 if (FleetCoordination.Coordinates(o)) score -= FleetCoordination.Priority.Value;
+                // A frigate's torpedoes are for the capitals (U.SPC-T475).
+                score -= AlphaStrike.TargetBias(u, o);
                 if (o.Kind == UnitKind.Platform) score += 6;
                 if (flagship != null && flagship != u && flagship.Target == o) score -= 6;
                 if (focus != null && focus == o) score -= FleetCoordination.Focus.Value;
@@ -956,11 +962,20 @@ namespace Unity.SpaceGod.Core
             }
 
             DVec3 desired;
+            DVec3? strikeFace = null;
+            double burn = 1;
             if (u.Fleeing)
             {
                 var away = u.Pos - HostileCentroid(u);
                 if (away.LengthSquared < 1e-6) away = u.Pos.LengthSquared > 0 ? u.Pos : DVec3.UnitX;
                 desired = away.Normalized * maxSpeed;
+            }
+            else if (u.Target != null && AlphaStrike.Flies(u) && !Broadsides.HoldsFormation(u))
+            {
+                // A frigate's alpha strike (U.SPC-T475): burn in nose-on, loose the volley, flip and burn back out.
+                burn = AlphaStrike.Steer(u, maxSpeed, out desired, out var strikeHeading);
+                maxSpeed *= burn;
+                strikeFace = strikeHeading;
             }
             else if (u.Target != null)
             {
@@ -997,13 +1012,14 @@ namespace Unity.SpaceGod.Core
             if (held) desired = (StationOf(u) - u.Pos) * 0.05 + u.Leader.Vel;
             if (desired.Length > maxSpeed) desired = desired.Normalized * maxSpeed;
 
-            double accel = c.Spec.Accel * (0.3 + 0.7 * c.EngineFactor);
+            double accel = c.Spec.Accel * (0.3 + 0.7 * c.EngineFactor) * burn;
             var dv = desired - u.Vel;
             double step = accel * dt;
             u.Vel += dv.Length > step ? dv.Normalized * step : dv;
             u.Pos += u.Vel * dt;
 
             var face = u.Fleeing ? u.Vel
+                : strikeFace is DVec3 strike ? strike
                 : u.Target == null ? (held ? u.Leader.Forward : u.Vel)
                 : BroadsideFacing(u, (u.Target.Pos - u.Pos).Normalized);
             TurnToward(u, face, c.Spec.TurnRateDegS, dt);
@@ -1261,6 +1277,10 @@ namespace Unity.SpaceGod.Core
             Broadsides.BeginVolleys(u);
             // The captain tunes the phaser arrays for the fight as it stands: a lance or a sweep (U.SPC-T488).
             EnergyWeapons.Step(this, u);
+            // A frigate holds every launcher for one volley, loosed together once its mark is in reach of them all (U.SPC-T475).
+            bool alpha = AlphaStrike.Flies(u);
+            bool release = alpha && AlphaStrike.Releases(u);
+            bool loosed = false;
             foreach (var s in c.Subsystems)
             {
                 var w = EnergyWeapons.Effective(s, c);
@@ -1369,6 +1389,11 @@ namespace Unity.SpaceGod.Core
                     s.Aim = DVec3.Zero;
                     continue;
                 }
+                if (alpha && AlphaStrike.Holds(s, release))
+                {
+                    s.Aim = (target.Pos - origin).Normalized;
+                    continue;
+                }
                 // No round in reach: the screen turns on fighters (U.SPC-T489); a flak cannon with only a hull near fires on it as
                 // point defence does.
                 if (ScreenWeapons.IsScreenMount(s.Kind) && WeakPoints.IsSmallCraft(target))
@@ -1393,6 +1418,7 @@ namespace Unity.SpaceGod.Core
                     // antimatter torpedo is tougher still and hits hardest of all (U.SPC-T489).
                     var kindOf = ScreenWeapons.KindOf(s.Kind, w);
                     bool torpedo = kindOf == MissileKind.Torpedo || kindOf == MissileKind.Antimatter;
+                    if (alpha && AlphaStrike.IsStrikeMount(s)) loosed = true;
                     for (int k = 0; k < w.Salvo && s.Ammo > 0; k++)
                     {
                         s.Ammo--;
@@ -1455,6 +1481,8 @@ namespace Unity.SpaceGod.Core
                     Emit(kind, origin, origin + (miss - origin).Normalized * Math.Min(w.RangeKm, dist * 1.3), 0, u.Side, null, -1);
                 }
             }
+            // The volley is away: flip and burn back out (U.SPC-T475).
+            if (loosed) AlphaStrike.Loosed(u);
         }
 
         /// <summary>
