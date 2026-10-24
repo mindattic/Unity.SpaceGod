@@ -101,6 +101,7 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void TheNewTunablesAreInTheSettingsMenu()
         {
+            SettingsRegistry.DiscoverLoadedDeclarations(); // the menu runs this at startup; All holds only what was declared so far
             var weapons = SettingsRegistry.Default.All.Where(s => s.Group == SettingGroups.Weapons).Select(s => s.Key).ToList();
             foreach (var key in new[] { "weapons.antimatterYield", "weapons.antimatterToughness", "weapons.flakBurst", "weapons.flakDamage", "weapons.interceptorReliability", "weapons.screenStation" })
                 Assert.That(weapons, Does.Contain(key));
