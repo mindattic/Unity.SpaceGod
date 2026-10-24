@@ -75,6 +75,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Frigate: BuildFrigate(b); break;
                 case ShipClass.Corvette: BuildCorvette(b); break;
                 case ShipClass.Recon: BuildRecon(b); break;
+                case ShipClass.AssaultShuttle: BuildShuttle(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -353,6 +354,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Bomber: BuildBomber(b); break;
                 case ShipClass.Gunship: BuildGunship(b); break;
                 case ShipClass.Recon: BuildRecon(b); break;
+                case ShipClass.AssaultShuttle: BuildShuttle(b); break;
                 default:
                     b.Frustum(-0.45f, 0.5f, new Vector2(0.16f, 0.12f), new Vector2(0.02f, 0.02f), 0, b.Hull);
                     b.Frustum(-0.35f, 0.05f, new Vector2(0.95f, 0.025f), new Vector2(0.12f, 0.02f), 0, b.Accent);
@@ -1009,6 +1011,22 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0.07f, 0.15f), new Vector3(0.09f, 0.04f, 0.18f), b.Glow(new Color(0.6f, 0.85f, 1f)));
             b.Nozzle(new Vector3(-0.07f, 0, -0.47f), 0.05f, 0.06f);
             b.Nozzle(new Vector3(0.07f, 0, -0.47f), 0.05f, 0.06f);
+        }
+
+        /// <summary>A boarding shuttle (U.SPC-T486): a blunt, boxy armoured hull with a glazed cockpit forward, a docking
+        /// collar on its flank where the team goes across, armour skirts along its troop bay, and twin drives. No guns.</summary>
+        static void BuildShuttle(Builder b)
+        {
+            b.Frustum(-0.42f, 0.3f, new Vector2(0.26f, 0.2f), new Vector2(0.2f, 0.15f), 0, b.Hull);
+            b.Frustum(0.3f, 0.48f, new Vector2(0.2f, 0.15f), new Vector2(0.09f, 0.07f), 0, b.Hull);
+            b.Box(new Vector3(0, 0.1f, 0.34f), new Vector3(0.14f, 0.04f, 0.12f), b.Glow(new Color(0.6f, 0.85f, 1f)));
+            foreach (float side in new[] { -1f, 1f })
+                b.Box(new Vector3(side * 0.14f, -0.02f, -0.05f), new Vector3(0.025f, 0.16f, 0.5f), b.Accent);
+            // The docking collar: a squat ring of plate on the starboard flank over the troop bay.
+            b.Box(new Vector3(0.17f, 0, 0.02f), new Vector3(0.04f, 0.12f, 0.14f), b.Dark);
+            b.Box(new Vector3(0.195f, 0, 0.02f), new Vector3(0.01f, 0.08f, 0.09f), new Color(0.55f, 0.53f, 0.5f, 1f));
+            b.Nozzle(new Vector3(-0.08f, 0, -0.45f), 0.05f, 0.06f);
+            b.Nozzle(new Vector3(0.08f, 0, -0.45f), 0.05f, 0.06f);
         }
 
         /// <summary>A recon / EW fighter (U.SPC-T485): an interceptor's needle on a wider delta, a sensor pod at each wing

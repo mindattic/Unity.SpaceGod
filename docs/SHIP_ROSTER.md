@@ -30,7 +30,7 @@ All piloted. Inertial dampeners are what make a dogfight survivable (see the rea
 - **Bomber.** Slow and tough, with torpedoes for anti-capital strikes. It needs an escort.
 - **Heavy Fighter / Gunship.** Armoured and multi-crew, with turrets. It brawls and hunts corvettes.
 - **Recon / EW Fighter.** Scouts, jams enemy targeting and paints targets for the bombers.
-- **Boarding Shuttle / Assault Craft.** Delivers marines to disabled ships and to gates.
+- **Boarding Shuttle / Assault Craft.** Delivers marines to disabled ships and to gates. In the game (U.SPC-T486, `Core/Combat/BoardingShuttles.cs`): an armoured, unarmed craft a carrier keeps two of in its hangars beside its squadrons. When a hull lies disabled (or has struck on terms that open it to boarding) or a station or gate fort's guns are silenced, and no armed enemy is near it, the carrier sends a shuttle with a team of 24 marines from its barracks; it docks alongside, matches the prize's drift, latches on and lets the team in through the airlock, with no drill, no breach and no damage to the hull, then casts off when the fight aboard is decided and flies home. A carrier with shuttles sends them rather than closing to board with its own hull; a war fleet whose group carries them takes a silenced gate in a day rather than two. Figures in Settings > Broadsides.
 - **Breacher.** A whole marine team in an armoured round, fired at high velocity from an Assault Bay on a hull that carries a Marine Habitat (U.SPC-T465, U.SPC-T466).
 
 ### Escorts and sub-capitals
@@ -59,7 +59,7 @@ All piloted. Inertial dampeners are what make a dogfight survivable (see the rea
 | Cruiser | No | Gates |
 | Destroyer / Frigate | No | Gates, or docked on a carrier's hull |
 | Corvette | Never | Never leaves its home system |
-| Fighters / Bombers | No | Inside a carrier's hangar |
+| Fighters / Bombers / Boarding shuttles | No | Inside a carrier's hangar |
 
 Battleships are as big as carriers or bigger, so they never land on one.
 
@@ -143,7 +143,7 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 | Truss-and-pod freighters | In: a truss with cargo pods and fuel spheres as facilities, unarmed and unarmoured, a bulk lane toll, a weak drive, never landing, its model showing its load | U.SPC-T482 |
 | Ice hauler / ore tug | Not yet | U.SPC-T483 |
 | Recon / EW fighter | In: a class of its own (`ShipClass.Recon`), an interceptor's airframe with a pilot and an EW officer; every carrier berths a recon pair beside its squadrons and flies it ahead to the capital its bombers are going for, where it holds off outside point defence, jams every enemy ship within 8 km (they fire 30% less accurately) and paints its mark (bombers go for it first, and their torpedoes steer 2.5 times as hard onto it and ignore its decoys four times in five); aboard, it stretches the carrier's sensor reach by half. Figures in Settings > Dogfighting (`ElectronicWarfare`, `Core/Combat/ElectronicWarfare.cs`) | U.SPC-T485 |
-| Boarding shuttle | Not yet a class (the interceptor, space superiority fighter and bomber are hulls of their own since U.SPC-T484) | U.SPC-T486 |
+| Boarding shuttles take prizes and gates intact | In: the assault shuttle is a class of its own carried in a carrier's hangars; it docks with a disabled hull or a silenced station or gate fort, latches on and puts its marine team in through the airlock for the boarding fight, slower and gentler than a Breacher round; a war fleet with shuttles takes a silenced gate sooner | U.SPC-T486 |
 | Antimatter / photon torpedoes, flak, interceptor missiles | In: battleships and carriers carry an antimatter torpedo launcher (a frigate two, from a magazine twice as deep, U.SPC-T475); destroyers carry two rotary flak cannons and an interceptor launcher beside their point defence and keep between their capital and the threat; tunables in Settings > Weapons | U.SPC-T489 |
 | Dreadnought spinal mounts and rear-line doctrine | Not yet | U.SPC-T490 |
 | Radiators and heat on big ships | Not yet | U.SPC-T491 |

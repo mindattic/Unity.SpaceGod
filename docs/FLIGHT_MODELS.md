@@ -31,6 +31,7 @@ To add a way of flying: write an `IFlightModel` and its handling struct, then ca
 | Interceptor | Interceptor | `LightFighterFlightModel` on `LightFighterHandling.Interceptor` (see [Strike craft](#strike-craft-interceptors-fighters-and-bombers)) |
 | Fighter (space superiority) | Light fighter | `LightFighterFlightModel` |
 | Bomber | Bomber | `BomberFlightModel` (see [Strike craft](#strike-craft-interceptors-fighters-and-bombers)) |
+| Assault shuttle (U.SPC-T486) | Bomber | `BomberFlightModel`: a heavy throttle and a weak strafe for coming alongside a prize (see `BoardingShuttles`) |
 | Courier | Light fighter | `LightFighterFlightModel` (new; see [Couriers](#couriers)) |
 | Gunship | Heavy fighter | Newtonian, until its own model lands |
 | Breacher (a fired round) | Ballistic | `BallisticFlightModel` (see [Fired rounds](#fired-rounds-the-breacher)) |

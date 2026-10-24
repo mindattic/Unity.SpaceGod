@@ -139,6 +139,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>Seconds until its assault bays can fire the next Breacher round (U.SPC-T466, <see cref="AssaultBays.IntervalSeconds"/>).</summary>
         public double AssaultBayReload;
 
+        /// <summary>Seconds until a carrier can send its next boarding shuttle out of its hangar (U.SPC-T486, <see cref="BoardingShuttles"/>).</summary>
+        public double ShuttleLaunchIn;
+
         /// <summary>Taken by boarders: it has changed sides and carries a prize crew, so it no longer fights.</summary>
         public bool Captured;
 
@@ -476,7 +479,7 @@ namespace Unity.SpaceGod.Core
     /// runs carries its damage home. Seconds are simulated seconds; at high time warp the battle takes
     /// coarser steps rather than holding the clock back.
     /// </summary>
-    public sealed class Battle
+    public sealed partial class Battle
     {
         public readonly int Id;
         public readonly int Body;
@@ -866,6 +869,8 @@ namespace Unity.SpaceGod.Core
                 // Nor does a ship its flagship has ordered into line break off to board (U.SPC-T425).
                 if (u.PlayerControlled || Broadsides.HoldsFormation(u)) u.BoardTarget = null;
                 else ChooseBoarding(u);
+                // A carrier sends its boarding shuttles to the prizes instead (U.SPC-T486).
+                SendShuttles(u, dt);
             }
             u.RetargetIn -= dt;
             if (u.Target == null || !u.Target.Present || u.RetargetIn <= 0)
@@ -2762,6 +2767,8 @@ namespace Unity.SpaceGod.Core
             // A boarder that can no longer fly the approach (crippled, or breaking off) gives up the
             // prize, or the battle would wait on a boarding that never comes.
             if (u.Fleeing || u.Combat.Disabled) { u.BoardTarget = null; return; }
+            // A carrier with boarding shuttles sends them, not its own hull (U.SPC-T486).
+            if (BoardsByShuttle(u)) { u.BoardTarget = null; return; }
             if (u.BoardTarget != null) return;
             bool boarder = u.Faction.IsPirate || u.Faction.IsMilitary || (Boards != null && Boards(u));
             if (!boarder || u.Combat.MarinesAvailable < 15) return;

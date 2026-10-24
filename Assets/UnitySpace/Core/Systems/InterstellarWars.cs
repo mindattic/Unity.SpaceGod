@@ -1013,8 +1013,10 @@ namespace Unity.SpaceGod.Core
                 c.BesiegedDays = 0;
             }
             c.BesiegedDays += 1;
-            if (c.BesiegedDays < GateHoldDays) return;
-            TakeGate(c, gate, jd);
+            // Boarding shuttles in the group put marines aboard the gate and take it sooner (U.SPC-T486).
+            bool shuttles = BoardingShuttles.CanSeizeGate(Group(system.World, ship));
+            if (c.BesiegedDays < BoardingShuttles.GateHoldDays(GateHoldDays, shuttles)) return;
+            SeizeGate(c, gate, jd, shuttles);
             if (v.HoldGate != null) Traffic.Release(system, ship, jd);
         }
 
@@ -1031,7 +1033,19 @@ namespace Unity.SpaceGod.Core
             return false;
         }
 
-        void TakeGate(Campaign c, JumpGate gate, double jd)
+        /// <summary>A war fleet's group: its leader and the ships keeping station on it.</summary>
+        static IEnumerable<Ship> Group(World world, Ship leader)
+        {
+            yield return leader;
+            foreach (var s in world.Fleet.Ships)
+                if (s.Leader == leader && !s.Destroyed) yield return s;
+        }
+
+        void TakeGate(Campaign c, JumpGate gate, double jd) => SeizeGate(c, gate, jd, false);
+
+        /// <summary>Takes <paramref name="gate"/> for the campaign; <paramref name="boarded"/> when its boarding shuttles put the
+        /// marines aboard (U.SPC-T486).</summary>
+        void SeizeGate(Campaign c, JumpGate gate, double jd, bool boarded)
         {
             var old = gate.Owner;
             if (takenGates.TryGetValue(gate, out var taken) && taken.War == c.War)
@@ -1049,7 +1063,8 @@ namespace Unity.SpaceGod.Core
             c.Besieging = null;
             c.BesiegedDays = 0;
             var world = gate.Home.World;
-            world.Log(jd, $"The {c.Faction.Name} take the {gate.Name} at {gate.Home.Name} from the {old?.Name ?? "nobody"}: its forts silenced, the gate is theirs", WorldEventKind.Capture,
+            string how = boarded ? "its forts silenced, their boarding shuttles put marines aboard and take it intact" : "its forts silenced, the gate is theirs";
+            world.Log(jd, $"The {c.Faction.Name} take the {gate.Name} at {gate.Home.Name} from the {old?.Name ?? "nobody"}: {how}", WorldEventKind.Capture,
                 world.Catalog.Root.Index);
         }
 

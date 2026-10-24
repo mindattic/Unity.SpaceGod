@@ -176,6 +176,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Interceptor] = FtlAccess.Hangar,
             [ShipClass.Bomber] = FtlAccess.Hangar,
             [ShipClass.Recon] = FtlAccess.Hangar,
+            // A boarding shuttle (U.SPC-T486) rides in a carrier's hangar.
+            [ShipClass.AssaultShuttle] = FtlAccess.Hangar,
         };
 
         /// <summary>Sets how hulls of <paramref name="cls"/> cross between the stars: how a new class slots in.</summary>
@@ -331,6 +333,7 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Interceptor] = 1,
             [ShipClass.Bomber] = 2,
             [ShipClass.Recon] = 1,
+            [ShipClass.AssaultShuttle] = 2,
             [ShipClass.Courier] = 2,
             [ShipClass.Breacher] = 2,
             [ShipClass.Gunship] = 2,

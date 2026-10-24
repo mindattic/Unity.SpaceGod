@@ -33,6 +33,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>Seconds until a stranded craft looks again for somewhere to land.</summary>
         public double HavenCheckIn;
 
+        /// <summary>What a boarding shuttle's team drilled to in its carrier's habitats (U.SPC-T486): the factor their
+        /// fighting quality is multiplied by (<see cref="Interior.DrillFactor"/>).</summary>
+        public double Drill = 1;
+
         public BattleUnit Lead;
         public int Squadron;
         public int Slot;
@@ -150,6 +154,12 @@ namespace Unity.SpaceGod.Core
         public static void Step(Battle b, BattleUnit u, double dt)
         {
             var f = u.Fighter;
+            // A boarding shuttle flies to its prize, not into the fight (U.SPC-T486).
+            if (f.Role == FighterRole.AssaultShuttle)
+            {
+                Shuttle(b, u, dt);
+                return;
+            }
             // Its drives knocked out (an EMP): it drifts on the way it was going until they come back.
             if (u.Stunned > 0)
             {
@@ -196,7 +206,8 @@ namespace Unity.SpaceGod.Core
             BattleUnit best = null;
             foreach (var o in b.Units)
             {
-                if (!o.Present || o.Kind != UnitKind.Fighter || o.Fighter.Squadron != u.Fighter.Squadron || o.Fighter.Carrier != u.Fighter.Carrier) continue;
+                if (!o.Present || o.Kind != UnitKind.Fighter || o.Fighter.Squadron != u.Fighter.Squadron || o.Fighter.Carrier != u.Fighter.Carrier
+                    || BoardingShuttles.Is(o)) continue;
                 if (best == null || o.Fighter.Slot < best.Fighter.Slot) best = o;
             }
             if (best == null || best == u) return null;
@@ -590,8 +601,121 @@ namespace Unity.SpaceGod.Core
             if (toDeck < Math.Max(0.12, u.Vel.Length * dt * 1.5))
             {
                 u.Docked = true;
-                carrier.Combat.RestoreFighters(1);
+                TakeAboard(carrier, u);
             }
+        }
+
+        /// <summary>A craft back aboard <paramref name="home"/>: a fighter into its hangar's count; a boarding shuttle into its
+        /// shuttle berths (U.SPC-T486), and any of its team still aboard back to the barracks.</summary>
+        public static void TakeAboard(BattleUnit home, BattleUnit craft)
+        {
+            if (home?.Combat == null) return;
+            if (!BoardingShuttles.Is(craft))
+            {
+                home.Combat.RestoreFighters(1);
+                return;
+            }
+            home.Combat.RestoreShuttles(1);
+            double team = craft.Combat.Interior.TakeMarines(craft.Combat.Interior.Marines);
+            if (team > 0) home.Combat.Interior.Embark(0, team);
+        }
+
+        // ---------------------------------------------------------------- boarding shuttles (U.SPC-T486)
+
+        /// <summary>
+        /// Sends a boarding shuttle out of <paramref name="carrier"/>'s hangar toward <paramref name="target"/> with
+        /// <paramref name="team"/> marines aboard, who fight as well as they drilled in the carrier's habitats.
+        /// </summary>
+        public static BattleUnit LaunchShuttle(Battle b, BattleUnit carrier, BattleUnit target, double team)
+        {
+            var craft = FighterCraft.AssaultShuttle;
+            Subsystem bay = null;
+            foreach (var s in carrier.Combat.Subsystems)
+                if (s.Kind == SubsystemKind.Hangar && !s.Destroyed) bay = s;
+            var pos = (bay != null ? carrier.PointOf(bay.Def) : carrier.Pos) + carrier.Forward * 0.3;
+            var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(craft.Spec, craft.Class), craft.LengthKm, pos, carrier.Forward);
+            u.Vel = carrier.Vel + carrier.Forward * 0.1;
+            u.Power = new PowerDistribution();
+            var rng = b.Rng;
+            u.Fighter = new FighterState
+            {
+                Carrier = carrier, Squadron = -1, Role = craft.Role, Phase = FighterPhase.Launch, Drill = carrier.Combat.Interior.DrillFactor,
+                Skill = 0.4 + rng.NextDouble() * 0.6, Reaction = 0.4 + rng.NextDouble() * 1.4, Discipline = 0.45 + rng.NextDouble() * 0.5,
+                Seed = rng.NextDouble() * 1000,
+            };
+            u.BoardTarget = target;
+            if (team > 0) u.Combat.Interior.Embark(0, team);
+            return u;
+        }
+
+        /// <summary>
+        /// A boarding shuttle's step (U.SPC-T486): latched on, it rides with the hull it is boarding until the fight aboard is
+        /// decided (the battle casts it off); otherwise, with a team aboard and a prize it may still board
+        /// (<see cref="Battle.ShuttleMayBoard"/>), it flies to it and docks (<see cref="Dock"/>), finding another prize near it
+        /// if that one is taken or gone; with none, its team delivered, or its carrier pulling out, it flies home to land.
+        /// </summary>
+        static void Shuttle(Battle b, BattleUnit u, double dt)
+        {
+            var f = u.Fighter;
+            if (u.Latched != null)
+            {
+                u.Pos = u.Latched.PointLocal(u.LatchLocal);
+                u.Vel = u.Latched.Vel;
+                return;
+            }
+            if (u.Stunned > 0)
+            {
+                u.Pos += u.Vel * dt;
+                return;
+            }
+            f.PhaseTime += dt;
+            StrandedWings.Step(b, u, dt);
+            var home = f.LandsOn;
+            bool recalled = home.Present && home.Fleeing;
+            if (u.BoardTarget != null && (recalled || !b.ShuttleMayBoard(u, u.BoardTarget))) u.BoardTarget = null;
+            if (u.BoardTarget == null && !recalled && u.Combat.Interior.Marines >= 0.5) u.BoardTarget = b.ShuttleTarget(u);
+            if (u.BoardTarget == null)
+            {
+                if (f.Phase != FighterPhase.Return) Switch(f, FighterPhase.Return);
+                Land(b, u, dt);
+                return;
+            }
+            if (f.Phase != FighterPhase.Approach) Switch(f, FighterPhase.Approach);
+            Dock(b, u, u.BoardTarget, dt);
+        }
+
+        /// <summary>
+        /// Flies a shuttle alongside <paramref name="t"/>: to a point off its flank, slowing as it closes and holding the
+        /// hull's own drift, nose turning to the hull's heading at the last. Lying there matched
+        /// (<see cref="BoardingShuttles.DockKm"/>, <see cref="BoardingShuttles.MatchKmS"/>) for
+        /// <see cref="BoardingShuttles.LatchSeconds"/>, it latches on and its team goes in (<see cref="Battle.ShuttleLatch"/>).
+        /// </summary>
+        static void Dock(Battle b, BattleUnit u, BattleUnit t, double dt)
+        {
+            var spec = u.Combat.Spec;
+            double engines = PowerDistribution.FactorOf(u, PowerSystem.Engines);
+            t.Basis(out var right, out _);
+            var dock = t.Pos + right * (t.Radius * 0.35 + u.Radius + BoardingShuttles.StandOffKm);
+            var to = dock - u.Pos;
+            double dist = to.Length;
+            // Arrive matched: the closer, the slower, on top of the hull's own drift.
+            double want = Math.Min(spec.MaxSpeed * engines, dist * 0.05 + 0.002);
+            var desired = t.Vel + (dist > 1e-6 ? to / dist : DVec3.Zero) * want;
+            var dv = desired - u.Vel;
+            double step = spec.Accel * engines * dt;
+            u.Vel += dv.Length > step ? dv.Normalized * step : dv;
+            u.Pos += u.Vel * dt;
+            var face = dist > 0.5 ? to / dist : t.Forward;
+            double turn = spec.TurnRateDegS * Astro.Deg2Rad * dt;
+            double angle = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(u.Forward, face))));
+            u.Forward = angle <= turn ? face : DVec3.TurnStep(u.Forward, face, turn / angle);
+
+            if (dist < BoardingShuttles.DockKm && (u.Vel - t.Vel).Length < BoardingShuttles.MatchKmS)
+            {
+                u.LatchTimer += dt;
+                if (u.LatchTimer >= BoardingShuttles.LatchSeconds.Value) b.ShuttleLatch(u, t);
+            }
+            else u.LatchTimer = 0;
         }
 
         // ---------------------------------------------------------------- wingmen

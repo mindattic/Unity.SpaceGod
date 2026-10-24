@@ -387,6 +387,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Frigate: return 10000;
                 // A small hull with no drive room: cheap enough to keep one at every port (U.SPC-T476).
                 case ShipClass.Corvette: return 6000;
+                // A bomber's armour round a troop bay and a docking collar (U.SPC-T486).
+                case ShipClass.AssaultShuttle: return 4000;
                 default: return 3000;
             }
         }

@@ -63,6 +63,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>Fighters left aboard (carriers); losses are made good at a yard.</summary>
         public int Fighters;
 
+        /// <summary>Boarding shuttles in the hangars (carriers, U.SPC-T486, <see cref="BoardingShuttles"/>); losses are made good at a yard.</summary>
+        public int Shuttles;
+
         /// <summary>Boost charge, 0-1: drains over <see cref="CombatSpec.BoostDurationS"/> while held and
         /// recharges (twice as slowly) otherwise. Shared by AI and player flight so boost behaves the same
         /// whoever is flying.</summary>
@@ -93,6 +96,7 @@ namespace Unity.SpaceGod.Core
             Spec = spec;
             Hull = spec.Hull;
             Fighters = spec.HangarCraft;
+            Shuttles = spec.Shuttles;
             for (int i = 0; i < spec.Layout.Length; i++) Subsystems.Add(new Subsystem(spec.Layout[i], i));
             double ratings = GeneratorRatings;
             if (ratings > 0)
@@ -115,6 +119,7 @@ namespace Unity.SpaceGod.Core
             {
                 Hull = spec.Hull * HullFraction,
                 Fighters = Math.Min(spec.HangarCraft, Fighters),
+                Shuttles = Math.Min(spec.Shuttles, Shuttles),
                 BoostFraction = BoostFraction,
                 Readiness = Readiness,
                 PhaserTuning = PhaserTuning,
@@ -315,5 +320,8 @@ namespace Unity.SpaceGod.Core
         }
 
         public void RestoreFighters(int count) => Fighters = Math.Min(Spec.HangarCraft, Fighters + count);
+
+        /// <summary>Takes boarding shuttles back into the hangars (U.SPC-T486), as many as they hold.</summary>
+        public void RestoreShuttles(int count) => Shuttles = Math.Min(Spec.Shuttles, Shuttles + count);
     }
 }

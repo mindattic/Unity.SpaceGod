@@ -27,7 +27,7 @@ namespace Unity.SpaceGod.Core
             Unit = unit;
         }
 
-        /// <summary>What it is: "interceptor", "fighter", "heavy fighter" or "bomber".</summary>
+        /// <summary>What it is: "interceptor", "fighter", "heavy fighter", "bomber" or "assault shuttle".</summary>
         public string Craft
         {
             get
@@ -44,6 +44,8 @@ namespace Unity.SpaceGod.Core
             {
                 var f = Unit.Fighter;
                 if (f == null) return Unit.Name;
+                // A boarding shuttle flies in no squadron (U.SPC-T486).
+                if (f.Squadron < 0) return f.Carrier != null ? f.Carrier.Name + " " + Craft : Craft;
                 return f.Carrier != null ? f.Carrier.Name + " " + Craft + " " + (f.Squadron + 1) + "-" + (f.Slot + 1) : Craft;
             }
         }

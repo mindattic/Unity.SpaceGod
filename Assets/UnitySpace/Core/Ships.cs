@@ -86,6 +86,13 @@ namespace Unity.SpaceGod.Core
         /// ship for the bombers, whose torpedoes then home on it harder and are not drawn off by its decoys. Carried aboard, they
         /// stretch the carrier's own sensor reach.</summary>
         Recon,
+
+        /// <summary>A boarding shuttle, or assault shuttle (U.SPC-T486): a piloted, armoured, unarmed craft carried in a
+        /// carrier's hangars that ferries a marine team across to a disabled ship or a silenced station (a gate's fort among
+        /// them), matches its drift, docks alongside and latches on, and lets the team in through the airlock to take it
+        /// intact: slower and gentler than a fired Breacher round (U.SPC-T466), no drill and no breach. See
+        /// <see cref="BoardingShuttles"/>; carriers launch it as <see cref="FighterRole.AssaultShuttle"/>.</summary>
+        AssaultShuttle,
     }
 
     public enum ShipRole
@@ -190,6 +197,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Corvette, "Corvette", 0.7, true),
             // The recon fighter (U.SPC-T485): as quick as an interceptor, it has to get ahead of the strike.
             new ShipClassSpec(ShipClass.Recon, "Recon fighter", 1.3, true),
+            // A boarding shuttle (U.SPC-T486): heavy for its size, no faster than a bomber.
+            new ShipClassSpec(ShipClass.AssaultShuttle, "Assault shuttle", 0.5, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

@@ -32,6 +32,11 @@ namespace Unity.SpaceGod.Core
         /// squadrons in a carrier's recon flight, it jams the enemy's targeting and paints a capital for the bombers (see
         /// <see cref="ElectronicWarfare"/>). Never in <see cref="FighterCraft.SquadronMix"/>.</summary>
         Recon,
+
+        /// <summary>A boarding shuttle (<see cref="ShipClass.AssaultShuttle"/>, U.SPC-T486): unarmed and armoured, it carries a
+        /// marine team to a disabled hull or a silenced station, docks and latches on (<see cref="BoardingShuttles"/>). Not
+        /// one of a carrier's squadrons: a carrier sends one out when there is a prize to take.</summary>
+        AssaultShuttle,
     }
 
     /// <summary>
@@ -161,6 +166,18 @@ namespace Unity.SpaceGod.Core
             Layout = new[]
             {
                 new SubsystemDef(SubsystemKind.FighterGuns, 0, -0.05, 0.4, arcWidthDeg: 28),
+                new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
+            },
+        }, huntsFightersKm: 0);
+
+        /// <summary>The boarding shuttle (U.SPC-T486): slow, plated and shielded to get its team across, no guns, flares to
+        /// shake a missile off. Its pilots fly it to a prize, never into a fight (<see cref="BoardingShuttles"/>).</summary>
+        public static readonly FighterCraft AssaultShuttle = Add(FighterRole.AssaultShuttle, "assault shuttle", ShipClass.AssaultShuttle, 0.03, 0.04, 90, 1.3, 4, new CombatSpec
+        {
+            Hull = 200, Shield = 70, ShieldRegen = 2, Armor = 2, MaxSpeed = 0.2, Accel = 0.1, TurnRateDegS = 60,
+            Layout = new[]
+            {
                 new SubsystemDef(SubsystemKind.Countermeasures, 0, 0, -0.4, facesAft: true),
                 new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, -0.3),
             },

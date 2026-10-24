@@ -28,6 +28,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Interceptor] = new CargoHoldSpec(1, 2),
             [ShipClass.Bomber] = new CargoHoldSpec(3, 2),
             [ShipClass.Recon] = new CargoHoldSpec(1, 2),
+            // Its troop bay is for marines (U.SPC-T486): a locker for their kit.
+            [ShipClass.AssaultShuttle] = new CargoHoldSpec(3, 2),
             [ShipClass.GatePicket] = new CargoHoldSpec(3, 2),
             // A truss freighter's hold is its pods (U.SPC-T482): six cells wide, a row for each of its stock design's eight pods.
             [ShipClass.Freighter] = new CargoHoldSpec(6, BulkFreighters.StockPods * BulkFreighters.PodRows),

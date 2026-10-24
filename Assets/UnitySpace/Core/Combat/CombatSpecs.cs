@@ -426,6 +426,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>Every craft its hangars hold: six to a squadron, and its recon flight.</summary>
         public int HangarCraft => Squadrons * 6 + ReconCraft;
 
+        /// <summary>Boarding shuttles a carrier keeps in its hangars beside its squadrons (U.SPC-T486, <see cref="BoardingShuttles"/>).</summary>
+        public int Shuttles;
+
         /// <summary>People aboard: the ship's company, and the marines who board and repel boarders. The marines are the
         /// complement its marine habitats quarter (U.SPC-T465, <see cref="FacilityLayouts.Complement(ShipClass, CombatSpec)"/>).</summary>
         public double Crew, Marines;
@@ -448,7 +451,7 @@ namespace Unity.SpaceGod.Core
                 DesignName = "Carrier", LengthKm = 3.2,
                 MassKt = 40000, MainThrustMN = 100000, RetroThrustMN = 75000, LateralThrustMN = 35000, VerticalThrustMN = 35000, PitchYawTorqueMNKm = 4770000, RollTorqueMNKm = 1190000,
                 Hull = 26000, Shield = 11000, ShieldRegen = 75, Armor = 6, MaxSpeed = 0.07, Accel = 0.0025, Decel = 0.0025,
-                BoostSpeedMultiplier = 1.3, BoostDurationS = 30, TurnRateDegS = 4, Squadrons = 3, ReconCraft = 2,
+                BoostSpeedMultiplier = 1.3, BoostDurationS = 30, TurnRateDegS = 4, Squadrons = 3, ReconCraft = 2, Shuttles = 2,
                 Crew = 3800,
                 DryMassTonnes = 140000, PropellantTonnes = 70000, ExhaustVelocityKmS = 4000,
                 Layout = new[]
@@ -843,6 +846,28 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.025, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.44),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.2),
+                },
+            } },
+            [ShipClass.AssaultShuttle] = new[] { new CombatSpec
+            {
+                // The boarding shuttle (U.SPC-T486): a pilot and a loadmaster up front and a troop bay behind them for one
+                // marine team, a docking collar on its flank. Armoured and shielded to get the team across, slower than a
+                // bomber, and unarmed but for point defence: it is escorted in, not fought with.
+                DesignName = "Assault shuttle", LengthKm = 0.12,
+                MassKt = 12, MainThrustMN = 300, RetroThrustMN = 225, LateralThrustMN = 120, VerticalThrustMN = 120, PitchYawTorqueMNKm = 420, RollTorqueMNKm = 105,
+                Hull = 3000, Shield = 900, ShieldRegen = 10, Armor = 4, MaxSpeed = 0.22, Accel = 0.01, Decel = 0.012,
+                BoostSpeedMultiplier = 1.4, BoostDurationS = 10, TurnRateDegS = 14,
+                Crew = 2, Marines = 24,
+                DryMassTonnes = 200, PropellantTonnes = 80, ExhaustVelocityKmS = 3000,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.PointDefense, 0, 0.045, -0.1),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.04, 0.3),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, 0.1, arcCenterDeg: 0, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.035, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.Engine, -0.05, 0, -0.45),
+                    new SubsystemDef(SubsystemKind.Engine, 0.05, 0, -0.45),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.28),
                 },
             } },
             [ShipClass.GatePicket] = new[] { new CombatSpec

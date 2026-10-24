@@ -25,6 +25,8 @@ namespace Unity.SpaceGod.Core.Tests
             {
                 (ShipClass.Carrier, 320), (ShipClass.Battleship, 260), (ShipClass.Cruiser, 140), (ShipClass.Destroyer, 50),
                 (ShipClass.Freighter, 4), (ShipClass.Breacher, 70),
+                // A boarding shuttle's team rides in its troop bay (U.SPC-T486).
+                (ShipClass.AssaultShuttle, 24),
                 // The command cruiser (U.SPC-T477) quarters a small marine guard for the flag.
                 (ShipClass.CommandCruiser, 120),
             };
@@ -41,7 +43,7 @@ namespace Unity.SpaceGod.Core.Tests
                 if (!listed) Assert.That(design.Marines, Is.EqualTo(0), c + " has no habitat and carries no marines");
                 // Every warship's marines live in a habitat; a Breacher round's team rides in its troop compartment (U.SPC-T466).
                 bool habitat = FacilityLayouts.For(c).Any(s => s.Kind == FacilityKinds.MarineHabitat);
-                Assert.That(habitat, Is.EqualTo(listed && c != ShipClass.Breacher), c.ToString());
+                Assert.That(habitat, Is.EqualTo(listed && c != ShipClass.Breacher && c != ShipClass.AssaultShuttle), c.ToString());
             }
         }
 

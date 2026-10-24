@@ -42,7 +42,8 @@ namespace Unity.SpaceGod.Core
             if (IsStation(haven)) return int.MaxValue;
             int room = haven.Combat.Spec.HangarCraft - haven.Combat.Fighters;
             foreach (var o in b.Units)
-                if (o.Kind == UnitKind.Fighter && o.Present && o.Fighter != null && o.Fighter.LandsOn == haven) room--;
+                // A boarding shuttle lands in its own berths, not a squadron's (U.SPC-T486).
+                if (o.Kind == UnitKind.Fighter && o.Present && o.Fighter != null && o.Fighter.LandsOn == haven && !BoardingShuttles.Is(o)) room--;
             return room;
         }
 

@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, scout, halo, pennant, arrow, badge, white, prograde, retrograde, blip, lost, singularity;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, scout, halo, pennant, arrow, badge, shuttle, white, prograde, retrograde, blip, lost, singularity;
 
         public static Texture2D White => white ??= Solid();
 
@@ -95,6 +95,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Frigate: return arrow ??= Draw(p => Outline(Triangle(new Vector2(p.x * 1.6f, p.y), 0.8f), 0.12f));
                 // The corvette (U.SPC-T476): a destroyer's chevron inside a ring, the law's badge.
                 case ShipClass.Corvette: return badge ??= Draw(p => Mathf.Min(Ring(p, 0.85f, 0.1f), Chevron(p * 1.5f)));
+                // The boarding shuttle (U.SPC-T486): a stubby box with a bar across it, its docking collar.
+                case ShipClass.AssaultShuttle: return shuttle ??= Draw(p => Mathf.Min(Box(p, new Vector2(0.3f, 0.5f)), Box(p, new Vector2(0.55f, 0.08f))));
                 default: return square ??= Draw(p => Outline(Box(p, new Vector2(0.62f, 0.62f)), 0.14f));
             }
         }
@@ -113,7 +115,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Fighter: return 8;
                 case ShipClass.Gunship: return 10;
                 case ShipClass.Interceptor: return 7;
-                case ShipClass.Bomber: return 10;
+                case ShipClass.Bomber:
+                case ShipClass.AssaultShuttle: return 10;
                 case ShipClass.Recon: return 8;
                 case ShipClass.Interdictor: return 13;
                 case ShipClass.CommandCruiser: return 18;

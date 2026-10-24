@@ -1751,7 +1751,7 @@ namespace Unity.SpaceGod.Core
                 }
                 if (home != null)
                 {
-                    home.Combat?.RestoreFighters(1);
+                    FighterAI.TakeAboard(home, u);
                     u.Docked = true;
                     if (u.Fighter.Home != null) PutIn(home.Name);
                     continue;
@@ -3290,6 +3290,15 @@ namespace Unity.SpaceGod.Core
                     yard.Stock[(int)Good.Alloys] = Math.Max(0, yard.Stock[(int)Good.Alloys] - 40 * add);
                     s.Faction.Treasury -= add * 2.5e6;
                     s.Combat.RestoreFighters(add);
+                }
+                // Boarding shuttles lost are built anew (U.SPC-T486).
+                int shuttles = s.Combat.Spec.Shuttles - s.Combat.Shuttles;
+                if (shuttles > 0 && yard.Stock[(int)Good.Electronics] > 30)
+                {
+                    yard.Stock[(int)Good.Electronics] -= 4 * shuttles;
+                    yard.Stock[(int)Good.Alloys] = Math.Max(0, yard.Stock[(int)Good.Alloys] - 60 * shuttles);
+                    s.Faction.Treasury -= shuttles * 3e6;
+                    s.Combat.RestoreShuttles(shuttles);
                 }
                 // A sound, rearmed hull of a flush owner takes an upgrade now and then (U.SPC-T65); the player fits their own.
                 if (s != world.PilotedShip && s.Combat.Damage <= 0.001 && missing == 0 && rng.NextDouble() < AiOutfitChance)

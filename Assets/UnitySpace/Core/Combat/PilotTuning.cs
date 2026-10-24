@@ -70,6 +70,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Bomber] = new PilotTuning(0.3, 85, 1.6, 12, 8, 2.4),
             // The recon fighter (U.SPC-T485): an interceptor's pace on a longer boost, a little wider in the turn for its pods.
             [ShipClass.Recon] = new PilotTuning(0.46, 160, 2.4, 16, 9, 1.6),
+            // The boarding shuttle (U.SPC-T486): slower and heavier on the stick than a bomber, built to come alongside gently.
+            [ShipClass.AssaultShuttle] = new PilotTuning(0.24, 60, 1.4, 10, 8, 2.6),
             // A truss freighter (U.SPC-T482): a weak drive for its mass, so its cruise drive takes twice a hauler's time to spool.
             [ShipClass.Freighter] = new PilotTuning(0.18, 75, 1.6, 36, 8, 6.0),
             [ShipClass.Miner] = new PilotTuning(0.16, 70, 1.6, 38, 8, 3.0),

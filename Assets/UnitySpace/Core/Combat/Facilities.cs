@@ -471,6 +471,14 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.TroopCompartment, "Troop compartment", 0.25, 0, FacilitySite.Keel, 70), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0, 0.03),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
+            // A boarding shuttle (U.SPC-T486): the cockpit forward, then the troop bay its one team rides in (the docking collar
+            // on its flank opens off it) and does not train in, and engineering astern.
+            [ShipClass.AssaultShuttle] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.32, 0.04),
+                new FacilitySite(FacilityKinds.TroopCompartment, "Troop bay", 0.05, 0, FacilitySite.Keel, 24),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.32),
+            },
         };
 
         /// <summary>A small hull's: a cockpit and its engineering.</summary>
@@ -565,6 +573,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.LaneTender:
                 case ShipClass.Interdictor: return 3;
                 case ShipClass.Breacher:
+                case ShipClass.AssaultShuttle:
                 case ShipClass.Gunship:
                 case ShipClass.Courier:
                 case ShipClass.OreTug:
