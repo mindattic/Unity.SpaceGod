@@ -198,17 +198,11 @@ namespace Unity.SpaceGod.Core.Tests
                 rolled |= DVec3.Dot(me.Roof.Normalized, WeakPatches.LevelRoof(me.Forward)) < 0.9;
             }
             Assert.That(rolled, Is.True, "in the fight it rolls off level");
-            // Wherever the fight has left its bow, the attitude its captain settles on there shows the fire no more of its holes
-            // than lying level would (once the fight has drained its shields all round, level may be the best there is). The
-            // hull's bow swings with the fight, so the roll it carries at any one moment may have been chosen for a heading it
-            // has not reached yet; the choice itself is what is checked, and the steady-state tests above check it strictly.
+            // Wherever the fight has left its bow, the attitude its captain has rolled to there shows the fire no more of its
+            // holes than lying level would (once the fight has drained its shields all round, level may be the best there is).
             var fire = WeakPatches.IncomingFireOn(b, me);
             Assert.That(fire.Count, Is.GreaterThan(0));
-            me.Broadside.RollReconsider = 0;
-            WeakPatches.Orient(b, me, me.Forward, null, null, null, dt, out var forward, out var roof);
-            me.Forward = forward;
-            me.Roof = roof;
-            Assert.That(WeakPatches.Exposure(me, fire), Is.LessThanOrEqualTo(LevelExposure(me, fire) + 1e-9), "it never lies with more of its holes to the fire than level");
+            Assert.That(WeakPatches.Exposure(me, fire), Is.LessThan(LevelExposure(me, fire)), "it lies with its holes turned away");
 
             // With the doctrine off it rolls back to level.
             WeakPatches.AiRolls.Set(false);

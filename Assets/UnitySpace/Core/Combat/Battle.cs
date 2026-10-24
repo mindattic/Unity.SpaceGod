@@ -1124,7 +1124,7 @@ namespace Unity.SpaceGod.Core
                 // A capital's captain rolls and turns its hull to keep its weak patches out of the heaviest fire (U.SPC-T502).
                 var bearings = broadside ? ConeFirepower(u, (u.Target.Pos - u.Pos).Normalized) : null;
                 WeakPatches.Orient(this, u, face, bearings, bearings != null ? (u.Target.Pos - u.Pos).Normalized : (DVec3?)null, null, dt,
-                    out face, out var roof);
+                    out face, out var roof, u.Forward);
                 TurnToward(u, face, c.Spec.TurnRateDegS, dt);
                 WeakPatches.RollToward(u, roof, c.Spec.TurnRateDegS, dt);
                 return;

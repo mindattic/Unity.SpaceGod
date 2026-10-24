@@ -363,7 +363,7 @@ namespace Unity.SpaceGod.Core
         /// for a better one by <see cref="Hysteresis"/>, so the hull settles instead of hunting.
         /// </summary>
         public static void Orient(Battle b, BattleUnit u, DVec3 face, IReadOnlyDictionary<int, double> bearings, DVec3? toTarget, DVec3? rest, double dt,
-            out DVec3 forward, out DVec3 roof)
+            out DVec3 forward, out DVec3 roof, DVec3? actual = null)
         {
             if (face.LengthSquared < 1e-18) face = u.Forward;
             var cmd = Broadsides.Of(u);
@@ -379,12 +379,32 @@ namespace Unity.SpaceGod.Core
             if (!valid || cmd.RollReconsider <= 0)
             {
                 cmd.RollReconsider = ReconsiderSeconds;
-                Choose(b, u, cmd, face, aiming ? bearings : null, aiming ? toTarget : null, rest);
+                Choose(b, u, cmd, face, aiming ? bearings : null, aiming ? toTarget : null, rest, actual);
             }
             Frame(face, aiming ? toTarget : null, aiming ? cmd.RollBearing : NoBearing, cmd.RollDeg, out forward, out roof);
+            Transport(actual, ref forward, ref roof);
         }
 
-        static void Choose(Battle b, BattleUnit u, BroadsideCommand cmd, DVec3 face, IReadOnlyDictionary<int, double> bearings, DVec3? toTarget, DVec3? rest)
+        /// <summary>A hull still turning toward the heading it wants lies along <paramref name="actual"/>, not along
+        /// <paramref name="forward"/>: carries the attitude chosen for the wanted heading over to the actual one (the same roll
+        /// about the nose, by the shortest turn between them), so the roll is weighed and ordered for the heading the fire
+        /// really meets, and blends into the wanted one as the hull comes round.</summary>
+        static void Transport(DVec3? actual, ref DVec3 forward, ref DVec3 roof)
+        {
+            if (!(actual is DVec3 a) || a.LengthSquared < 1e-18) return;
+            a = a.Normalized;
+            var axis = DVec3.Cross(forward, a);
+            double sin = axis.Length, cos = DVec3.Dot(forward, a);
+            if (sin > 1e-9)
+            {
+                double ang = Math.Atan2(sin, cos);
+                roof = PilotFlight.RotateAbout(roof, axis / sin, ang).Normalized;
+            }
+            else if (cos < 0) return;
+            forward = a;
+        }
+
+        static void Choose(Battle b, BattleUnit u, BroadsideCommand cmd, DVec3 face, IReadOnlyDictionary<int, double> bearings, DVec3? toTarget, DVec3? rest, DVec3? actual)
         {
             var c = u.Combat;
             var fire = IncomingFireOn(b, u);
@@ -409,6 +429,7 @@ namespace Unity.SpaceGod.Core
                 {
                     double deg = k * step;
                     Frame(face, toTarget, bearing, deg, out var f, out var up);
+                    Transport(actual, ref f, ref up);
                     var right = DVec3.Cross(f, up).Normalized;
                     double score = battery;
                     if (fire.Count > 0 && protect > 0) score -= protect * Exposure(samples, weak, fire, right, up, f);
