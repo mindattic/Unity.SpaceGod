@@ -87,6 +87,7 @@ namespace Unity.SpaceGod.Core
         {
             Danger[lane] = value;
             routeCache.Clear();
+            routeTrees.Clear();
         }
 
         // ---------------------------------------------------------------- upkeep (U.SPC-T481)
@@ -110,7 +111,11 @@ namespace Unity.SpaceGod.Core
             if (lane == null) return;
             bool carried = Carries(lane);
             Condition[lane] = Math.Max(0, Math.Min(1, value));
-            if (Carries(lane) != carried) routeCache.Clear();
+            if (Carries(lane) != carried)
+            {
+                routeCache.Clear();
+                routeTrees.Clear();
+            }
         }
 
         /// <summary>Whether <paramref name="lane"/> still carries traffic: not failed (<see cref="LaneCondition.Carries"/>).</summary>
@@ -584,6 +589,9 @@ namespace Unity.SpaceGod.Core
         // Lane geometry changes over days, and planning asks for it constantly: cache per half day.
         readonly Dictionary<(int, long), double> lengthCache = new Dictionary<(int, long), double>();
         readonly Dictionary<(int, int, long), List<LaneHop>> routeCache = new Dictionary<(int, int, long), List<LaneHop>>();
+        // The quickest hop into every system from one, per origin and half day: planning asks for many routes from the
+        // same place, and one sweep of Dijkstra's answers them all.
+        readonly Dictionary<(int, long), Dictionary<int, LaneHop>> routeTrees = new Dictionary<(int, long), Dictionary<int, LaneHop>>();
         long cacheBucket = long.MinValue;
 
         long Bucket(double jd)
@@ -594,6 +602,7 @@ namespace Unity.SpaceGod.Core
                 cacheBucket = bucket;
                 lengthCache.Clear();
                 routeCache.Clear();
+                routeTrees.Clear();
             }
             return bucket;
         }
@@ -624,6 +633,22 @@ namespace Unity.SpaceGod.Core
 
         List<LaneHop> FindRoute(int fromSystem, int toSystem, double jd, bool heavyOnly = false)
         {
+            Dictionary<int, LaneHop> via;
+            if (heavyOnly) via = RouteTree(fromSystem, jd, true);
+            else
+            {
+                var treeKey = (fromSystem, Bucket(jd));
+                if (!routeTrees.TryGetValue(treeKey, out via)) routeTrees[treeKey] = via = RouteTree(fromSystem, jd, false);
+            }
+            if (!via.ContainsKey(toSystem)) return null;
+            var route = new List<LaneHop>();
+            for (int at = toSystem; at != fromSystem; at = via[at].From) route.Insert(0, via[at]);
+            return route;
+        }
+
+        /// <summary>The last hop of the quickest route from <paramref name="fromSystem"/> into every system it reaches.</summary>
+        Dictionary<int, LaneHop> RouteTree(int fromSystem, double jd, bool heavyOnly)
+        {
             var dist = new Dictionary<int, double> { [fromSystem] = 0 };
             var via = new Dictionary<int, LaneHop>();
             var open = new List<int> { fromSystem };
@@ -634,7 +659,6 @@ namespace Unity.SpaceGod.Core
                 int here = open[0];
                 open.RemoveAt(0);
                 if (!done.Add(here)) continue;
-                if (here == toSystem) break;
                 foreach (var lane in Lanes)
                 {
                     if (lane.A != here && lane.B != here) continue;
@@ -651,10 +675,7 @@ namespace Unity.SpaceGod.Core
                     open.Add(next);
                 }
             }
-            if (!via.ContainsKey(toSystem)) return null;
-            var route = new List<LaneHop>();
-            for (int at = toSystem; at != fromSystem; at = via[at].From) route.Insert(0, via[at]);
-            return route;
+            return via;
         }
     }
 }

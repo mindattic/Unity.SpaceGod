@@ -565,7 +565,14 @@ namespace Unity.SpaceGod.Core
             lastSweepJd = jd;
             var observers = Observers(jd);
             var factions = new HashSet<Faction>();
-            foreach (var o in observers) factions.Add(o.Faction);
+            // Each faction's own lookers, so a target is tried against them alone and not every faction's.
+            var lookers = new Dictionary<Faction, List<Observer>>();
+            foreach (var o in observers)
+            {
+                factions.Add(o.Faction);
+                if (!lookers.TryGetValue(o.Faction, out var mine)) lookers[o.Faction] = mine = new List<Observer>();
+                mine.Add(o);
+            }
             // A faction left with nobody looking still lets its old tracks go cold and be lost.
             factions.UnionWith(pictures.Keys);
             var targets = new List<Target>();
@@ -585,16 +592,16 @@ namespace Unity.SpaceGod.Core
             foreach (var f in factions)
             {
                 var book = PictureOf(f);
+                lookers.TryGetValue(f, out var mineList);
                 foreach (var t in targets)
                 {
                     if (t.Ship.Faction == f) continue;
                     var best = ContactLevel.None;
                     var by = t.Helio;
                     double byKm2 = double.MaxValue;
-                    if (t.Signature > 0)
-                        foreach (var o in observers)
+                    if (t.Signature > 0 && mineList != null)
+                        foreach (var o in mineList)
                         {
-                            if (o.Faction != f) continue;
                             double reach = o.Suite.RangeKm * t.Root;
                             double d2 = (o.Helio - t.Helio).LengthSquared;
                             if (d2 > reach * reach) continue;

@@ -86,7 +86,7 @@ namespace Unity.SpaceGod.Core
             // The Moon follows a lunar theory, not an ellipse (see LunarTheory).
             if (moonIndex >= 0)
             {
-                relative[moonIndex] = LunarTheory.Position(jd);
+                relative[moonIndex] = Lunar(jd);
                 const double h = 1e-3;
                 velocity[moonIndex] = (LunarTheory.Position(jd + h) - LunarTheory.Position(jd - h)) / (2 * h);
             }

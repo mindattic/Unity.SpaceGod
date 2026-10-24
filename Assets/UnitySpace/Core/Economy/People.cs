@@ -58,15 +58,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>Nitrogen bled in a day per person to replace leaked air, kg.</summary>
         public const double NitrogenKg = LeakAirKg * AirNitrogenShare;
 
-        static readonly Dictionary<SettlementKind, (Good good, double perPersonDay)[]> needs = new Dictionary<SettlementKind, (Good, double)[]>();
+        static readonly (Good good, double perPersonDay)[][] needs = BuildNeeds();
 
-        /// <summary>Daily per-person needs in tonnes for a kind of settlement.</summary>
-        public static (Good good, double perPersonDay)[] NeedsOf(SettlementKind kind)
+        static (Good good, double perPersonDay)[][] BuildNeeds()
         {
-            lock (needs)
-            {
-                if (needs.TryGetValue(kind, out var list)) return list;
-                list = new[]
+            var all = new (Good, double)[Enum.GetValues(typeof(SettlementKind)).Length][];
+            foreach (SettlementKind kind in Enum.GetValues(typeof(SettlementKind)))
+                all[(int)kind] = new[]
                 {
                     (Good.Food, FoodKg / 1000),
                     (Good.Water, WaterLossKg(kind) / 1000),
@@ -77,10 +75,11 @@ namespace Unity.SpaceGod.Core
                     (Good.Machinery, 0.000008),
                     (Good.Electronics, 0.0000015),
                 };
-                needs[kind] = list;
-                return list;
-            }
+            return all;
         }
+
+        /// <summary>Daily per-person needs in tonnes for a kind of settlement (built once, read without locking).</summary>
+        public static (Good good, double perPersonDay)[] NeedsOf(SettlementKind kind) => needs[(int)kind];
 
         /// <summary>A person's daily need of <paramref name="g"/> at a kind of settlement, tonnes (0 if it is not a need).</summary>
         public static double NeedOf(SettlementKind kind, Good g)
