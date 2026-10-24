@@ -35,6 +35,11 @@ namespace Unity.SpaceGod.Views
         readonly MeshFilter truss;
         (int pods, int loaded, int spheres) trussShown;
 
+        /// <summary>What an ore tug has latched on (U.SPC-T498), drawn ahead of its push plate, and the load it shows now; null until it first carries one.</summary>
+        MeshRenderer towRenderer;
+        MeshFilter towFilter;
+        CapturedRock towShown;
+
         /// <summary>Whether the full model is drawn (U.SPC-T415): false draws the hull alone, without hardpoints, scars, glows, shields or exhaust.</summary>
         bool detailed = true;
         float wreckSpin;
@@ -413,12 +418,56 @@ namespace Unity.SpaceGod.Views
                 }
             }
 
+            UpdateTow();
+
             block.SetFloat(EngineGlowId, burning ? 2.2f : 0.35f);
             block.SetFloat(HighlightId, highlighted ? 1f : 0f);
             block.SetColor(ColorId, Color.white);
             SetBlock();
+            if (towRenderer != null) towRenderer.SetPropertyBlock(block);
             plume.enabled = visible && burning;
             SetExhaust(visible && detailed && burning);
+        }
+
+        /// <summary>
+        /// An ore tug's load (U.SPC-T498): the rock or block of ice in its claws, drawn just ahead of its push plate at its
+        /// true size against the hull (the root is scaled to the hull's length, so a unit here is one hull length), and gone
+        /// when it lets go.
+        /// </summary>
+        void UpdateTow()
+        {
+            var load = Ship.Tow;
+            if (load == null)
+            {
+                if (towRenderer != null) towRenderer.enabled = false;
+                towShown = null;
+                return;
+            }
+            if (towRenderer == null)
+            {
+                var go = new GameObject("Tow");
+                go.transform.SetParent(Root.transform, false);
+                towFilter = go.AddComponent<MeshFilter>();
+                towRenderer = go.AddComponent<MeshRenderer>();
+                towRenderer.sharedMaterial = ShipModels.ProceduralMaterial;
+                towRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                towRenderer.receiveShadows = false;
+            }
+            if (towShown != load)
+            {
+                towShown = load;
+                towFilter.sharedMesh = ShipMeshFactory.GetTowLoad(load.Class == AsteroidClass.CometIce);
+                float across = Ship.LengthKm > 0 ? (float)(load.DiameterM / 1000 / Ship.LengthKm) : 1f;
+                var t = towFilter.transform;
+                t.localScale = Vector3.one * across;
+                // Resting against the push plate, its near side in the claws' grip.
+                t.localPosition = new Vector3(0, 0, 0.38f + across * 0.45f);
+                // A fixed tumble per load, so each block reads as its own lump of rock.
+                int seed = 0;
+                foreach (char ch in load.Designation ?? "") seed = seed * 31 + ch;
+                t.localRotation = Quaternion.Euler((seed & 0x7fff) % 360, 37f + (seed >> 15 & 0xff), 11f);
+            }
+            towRenderer.enabled = visible;
         }
 
         /// <summary>Starts/stops the exhaust emitter only on an actual state change -- <see cref="ParticleSystem.Stop"/>
@@ -656,6 +705,7 @@ namespace Unity.SpaceGod.Views
             if (visible == value) return;
             visible = value;
             foreach (var r in renderers) r.enabled = value;
+            if (towRenderer != null) towRenderer.enabled = value && Ship.Tow != null;
             foreach (var p in parts)
             {
                 foreach (var r in p.Renderers) r.enabled = value && detailed && !p.Sub.Destroyed;

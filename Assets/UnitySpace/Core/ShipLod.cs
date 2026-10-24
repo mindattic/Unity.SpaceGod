@@ -40,6 +40,18 @@ namespace Unity.SpaceGod.Core
 
         public static bool DrawsModel(double px, double iconBelowPx) => px >= iconBelowPx;
 
+        /// <summary>
+        /// How many times its hull's length a ship spans on screen (U.SPC-T498): an ore tug with a load latched on is the tug
+        /// and the rock or ice ahead of its push plate together, so it turns from icon to model by that whole length; any other
+        /// ship, 1.
+        /// </summary>
+        public static double ExtentFactor(Ship ship)
+        {
+            var load = ship?.Tow;
+            double hull = ship?.Combat != null ? ship.LengthKm : 0;
+            return load == null || hull <= 0 ? 1 : 1 + Math.Max(0, load.DiameterM) / 1000 / hull;
+        }
+
         /// <summary>Whether a ship drawn as an icon is named beside it, by <see cref="IconNames"/>. An escort is named only when it is all there is to see of its group: it is folded into its leader's icon otherwise.</summary>
         public static bool NamesIcon(bool military, bool escort) => NamesIcon(IconNames.Index, military, escort);
 

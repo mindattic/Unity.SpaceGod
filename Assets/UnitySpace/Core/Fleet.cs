@@ -280,7 +280,7 @@ namespace Unity.SpaceGod.Core
                         continue;
                     }
                     var acc = (target[i] - off) * (omega * omega) - v * (2 * omega);
-                    double maxAcc = s.Spec.AccelG * Astro.GravityKmPerDay2;
+                    double maxAcc = s.AccelG * Astro.GravityKmPerDay2;
                     if (acc.Length > maxAcc) acc = acc.Normalized * maxAcc;
                     v += acc * d;
                     off += v * d;
@@ -573,7 +573,8 @@ namespace Unity.SpaceGod.Core
                 // Holding position (a siege, a refit, an ambush): decide again rather than fly to itself.
                 // A free ship's hop out to open space near the same world is a real trip, though.
                 // A ship bound for a gate is leaving even from the root it is parked at (one gate to the next).
-                if (ship.DestinationBody == ship.Orbit.Body && !ship.Wander && ship.GateKm == null) ScheduleNext(ship, ship.PhaseEndJd);
+                // So is an ore tug's push in from the field to the very world the field lies round (U.SPC-T498).
+                if (ship.DestinationBody == ship.Orbit.Body && !ship.Wander && !ship.Homing && ship.GateKm == null) ScheduleNext(ship, ship.PhaseEndJd);
                 else Depart(ship);
             }
             else if (ship.Phase == ShipPhase.Lane) EndLane(ship);
@@ -696,7 +697,7 @@ namespace Unity.SpaceGod.Core
             if (Lanes != null && !direct)
             {
                 int fromSystem = Lanes.SystemOf(from), toSystem = Lanes.SystemOf(to);
-                if (fromSystem != toSystem) ship.Journey = Lanes.Route(fromSystem, toSystem, departJd);
+                if (fromSystem != toSystem) ship.Journey = Lanes.RouteFor(ship, fromSystem, toSystem, departJd);
             }
             if (ship.Journey != null)
             {
@@ -825,7 +826,7 @@ namespace Unity.SpaceGod.Core
             }
             int to = ship.FinalBody;
             int toSystem = Lanes.SystemOf(to);
-            var route = toSystem != hop.From ? Lanes.Route(hop.From, toSystem, jd) : null;
+            var route = toSystem != hop.From ? Lanes.RouteFor(ship, hop.From, toSystem, jd) : null;
             ship.Journey = route;
             ship.JourneyIndex = 0;
             if (route != null)
@@ -859,7 +860,7 @@ namespace Unity.SpaceGod.Core
             ship.LaneLeg = hop;
             ship.LaneFromOffset = ship.Orbit.OffsetAt(jd);
             var a = ephemeris.HelioAt(hop.From, jd) + ship.LaneFromOffset;
-            var estimate = Lanes.RideDays(hop.Lane, Lanes.LaneLengthKm(hop.Lane, jd));
+            var estimate = Lanes.RideDays(ship, hop.Lane, Lanes.LaneLengthKm(hop.Lane, jd));
             ship.LaneToOffset = Lanes.RampOffset(hop.Lane, hop.To, jd + estimate);
             var b = ephemeris.HelioAt(hop.To, jd) + ship.LaneToOffset;
             ship.LaneStar = Lanes.KeepOutStar(a, b, jd);
@@ -879,7 +880,7 @@ namespace Unity.SpaceGod.Core
             ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
             ship.PhaseStartJd = jd;
             // A worn lane (U.SPC-T481) rides at its condition's pace.
-            ship.PhaseEndJd = jd + Lanes.RideDays(hop.Lane, ship.LaneLengthKm) * ship.LaneEndProgress;
+            ship.PhaseEndJd = jd + Lanes.RideDays(ship, hop.Lane, ship.LaneLengthKm) * ship.LaneEndProgress;
             LaneJoined?.Invoke(ship, hop, jd);
         }
 
@@ -892,7 +893,7 @@ namespace Unity.SpaceGod.Core
             ship.LaneEndProgress = 1;
             // LaneHoldSide is kept: the ship eases back in from beside the lane over the first hours.
             ship.PhaseStartJd = jd;
-            ship.PhaseEndJd = jd + Lanes.RideDays(ship.LaneLeg.Lane, ship.LaneLengthKm) * Math.Max(1e-3, 1 - ship.LaneHold);
+            ship.PhaseEndJd = jd + Lanes.RideDays(ship, ship.LaneLeg.Lane, ship.LaneLengthKm) * Math.Max(1e-3, 1 - ship.LaneHold);
         }
 
         /// <summary>Drops out of the lane where the ship is, a little to one side (an interdiction pulse).</summary>
@@ -1367,7 +1368,7 @@ namespace Unity.SpaceGod.Core
         bool Plan(Ship ship, int frame, int from, int to, double departJd, DVec3 start, DVec3 startVelocity,
             ParkingOrbit arrival, double keepOut, bool matchVelocity)
         {
-            double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
+            double accel = ship.AccelG * Astro.GravityKmPerDay2;
             var v0 = matchVelocity ? startVelocity : DVec3.Zero;
             var v1 = DVec3.Zero;
             DVec3[] path = null;
@@ -1473,6 +1474,7 @@ namespace Unity.SpaceGod.Core
             double arriveJd = ship.PhaseEndJd;
             ship.Phase = landed ? ShipPhase.Landed : ShipPhase.Parked;
             ship.Wander = false;
+            ship.Homing = false;
             ship.TripsCompleted++;
             ship.Path = null;
             ship.Conic = null;
@@ -1684,6 +1686,8 @@ namespace Unity.SpaceGod.Core
                     return ship.Route[ship.RouteIndex];
 
                 case ShipRole.Miner:
+                // An ore tug with no belt works to send it (U.SPC-T498) shuttles the same way: out from its field and home.
+                case ShipRole.Tug:
                     if (here != ship.Ports[0]) return ship.Ports[0];
                     return ship.Ports.Length > 1 ? ship.Ports[1 + rng.Next(ship.Ports.Length - 1)] : here;
 
@@ -1766,6 +1770,8 @@ namespace Unity.SpaceGod.Core
                 case ShipRole.Courier: return 0.1 + rng.NextDouble() * 0.4;
                 case ShipRole.Free: return 0.1 + rng.NextDouble() * 0.6;
                 case ShipRole.Miner: return 1.0 + rng.NextDouble() * 2.0;
+                // An ore tug with a load latched on sets straight out; running empty it lies at the field a while.
+                case ShipRole.Tug: return ship.Tow != null ? 0.05 + rng.NextDouble() * 0.1 : 0.5 + rng.NextDouble() * 1.0;
                 default: return 0.5 + rng.NextDouble() * 1.5;
             }
         }
@@ -1942,6 +1948,8 @@ namespace Unity.SpaceGod.Core
             if (ship.Role == ShipRole.Courier) return "Priority mail and data cores";
             if (ship.Role == ShipRole.Miner)
                 return origin == ship.Ports[0] ? (rng.Next(2) == 0 ? "Nickel-iron ore" : "Platinum-group metals") : "Empty, outbound to the belt";
+            if (ship.Role == ShipRole.Tug)
+                return ship.Tow != null ? $"Pushing {ship.Tow.Designation}, {ship.Tow.Tonnes:N0} t" : origin == ship.Ports[0] ? "Claws open, out for a load" : "Running empty, back to the field";
 
             switch (catalog[origin].Name)
             {
@@ -2181,6 +2189,16 @@ namespace Unity.SpaceGod.Core
                 fleet.Station(ship, ports[fleet.rng.Next(ports.Length)], startJd);
             }
 
+            // The Consortium's ore tugs (U.SPC-T498): every class a real hull in the fleet. With no belt works here to send
+            // them, they push metal from the field round Psyche in to the refinery at Ceres and go back for more.
+            var tugPorts = fleet.Bodies("Psyche", "Ceres");
+            foreach (var name in new[] { "Bulldog", "Sisyphus" })
+            {
+                var ship = fleet.AddShip(name, ShipClass.OreTug, belt, ShipRole.Tug);
+                ship.Ports = tugPorts;
+                fleet.Station(ship, tugPorts[0], startJd);
+            }
+
             fleet.Update(jd);
             return fleet;
         }
@@ -2225,7 +2243,7 @@ namespace Unity.SpaceGod.Core
         public TripEstimate EstimateTrip(Ship ship, int from, int to, double jd, out bool direct)
         {
             direct = false;
-            double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
+            double accel = ship.AccelG * Astro.GravityKmPerDay2;
             bool conics = UsesConics(ship);
             double deltaV = 0, cost = 0;
             double Burn(double km, int frame, LegEnd start, LegEnd end)
@@ -2246,7 +2264,7 @@ namespace Unity.SpaceGod.Core
             if (Lanes != null)
             {
                 int a = Lanes.SystemOf(from), b = Lanes.SystemOf(to);
-                var route = a != b ? Lanes.Route(a, b, jd) : null;
+                var route = a != b ? Lanes.RouteFor(ship, a, b, jd) : null;
                 if (route != null)
                 {
                     int first = CommonFrame(from, a), last = CommonFrame(b, to);
@@ -2255,7 +2273,7 @@ namespace Unity.SpaceGod.Core
                     double rideDays = 0;
                     for (int i = 0; i < route.Count; i++)
                     {
-                        double ride = Lanes.RideDays(route[i].Lane, Lanes.LaneLengthKm(route[i].Lane, jd));
+                        double ride = Lanes.RideDays(ship, route[i].Lane, Lanes.LaneLengthKm(route[i].Lane, jd));
                         days += ride;
                         rideDays += ride;
                         if (i + 1 < route.Count) days += Burn(Lanes.RampRadiusKm(route[i].To) * 1.5, route[i].To, RampEnd(route[i].To), RampEnd(route[i].To));
@@ -2316,7 +2334,8 @@ namespace Unity.SpaceGod.Core
 
         public static DriveKind DriveOf(Ship ship) => ship.Spec.AccelG >= TorchAccelG ? DriveKind.Torch : DriveKind.LowThrust;
 
-        bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust;
+        // An ore tug works to its operation's timetable, laden or not (U.SPC-T498): it never waits on a launch window.
+        bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust && ship.Role != ShipRole.Tug;
 
         /// <summary>
         /// What a day of the hull's time is worth to its owner (credits) when it trades time for propellant:
@@ -2515,7 +2534,7 @@ namespace Unity.SpaceGod.Core
             if (!patchedOut) c.DepartureBurnKmS = (v1 - startVel).Length / day;
             if (!patchedIn) c.ArrivalBurnKmS = (v2 - endVel).Length / day;
 
-            double accel = Math.Max(1e-9, ship.Spec.AccelG * 9.80665e-3);
+            double accel = Math.Max(1e-9, ship.AccelG * 9.80665e-3);
             c.DepartureBurnDays = c.DepartureBurnKmS / accel / day;
             c.ArrivalBurnDays = c.ArrivalBurnKmS / accel / day;
             if (c.DepartureBurnDays + c.ArrivalBurnDays > 0.5 * days) return null;
@@ -2624,7 +2643,7 @@ namespace Unity.SpaceGod.Core
             if (!(mu > 0)) return false;
 
             // What flying now by flip-and-burn would cost, for comparison.
-            double accel = ship.Spec.AccelG * Astro.GravityKmPerDay2;
+            double accel = ship.AccelG * Astro.GravityKmPerDay2;
             double km = Math.Max(1, (target - ephemeris.HelioAt(here, earliestJd)).Length);
             double burnDays = 2 * Math.Sqrt(km / accel);
             double burnDv = accel * burnDays / Astro.SecondsPerDay * LegMargin + LegMatchKmS
@@ -2744,7 +2763,7 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         double GravityLossEstimate(Ship ship, int frame, LegEnd start, LegEnd end, double days)
         {
-            double accel = ship.Spec.AccelG * 9.80665e-3;
+            double accel = ship.AccelG * 9.80665e-3;
             double loss = 0;
             foreach (var e in new[] { start, end })
                 loss += e.Well >= 0 ? Conics.GravityLossLeaving(catalog[e.Well].Gm, e.Rp, accel) : Conics.GravityLossLeaving(catalog[frame].Gm, e.R, accel);

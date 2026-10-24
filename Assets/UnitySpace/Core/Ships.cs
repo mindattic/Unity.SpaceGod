@@ -121,6 +121,13 @@ namespace Unity.SpaceGod.Core
         /// ramps and lies over the rings at each end, its polity's upkeep, not a market's, deciding where it goes.
         /// </summary>
         Tender,
+
+        /// <summary>
+        /// An ore tug at work for its belt works (U.SPC-T498, see <see cref="BeltMining"/>): it lies at the field its loads
+        /// come from, latches onto one when its operation sends it out (<see cref="Ship.Tow"/>), pushes it in to the refinery
+        /// or the depot it is for, and comes home empty. Its operation, not a market, decides where it goes.
+        /// </summary>
+        Tug,
     }
 
     public enum ShipPhase
@@ -440,6 +447,38 @@ namespace Unity.SpaceGod.Core
         /// <summary>What a salvager still finds aboard a derelict: what the raiders left of the cargo, and
         /// the ship's own stores. The player takes it crate by crate (see <see cref="SalvageSession"/>).</summary>
         public readonly List<SalvageStack> Salvage = new List<SalvageStack>();
+
+        /// <summary>
+        /// What an ore tug has latched onto in its claws and is pushing (U.SPC-T498): a captured asteroid or a block of comet
+        /// ice, drawn ahead of its push plate and flown at the gentler acceleration its mass leaves (<see cref="AccelG"/>).
+        /// Null when it is running empty. Not in the hold: <see cref="MassTonnes"/> and the propellant reckoning leave it out.
+        /// </summary>
+        public CapturedRock Tow;
+
+        /// <summary>Tonnes latched on (<see cref="Tow"/>), or 0.</summary>
+        public double TowTonnes => Tow == null ? 0 : Math.Max(0, Tow.Tonnes);
+
+        /// <summary>
+        /// An ore tug pushing its load in to the body it is at from a spot out in that body's neighbourhood, where it latched
+        /// on (a load for a refinery at the field's own body): the trip is a real one, though it starts and ends at one body.
+        /// Cleared when it arrives.
+        /// </summary>
+        public bool Homing;
+
+        /// <summary>
+        /// The drive's sustained acceleration now, g: its class's (<see cref="ShipClassSpec.AccelG"/>), cut by whatever it has
+        /// latched on to the share its thrust can still move -- the tug's own mass over the tug and its load together.
+        /// </summary>
+        public double AccelG
+        {
+            get
+            {
+                double load = TowTonnes;
+                if (load <= 0) return Spec.AccelG;
+                double own = Math.Max(1, DryMassTonnes + PropellantCapacity);
+                return Spec.AccelG * own / (own + load);
+            }
+        }
 
         /// <summary>Hold size in tonnes (0 for warships).</summary>
         public double CapacityTonnes;
@@ -764,6 +803,7 @@ namespace Unity.SpaceGod.Core
             CorvetteStation = -1;
             Civil = CivilCraft.None;
             Wander = false;
+            Homing = false;
             Ring = null;
             HoldPoint = null;
             Battle = null;

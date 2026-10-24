@@ -126,6 +126,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Taken by raiders on the way: the cargo is theirs.</summary>
         Stolen,
+
+        /// <summary>Lost on the way with nobody the richer: an ore tug blown apart with its load in a fight (U.SPC-T498).</summary>
+        Lost,
     }
 
     /// <summary>A raw-material convoy: one load of separated elements from a refinery to a warehouse.</summary>
@@ -197,7 +200,38 @@ namespace Unity.SpaceGod.Core
         /// <summary>The raiders who took the tug and its load, if they did.</summary>
         public Faction TakenBy;
 
+        /// <summary>
+        /// The tug's own hull, a real ship in its world's fleet that flies the haul (U.SPC-T498), or null for a pipeline run on
+        /// its own, where a haul is its timetable alone. With a hull, the haul ends when the hull gets its load in, not at
+        /// <see cref="ArriveJd"/> (only the estimate it set out on), and is lost when the hull is.
+        /// </summary>
+        public Ship Tug;
+
+        /// <summary>
+        /// Whether the hull has its load latched on. One whose load lies in the field round the very body it is for flies out
+        /// to it empty first and latches on there; any other latches on where it lies, at the field it sets out from.
+        /// </summary>
+        public bool Latched;
+
         public override string ToString() => Name;
+    }
+
+    /// <summary>
+    /// What threatens an ore tug's hull where it actually is (U.SPC-T498): the raiders nearest it, how thick they are about
+    /// it (0 none in reach, 1 as bad as it gets), and the body it is nearest, where any seizure is reported.
+    /// </summary>
+    public readonly struct TugDanger
+    {
+        public readonly Faction Raiders;
+        public readonly double Pressure;
+        public readonly int Body;
+
+        public TugDanger(Faction raiders, double pressure, int body)
+        {
+            Raiders = raiders;
+            Pressure = pressure;
+            Body = body;
+        }
     }
 
     /// <summary>
@@ -244,8 +278,18 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public int OreTugs;
 
+        /// <summary>
+        /// Its ore tugs' own hulls when the works runs in a world (U.SPC-T498, see <see cref="World.RaiseTugs"/>): real ships in
+        /// its fleet, one for each of <see cref="OreTugs"/>, which lie at <see cref="TugHome"/> between hauls and fly every
+        /// haul themselves. Null for a works run on its own, whose tugs are a count and a timetable.
+        /// </summary>
+        public List<Ship> Tugs;
+
         /// <summary>Where the tugs find their loads: the field around this body (-1: around the refinery).</summary>
         public int TugSourceBody = -1;
+
+        /// <summary>The body whose field the ore tugs work, and where their hulls lie between hauls.</summary>
+        public int TugHome => TugSourceBody >= 0 ? TugSourceBody : RefineryBody;
 
         /// <summary>Share of the tugs' loads that are blocks of comet ice rather than belt rock.</summary>
         public double TugIceShare;
@@ -417,7 +461,10 @@ namespace Unity.SpaceGod.Core
     /// warehouse its owner guards.
     ///
     /// The pipeline runs in whole days off its own random stream, and reaches the world it sits in only through the
-    /// hooks below, so it runs the same on its own (the tests) as wired into a <see cref="World"/>.
+    /// hooks below, so it runs the same on its own (the tests) as wired into a <see cref="World"/>. In a world every ore tug
+    /// is a real hull (U.SPC-T498, <see cref="MiningOperation.Tugs"/>): the pipeline sends it, its world's fleet flies it with
+    /// its load latched on (<see cref="Ship.Tow"/>), the haul ends when the hull gets in (<see cref="TugArrived"/>), and the
+    /// raiders who can take it are those about it where it actually is (<see cref="TugThreat"/>) or the fight that boards it.
     /// </summary>
     public sealed class BeltMining
     {
@@ -497,6 +544,87 @@ namespace Unity.SpaceGod.Core
         public event Action<TugHaul> TugTaken;
 
         public int TugsTaken, TugHaulsDelivered;
+
+        // ---------------------------------------------------------------- the tugs' own hulls (U.SPC-T498)
+
+        /// <summary>Whether a tug's hull lying at its field is free to be sent out (not at the player's helm, not fighting). Null: any is.</summary>
+        public Func<Ship, bool> TugFree;
+
+        /// <summary>A tug's hull has been sent out on a haul: its world flies it (to the field first, unless its load is already latched on).</summary>
+        public Action<TugHaul, double> HaulSent;
+
+        /// <summary>What threatens a tug's hull where it actually is on a date (see <see cref="TugDanger"/>). Null: nothing does.</summary>
+        public Func<TugHaul, double, TugDanger> TugThreat;
+
+        /// <summary>Raiders have seized a tug's hull where it was: its world hands the hull over to them (the load is already theirs).</summary>
+        public Action<TugHaul, double> TugSeized;
+
+        /// <summary>The ore tugs' hauls lost with their hulls, blown apart on the way with nobody the richer.</summary>
+        public int TugsDestroyed;
+
+        /// <summary>The haul <paramref name="tug"/>'s hull is flying, or null.</summary>
+        public TugHaul HaulOf(Ship tug)
+        {
+            if (tug == null) return null;
+            foreach (var h in Hauls)
+                if (h.Tug == tug && h.State == ConvoyState.EnRoute) return h;
+            return null;
+        }
+
+        /// <summary>The works <paramref name="tug"/>'s hull belongs to, or null.</summary>
+        public MiningOperation OperationOf(Ship tug)
+        {
+            if (tug == null) return null;
+            foreach (var op in Operations)
+                if (op.Tugs != null && op.Tugs.Contains(tug)) return op;
+            return null;
+        }
+
+        /// <summary>
+        /// Where a tug's hull goes next (its world's fleet asks): on a haul with its load latched on, to where the load is
+        /// for; on a haul still to latch on, out into the field round where it lies (<see cref="Ship.Wander"/>, so the
+        /// body it is at); with no haul, home to its field. -1 for a hull that is no tug of any works.
+        /// </summary>
+        public int TugNext(Ship tug, int here)
+        {
+            var h = HaulOf(tug);
+            if (h != null)
+            {
+                if (h.Latched) return h.ToBody;
+                tug.Wander = true;
+                return here;
+            }
+            var op = OperationOf(tug);
+            return op != null ? op.TugHome : -1;
+        }
+
+        /// <summary>
+        /// A tug's hull has arrived somewhere (its world's fleet tells): out in the field for a load it latches on, and pushes
+        /// it in (<see cref="Ship.Homing"/>); with its load at the body it is for, it lets go there and the haul is done.
+        /// True if either happened.
+        /// </summary>
+        public bool TugArrived(Ship tug, double jd)
+        {
+            var h = HaulOf(tug);
+            if (h == null) return false;
+            if (!h.Latched)
+            {
+                if (tug.Orbit == null || tug.Orbit.Body != h.FromBody) return false;
+                h.Latched = true;
+                tug.Tow = h.Load;
+                tug.Homing = tug.Orbit.Body == h.ToBody;
+                return true;
+            }
+            if (tug.Orbit == null || tug.Orbit.Body != h.ToBody || tug.Homing) return false;
+            h.ArriveJd = h.FreeJd = jd;
+            tug.Tow = null;
+            Deliver(h, jd);
+            return true;
+        }
+
+        /// <summary>A hull that is gone from its works: lost, left adrift, or flying someone else's colours.</summary>
+        static bool Gone(MiningOperation op, Ship tug) =>
+            tug == null || tug.Destroyed || tug.Derelict || (op != null && tug.Faction != op.Owner);
 
         /// <summary>An ore tug's own mass, tonnes: its stock design, dry, with full tanks.</summary>
         public static double TugMassTonnes
@@ -765,114 +893,228 @@ namespace Unity.SpaceGod.Core
         /// <summary>Sends every idle ore tug of <paramref name="op"/> out to latch onto a load and push it in.</summary>
         void SendTugs(MiningOperation op, double jd)
         {
+            if (op.Tugs != null)
+            {
+                SendHulls(op, jd);
+                return;
+            }
             if (op.OreTugs <= 0) return;
             int busy = 0, inbound = 0;
             foreach (var h in Hauls)
             {
-                if (h.Operation != op || h.State == ConvoyState.Stolen) continue;
+                if (h.Operation != op || h.State == ConvoyState.Stolen || h.State == ConvoyState.Lost) continue;
                 if (jd < h.FreeJd) busy++;
                 if (h.State == ConvoyState.EnRoute && h.ToDepot == null) inbound++;
             }
             for (; busy < op.OreTugs; busy++)
-            {
-                bool ice = op.TugIceShare > 0 && rng.NextDouble() < op.TugIceShare;
-                var kind = ice ? AsteroidClass.CometIce : AsteroidClass.Pick(rng);
-                var depot = ice ? op.IceDepot : null;
-                if (depot == null)
-                {
-                    // The grinders' yard is full (counting what is on the way): the tugs stand down.
-                    if (op.Backlog.Count + inbound >= op.MaxBacklog) return;
-                }
-                else if (depot.StoredTonnes >= depot.CapacityTonnes) return;
+                if (NewHaul(op, jd, ref inbound) == null) return;
+        }
 
-                int from = op.TugSourceBody >= 0 ? op.TugSourceBody : op.RefineryBody;
-                int to = depot?.Body ?? op.RefineryBody;
-                double d = op.TugMinLoadM + (op.TugMaxLoadM - op.TugMinLoadM) * rng.NextDouble();
-                double t = RockTonnes(d, kind.Density), cap = MaxLoadTonnes(from, to, jd);
-                if (t > cap)
-                {
-                    // Too big for any way in: the tug cuts (or picks) one that is not.
-                    t = cap;
-                    d = RockDiameter(t, kind.Density);
-                }
-                double days = HaulDays(from, to, t, jd, out var heavy);
-                if (double.IsInfinity(days)) return;
-                // Home again empty, the same way, at its unladen acceleration.
-                double back = HaulDays(from, to, 0, jd, out _);
-                var haul = new TugHaul
-                {
-                    Name = $"{op.Name} tug haul {++haulSerial}", Operation = op, FromBody = from, ToBody = to, ToDepot = depot,
-                    HeavyLane = heavy?.Name, AccelMs2 = TugAccel(t), DepartJd = jd, ArriveJd = jd + Math.Max(1, days),
-                    Load = new CapturedRock
-                    {
-                        Designation = ice ? $"{op.Name} ice block {haulSerial}" : $"{op.Name} rock {++rockSerial}",
-                        Class = kind, DiameterM = d, Tonnes = t, Remaining = t,
-                    },
-                };
-                haul.FreeJd = haul.ArriveJd + Math.Max(1, back);
-                Hauls.Add(haul);
-                op.TugHaulsSent++;
-                if (depot == null) inbound++;
+        /// <summary>
+        /// Sends every one of <paramref name="op"/>'s tug hulls (U.SPC-T498) lying idle at its field out on a haul of its own,
+        /// once those its world has lost (left adrift, taken, destroyed) when on no haul have left the works.
+        /// </summary>
+        void SendHulls(MiningOperation op, double jd)
+        {
+            for (int i = op.Tugs.Count - 1; i >= 0; i--)
+            {
+                var tug = op.Tugs[i];
+                if (!Gone(op, tug) || HaulOf(tug) != null) continue;
+                op.Tugs.RemoveAt(i);
+                op.TugsLost++;
             }
+            op.OreTugs = op.Tugs.Count;
+            int inbound = 0;
+            foreach (var h in Hauls)
+                if (h.Operation == op && h.State == ConvoyState.EnRoute && h.ToDepot == null) inbound++;
+            foreach (var tug in op.Tugs.ToArray())
+            {
+                if (tug.Tow != null || tug.Phase != ShipPhase.Parked || tug.Orbit == null || tug.Orbit.Body != op.TugHome) continue;
+                if (HaulOf(tug) != null || (TugFree != null && !TugFree(tug))) continue;
+                var haul = NewHaul(op, jd, ref inbound);
+                if (haul == null) return;
+                haul.Tug = tug;
+                // A load for anywhere else is latched on where it lies, in the field the tug is at; one for this very body
+                // lies out in its field, and the tug flies out empty to it first.
+                haul.Latched = haul.FromBody != haul.ToBody;
+                if (haul.Latched) tug.Tow = haul.Load;
+                // Its hull, not a timetable, says when it is free again.
+                haul.FreeJd = double.PositiveInfinity;
+                HaulSent?.Invoke(haul, jd);
+            }
+        }
+
+        /// <summary>Plans one haul for one of <paramref name="op"/>'s tugs setting out on <paramref name="jd"/>, or null when it stands down.</summary>
+        TugHaul NewHaul(MiningOperation op, double jd, ref int inbound)
+        {
+            bool ice = op.TugIceShare > 0 && rng.NextDouble() < op.TugIceShare;
+            var kind = ice ? AsteroidClass.CometIce : AsteroidClass.Pick(rng);
+            var depot = ice ? op.IceDepot : null;
+            if (depot == null)
+            {
+                // The grinders' yard is full (counting what is on the way): the tugs stand down.
+                if (op.Backlog.Count + inbound >= op.MaxBacklog) return null;
+            }
+            else if (depot.StoredTonnes >= depot.CapacityTonnes) return null;
+
+            int from = op.TugHome;
+            int to = depot?.Body ?? op.RefineryBody;
+            double d = op.TugMinLoadM + (op.TugMaxLoadM - op.TugMinLoadM) * rng.NextDouble();
+            double t = RockTonnes(d, kind.Density), cap = MaxLoadTonnes(from, to, jd);
+            if (t > cap)
+            {
+                // Too big for any way in: the tug cuts (or picks) one that is not.
+                t = cap;
+                d = RockDiameter(t, kind.Density);
+            }
+            double days = HaulDays(from, to, t, jd, out var heavy);
+            if (double.IsInfinity(days)) return null;
+            // Home again empty, the same way, at its unladen acceleration.
+            double back = HaulDays(from, to, 0, jd, out _);
+            var haul = new TugHaul
+            {
+                Name = $"{op.Name} tug haul {++haulSerial}", Operation = op, FromBody = from, ToBody = to, ToDepot = depot,
+                HeavyLane = heavy?.Name, AccelMs2 = TugAccel(t), DepartJd = jd, ArriveJd = jd + Math.Max(1, days),
+                Load = new CapturedRock
+                {
+                    Designation = ice ? $"{op.Name} ice block {haulSerial}" : $"{op.Name} rock {++rockSerial}",
+                    Class = kind, DiameterM = d, Tonnes = t, Remaining = t,
+                },
+            };
+            haul.FreeJd = haul.ArriveJd + Math.Max(1, back);
+            Hauls.Add(haul);
+            op.TugHaulsSent++;
+            if (depot == null) inbound++;
+            return haul;
         }
 
         void MoveHauls(double jd, double pressure)
         {
-            foreach (var h in Hauls)
+            // A list, not a foreach: a hull handed over to raiders may set its world planning afresh.
+            for (int k = 0; k < Hauls.Count; k++)
             {
+                var h = Hauls[k];
                 if (h.State != ConvoyState.EnRoute) continue;
+                if (h.Tug != null)
+                {
+                    MoveHull(h, jd);
+                    continue;
+                }
                 var op = h.Operation;
                 double risk = TugTheftPerDay * pressure * (1 - EscortCut * Clamp01(op?.EscortShare ?? 0));
                 if (risk > 0 && rng.NextDouble() < risk)
                 {
-                    // Raiders take the tug and what it holds: the load is theirs, the hull lost to its operation.
-                    h.State = ConvoyState.Stolen;
-                    h.TakenBy = Raiders?.Invoke();
-                    foreach (var (g, f) in h.Load.Class.Yield) Plundered[(int)g] += h.Load.Tonnes * f;
-                    if (op != null)
-                    {
-                        op.OreTugs = Math.Max(0, op.OreTugs - 1);
-                        op.TugsLost++;
-                    }
-                    TugsTaken++;
-                    Log?.Invoke(jd, $"Raiders{By(h.TakenBy)} seized an ore tug of the {op?.Name} and the {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()} it was pushing", h.ToBody);
-                    TugTaken?.Invoke(h);
+                    Seize(h, Raiders?.Invoke(), h.ToBody, jd);
                     continue;
                 }
                 if (jd < h.ArriveJd) continue;
-                h.State = ConvoyState.Delivered;
-                TugHaulsDelivered++;
-                if (op == null) continue;
-                op.TugHaulsDelivered++;
-                op.TugTonnesDelivered += h.Load.Tonnes;
-                if (h.ToDepot != null)
-                {
-                    // Ice is melted at the depot: its water and volatiles go into stock, the grit is dumped. Never past its room.
-                    var w = h.ToDepot;
-                    double room = Math.Max(0, w.CapacityTonnes - w.StoredTonnes), got = 0;
-                    foreach (var (_, f) in h.Load.Class.Yield) got += h.Load.Tonnes * f * op.SeparationEfficiency;
-                    double share = got > room ? room / got : 1;
-                    foreach (var (g, f) in h.Load.Class.Yield) w.Stock[(int)g] += h.Load.Tonnes * f * op.SeparationEfficiency * share;
-                }
-                else
-                {
-                    // Parked at the refinery for the grinders, like a capture tug's catch.
-                    h.Load.CapturedJd = jd;
-                    op.Backlog.Add(h.Load);
-                    op.RocksCaptured++;
-                    op.TonnesCaptured += h.Load.Tonnes;
-                }
+                Deliver(h, jd);
             }
             // Keep the history bounded: drop the oldest finished hauls whose tugs are home (or gone).
             int finished = 0;
             foreach (var h in Hauls)
-                if (h.State == ConvoyState.Stolen || (h.State == ConvoyState.Delivered && jd >= h.FreeJd)) finished++;
+                if (Finished(h, jd)) finished++;
             for (int i = 0; i < Hauls.Count && finished > 300; i++)
             {
-                var h = Hauls[i];
-                if (!(h.State == ConvoyState.Stolen || (h.State == ConvoyState.Delivered && jd >= h.FreeJd))) continue;
+                if (!Finished(Hauls[i], jd)) continue;
                 Hauls.RemoveAt(i--);
                 finished--;
+            }
+        }
+
+        static bool Finished(TugHaul h, double jd) =>
+            h.State == ConvoyState.Stolen || h.State == ConvoyState.Lost || (h.State == ConvoyState.Delivered && jd >= h.FreeJd);
+
+        /// <summary>
+        /// A day of a haul flown by a real hull (U.SPC-T498): lost with the hull if a fight took it (adrift, captured or blown
+        /// apart), else at the risk the raiders about it where it actually is put it in (<see cref="TugThreat"/>). Its
+        /// arrival is the hull's own (<see cref="TugArrived"/>), not the timetable's; a hull fighting is the fight's to settle.
+        /// </summary>
+        void MoveHull(TugHaul h, double jd)
+        {
+            var op = h.Operation;
+            var tug = h.Tug;
+            if (Gone(op, tug))
+            {
+                if (tug.Destroyed && !tug.Derelict && (op == null || tug.Faction == op.Owner))
+                {
+                    // Blown apart with its load: nobody the richer.
+                    h.State = ConvoyState.Lost;
+                    LoseHull(h);
+                    TugsDestroyed++;
+                    Log?.Invoke(jd, $"The ore tug {tug.Name} of the {op?.Name} is lost with the {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()} it was pushing", h.ToBody);
+                    return;
+                }
+                // Boarded in a fight: left adrift by its captors or flying their colours, its load is theirs.
+                var by = tug.Derelict ? tug.DerelictBy ?? Raiders?.Invoke() : tug.Faction;
+                Seize(h, by, tug.Orbit?.Body ?? h.ToBody, jd, handOver: false);
+                return;
+            }
+            if (tug.Battle != null) return;
+            var danger = TugThreat?.Invoke(h, jd) ?? default;
+            double risk = TugTheftPerDay * Clamp01(danger.Pressure) * (1 - EscortCut * Clamp01(op?.EscortShare ?? 0));
+            if (risk > 0 && rng.NextDouble() < risk) Seize(h, danger.Raiders ?? Raiders?.Invoke(), danger.Body >= 0 ? danger.Body : h.ToBody, jd);
+        }
+
+        /// <summary>A haul's hull leaves its works: the load comes off its claws, and the works counts it lost.</summary>
+        void LoseHull(TugHaul h)
+        {
+            var op = h.Operation;
+            if (h.Tug != null)
+            {
+                h.Tug.Tow = null;
+                h.Tug.Homing = false;
+                op?.Tugs?.Remove(h.Tug);
+            }
+            if (op == null) return;
+            op.OreTugs = op.Tugs != null ? op.Tugs.Count : Math.Max(0, op.OreTugs - 1);
+            op.TugsLost++;
+        }
+
+        /// <summary>
+        /// Raiders take a tug and what it holds, at <paramref name="body"/>: the load is theirs, the hull lost to its works.
+        /// A real hull is handed over to them where it is (<see cref="TugSeized"/>) unless a fight already did.
+        /// </summary>
+        void Seize(TugHaul h, Faction by, int body, double jd, bool handOver = true)
+        {
+            var op = h.Operation;
+            h.State = ConvoyState.Stolen;
+            h.TakenBy = by;
+            h.FreeJd = jd;
+            foreach (var (g, f) in h.Load.Class.Yield) Plundered[(int)g] += h.Load.Tonnes * f;
+            LoseHull(h);
+            TugsTaken++;
+            string tug = h.Tug != null ? "the ore tug " + h.Tug.Name : "an ore tug";
+            Log?.Invoke(jd, $"Raiders{By(h.TakenBy)} seized {tug} of the {op?.Name} and the {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()} it was pushing", body);
+            if (handOver && h.Tug != null) TugSeized?.Invoke(h, jd);
+            TugTaken?.Invoke(h);
+        }
+
+        /// <summary>A haul's load is in: ice melted into its depot's stock, rock parked at the refinery for the grinders.</summary>
+        void Deliver(TugHaul h, double jd)
+        {
+            var op = h.Operation;
+            h.State = ConvoyState.Delivered;
+            TugHaulsDelivered++;
+            if (op == null) return;
+            op.TugHaulsDelivered++;
+            op.TugTonnesDelivered += h.Load.Tonnes;
+            if (h.ToDepot != null)
+            {
+                // Ice is melted at the depot: its water and volatiles go into stock, the grit is dumped. Never past its room.
+                var w = h.ToDepot;
+                double room = Math.Max(0, w.CapacityTonnes - w.StoredTonnes), got = 0;
+                foreach (var (_, f) in h.Load.Class.Yield) got += h.Load.Tonnes * f * op.SeparationEfficiency;
+                double share = got > room ? room / got : 1;
+                foreach (var (g, f) in h.Load.Class.Yield) w.Stock[(int)g] += h.Load.Tonnes * f * op.SeparationEfficiency * share;
+            }
+            else
+            {
+                // Parked at the refinery for the grinders, like a capture tug's catch.
+                h.Load.CapturedJd = jd;
+                op.Backlog.Add(h.Load);
+                op.RocksCaptured++;
+                op.TonnesCaptured += h.Load.Tonnes;
             }
         }
 

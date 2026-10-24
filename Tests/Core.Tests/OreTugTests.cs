@@ -269,6 +269,207 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(copy.Mining.Hauls[0].Load.Class, Is.SameAs(AsteroidClass.CometIce), "rock kinds are the shared table entries");
             Assert.That(copy.Mining.Hauls[0].Operation, Is.SameAs(copy.Mining.Operations[0]));
             Assert.That(copy.Mining.HeavyLane.Target, Is.SameAs(copy), "the copy's tugs read the copy's lanes");
+            Assert.That(copy.Mining.Hauls[0].Tug, Is.SameAs(copy.Mining.Operations[0].Tugs[0]).Or.SameAs(copy.Mining.Operations[0].Tugs[1]),
+                "the copy's hauls are flown by the copy's hulls");
+            Assert.That(copy.Fleet.Ships, Does.Contain(copy.Mining.Hauls[0].Tug));
+        }
+
+        // ---------------------------------------------------------------- real hulls (U.SPC-T498)
+
+        static World Sol(out Ephemeris eph)
+        {
+            eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            return World.CreateDefault(eph, StartJd);
+        }
+
+        static void Step(World w, Ephemeris eph, double days, Func<bool> until = null, double dt = 1)
+        {
+            double jd = w.Jd;
+            for (double end = jd + days; jd < end;)
+            {
+                jd += dt;
+                eph.Update(jd);
+                w.Update(jd);
+                if (until != null && until()) return;
+            }
+        }
+
+        [Test]
+        public void EveryOreTugIsARealHullInTheFleetThePlayerCanTakeTheHelmOf()
+        {
+            var w = Sol(out _);
+            var op = w.Mining.Operations.Single();
+            Assert.That(op.Tugs, Has.Count.EqualTo(op.OreTugs), "a hull for every tug the works counts");
+            foreach (var tug in op.Tugs)
+            {
+                Assert.That(w.Fleet.Ships, Does.Contain(tug));
+                Assert.That(w.Fleet.IsPresent(tug), Is.True);
+                Assert.That(tug.Spec.Class, Is.EqualTo(ShipClass.OreTug));
+                Assert.That(tug.Role, Is.EqualTo(ShipRole.Tug));
+                Assert.That(tug.Faction, Is.SameAs(op.Owner));
+                Assert.That(new ShipHelm(w, tug).CanEmbody, Is.True, "its helm can be taken");
+                Assert.That(w.BurnsPropellant(tug), Is.False, "its works keeps it fuelled");
+            }
+            Assert.That(op.Tugs.Distinct().Count(), Is.EqualTo(op.Tugs.Count));
+        }
+
+        [Test]
+        public void ALoadedTugIsSlowedByItsLoadAndTakesOnlyHeavyLanes()
+        {
+            var w = Sol(out _);
+            var tug = w.Mining.Operations.Single().Tugs[0];
+            tug.Tow = null; // as it runs home empty
+            Assert.That(tug.AccelG, Is.EqualTo(tug.Spec.AccelG), "running empty it pulls its full rating");
+            var lanes = w.Fleet.Lanes;
+            int ceres = lanes.SystemOf(w.Catalog["Ceres"].Index), jupiter = lanes.SystemOf(w.Catalog["Callisto"].Index), earth = lanes.SystemOf(w.Catalog["Earth"].Index);
+            Assert.That(lanes.RouteFor(tug, earth, jupiter, StartJd), Is.Not.Null, "empty, it goes any way the lanes run");
+
+            tug.Tow = new CapturedRock { Designation = "test block", Class = AsteroidClass.CometIce, DiameterM = 250, Tonnes = 5e6, Remaining = 5e6 };
+            Assert.That(tug.AccelG * 9.80665, Is.EqualTo(BeltMining.TugAccel(5e6)).Within(1e-12), "the same push the works plans its hauls by");
+            var heavy = lanes.RouteFor(tug, ceres, jupiter, StartJd);
+            Assert.That(heavy, Is.Not.Null);
+            Assert.That(heavy.All(h => h.Lane.Heavy), Is.True);
+            Assert.That(lanes.RouteFor(tug, earth, jupiter, StartJd), Is.Null, "no heavy lane from Earth: it pushes through open space");
+            var lane = heavy[0].Lane;
+            double km = lanes.LaneLengthKm(lane, StartJd);
+            Assert.That(lanes.RideDays(tug, lane, km), Is.GreaterThan(lanes.RideDays(lane, km)), "a heavy lane carries a load at its own slow pace");
+        }
+
+        [Test]
+        public void ATugFliesItsHaulWithItsLoadLatchedOnAndBringsItIn()
+        {
+            var w = Sol(out var eph);
+            var m = w.Mining;
+            var op = m.Operations.Single();
+            var depot = op.IceDepot;
+            Step(w, eph, 5);
+            var haul = m.Hauls.First();
+            var tug = haul.Tug;
+            Assert.That(tug, Is.Not.Null, "a hull flies the haul");
+            Assert.That(op.Tugs, Does.Contain(tug));
+            Assert.That(haul.Latched, Is.True, "ice for Callisto is latched on at the field at Ceres");
+            Assert.That(tug.Tow, Is.SameAs(haul.Load), "the load is in its claws");
+            Assert.That(tug.AccelG, Is.LessThan(tug.Spec.AccelG / 50), "hundreds of thousands of tonnes and more on a tug of a few thousand");
+            Assert.That(tug.Cargo, Does.Contain(haul.Load.Designation));
+            Assert.That(ShipLod.ExtentFactor(tug), Is.EqualTo(1 + haul.Load.DiameterM / 1000 / tug.LengthKm).Within(1e-12),
+                "drawn, and switched from icon to model, as the tug and its load together");
+
+            bool rodeHeavy = false, flew = false;
+            double stored = depot.StoredTonnes;
+            Step(w, eph, 700, () =>
+            {
+                if (haul.State != ConvoyState.EnRoute) return true;
+                if (tug.Phase == ShipPhase.Transit || tug.Phase == ShipPhase.Lane) flew = true;
+                if (tug.Phase == ShipPhase.Lane)
+                {
+                    Assert.That(tug.LaneLeg.Lane.Heavy, Is.True, "laden, it rides heavy lanes only");
+                    Assert.That(tug.Tow, Is.SameAs(haul.Load), "with its load still on");
+                    rodeHeavy = true;
+                }
+                return false;
+            });
+            Assert.That(flew, Is.True, "the hull flew the haul");
+            Assert.That(haul.State, Is.EqualTo(ConvoyState.Delivered), $"still {haul.State} with the tug {tug.Phase} at {w.Catalog[tug.Orbit?.Body ?? 0].Name}");
+            Assert.That(rodeHeavy, Is.True, "out along the belt's heavy lane");
+            Assert.That(tug.Tow, Is.Null, "it let go at the depot");
+            Assert.That(tug.Orbit.Body, Is.EqualTo(depot.Body).Or.Not.EqualTo(op.TugHome), "it got the load in where it was for");
+            Assert.That(haul.ArriveJd, Is.GreaterThan(haul.DepartJd + 1), "its arrival is when the hull got in");
+            Assert.That(depot.StoredTonnes, Is.GreaterThan(stored), "the ice is melted into the depot");
+            Assert.That(w.Events.Any(e => e.Text.Contains(tug.Name) && e.Text.Contains("brings")), Is.True);
+            TestContext.Out.WriteLine($"{haul.Load.Tonnes:N0} t in {haul.ArriveJd - haul.DepartJd:0} d");
+        }
+
+        [Test]
+        public void ATugWhoseLoadIsForItsOwnFieldFliesOutForItAndPushesItIn()
+        {
+            var w = Sol(out var eph);
+            var m = w.Mining;
+            int ceres = w.Catalog["Ceres"].Index;
+            var op = m.AddOperation("Ceres Rock Works", w.Belt, ceres, null);
+            op.CaptureTugs = 0;
+            op.OreTugs = 1;
+            var tug = w.RaiseTugs(op, w.Jd).Single();
+            Assert.That(tug.Orbit.Body, Is.EqualTo(ceres));
+
+            bool outEmpty = false, inLaden = false;
+            TugHaul haul = null;
+            Step(w, eph, 200, () =>
+            {
+                haul ??= m.HaulOf(tug);
+                if (haul == null) return false;
+                if (!haul.Latched && tug.Phase == ShipPhase.Transit)
+                {
+                    Assert.That(tug.Tow, Is.Null, "out to the field with its claws open");
+                    outEmpty = true;
+                }
+                if (haul.Latched && tug.Phase == ShipPhase.Transit)
+                {
+                    Assert.That(tug.Tow, Is.SameAs(haul.Load));
+                    inLaden = true;
+                }
+                return haul.State != ConvoyState.EnRoute;
+            }, dt: 0.05);
+            Assert.That(haul, Is.Not.Null, "the works sent its tug out");
+            Assert.That(outEmpty, Is.True, "it flew out to the field for its load");
+            Assert.That(inLaden, Is.True, "and pushed it in");
+            Assert.That(haul.State, Is.EqualTo(ConvoyState.Delivered));
+            Assert.That(op.RocksCaptured, Is.EqualTo(1), "the rock is parked at the refinery for the grinders");
+            Assert.That(tug.Tow, Is.Null);
+            Assert.That(tug.Orbit.Body, Is.EqualTo(ceres));
+        }
+
+        [Test]
+        public void RaidersThreatenATugWhereItActuallyIsAndATugTakenInAFightTakesItsHaulWithIt()
+        {
+            var w = Sol(out var eph);
+            var m = w.Mining;
+            var op = m.Operations.Single();
+            Step(w, eph, 5);
+            var haul = m.Hauls.First();
+            var tug = haul.Tug;
+            double jd = w.Jd;
+
+            Assert.That(m.TugThreat(haul, jd).Pressure, Is.EqualTo(0), "no raiders near the belt works' field");
+            var here = ShipHelm.FrameOf(w, tug, jd);
+            var raider = w.Fleet.SpawnAt("Cutthroat", ShipClass.Destroyer, w.Pirates, here.body, here.offsetKm + new DVec3(500, 0, 0), DVec3.UnitX, jd);
+            var danger = m.TugThreat(haul, jd);
+            Assert.That(danger.Pressure, Is.GreaterThan(0), "a raider alongside it");
+            Assert.That(danger.Raiders, Is.SameAs(w.Pirates));
+            Assert.That(danger.Body, Is.EqualTo(w.Catalog["Ceres"].Index), "reported where the tug actually is");
+            raider.Destroyed = true;
+
+            // Boarded and taken in a fight (as the war's prize rules hand a hull over): its haul goes with it.
+            double plundered = m.Plundered.Sum();
+            tug.Faction = w.Pirates;
+            Step(w, eph, 1);
+            Assert.That(haul.State, Is.EqualTo(ConvoyState.Stolen));
+            Assert.That(haul.TakenBy, Is.SameAs(w.Pirates));
+            Assert.That(tug.Tow, Is.Null);
+            Assert.That(op.Tugs, Does.Not.Contain(tug));
+            Assert.That(op.OreTugs, Is.EqualTo(1));
+            Assert.That(op.TugsLost, Is.EqualTo(1));
+            Assert.That(m.Plundered.Sum(), Is.GreaterThan(plundered), "its load is the raiders'");
+        }
+
+        [Test]
+        public void ATugSeizedOnTheWayFliesTheRaidersColoursFromWhereItWas()
+        {
+            var w = Sol(out var eph);
+            var m = w.Mining;
+            Step(w, eph, 5);
+            var haul = m.Hauls.First();
+            var tug = haul.Tug;
+            var start = w.Fleet.StateOf(tug, w.Jd).HelioKm;
+            haul.TakenBy = w.Pirates;
+            m.TugSeized(haul, w.Jd);
+            Assert.That(tug.Faction, Is.SameAs(w.Pirates));
+            Assert.That(tug.Role, Is.EqualTo(ShipRole.Free), "no longer the works' to send");
+            Assert.That(tug.Destroyed, Is.False, "the same hull, still in the fleet");
+            Assert.That(w.Fleet.IsPresent(tug), Is.True);
+            Assert.That((w.Fleet.StateOf(tug, w.Jd).HelioKm - start).Length, Is.LessThan(1e4), "taken where it was");
+            var havens = w.Economy.Settlements.Where(s => s.Owner == w.Pirates && s.Kind == SettlementKind.Haven && !s.Fallen).Select(s => s.Body).ToList();
+            Assert.That(tug.Ports.All(havens.Contains), Is.True, "bound for the raiders' holds");
         }
     }
 }

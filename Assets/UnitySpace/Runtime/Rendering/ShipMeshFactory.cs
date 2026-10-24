@@ -894,6 +894,30 @@ namespace Unity.SpaceGod.Rendering
             }
         }
 
+        static Mesh towRock, towIce;
+
+        /// <summary>
+        /// What an ore tug pushes (U.SPC-T498, <see cref="Ship.Tow"/>): a lumpy boulder one unit across, centred, made of a big
+        /// faceted body and a few smaller knobs fused into it -- dark rock, or pale blue-white comet ice.
+        /// </summary>
+        public static Mesh GetTowLoad(bool ice)
+        {
+            var cached = ice ? towIce : towRock;
+            if (cached != null) return cached;
+            var b = new Builder(null, WholeHull);
+            var main = ice ? new Color(0.78f, 0.86f, 0.93f, 1f) : new Color(0.36f, 0.33f, 0.3f, 1f);
+            var knob = ice ? new Color(0.66f, 0.78f, 0.9f, 1f) : new Color(0.28f, 0.26f, 0.24f, 1f);
+            b.Sphere(Vector3.zero, 0.42f, main, bands: 7, segments: 11);
+            b.Sphere(new Vector3(0.18f, 0.12f, 0.1f), 0.24f, knob, bands: 5, segments: 8);
+            b.Sphere(new Vector3(-0.16f, -0.1f, 0.14f), 0.22f, main, bands: 5, segments: 8);
+            b.Sphere(new Vector3(0.05f, -0.2f, -0.18f), 0.2f, knob, bands: 5, segments: 8);
+            b.Sphere(new Vector3(-0.12f, 0.2f, -0.12f), 0.18f, main, bands: 5, segments: 8);
+            var mesh = b.ToMesh(ice ? "TowIce" : "TowRock");
+            if (ice) towIce = mesh;
+            else towRock = mesh;
+            return mesh;
+        }
+
         /// <summary>A Breacher round (U.SPC-T466): a squat armoured troop round behind a massive fluted drill head, drawn stuck in
         /// the hull it struck.</summary>
         static void BuildBreacher(Builder b)

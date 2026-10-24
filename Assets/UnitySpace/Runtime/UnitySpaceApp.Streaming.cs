@@ -148,7 +148,7 @@ namespace Unity.SpaceGod
                 var at = wreck != null ? WreckScene(wreck) : shipScene[i];
                 bool always = ship == Piloted.Ship || (Selected.IsShip && Selected.Ship == ship) ||
                               (SpaceCamera.FocusTarget.IsShip && SpaceCamera.FocusTarget.Ship == ship);
-                streamItems.Add(new StreamItem(i, at, shipLength[i], loaded, always));
+                streamItems.Add(new StreamItem(i, at, shipLength[i] * ShipLod.ExtentFactor(ship), loaded, always));
             }
             Streaming.Plan(streamItems, view, streamLoad, streamUnload);
 
@@ -168,7 +168,7 @@ namespace Unity.SpaceGod
             foreach (int i in streamLoad)
             {
                 if (shipViews[i] != null) continue;
-                double px = ShipLod.ApparentPx(shipLength[i], (shipScene[i] - camera).Length, ppu);
+                double px = ShipLod.ApparentPx(shipLength[i] * ShipLod.ExtentFactor(Fleet.Ships[i]), (shipScene[i] - camera).Length, ppu);
                 if (ShipLod.DrawsModel(px)) pending++;
             }
             foreach (var path in activePaths)

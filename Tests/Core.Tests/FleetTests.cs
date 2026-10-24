@@ -25,11 +25,11 @@ namespace Unity.SpaceGod.Core.Tests
             // pirates/carriers/free pilots of the full World.BuildMilitary roster, and the tenders with the World's lane upkeep,
             // U.SPC-T481, not this standalone Core.Tests fixture) -- adding
             // either here would also perturb this fixture's own chaotic N-body simulation used by other
-            // tests, the same way it does World.CreateDefault's (see AvoidanceTests). Ore tugs work the belt pipeline
-            // (BeltMining's hauls, U.SPC-T483), not the fleet's trade. The interceptor and bomber (U.SPC-T484) are strike craft
+            // tests, the same way it does World.CreateDefault's (see AvoidanceTests). Ore tugs are real hulls here too
+            // (U.SPC-T498: no ship exists only as a number). The interceptor and bomber (U.SPC-T484) are strike craft
             // that fly from carriers' hangars as squadrons, and the recon fighter (U.SPC-T485) in a carrier's recon flight.
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
-                if (c != ShipClass.Breacher && c != ShipClass.Fighter && c != ShipClass.Explorer && c != ShipClass.Gunship && c != ShipClass.OreTug
+                if (c != ShipClass.Breacher && c != ShipClass.Fighter && c != ShipClass.Explorer && c != ShipClass.Gunship
                     && c != ShipClass.Interceptor && c != ShipClass.Bomber && c != ShipClass.LaneTender && c != ShipClass.Interdictor && c != ShipClass.GatePicket
                     && c != ShipClass.CommandCruiser && c != ShipClass.Frigate && c != ShipClass.Corvette && c != ShipClass.Recon && c != ShipClass.AssaultShuttle) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
             Assert.That(fleet.Ships.Count >= 40, Is.True);

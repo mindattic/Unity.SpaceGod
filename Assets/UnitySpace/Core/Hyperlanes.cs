@@ -196,6 +196,22 @@ namespace Unity.SpaceGod.Core
         public static double HeavyRideDays(double lengthKm) => 2 * Math.Max(0, lengthKm) / HeavyLaneKmS / Astro.SecondsPerDay;
 
         /// <summary>
+        /// Days <paramref name="ship"/> takes to ride <paramref name="lengthKm"/> of <paramref name="lane"/>: an ore tug with a
+        /// load latched on (U.SPC-T498, <see cref="Ship.Tow"/>) rides a heavy lane at its heavy pace (<see cref="HeavyRideDays(double)"/>);
+        /// everything else at the lane's own. A worn lane is slower for both.
+        /// </summary>
+        public double RideDays(Ship ship, Lane lane, double lengthKm) =>
+            ship != null && ship.Tow != null && lane.Heavy ? HeavyRideDays(lengthKm) / Math.Max(1e-3, SpeedFactor(lane)) : RideDays(lane, lengthKm);
+
+        /// <summary>
+        /// The lanes <paramref name="ship"/> rides from one planetary system to another: an ore tug with a load latched on
+        /// (U.SPC-T498) only heavy lanes (<see cref="HeavyRoute"/>, null where none join them: it pushes through open space),
+        /// everyone else the quickest route over any (<see cref="Route"/>).
+        /// </summary>
+        public List<LaneHop> RouteFor(Ship ship, int fromSystem, int toSystem, double jd) =>
+            ship != null && ship.Tow != null ? HeavyRoute(fromSystem, toSystem, jd) : Route(fromSystem, toSystem, jd);
+
+        /// <summary>
         /// The quickest route between two systems over heavy lanes alone (what a tug with a big load can take), or null
         /// when they are not joined by heavy lanes (or are the same system).
         /// </summary>

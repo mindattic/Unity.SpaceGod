@@ -2411,7 +2411,7 @@ namespace Unity.SpaceGod
         }
 
         public DVec3 ShipScene(Ship ship) { EnsureShipSynced(ship); return shipScene[ship.Id]; }
-        public double ShipDisplayLength(Ship ship) { EnsureShipSynced(ship); return shipLength[ship.Id]; }
+        public double ShipDisplayLength(Ship ship) { EnsureShipSynced(ship); return shipLength[ship.Id] * ShipLod.ExtentFactor(ship); }
         public ShipState ShipStateOf(Ship ship) { EnsureShipSynced(ship); return shipStates[ship.Id]; }
 
         // ---------------------------------------------------------------- ICameraWorld
@@ -2665,7 +2665,8 @@ namespace Unity.SpaceGod
                 }
                 float heat = shipStates[i].Heat;
                 if (heat > 0.01f) PlaceEntryGlow(glowIndex++, i, rel, heat, pixelsPerUnit);
-                double px = ShipLod.ApparentPx(shipLength[i], rel.magnitude, pixelsPerUnit);
+                // An ore tug with its load on is drawn by the length of both (U.SPC-T498).
+                double px = ShipLod.ApparentPx(shipLength[i] * ShipLod.ExtentFactor(ship), rel.magnitude, pixelsPerUnit);
                 // Too small to read: hide the model, the HUD draws its named faction icon instead (U.SPC-T376), folded
                 // into one mark with its neighbours where they crowd; too small for its hardpoints, the hull alone (U.SPC-T415).
                 var tier = RenderLod.Tier(RenderLod.Ship, px);
@@ -2990,7 +2991,7 @@ namespace Unity.SpaceGod
             {
                 if (ships[i].Destroyed || ships[i].Controller.Phase == ShipPhase.Landed) continue;
                 if (!ToGui(shipScene[i], out var p, out var depth)) continue;
-                double px = ShipLod.ApparentPx(shipLength[i], depth, ppu);
+                double px = ShipLod.ApparentPx(shipLength[i] * ShipLod.ExtentFactor(ships[i]), depth, ppu);
                 if (picture != null && ships[i] != Piloted.Ship && !ShipLod.DrawsModel(px) && picture.Of(ships[i]) == null) continue;
                 if (FoldedShips.Contains(ships[i]) && !ShipLod.DrawsModel(px)) continue;
                 double pickRadius = Math.Max(px * 0.5, Icons.PixelSize(ships[i].Spec.Class) * 0.5 + 4);

@@ -262,7 +262,7 @@ namespace Unity.SpaceGod.Core
         /// own approach (it pays the gates' tolls instead) until fuel for it is modelled too.
         /// </summary>
         public bool BurnsPropellant(Ship s) => !s.IsEscort && !s.Spec.IsMilitary && s.Voyage == null && !s.PatrolWing && s.Role != ShipRole.Commuter &&
-                                               s.Role != ShipRole.Tender;
+                                               s.Role != ShipRole.Tender && s.Role != ShipRole.Tug;
 
         /// <summary>
         /// A ship joins a hyperlane: civilian traffic pays the ride's toll (<see cref="Economy.LaneToll"/>, by its
@@ -271,7 +271,8 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         void PayToll(Ship ship, LaneHop hop, double jd)
         {
-            if (ship.Spec.IsMilitary || ship.PatrolWing || ship.Faction.IsPirate || ship == PilotedShip || ship.Role == ShipRole.Tender) return;
+            // An ore tug on its works' heavy lanes rides at its works' charge, like a tender at its upkeep (U.SPC-T498).
+            if (ship.Spec.IsMilitary || ship.PatrolWing || ship.Faction.IsPirate || ship == PilotedShip || ship.Role == ShipRole.Tender || ship.Role == ShipRole.Tug) return;
             double toll = Economy.LaneToll(ship.Spec.Class, ship.MassTonnes);
             ship.Faction.Treasury -= toll;
             ship.Credits -= toll;
@@ -522,7 +523,8 @@ namespace Unity.SpaceGod.Core
                                    (Pursuit != null && Pursuit.Active && Pursuit.Of(ship) != null);
             // The player's captains keep their own time in port (mining a claim, waiting on a charge).
             fleet.Dwell = (ship, normal) => Holdings.Owns(ship) ? Holdings.Dwell(ship, normal)
-                : ship.Role == ShipRole.Tender ? LaneUpkeep.Dwell(ship) : war.Dwell(ship, normal);
+                : ship.Role == ShipRole.Tender ? LaneUpkeep.Dwell(ship)
+                : ship.Role == ShipRole.Tug ? normal : war.Dwell(ship, normal);
             fleet.Arrived = (ship, when) =>
             {
                 // At a jump gate, not a port: the interstellar traffic takes it from here.
@@ -535,6 +537,8 @@ namespace Unity.SpaceGod.Core
                 // any port it passes on the way to the gate (selling there skipped the gate's toll and the far market).
                 bool bound = ship.Voyage != null && ship.GateKm != null;
                 // Contract cargo and people go to the contract, not the market (U.SPC-T101).
+                // An ore tug's works latches its load on out in the field, or takes it in where it is for (U.SPC-T498).
+                if (ship.Role == ShipRole.Tug) TugArrived(ship, when);
                 bool contracted = Contracts.OnArrived(ship, ship.Orbit.Body, when);
                 if (IsTrader(ship) && !bound && !contracted) economy.OnArrive(ship, ship.Orbit.Body, when);
                 war.OnArrived(ship, when);
@@ -563,6 +567,12 @@ namespace Unity.SpaceGod.Core
                 }
                 // A lane tender works its lane (U.SPC-T481).
                 if (ship.Role == ShipRole.Tender && !Holdings.Owns(ship)) return LaneUpkeep.ChooseNext(ship, here, when);
+                // An ore tug goes where its belt works sends it (U.SPC-T498).
+                if (ship.Role == ShipRole.Tug && !Holdings.Owns(ship))
+                {
+                    int tugNext = Mining?.TugNext(ship, here) ?? -1;
+                    return tugNext >= 0 ? tugNext : here;
+                }
                 // A clan's smuggler lies at its haven between runs (U.SPC-T94).
                 if (ship.Runner) return ship.Route != null && ship.Route.Length > 0 ? ship.Route[0] : here;
                 // The player's own ships go where their captains' standing orders take them.
