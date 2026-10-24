@@ -144,6 +144,10 @@ namespace Unity.SpaceGod.Input
         /// <summary>While piloting (U.SPC-T420): Delete clears the plotted FTL course.</summary>
         public bool ClearFtlCourse;
 
+        /// <summary>At a capital ship's helm (U.SPC-T502): Shift+Delete orders the helm assist to roll the hull's weak shield
+        /// patches away from the heaviest fire, or lets the roll go back to the helmsman.</summary>
+        public bool ToggleRollPatches;
+
         /// <summary>F5 saves to the quicksave slot, F8 loads it, F6 opens the save slots.</summary>
         public bool QuickSave, QuickLoad, ToggleSaves;
 
@@ -263,7 +267,8 @@ namespace Unity.SpaceGod.Input
             EngageFtl = kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame;
             ToggleFtlAutopilot = kb.endKey.wasPressedThisFrame;
             CycleFtlTarget = kb.pageDownKey.wasPressedThisFrame ? 1 : kb.pageUpKey.wasPressedThisFrame ? -1 : 0;
-            ClearFtlCourse = kb.deleteKey.wasPressedThisFrame;
+            ClearFtlCourse = kb.deleteKey.wasPressedThisFrame && !shifted;
+            ToggleRollPatches = kb.deleteKey.wasPressedThisFrame && shifted;
             QuickSave = kb.f5Key.wasPressedThisFrame;
             QuickLoad = kb.f8Key.wasPressedThisFrame;
             ToggleSaves = kb.f6Key.wasPressedThisFrame;
@@ -303,6 +308,7 @@ namespace Unity.SpaceGod.Input
             TunePhasers = false;
             ToggleBoarding = false;
             ToggleRunHot = false;
+            ToggleRollPatches = false;
             NumberKey = -1;
         }
 

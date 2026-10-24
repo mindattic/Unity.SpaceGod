@@ -1364,6 +1364,12 @@ namespace Unity.SpaceGod
                 input.FlightAssistOff = true;
                 input.TelegraphStep = 0;
             }
+            // Ordered to roll the weak patches away (U.SPC-T502): the helm assist rolls the hull while the helmsman's hands
+            // are off the roll keys; the nose stays the helmsman's.
+            if (capital != null && !input.FlightAssistOff && Math.Abs(input.Roll) < 0.01 && ship.Battle != null
+                && ship.Battle.UnitOf(ship) is BattleUnit helmUnit && helmUnit.Broadside != null && helmUnit.Broadside.RollWeakPatches)
+                input.Roll = WeakPatches.HelmRoll(ship.Battle, helmUnit, pilot.Forward, pilot.Up,
+                    capital.PeakTurnRateDegS(hull) * capital.Handling.RollFactor, hull.RollAngularAccel, dt);
             // Mirrors PilotFlight.Step's own "boosting" condition, read before Step drains the
             // charge further this frame, purely to drive the camera's FOV kick below (a capital rung to Flank boosts too).
             bool flank = capital != null && !input.FlightAssistOff && pilot.Telegraph == EngineTelegraph.Flank;
@@ -1710,6 +1716,11 @@ namespace Unity.SpaceGod
                 cmd.RunHot = !cmd.RunHot;
                 ShowToast(cmd.RunHot ? "Run hot: guns and drive at full, whatever the heat does" : "Throttle down for the heat as needed");
             }
+            // Roll the weak shield patches away from the heaviest fire, on a capital with patches to choose between (U.SPC-T502).
+            if (Input.ToggleRollPatches && PilotControlMode == PilotControl.Helm && Broadsides.Commands(unit) && WeakPatches.HasPatches(unit.Combat))
+                ShowToast(WeakPatches.ToggleOrder(unit)
+                    ? "Helm: roll our weak patches away from their fire (steer as you like; Z/X overrides it while held)"
+                    : "Helm: the roll is yours");
         }
 
         /// <summary>
@@ -2381,9 +2392,13 @@ namespace Unity.SpaceGod
                         var f = u.Forward.SwapYZ;
                         var fv = new Vector3((float)f.X, (float)f.Y, (float)f.Z);
                         // The flown hull keeps the roll its pilot gave it (set with its pose in UpdateShips); the
-                        // battle's units have no roll of their own.
+                        // battle's units roll as their captains roll them, to keep weak patches out of the fire (U.SPC-T502).
                         if (ship == World.PilotedShip) shipRotation[i] = ToRotation(pilotForward, pilot.Up);
-                        else if (fv.sqrMagnitude > 1e-12f) shipRotation[i] = Quaternion.LookRotation(fv, Mathf.Abs(fv.normalized.y) > 0.98f ? Vector3.right : Vector3.up);
+                        else if (fv.sqrMagnitude > 1e-12f)
+                        {
+                            u.Basis(out _, out var unitUp);
+                            shipRotation[i] = ToRotation(u.Forward, unitUp);
+                        }
                         lastBattleScene[i] = shipScene[i];
                     }
                 }

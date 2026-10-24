@@ -67,17 +67,31 @@ namespace Unity.SpaceGod.Core.Tests
             var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
             var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 7);
             var battleship = Hull(ShipClass.Battleship, blue, 0);
-            // Knock out the forward/aft HeavyLasers, the bow torpedo tubes (U.SPC-T377) and the spinal mounts (U.SPC-T490, which
-            // would otherwise have it hold its bow on the mark from the rear) so a broadside battery becomes the strongest arc.
-            foreach (var s in battleship.Combat.Subsystems)
-                if (s.Kind == SubsystemKind.HeavyLaser || s.Kind == SubsystemKind.TorpedoTube || s.Def.Spinal) s.Hp = 0;
+            // Knock out the forward/aft HeavyLasers, the bow torpedo tubes (U.SPC-T377), the bow antimatter launcher (U.SPC-T489)
+            // and the spinal mounts (U.SPC-T490, which would otherwise have it hold its bow on the mark from the rear) so a
+            // broadside battery becomes the strongest arc, and keep them out: its emergency repair crews (U.SPC-T501) would
+            // otherwise bring the forward battery back mid-fight.
+            void KnockOut()
+            {
+                foreach (var s in battleship.Combat.Subsystems)
+                    if (s.Kind == SubsystemKind.HeavyLaser || s.Kind == SubsystemKind.TorpedoTube || s.Kind == SubsystemKind.AntimatterTorpedo || s.Def.Spinal)
+                    {
+                        s.Hp = 0;
+                        s.Restoring = 0;
+                    }
+            }
+            KnockOut();
             var target = Hull(ShipClass.Destroyer, red, 1);
             var bu = b.AddShip(battleship, 0, DVec3.Zero, DVec3.UnitX);
             var tu = b.AddShip(target, 1, new DVec3(20, 0, 0), -DVec3.UnitX);
 
             // Mid-fight, while the destroyer is within the broadside's reach (it later opens the range,
             // and a hull with nothing in reach noses in to close it again, turning at its full rate).
-            for (int i = 0; i < 120; i++) b.Advance(1);
+            for (int i = 0; i < 120; i++)
+            {
+                b.Advance(1);
+                KnockOut();
+            }
 
             double angleToTarget = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(bu.Forward, (tu.Pos - bu.Pos).Normalized)))) * Astro.Rad2Deg;
             TestContext.Out.WriteLine($"battleship forward={bu.Forward}, angle to target={angleToTarget:0.#} deg");

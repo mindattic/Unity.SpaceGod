@@ -148,6 +148,20 @@ namespace Unity.SpaceGod.Core
         /// <summary>Mounts shot away that the emergency repair crews have brought back this battle (U.SPC-T501).</summary>
         public int Restored;
 
+        /// <summary>The player's order at the helm (U.SPC-T502, see <see cref="WeakPatches"/>): the helm assist rolls the hull
+        /// to keep its weak patches out of the heaviest fire (an AI captain does so by doctrine, <see cref="WeakPatches.AiRolls"/>).</summary>
+        public bool RollWeakPatches;
+
+        /// <summary>The attitude the captain last settled on to shield its weak patches (U.SPC-T502): the battery it turns to
+        /// the enemy (<see cref="WeakPatches.NoArc"/> for a roll about the bow alone) and how far it is rolled from level
+        /// about the line it turns on, deg; and seconds until it weighs the fire again.</summary>
+        public int RollArc = WeakPatches.NoArc;
+
+        public double RollDeg, RollReconsider;
+
+        /// <summary>Whether <see cref="RollArc"/> and <see cref="RollDeg"/> hold a choice yet.</summary>
+        public bool RollChosen;
+
         /// <summary>This step: the arcs whose volley goes now.</summary>
         internal readonly bool[] Releasing = new bool[Facings.Count];
 

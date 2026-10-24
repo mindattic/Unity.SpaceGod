@@ -988,6 +988,7 @@ namespace Unity.SpaceGod.UI
             string line = "5-9 LINE " + Broadsides.Label(cmd.Formation) + "  ·  0 all at will"
                 + "    TURN CIRCLE " + (double.IsInfinity(radius) ? "-" : RangeText(radius)) + "  ·  about in " + (double.IsInfinity(about) ? "-" : Mathf.RoundToInt((float)about) + "s");
             DrawLabel(line, new Vector2(x, y - 44), Dim, true);
+            DrawPatches(battle, me, cmd, x, y - 80);
 
             // The enemy's broadside building on us: the Black Flag tell.
             var incoming = Broadsides.IncomingBroadside(battle, me);
@@ -1002,6 +1003,29 @@ namespace Unity.SpaceGod.UI
                 DrawLabel("INCOMING BROADSIDE  ·  " + incoming.Name + " " + side + "BATTERY " + loaded + "%  ·  3 BRACE",
                     new Vector2(Screen.width * 0.5f - 160, Screen.height * 0.28f), HostileColor, false);
             }
+        }
+
+        /// <summary>
+        /// The hull's shield patches at the helm (U.SPC-T502, see <see cref="WeakPatches"/>): which are weak (holed, or their
+        /// field how far down), which one faces the heaviest fire as the hull lies now, and the order to roll them away.
+        /// Red while a weak patch is the one taking the fire.
+        /// </summary>
+        void DrawPatches(Battle battle, BattleUnit me, BroadsideCommand cmd, float x, float y)
+        {
+            var patches = WeakPatches.Readout(battle, me);
+            if (patches.Count == 0) return;
+            var weak = new List<string>();
+            HullPatch? under = null;
+            foreach (var p in patches)
+            {
+                if (p.Weak) weak.Add(p.Name + (p.Holed ? " HOLED" : " " + Mathf.RoundToInt((float)p.Field * 100) + "%"));
+                if (p.Fire > 0 && (under == null || p.Fire > under.Value.Fire)) under = p;
+            }
+            string text = "PATCHES " + (weak.Count == 0 ? "all holding" : "WEAK: " + string.Join(", ", weak))
+                + (under != null ? "  ·  UNDER FIRE: " + under.Value.Name + (under.Value.Weak ? " (weak)" : "") : "")
+                + "    SHIFT+DEL roll them away: " + (cmd.RollWeakPatches ? "ON" : "off");
+            bool danger = under != null && under.Value.Weak;
+            DrawLabel(text, new Vector2(x, y), danger ? HostileColor : weak.Count > 0 ? LockColor : Dim, true);
         }
 
         /// <summary>A big ship's heat at the helm (U.SPC-T491): how full its sinks are, its radiators standing, and whether

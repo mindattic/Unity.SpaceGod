@@ -214,16 +214,22 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The roof of a hull flown at the helm, rolled however its captain has rolled it (U.SPC-T499: capitals fight
         /// in full 3D, rolling a broadside onto a ship above or below); read only while <see cref="PlayerControlled"/>.
-        /// Zero, or any hull flown by the battle, is held level, roof toward ecliptic north.</summary>
+        /// Zero is held level, roof toward ecliptic north; a hull flown by the battle takes its captain's <see cref="Roof"/> instead.</summary>
         public DVec3 Up;
 
+        /// <summary>The roof of a hull the battle flies, rolled however its captain has rolled it to keep its weak patches
+        /// out of the heaviest fire (U.SPC-T502, see <see cref="WeakPatches"/>); read only while not
+        /// <see cref="PlayerControlled"/>. Zero holds it level, roof toward ecliptic north.</summary>
+        public DVec3 Roof;
+
         /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north, or the helm's
-        /// own roof, <see cref="Up"/>): the frame its arcs, bearings and hardpoints are reckoned in.</summary>
+        /// own roof, <see cref="Up"/>, or its captain's, <see cref="Roof"/>): the frame its arcs, bearings and hardpoints are reckoned in.</summary>
         public void Basis(out DVec3 right, out DVec3 up)
         {
-            if (PlayerControlled && Up.LengthSquared > 1e-12)
+            var roof = PlayerControlled ? Up : Roof;
+            if (roof.LengthSquared > 1e-12)
             {
-                var r = DVec3.Cross(Forward, Up);
+                var r = DVec3.Cross(Forward, roof);
                 if (r.LengthSquared > 1e-12)
                 {
                     right = r.Normalized;
@@ -1085,11 +1091,23 @@ namespace Unity.SpaceGod.Core
             u.Vel += dv.Length > step ? dv.Normalized * step : dv;
             u.Pos += u.Vel * dt;
 
+            bool broadside = !u.Fleeing && strikeFace == null && u.Target != null;
             var face = u.Fleeing ? u.Vel
                 : strikeFace is DVec3 strike ? strike
                 : u.Target == null ? (held ? u.Leader.Forward : u.Vel)
                 : BroadsideFacing(u, (u.Target.Pos - u.Pos).Normalized);
+            if (WeakPatches.Steers(u))
+            {
+                // A capital's captain rolls and turns its hull to keep its weak patches out of the heaviest fire (U.SPC-T502).
+                var arcs = broadside ? ArcFirepower(u) : null;
+                WeakPatches.Orient(this, u, face, arcs, arcs != null ? (u.Target.Pos - u.Pos).Normalized : (DVec3?)null, null, dt,
+                    out face, out var roof);
+                TurnToward(u, face, c.Spec.TurnRateDegS, dt);
+                WeakPatches.RollToward(u, roof, c.Spec.TurnRateDegS, dt);
+                return;
+            }
             TurnToward(u, face, c.Spec.TurnRateDegS, dt);
+            if (u.Roof.LengthSquared > 1e-12) WeakPatches.RollToward(u, WeakPatches.LevelRoof(u.Forward), c.Spec.TurnRateDegS, dt);
         }
 
         // ---------------------------------------------------------------- dogfighting (U.SPC-T274)
@@ -1236,6 +1254,19 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         DVec3 BroadsideFacing(BattleUnit u, DVec3 toTarget)
         {
+            var byArc = ArcFirepower(u);
+            if (byArc == null) return toTarget;
+            int bestArc = 0;
+            double best = -1;
+            foreach (var kv in byArc)
+                if (kv.Value > best) { best = kv.Value; bestArc = kv.Key; }
+            return BowFor(toTarget, bestArc);
+        }
+
+        /// <summary>The firepower (damage a second) of <paramref name="u"/>'s ready guns by the bearing their arcs are
+        /// centred on, whole degrees from the bow; null for a hull with none: the batteries a captain can turn to the enemy.</summary>
+        public static Dictionary<int, double> ArcFirepower(BattleUnit u)
+        {
             Dictionary<int, double> byArc = null;
             foreach (var s in u.Combat.Subsystems)
             {
@@ -1247,13 +1278,12 @@ namespace Unity.SpaceGod.Core
                 byArc.TryGetValue(key, out double sum);
                 byArc[key] = sum + w.Damage * w.Salvo / w.Cooldown;
             }
-            if (byArc == null) return toTarget;
-            int bestArc = 0;
-            double best = -1;
-            foreach (var kv in byArc)
-                if (kv.Value > best) { best = kv.Value; bestArc = kv.Key; }
-            return RotateYaw(toTarget, bestArc);
+            return byArc;
         }
+
+        /// <summary>The way to point the bow, held level, so a target along <paramref name="toTarget"/> lies on the battery
+        /// whose arc is centred <paramref name="arcDeg"/> from the bow.</summary>
+        public static DVec3 BowFor(DVec3 toTarget, int arcDeg) => RotateYaw(toTarget, arcDeg);
 
         /// <summary>Rotates a direction by an angle (degrees) around the battle's vertical (ecliptic) axis.</summary>
         static DVec3 RotateYaw(DVec3 v, double angleDeg)
