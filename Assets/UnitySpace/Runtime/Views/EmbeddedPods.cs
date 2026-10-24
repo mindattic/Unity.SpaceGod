@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 namespace Unity.SpaceGod.Views
 {
     /// <summary>
-    /// Boarding pods stuck in hulls. Each is parented to the model of the ship (or platform) it holed,
+    /// Boarding pods and Breacher rounds (U.SPC-T466) stuck in hulls. Each is parented to the model of the ship (or platform) it holed,
     /// drill buried and tail standing out of the plating, so it rides along as the hull manoeuvres,
     /// and it stays there after the fight until the ship is lost or the battle is long over.
     /// </summary>
@@ -38,7 +38,7 @@ namespace Unity.SpaceGod.Views
         {
             foreach (var e in b.Embedded)
             {
-                if (e.Breacher || e.Unit.Dead || (e.Unit.Ship != null && e.Unit.Ship.Destroyed)) continue;
+                if (e.Unit.Dead || (e.Unit.Ship != null && e.Unit.Ship.Destroyed)) continue;
                 var parent = app.UnitTransform(e.Unit);
                 if (parent == null) continue;
                 live.Add(e);
@@ -51,14 +51,18 @@ namespace Unity.SpaceGod.Views
         GameObject Create(Embedded e, Transform parent, Battle b)
         {
             var owner = e.Side >= 0 && e.Side < 2 ? b.SideLeaders[e.Side] : e.Unit.Faction;
-            var go = new GameObject("Boarding pod");
+            var go = new GameObject(e.Breacher ? "Breacher round" : "Boarding pod");
             go.transform.SetParent(parent, false);
-            go.AddComponent<MeshFilter>().sharedMesh = ShipMeshFactory.GetPod(owner ?? e.Unit.Faction);
+            go.AddComponent<MeshFilter>().sharedMesh = e.Breacher ? ShipMeshFactory.Get(ShipClass.Breacher, owner ?? e.Unit.Faction)
+                : ShipMeshFactory.GetPod(owner ?? e.Unit.Faction);
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = ShipModels.ProceduralMaterial;
             mr.shadowCastingMode = ShadowCastingMode.Off;
             // Pods are drawn a little large so they read on a capital ship: a few percent of its length.
-            float size = Mathf.Clamp(0.025f / Mathf.Max((float)e.Unit.LengthKm, 0.01f), 0.04f, 0.15f);
+            // A Breacher round is drawn at its own length, a good deal bigger than a pod.
+            float size = e.Breacher
+                ? Mathf.Clamp((float)CombatSpec.Of(ShipClass.Breacher).LengthKm / Mathf.Max((float)e.Unit.LengthKm, 0.01f), 0.08f, 0.35f)
+                : Mathf.Clamp(0.025f / Mathf.Max((float)e.Unit.LengthKm, 0.01f), 0.04f, 0.15f);
             var inward = new Vector3((float)e.Inward.X, (float)e.Inward.Y, (float)e.Inward.Z);
             if (inward.sqrMagnitude < 1e-6f) inward = Vector3.forward;
             inward.Normalize();

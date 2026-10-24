@@ -584,13 +584,24 @@ namespace Unity.SpaceGod.Core
         public OutfitOutcome CanAdd(FacilityKind kind)
         {
             if (kind == null || !kind.Fittable || !kind.AllowedOn(Category, Class)) return OutfitOutcome.WontFit;
+            // A facility that needs another to work goes in only beside it (an assault bay beside a habitat, U.SPC-T466).
+            if (kind.Requires != null && CountFacility(kind.Requires) == 0) return OutfitOutcome.WontFit;
             if (kind.Size > FreeSpace + 1e-9) return OutfitOutcome.NoRoom;
             return OutfitOutcome.Ok;
         }
 
         /// <summary>Whether the facility at <paramref name="index"/> may be taken out (a fittable one; never the
         /// structure the hull is built around).</summary>
-        public bool CanRemove(int index) => index >= 0 && index < Facilities.Count && Facilities[index].Def?.Fittable == true;
+        public bool CanRemove(int index)
+        {
+            if (index < 0 || index >= Facilities.Count || Facilities[index].Def?.Fittable != true) return false;
+            // Nor the last of a kind another fitted facility needs (the habitat that supplies an assault bay, U.SPC-T466).
+            string kind = Facilities[index].Kind;
+            if (CountFacility(kind) > 1) return true;
+            foreach (var f in Facilities)
+                if (f.Def?.Requires != null && string.Equals(f.Def.Requires, kind, StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
 
         /// <summary>An independent copy, fitted the same way (a newly built hull's own loadout).</summary>
         public Loadout Copy()

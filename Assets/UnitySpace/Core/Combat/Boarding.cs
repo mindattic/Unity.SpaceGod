@@ -13,6 +13,7 @@ namespace Unity.SpaceGod.Core
         Midships,
         Bridge,
         Engineering,
+        /// <summary>An assault bay that fires Breacher rounds, or a round's own troop compartment (U.SPC-T466).</summary>
         AssaultBay,
 
         /// <summary>A marine habitat (U.SPC-T465): where the ship's marines live and drill, and muster from to repel boarders.</summary>
@@ -46,7 +47,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>True once boarders hold it (no defenders left in it).</summary>
         public bool Taken;
 
-        /// <summary>Open to space: a pod or a breacher's drill holed it. Crew die until the bulkheads seal.</summary>
+        /// <summary>Open to space: a pod or a Breacher round's drill holed it. Crew die until the bulkheads seal.</summary>
         public bool Vented;
         public double SealIn;
 
@@ -280,7 +281,7 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>Quarters <paramref name="marines"/>: shared among the habitats' barracks, or, on a hull with none (a
-        /// prize crew, a breacher's team in its assault bay), amidships or wherever there is room.</summary>
+        /// prize crew, a Breacher round's team in its troop compartment), amidships or wherever there is room.</summary>
         void Quarter(double marines)
         {
             if (marines <= 0) return;
@@ -317,7 +318,7 @@ namespace Unity.SpaceGod.Core
 
         // ---------------------------------------------------------------- the fight
 
-        /// <summary>Marines come aboard at a compartment (a pod, a breacher's drill, or an airlock after docking).</summary>
+        /// <summary>Marines come aboard at a compartment (a pod, a Breacher round's drill, or an airlock after docking).</summary>
         /// <summary>Returns false when nobody was landed (the ship is already taken, or another faction is boarding it),
         /// so the caller can take its marines back rather than lose them.</summary>
         public bool Board(Faction boarder, double quality, double marines, Compartment at, bool breach, double seconds, Random rng)

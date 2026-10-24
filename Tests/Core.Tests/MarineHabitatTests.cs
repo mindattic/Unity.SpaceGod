@@ -39,7 +39,7 @@ namespace Unity.SpaceGod.Core.Tests
                 Assert.That(design.Marines, Is.EqualTo(FacilityLayouts.Complement(c, design)), c + ": the complement is its facilities' berths");
                 bool listed = expected.Any(e => e.cls == c);
                 if (!listed) Assert.That(design.Marines, Is.EqualTo(0), c + " has no habitat and carries no marines");
-                // Every warship's marines live in a habitat; the breacher's team rides in its assault bay.
+                // Every warship's marines live in a habitat; a Breacher round's team rides in its troop compartment (U.SPC-T466).
                 bool habitat = FacilityLayouts.For(c).Any(s => s.Kind == FacilityKinds.MarineHabitat);
                 Assert.That(habitat, Is.EqualTo(listed && c != ShipClass.Breacher), c.ToString());
             }
@@ -140,7 +140,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(interior.Training, Is.EqualTo(1), "fully trained, no further");
             Assert.That(interior.DrillFactor, Is.EqualTo(1 + MarineHabitats.DrillBonus.Value).Within(1e-9));
 
-            // No habitat, no drill: a breacher's team rides in its assault bay, a fighter has none.
+            // No habitat, no drill: a Breacher round's team rides in its troop compartment, a fighter has none.
             var breacher = new ShipCombat(CombatSpec.Of(ShipClass.Breacher), ShipClass.Breacher).Interior;
             Assert.That(breacher.Marines, Is.EqualTo(70).Within(1e-9));
             breacher.Drill(days);

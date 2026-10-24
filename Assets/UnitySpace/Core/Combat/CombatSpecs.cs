@@ -20,7 +20,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>Launches drill-tipped boarding pods that punch into a hull and put marines aboard.</summary>
         BoardingPods,
 
-        /// <summary>A breacher's drill prow: it rams and its assault bay opens into the target.</summary>
+        /// <summary>A Breacher's drill head: it bores into the hull the round strikes and its team goes in through the hole.</summary>
         Drill,
         Engine,
         ShieldGenerator,
@@ -604,6 +604,8 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
                 },
             } },
+            // The Breacher as it flew before U.SPC-T466, kept so a saved game's breachers still load and fight. Nothing builds
+            // one now: a Breacher is a round fired from an assault bay (AssaultBays, MissileKind.Breacher), not a ship.
             [ShipClass.Breacher] = new[] { new CombatSpec
             {
                 DesignName = "Breacher", LengthKm = 0.18,

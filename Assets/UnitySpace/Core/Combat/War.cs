@@ -3365,28 +3365,26 @@ namespace Unity.SpaceGod.Core
             }
             var leader = Fleet.AddShip(Name(), raidersRaised % 3 == 0 ? ShipClass.Cruiser : ShipClass.Destroyer, pirates, ShipRole.Patrol);
             leader.Route = new[] { body };
+            // Every raider band takes its prizes with Breacher rounds fired from its leader's assault bay (U.SPC-T466), a
+            // destroyer fitting a second habitat to supply the teams.
+            AssaultBays.Equip(leader);
             int escorts = 1 + rng.Next(2);
             for (int i = 0; i < escorts; i++)
             {
                 var e = Fleet.AddShip(Name(), ShipClass.Destroyer, pirates, ShipRole.Escort);
                 Fleet.AddEscort(leader, e, Fleet.SlotFor(i));
             }
-            // Every raider band keeps a breacher for taking prizes.
-            var breacher = Fleet.AddShip(Name(), ShipClass.Breacher, pirates, ShipRole.Escort);
-            Fleet.AddEscort(leader, breacher, Fleet.SlotFor(escorts));
-            // ... and a lane interdictor to pull its marks out of the hyperlanes (U.SPC-T479): no pulse without one.
+            // Every raider band keeps a lane interdictor to pull its marks out of the hyperlanes (U.SPC-T479): no pulse without one.
             var interdictor = Fleet.AddShip(Name(), ShipClass.Interdictor, pirates, ShipRole.Escort);
-            Fleet.AddEscort(leader, interdictor, Fleet.SlotFor(escorts + 1));
+            Fleet.AddEscort(leader, interdictor, Fleet.SlotFor(escorts));
             Fleet.Station(leader, body, jd);
-            double hands = Crews.Complement(leader.Spec.Class) + escorts * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher)
-                           + Crews.Complement(ShipClass.Interdictor);
+            double hands = Crews.Complement(leader.Spec.Class) + escorts * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Interdictor);
             Crews.Draft(pirates, hands);
             world.NotifyAdded(leader);
         }
 
-        /// <summary>The most hands a new raider band can need (a cruiser, two destroyers, a breacher and a lane interdictor).</summary>
-        static double BandComplement => Crews.Complement(ShipClass.Cruiser) + 2 * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Breacher)
-                                        + Crews.Complement(ShipClass.Interdictor);
+        /// <summary>The most hands a new raider band can need (a cruiser, two destroyers and a lane interdictor).</summary>
+        static double BandComplement => Crews.Complement(ShipClass.Cruiser) + 2 * Crews.Complement(ShipClass.Destroyer) + Crews.Complement(ShipClass.Interdictor);
 
         void PirateRecruiting(double jd)
         {

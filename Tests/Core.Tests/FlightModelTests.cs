@@ -48,7 +48,9 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(reg.FamilyOf(ShipClass.Fighter), Is.EqualTo(FlightFamily.LightFighter));
             Assert.That(reg.FamilyOf(ShipClass.Courier), Is.EqualTo(FlightFamily.LightFighter));
             Assert.That(reg.FamilyOf(ShipClass.Gunship), Is.EqualTo(FlightFamily.HeavyFighter));
-            Assert.That(reg.FamilyOf(ShipClass.Breacher), Is.EqualTo(FlightFamily.HeavyFighter));
+            // The Breacher is a fired round now, not a heavy fighter (U.SPC-T466).
+            Assert.That(reg.FamilyOf(ShipClass.Breacher), Is.EqualTo(FlightFamily.Ballistic));
+            Assert.That(reg.For(ShipClass.Breacher), Is.InstanceOf<BallisticFlightModel>());
             Assert.That(reg.FamilyOf(ShipClass.Freighter), Is.EqualTo(FlightFamily.Hauler));
             Assert.That(reg.FamilyOf(ShipClass.Miner), Is.EqualTo(FlightFamily.Hauler));
             foreach (var c in new[] { ShipClass.Carrier, ShipClass.Battleship, ShipClass.Cruiser, ShipClass.Destroyer })
@@ -73,7 +75,7 @@ namespace Unity.SpaceGod.Core.Tests
             var stub = new StubModel();
             reg.Register(FlightFamily.Capital, stub);
             Assert.That(reg.For(ShipClass.Battleship), Is.SameAs(stub));
-            Assert.That(reg.For(ShipClass.Breacher), Is.SameAs(NewtonianFlightModel.Instance), "another family was touched");
+            Assert.That(reg.For(ShipClass.Gunship), Is.SameAs(NewtonianFlightModel.Instance), "another family was touched");
             Assert.That(reg.For(ShipClass.Fighter), Is.InstanceOf<LightFighterFlightModel>(), "another family was touched");
 
             reg.Assign(ShipClass.Courier, FlightFamily.Capital);
@@ -86,7 +88,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var reg = FlightModelRegistry.CreateDefault();
             var input = new PilotInput { DesiredForward = new DVec3(0.3, 1, 0.2).Normalized, Throttle = 1, StrafeRight = 0.5, Roll = 0.4, Boost = true };
-            foreach (var c in new[] { ShipClass.Breacher, ShipClass.Freighter, ShipClass.Cruiser })
+            foreach (var c in new[] { ShipClass.Gunship, ShipClass.Freighter, ShipClass.Cruiser })
             {
                 var a = new Rig(c, reg.For(c), new DVec3(0.01, 0.02, 0));
                 var b = new Rig(c, NewtonianFlightModel.Instance, new DVec3(0.01, 0.02, 0));

@@ -143,30 +143,6 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void ABreacherRamsItsDrillHomeAndTakesTheShip()
-        {
-            var b = NewBattle(5);
-            var breacher = b.AddShip(Hull(ShipClass.Breacher, Red, 0), 0, new DVec3(6, 0, 0), -DVec3.UnitX);
-            var freighter = b.AddShip(Hull(ShipClass.Freighter, Blue, 1), 1, new DVec3(-4, 0, 0), DVec3.UnitX);
-            freighter.Combat.ZeroAllShields();
-            foreach (var s in freighter.Combat.Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) s.Hp = 0;
-            // A crew that will not strike its colours: an unarmed truss freighter (U.SPC-T482) with its shields down would
-            // sooner surrender to the pirates than be rammed, and this is about the ram.
-            freighter.MoraleThreshold = double.MaxValue;
-            bool latched = false;
-            for (int i = 0; i < 2000 && !b.Over; i++)
-            {
-                b.Advance(1);
-                latched |= breacher.Latched == freighter;
-            }
-            foreach (var note in freighter.Combat.Interior.Log) TestContext.Out.WriteLine(note.Text);
-            Assert.That(latched, Is.True, "the breacher never rammed home");
-            Assert.That(freighter.Captured, Is.True, "the freighter was not taken");
-            Assert.That((b.Embedded).Any(e => e.Breacher && e.Unit == freighter), Is.True);
-            Assert.That(freighter.Side, Is.EqualTo(0));
-        }
-
-        [Test]
         public void AWarshipLinesUpAlongsideADisabledShipAndBoardsIt()
         {
             var b = NewBattle(6);

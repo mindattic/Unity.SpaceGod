@@ -136,6 +136,9 @@ namespace Unity.SpaceGod.Core
         public DVec3 LatchLocal;
         public double LatchTimer;
 
+        /// <summary>Seconds until its assault bays can fire the next Breacher round (U.SPC-T466, <see cref="AssaultBays.IntervalSeconds"/>).</summary>
+        public double AssaultBayReload;
+
         /// <summary>Taken by boarders: it has changed sides and carries a prize crew, so it no longer fights.</summary>
         public bool Captured;
 
@@ -264,6 +267,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A screen's interceptor (U.SPC-T489): it hunts a hostile round (<see cref="Missile.Prey"/>) or a fighter.</summary>
         Interceptor,
+
+        /// <summary>A Breacher round (U.SPC-T466): a marine team fired from an assault bay, flying like a bullet with only a
+        /// slight course correction until it strikes a hull and drills in (<see cref="AssaultBays"/>).</summary>
+        Breacher,
     }
 
     /// <summary>
@@ -283,7 +290,7 @@ namespace Unity.SpaceGod.Core
         public bool Armed => ArmIn <= 0;
     }
 
-    /// <summary>A boarding pod or breacher stuck in a hull: where (ship lengths in that hull's frame), whose, and pointing which way.</summary>
+    /// <summary>A boarding pod or Breacher round stuck in a hull: where (ship lengths in that hull's frame), whose, and pointing which way.</summary>
     public sealed class Embedded
     {
         public BattleUnit Unit;
@@ -391,7 +398,7 @@ namespace Unity.SpaceGod.Core
         UnitDestroyed,
         MissileLaunch,
 
-        /// <summary>A pod or breacher holes a hull: a burst of venting atmosphere.</summary>
+        /// <summary>A pod or Breacher round holes a hull: a burst of venting atmosphere.</summary>
         Breach,
         PodBounce,
         Captured,
@@ -704,7 +711,7 @@ namespace Unity.SpaceGod.Core
                 // A small craft with power to spare for its shields recharges them that much faster (U.SPC-T424).
                 // A charging tachyon lance draws on the reactor, and the shields recover that much slower (U.SPC-T487).
                 else c.RegenShields(Seconds, dt * PowerDistribution.FactorOf(u, PowerSystem.Shields) * TachyonLances.ShieldRegenFactor(c));
-                // No escape with boarders fighting aboard (or a breacher stuck in the hull), nor for a hull that has struck
+                // No escape with boarders fighting aboard (or latched to a hull it is boarding), nor for a hull that has struck
                 // its colours or been taken: drifting off with its drives cold is not running.
                 if (u.Kind == UnitKind.Ship && u.Latched == null && !c.Disabled && !c.Interior.UnderBoarding && !u.Surrendering && !u.Captured && (u.Pos.Length > EscapeKm || (u.Fleeing && NearestHostileDistance(u) > 30)))
                     u.Fled = true;
@@ -746,7 +753,7 @@ namespace Unity.SpaceGod.Core
             return false;
         }
 
-        /// <summary>A raider or warship with marines to spare is a combatant even with no guns (a breacher).</summary>
+        /// <summary>A raider or warship with marines to spare is a combatant even with no guns.</summary>
         bool CanBoard(BattleUnit u) =>
             u.Kind == UnitKind.Ship && (u.Faction.IsPirate || u.Faction.IsMilitary || (Boards != null && Boards(u))) && u.Combat.MarinesAvailable >= 15;
 
@@ -760,7 +767,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>Whether <paramref name="u"/> would board <paramref name="target"/>: a navy or raiders board anything,
         /// a hunter only the quarry it wants alive (never a lawful hull: that would be piracy).</summary>
         bool MayBoard(BattleUnit u, BattleUnit target) =>
-            u.Faction.IsPirate || u.Faction.IsMilitary || (u.Ship != null && u.Ship.Spec.Class == ShipClass.Breacher) || (WantsAlive != null && WantsAlive(u, target));
+            u.Faction.IsPirate || u.Faction.IsMilitary || (WantsAlive != null && WantsAlive(u, target));
 
         /// <summary>Whether anyone on <paramref name="side"/> can still send a boarding party.</summary>
         bool SideCanBoard(int side)
@@ -1039,8 +1046,7 @@ namespace Unity.SpaceGod.Core
         public const double HuntPlayerKm = 8;
 
         /// <summary>The small craft that dogfight: the light fighters and interceptors. A heavy fighter (the gunship) brawls
-        /// on the ordinary circling approach, its crewed turrets firing all round; a Breacher closes to board, and a bomber
-        /// flies at the hulls.</summary>
+        /// on the ordinary circling approach, its crewed turrets firing all round, and a bomber flies at the hulls.</summary>
         static bool Dogfights(BattleUnit u) =>
             u.Kind == UnitKind.Ship && u.Ship != null
             && (u.Ship.Spec.Class == ShipClass.Fighter || u.Ship.Spec.Class == ShipClass.Interceptor || u.Ship.Spec.Class == ShipClass.Courier);
@@ -1277,6 +1283,8 @@ namespace Unity.SpaceGod.Core
             Broadsides.BeginVolleys(u);
             // The captain tunes the phaser arrays for the fight as it stands: a lance or a sweep (U.SPC-T488).
             EnergyWeapons.Step(this, u);
+            // The assault bay fires a Breacher round once the habitats have the next team ready (U.SPC-T466).
+            FireAssaultBay(u, dt);
             // A frigate holds every launcher for one volley, loosed together once its mark is in reach of them all (U.SPC-T475).
             bool alpha = AlphaStrike.Flies(u);
             bool release = alpha && AlphaStrike.Releases(u);
@@ -1859,7 +1867,7 @@ namespace Unity.SpaceGod.Core
             double bestD = km;
             foreach (var m in Missiles)
             {
-                if (m.Gone || m.Target != u || m.Decoy != null || m.Kind == MissileKind.Pod) continue;
+                if (m.Gone || m.Target != u || m.Decoy != null || m.Kind == MissileKind.Pod || m.Kind == MissileKind.Breacher) continue;
                 double d = (m.Pos - u.Pos).Length;
                 if (d <= bestD)
                 {
@@ -2401,6 +2409,12 @@ namespace Unity.SpaceGod.Core
                     StepInterceptor(m, dt);
                     continue;
                 }
+                // A Breacher round flies its own ballistic course (U.SPC-T466).
+                if (m.Kind == MissileKind.Breacher)
+                {
+                    StepBreacher(m, dt);
+                    continue;
+                }
                 // A hull that has struck its colours is no longer shot at, nor boarded until its terms open it.
                 bool spared = m.Target != null && m.Target.Surrendering && !(m.Kind == MissileKind.Pod && m.Target.SurrenderOpenToBoarding);
                 if (m.Life <= 0 || m.Target == null || !m.Target.Present || m.Target.Side == m.Side || spared)
@@ -2552,26 +2566,163 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
+        /// A ship's assault bays (U.SPC-T466): once the bays have cycled and the marine habitats have a whole team ready,
+        /// they fire a Breacher round at the nearest hostile hull in range that the team could board and the round could
+        /// get into (its shields down to a quarter, or none). The team is drawn from the habitats' barracks, and the bays
+        /// wait for the next one to be readied (<see cref="AssaultBays.IntervalSeconds"/>).
+        /// </summary>
+        void FireAssaultBay(BattleUnit u, double dt)
+        {
+            if (u.Kind != UnitKind.Ship || u.Ship == null) return;
+            if (u.AssaultBayReload > 0)
+            {
+                u.AssaultBayReload -= dt * u.Combat.Readiness;
+                return;
+            }
+            if (u.Fleeing || u.Combat.Disabled || AssaultBays.Count(u.Ship) <= 0) return;
+            if (!(u.Faction.IsPirate || u.Faction.IsMilitary || (Boards != null && Boards(u)))) return;
+            var interior = u.Combat.Interior;
+            if (!AssaultBays.TeamReady(interior)) return;
+            var target = BreacherTarget(u);
+            if (target == null) return;
+
+            double speed = AssaultBays.RoundSpeedKmS.Value;
+            var origin = u.Pos + u.Forward * (u.Radius * 0.3);
+            var aim = AssaultBays.Lead(origin, u.Vel, target.Pos, target.Vel, speed);
+            var dir = aim - origin;
+            if (dir.LengthSquared < 1e-18) dir = u.Forward;
+            double team = MarineHabitats.Draw(interior, AssaultBays.TeamSize.Value);
+            Missiles.Add(new Missile
+            {
+                Pos = origin, Vel = u.Vel + dir.Normalized * speed, Target = target,
+                Damage = AssaultBays.ImpactDamage.Value, Speed = speed, Hp = AssaultBays.RoundHp,
+                // It flies on past a miss for as long again as it takes to cross the bay's range, then is lost.
+                Life = AssaultBays.RangeKm.Value / speed * 2 + 5,
+                Side = u.Side, Kind = MissileKind.Breacher, Owner = u.Faction, Marines = team, Source = u,
+            });
+            u.AssaultBayReload = AssaultBays.IntervalSeconds(u.Ship);
+            Emit(FxKind.MissileLaunch, origin, origin + dir.Normalized, 0, u.Side, u, -1);
+        }
+
+        /// <summary>The hull a ship's assault bay would fire a Breacher round at: the nearest hostile in range that its team
+        /// may board and the round would get into, a disabled one favoured; or null.</summary>
+        BattleUnit BreacherTarget(BattleUnit u)
+        {
+            BattleUnit best = null;
+            double bestD = AssaultBays.RangeKm.Value;
+            foreach (var o in Units)
+            {
+                if (!Hostile(u, o) || o.Captured || o.Kind == UnitKind.Fighter) continue;
+                var inside = o.Combat.Interior;
+                if (inside.Captured || (inside.Boarder != null && inside.Boarder != u.Faction)) continue;
+                // A hull waiting on terms is not boarded until they open it to boarding.
+                if (!MayBoard(u, o) || (o.Surrendering && !o.SurrenderOpenToBoarding)) continue;
+                // A merchant's hold is asked for first, not fought through its corridors for (U.SPC-T374).
+                if (o.Ship != null && Spares(u, o) && o.Ship.HasCargo && !o.SurrenderOpenToBoarding) continue;
+                if (!AssaultBays.Opens(o.Combat)) continue;
+                double d = (o.Pos - u.Pos).Length;
+                if (o.Combat.Disabled) d *= 0.5;
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = o;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// A Breacher round in flight (U.SPC-T466): it coasts like a bullet, its thrusters bending its track only slightly
+        /// toward where its target will be, and strikes the first hostile hull it flies through. One that strikes nothing
+        /// flies on until it is lost, with its team.
+        /// </summary>
+        void StepBreacher(Missile m, double dt)
+        {
+            if (m.Life <= 0)
+            {
+                m.Gone = true;
+                return;
+            }
+            var t = m.Target;
+            if (t != null && t.Present)
+            {
+                var aim = AssaultBays.Lead(m.Pos, DVec3.Zero, t.Pos, t.Vel, m.Vel.Length);
+                m.Vel = AssaultBays.Correct(m.Vel, aim - m.Pos, AssaultBays.SteerKmS2.Value, dt);
+            }
+            var start = m.Pos;
+            m.Pos += m.Vel * dt;
+            BattleUnit hit = null;
+            double nearest = double.MaxValue;
+            foreach (var o in Units)
+            {
+                if (!o.Present || o.Side == m.Side || o.Kind == UnitKind.Fighter) continue;
+                if (SegmentPointDistance(start, m.Pos, o.Pos) >= o.Radius * 0.6 + 0.05) continue;
+                double d = (o.Pos - start).LengthSquared;
+                if (d < nearest)
+                {
+                    nearest = d;
+                    hit = o;
+                }
+            }
+            if (hit == null) return;
+            m.Gone = true;
+            var from = start - hit.Pos;
+            if (from.LengthSquared < 1e-12) from = m.Vel * -1;
+            BreacherHit(m, hit, from.Normalized);
+        }
+
+        /// <summary>
+        /// A Breacher round strikes <paramref name="t"/> from direction <paramref name="from"/> (U.SPC-T466). A shield
+        /// holding more than a quarter of its strength turns it aside and the team is lost with it; otherwise its drill
+        /// bores in, it stays stuck in the plating, and its team storms out into the compartment it struck, where the
+        /// boarding fight takes over and the hull's own marines try to stop them. If the hull is no longer theirs to take
+        /// (struck its colours on terms that do not open it, already held, or boarded by another faction), the team stays
+        /// in the round and is taken off by the ship that fired it.
+        /// </summary>
+        void BreacherHit(Missile m, BattleUnit t, DVec3 from)
+        {
+            var c = t.Combat;
+            var entry = t.Pos + from * t.Radius;
+            var contact = t.Pos + from * (t.Radius * 0.3);
+            if (!AssaultBays.Opens(c))
+            {
+                Emit(FxKind.PodBounce, entry, entry, t.LengthKm, t.Side, t, -1);
+                return;
+            }
+            ApplyDamage(t, PickSubsystem(t), m.Damage, contact, entry);
+            if (!t.Present) return;
+            Embed(t, contact, m.Vel - t.Vel, m.Side, true);
+            var local = t.ToLocal(contact);
+            var space = c.Interior.Nearest(local.Z, local.Y);
+            bool spared = t.Surrendering && !t.SurrenderOpenToBoarding;
+            // The team fights as well as it drilled in the habitat it came from (U.SPC-T465), with the shock of the breach.
+            double drill = m.Source?.Combat?.Interior.DrillFactor ?? 1;
+            if (spared || !c.Interior.Board(m.Owner, m.Owner.MarineQuality * AssaultBays.ShockEdge * drill, m.Marines, space, true, Seconds, rng))
+            {
+                if (m.Source != null && m.Source.Present && !m.Source.Captured) m.Source.Combat.Interior.Embark(0, m.Marines);
+            }
+            Emit(FxKind.Breach, contact, contact + from * 0.1, t.LengthKm * 0.15, m.Side, t, space.Index);
+        }
+
+        /// <summary>
         /// A ship with marines to spare picks a disabled enemy to board, once no healthy enemy warship
-        /// is close enough to make it suicide. Breachers are less careful: any hull with its shields
-        /// down will do.
+        /// is close enough to make it suicide.
         /// </summary>
         void ChooseBoarding(BattleUnit u)
         {
-            bool breacher = u.Ship != null && u.Ship.Spec.Class == ShipClass.Breacher;
             if (u.BoardTarget != null)
             {
                 var bt = u.BoardTarget;
                 // A hull waiting on terms is not boarded until they open it to boarding (as it is not fired on, pods included).
                 bool stillOpen = bt.Present && !bt.Captured && (!bt.Surrendering || bt.SurrenderOpenToBoarding) &&
-                    (bt.Combat.Disabled || bt.SurrenderOpenToBoarding || bt.Stunned > 10 || (breacher && (bt.Combat.Shield <= bt.Combat.Spec.Shield * 0.25 || !bt.Combat.HasShieldGenerator)));
+                    (bt.Combat.Disabled || bt.SurrenderOpenToBoarding || bt.Stunned > 10);
                 if (!stillOpen) u.BoardTarget = null;
             }
             // A boarder that can no longer fly the approach (crippled, or breaking off) gives up the
             // prize, or the battle would wait on a boarding that never comes.
             if (u.Fleeing || u.Combat.Disabled) { u.BoardTarget = null; return; }
             if (u.BoardTarget != null) return;
-            bool boarder = breacher || u.Faction.IsPirate || u.Faction.IsMilitary || (Boards != null && Boards(u));
+            bool boarder = u.Faction.IsPirate || u.Faction.IsMilitary || (Boards != null && Boards(u));
             if (!boarder || u.Combat.MarinesAvailable < 15) return;
             BattleUnit best = null;
             double bestD = double.MaxValue;
@@ -2583,9 +2734,9 @@ namespace Unity.SpaceGod.Core
                 // A merchant's hold is asked for, not fought through its corridors for (U.SPC-T374): raiders board a hull
                 // with cargo aboard only once it has turned their demand down.
                 if (Spares(u, o) && o.Ship.HasCargo && !o.SurrenderOpenToBoarding) continue;
-                bool open = o.Combat.Disabled || o.SurrenderOpenToBoarding || o.Stunned > 10 || (breacher && (o.Combat.Shield <= o.Combat.Spec.Shield * 0.25 || !o.Combat.HasShieldGenerator));
+                bool open = o.Combat.Disabled || o.SurrenderOpenToBoarding || o.Stunned > 10;
                 if (!open) continue;
-                if (!breacher && ThreatNear(u, o.Pos, 6)) continue;
+                if (ThreatNear(u, o.Pos, 6)) continue;
                 double d = (o.Pos - u.Pos).Length;
                 if (d < bestD)
                 {
@@ -2606,51 +2757,25 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// Closing to board. A boarding ship lines up alongside, matches the target's drift, latches
-        /// and after a while opens its airlock. A breacher rams nose first instead and its assault bay
-        /// opens straight into the hull.
+        /// and after a while opens its airlock. (A Breacher round is fired, not flown: <see cref="FireAssaultBay"/>.)
         /// </summary>
         void Approach(BattleUnit u, double dt)
         {
             var t = u.BoardTarget;
             var c = u.Combat;
-            bool breacher = u.Ship != null && u.Ship.Spec.Class == ShipClass.Breacher;
             double maxSpeed = c.Spec.MaxSpeed * (0.25 + 0.75 * c.EngineFactor);
             t.Basis(out var right, out _);
-            var dock = breacher ? t.Pos : t.Pos + right * (t.Radius * 0.35 + u.Radius + 0.06);
+            var dock = t.Pos + right * (t.Radius * 0.35 + u.Radius + 0.06);
             var to = dock - u.Pos;
             double dist = to.Length;
             // Arrive matched: slow down as it closes, holding the target's own drift.
-            double want = breacher ? maxSpeed : Math.Min(maxSpeed, dist * 0.05 + 0.002);
+            double want = Math.Min(maxSpeed, dist * 0.05 + 0.002);
             var desired = t.Vel + (dist > 1e-6 ? to / dist : DVec3.Zero) * want;
             var dv = desired - u.Vel;
-            double step = c.Spec.Accel * (0.3 + 0.7 * c.EngineFactor) * dt * (breacher ? 1 : 1.5);
+            double step = c.Spec.Accel * (0.3 + 0.7 * c.EngineFactor) * dt * 1.5;
             u.Vel += dv.Length > step ? dv.Normalized * step : dv;
             u.Pos += u.Vel * dt;
-            TurnToward(u, breacher ? to : t.Forward, c.Spec.TurnRateDegS, dt);
-
-            if (breacher)
-            {
-                if (dist < t.Radius * 0.55 + u.Radius * 0.5)
-                {
-                    var contact = t.Pos + (u.Pos - t.Pos).Normalized * t.Radius * 0.3;
-                    u.Latched = t;
-                    u.LatchLocal = t.ToLocal(u.Pos);
-                    u.BoardTarget = null;
-                    ApplyDamage(t, PickSubsystem(t), 300, contact);
-                    if (!t.Present) return;
-                    Embed(t, contact, to, u.Side, true);
-                    var local = t.ToLocal(contact);
-                    var space = t.Combat.Interior.Nearest(local.Z, local.Y);
-                    if (!t.Combat.Interior.Captured && (t.Combat.Interior.Boarder == null || t.Combat.Interior.Boarder == u.Faction))
-                    {
-                        double marines = c.MarinesAvailable * 0.9;
-                        RemoveMarines(c.Interior, marines);
-                        t.Combat.Interior.Board(u.Faction, u.Faction.MarineQuality * 1.15 * c.Interior.DrillFactor, marines, space, true, Seconds, rng);
-                    }
-                    Emit(FxKind.Breach, contact, contact - to.Normalized * 0.1, t.LengthKm * 0.15, u.Side, t, space.Index);
-                }
-                return;
-            }
+            TurnToward(u, t.Forward, c.Spec.TurnRateDegS, dt);
 
             if (dist < 0.08 && (u.Vel - t.Vel).Length < 0.01)
             {

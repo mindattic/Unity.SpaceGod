@@ -133,6 +133,10 @@ namespace Unity.SpaceGod.Core
         /// (U.SPC-T472). Asked with the hull's class, or null for a station or satellite.</summary>
         public Func<ShipClass?, bool> ClassFilter { get; set; }
 
+        /// <summary>The id of a facility the hull must already carry to fit this one, or null (U.SPC-T466): an assault bay
+        /// is fitted only where a marine habitat supplies its teams, and that habitat cannot be stripped from under it.</summary>
+        public string Requires { get; set; }
+
         /// <summary>Whether a hull of <paramref name="category"/> and <paramref name="cls"/> may carry it at all: not one the
         /// class bars (<see cref="FacilityLayouts.Bars"/>), and, for a kind with <see cref="Classes"/>, only those.</summary>
         public bool AllowedOn(HullCategory category, ShipClass? cls)
@@ -145,9 +149,10 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// The registry of facility kinds (U.SPC-T470). The hull's structure (bridge, engineering, quarters, hangar deck,
-    /// holds, batteries' magazines, the bow and midships sections, a breacher's assault bay) and the four fittable
+    /// holds, batteries' magazines, the bow and midships sections, a Breacher round's troop compartment) and the four fittable
     /// facilities that were internal-bay modules (armour plate, cargo racks, a scanner suite, a brig) are registered
-    /// here, with the marine habitat (U.SPC-T465, <see cref="MarineHabitats"/>); new kinds plug in with <see cref="Register"/>.
+    /// here, with the marine habitat (U.SPC-T465, <see cref="MarineHabitats"/>) and the assault bay that fires Breacher
+    /// rounds (U.SPC-T466, <see cref="AssaultBays"/>); new kinds plug in with <see cref="Register"/>.
     /// </summary>
     public static class FacilityKinds
     {
@@ -156,11 +161,15 @@ namespace Unity.SpaceGod.Core
 
         // The structure every hull is built around (not fittable: it comes with the frame).
         public const string Bridge = "bridge", Engineering = "engineering", Quarters = "quarters", Hangar = "hangar", Hold = "hold",
-                            Battery = "battery", Bow = "bow", Midships = "midships", AssaultBay = "assault-bay";
+                            Battery = "battery", Bow = "bow", Midships = "midships", TroopCompartment = "troop-compartment";
 
         // What a yard fits into free space.
         public const string ArmourPlating = "armour-plating", CargoRacks = "cargo-racks", Scanner = "scanner-suite", Brig = "brig",
                             MarineHabitat = "marine-habitat";
+
+        /// <summary>The firing room that launches Breacher rounds (U.SPC-T466, see <see cref="AssaultBays"/>): a capital's to
+        /// fit, and only beside a marine habitat to supply its teams.</summary>
+        public const string AssaultBay = "assault-bay";
 
         /// <summary>The hulls big enough for a marine habitat (U.SPC-T465): every one but fighters, small craft and
         /// satellites, whose crews repel boarders alone.</summary>
@@ -195,7 +204,8 @@ namespace Unity.SpaceGod.Core
             Register(Structure(Battery, "Battery magazine", 2, CompartmentKind.Battery));
             Register(Structure(Bow, "Bow section", 1, CompartmentKind.Bow));
             Register(Structure(Midships, "Midships", 1, CompartmentKind.Midships));
-            Register(Structure(AssaultBay, "Assault bay", 2, CompartmentKind.AssaultBay));
+            // The team's seats inside a Breacher round (U.SPC-T466): what boarders storm out of once it has drilled in.
+            Register(Structure(TroopCompartment, "Troop compartment", 2, CompartmentKind.AssaultBay));
 
             Register(FacilityKind.OfModule(ArmourPlating, ModuleKind.ArmourPlating, 1));
             Register(FacilityKind.OfModule(CargoRacks, ModuleKind.CargoRack, 1));
@@ -215,6 +225,14 @@ namespace Unity.SpaceGod.Core
                 new[] { (Good.Electronics, 50.0), (Good.Alloys, 10.0) }, Capitals));
             Register(new FacilityKind(TargetingComputers, "Targeting computers", 1, 40, false,
                 new[] { (Good.Electronics, 40.0), (Good.Machinery, 5.0) }, Capitals));
+            // The assault bay (U.SPC-T466): the breech, the loading cradle and the round magazine, two sections. A boarding
+            // fight inside the hull can be fought through it like any other space.
+            Register(new FacilityKind(AssaultBay, "Assault bay", 2, 400, false,
+                new[] { (Good.Alloys, 160.0), (Good.Machinery, 60.0), (Good.Electronics, 20.0) },
+                Capitals, true, CompartmentKind.AssaultBay)
+            {
+                Requires = MarineHabitat,
+            });
             // Only the classes the owner's roster lets carry a drive when fitted (battleships, command cruisers) may fit it
             // (U.SPC-T472); a carrier has its own already, a cruiser or destroyer none.
             Register(new FacilityKind(FtlDrive, "FTL drive", 2, 900, true,
@@ -409,11 +427,11 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.15, 0.04), new FacilitySite(FacilityKinds.Midships, "Sensor room", -0.08),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
-            // A breacher is too small for a habitat: its assault bay carries one boarding team (seventy marines) out to
-            // the target and does not train them.
+            // A Breacher round (U.SPC-T466) has no habitat: its troop compartment carries one team (seventy marines, as many as
+            // a stock round holds) to the target and does not train them.
             [ShipClass.Breacher] = new[]
             {
-                new FacilitySite(FacilityKinds.AssaultBay, "Assault bay", 0.25, 0, FacilitySite.Keel, 70), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0, 0.03),
+                new FacilitySite(FacilityKinds.TroopCompartment, "Troop compartment", 0.25, 0, FacilitySite.Keel, 70), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0, 0.03),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
         };
@@ -452,7 +470,7 @@ namespace Unity.SpaceGod.Core
         public static IReadOnlyList<FacilitySite> For(ShipClass c) => ByClass.TryGetValue(c, out var l) ? l : Small;
 
         /// <summary>The marines a hull with these facilities quarters (U.SPC-T465): every space's berths on a hull of
-        /// <paramref name="scale"/>. A hull with no habitat (or assault bay) carries none.</summary>
+        /// <paramref name="scale"/>. A hull with no habitat (or troop compartment) carries none.</summary>
         public static double Complement(IEnumerable<FacilitySite> facilities, double scale)
         {
             double n = 0;

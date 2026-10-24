@@ -15,8 +15,7 @@ namespace Unity.SpaceGod.Core
         /// Courier): the track carves after the nose, strafing is strong, and a turn is tightest at the corner speed.</summary>
         LightFighter,
 
-        /// <summary>Everspace 2-style heavy fighters: the Gunship (U.SPC-T467), and for now the Breacher, an assault
-        /// craft flown the same way until U.SPC-T466 makes it a fired boarding round.</summary>
+        /// <summary>Everspace 2-style heavy fighters: the Gunship (U.SPC-T467).</summary>
         HeavyFighter,
 
         /// <summary>Freighters and miners: heavy, deliberate haulers.</summary>
@@ -32,6 +31,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>Bombers (U.SPC-T484): a steady, heavy torpedo platform, with a wide carve, a weak strafe and a
         /// throttle with heft.</summary>
         Bomber,
+
+        /// <summary>Fired rounds (U.SPC-T466): the Breacher, a marine team in an armoured round shot from an assault bay. It
+        /// flies like a bullet, its course corrected only slightly (<see cref="BallisticFlightModel"/>).</summary>
+        Ballistic,
     }
 
     /// <summary>
@@ -246,6 +249,32 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
+    /// The ballistic family's model (U.SPC-T466): a fired round, not a ship. Nothing drives it on or slows it: it coasts on
+    /// the speed it was fired at, under gravity, its nose along its track, and the stick only bends that track a little
+    /// toward where it points, with the round's thrusters (<see cref="AssaultBays.SteerKmS2"/>, as a round in a battle is
+    /// steered, <see cref="AssaultBays.Correct"/>). Throttle, boost, strafe and roll do nothing.
+    /// </summary>
+    public sealed class BallisticFlightModel : IFlightModel
+    {
+        public string Name => "Ballistic";
+
+        public void Step(ref PilotState s, ShipCombat combat, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, DVec3 gravityKmS2, double dt)
+        {
+            if (dt <= 0) return;
+            if (input.DesiredForward.LengthSquared > 1e-12)
+                s.Vel = AssaultBays.Correct(s.Vel, input.DesiredForward, AssaultBays.SteerKmS2.Value, dt);
+            PilotFlight.Integrate(ref s, DVec3.Zero, gravityKmS2, dt);
+            s.AngularVelocity = DVec3.Zero;
+            if (s.Vel.LengthSquared > 1e-18)
+            {
+                s.Forward = s.Vel.Normalized;
+                var up = s.Up - s.Forward * DVec3.Dot(s.Up, s.Forward);
+                s.Up = up.LengthSquared > 1e-12 ? up.Normalized : PilotState.LevelUp(s.Forward);
+            }
+        }
+    }
+
+    /// <summary>
     /// Which family each <see cref="ShipClass"/> flies as, and which model flies each family (U.SPC-T17):
     /// the one extension point for per-class handling. Both tables are data: a new class is assigned a
     /// family, and a new way of flying is a model registered for its family, without touching the code
@@ -259,8 +288,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>The model a family with none registered flies: the shared Newtonian one.</summary>
         public IFlightModel Fallback { get; set; } = NewtonianFlightModel.Instance;
 
-        /// <summary>The game's registry: every class in its family, and the light fighters, interceptors and
-        /// bombers on models of their own; the other families fly the Newtonian model until theirs land (docs/FLIGHT_MODELS.md).</summary>
+        /// <summary>The game's registry: every class in its family, and the light fighters, interceptors,
+        /// bombers and fired rounds on models of their own; the other families fly the Newtonian model until theirs land (docs/FLIGHT_MODELS.md).</summary>
         public static FlightModelRegistry Default { get; } = CreateDefault();
 
         public static FlightModelRegistry CreateDefault()
@@ -271,7 +300,7 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.Bomber, FlightFamily.Bomber);
             r.Assign(ShipClass.Courier, FlightFamily.LightFighter);
             r.Assign(ShipClass.Gunship, FlightFamily.HeavyFighter);
-            r.Assign(ShipClass.Breacher, FlightFamily.HeavyFighter);
+            r.Assign(ShipClass.Breacher, FlightFamily.Ballistic);
             r.Assign(ShipClass.Freighter, FlightFamily.Hauler);
             r.Assign(ShipClass.Miner, FlightFamily.Hauler);
             r.Assign(ShipClass.Explorer, FlightFamily.Hauler);
@@ -288,6 +317,7 @@ namespace Unity.SpaceGod.Core
             r.Register(FlightFamily.LightFighter, new LightFighterFlightModel());
             r.Register(FlightFamily.Interceptor, new LightFighterFlightModel(LightFighterHandling.Interceptor, "Interceptor"));
             r.Register(FlightFamily.Bomber, new BomberFlightModel());
+            r.Register(FlightFamily.Ballistic, new BallisticFlightModel());
             return r;
         }
 

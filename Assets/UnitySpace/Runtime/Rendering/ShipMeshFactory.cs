@@ -805,7 +805,8 @@ namespace Unity.SpaceGod.Rendering
             }
         }
 
-        /// <summary>A breacher: a squat armoured assault hull behind a massive fluted drill prow.</summary>
+        /// <summary>A Breacher round (U.SPC-T466): a squat armoured troop round behind a massive fluted drill head, drawn stuck in
+        /// the hull it struck.</summary>
         static void BuildBreacher(Builder b)
         {
             b.Frustum(-0.45f, 0.1f, new Vector2(0.2f, 0.16f), new Vector2(0.24f, 0.2f), 0, b.Hull);

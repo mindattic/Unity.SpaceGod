@@ -560,6 +560,14 @@ namespace Unity.SpaceGod.Views
                     Ribbon(Point(b, m.Pos - m.Vel * 4.0), p, 2.4f, violet * 0.6f);
                     continue;
                 }
+                if (m.Kind == MissileKind.Breacher)
+                {
+                    // A Breacher round (U.SPC-T466): a big, hot slug in the firing side's colour with a long straight wake.
+                    var slug = Color.Lerp(c, new Color(1f, 0.85f, 0.6f), 0.5f);
+                    Sprite(p, PixelSize(p, 9), slug * 1.6f, Shape.Radial);
+                    Ribbon(Point(b, m.Pos - m.Vel * 1.5), p, 2.6f, slug * 0.55f);
+                    continue;
+                }
                 if (m.Kind == MissileKind.Interceptor)
                 {
                     // An interceptor (U.SPC-T489): a small, hot blue-white dart with a short, thin streak.
