@@ -211,7 +211,8 @@ namespace Unity.SpaceGod.Core.Tests
             Run(g, jd, 90, () => !raid.Active);
             TestContext.Out.WriteLine(string.Join("\n", log.Where(l => l.Contains("Bright Lance") || l.Contains("strike group"))));
             Assert.That(log.Any(l => l.Contains("[Luhman 16]") && l.Contains("falls on")), Is.True, "it never fell on a port");
-            Assert.That(raid.PortsRaided, Is.GreaterThanOrEqualTo(1), "it broke no port's defences");
+            Assert.That(log.Any(l => l.Contains("[Luhman 16]") && l.Contains("Battle of") && l.Contains("Centauri Accord (CAS Bright Lance")), Is.True,
+                "it never fought the port's defences");
             Assert.That(raid.Active, Is.False, "it never came home");
             Assert.That(raid.Lost, Is.False);
             Assert.That(ac.World.Fleet.IsPresent(strike), Is.True, "the strike group is not home");
