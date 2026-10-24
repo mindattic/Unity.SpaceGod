@@ -214,7 +214,7 @@ namespace Unity.SpaceGod
 
             streamKeep.Clear();
             foreach (var p in activePaths) streamKeep.Add(p);
-            if (Travel.Active && Travel.To != null) Warm(Travel.To);
+            if (Travel.Active && Travel.To != null) { Warm(Travel.To); if (Travel.Hop != null) Warm(Travel.Hop); }
             if (nearGate != null) Warm(nearGate.Destination);
             double ring = Scale.ShipLength(GateView.DiameterKm);
             foreach (var gate in ActiveSystem.Gates)

@@ -43,7 +43,7 @@ namespace Unity.SpaceGod.Cameras
         public string Banner { get; private set; }
 
         /// <summary>0..1 through the whole trip.</summary>
-        public float Overall => !Active ? 0 : ThroughGate ? (float)GateJump.Overall(phase, t) : Mathf.Clamp01(((int)Stage + t) / 3f);
+        public float Overall => !Active ? 0 : ThroughGate ? (leg + (float)GateJump.Overall(phase, t)) / Math.Max(1, course.Count) : Mathf.Clamp01(((int)Stage + t) / 3f);
 
         /// <summary>How hard the view is going to warp, 0..1: building as the system falls away, swelling with the glide
         /// across, dying away on arrival. Drives the warp lines and stellar dust.</summary>
@@ -121,7 +121,38 @@ namespace Unity.SpaceGod.Cameras
         GateJump.Phase phase;
         double gateClearance = double.MaxValue;
 
+        /// <summary>The gates the trip takes, in order, and the one being taken now (U.SPC-T516): every system on the way is
+        /// crossed to its next gate and every gate is gone through, never a jump to the far system.</summary>
+        System.Collections.Generic.List<JumpGate> course = new System.Collections.Generic.List<JumpGate>();
+        int leg;
+
+        /// <summary>How many gates the trip takes (0 across the interstellar view).</summary>
+        public int Legs => ThroughGate ? course.Count : 0;
+
+        /// <summary>Which gate the trip is at, from 0.</summary>
+        public int LegIndex => leg;
+
+        /// <summary>The gates of the trip, in order.</summary>
+        public System.Collections.Generic.IReadOnlyList<JumpGate> Course => course;
+
+        /// <summary>The system the gate being taken leads to: the next stop, which is the destination only on the last leg.</summary>
+        public StarSystem Hop => ThroughGate && arrival != null ? arrival.Home : To;
+
         public StarTravel(UnitySpaceApp app) => this.app = app;
+
+        /// <summary>The line on the HUD: where bound, how far, the course by the systems on it and the leg being flown.</summary>
+        void RefreshBanner()
+        {
+            Banner = To.Name.ToUpperInvariant() + "   ·   " + Galaxy.DistanceLy(From, To).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " LIGHT-YEARS";
+            if (!ThroughGate) return;
+            var sb = new System.Text.StringBuilder(Banner);
+            sb.Append("   ·   COURSE ").Append(From.Name.ToUpperInvariant());
+            foreach (var g in course) sb.Append(" > ").Append(g.Partner.Home.Name.ToUpperInvariant());
+            sb.Append("   ·   ");
+            if (course.Count > 1) sb.Append("LEG ").Append(leg + 1).Append(" OF ").Append(course.Count).Append(": ");
+            sb.Append(departure.Name.ToUpperInvariant());
+            Banner = sb.ToString();
+        }
 
         public void Begin(StarSystem to)
         {
@@ -143,12 +174,14 @@ namespace Unity.SpaceGod.Cameras
             fromUp = app.SpaceCamera.UpFrame * Vector3.up;
             toUp = app.AutoReorient ? UnitySpaceApp.PlaneNormal(To) : Vector3.up;
             oortLy = UnitySpaceApp.OortCloudLy(To);
-            Banner = To.Name.ToUpperInvariant() + "   ·   " + Galaxy.DistanceLy(From, To).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " LIGHT-YEARS";
-            // Through the gate leading that way, if this system has one; the old way across if not.
-            ThroughGate = GateJump.TryChoose(app.Galaxy.Network, From, To, out departure, out arrival);
+            // Through the gates by the planned course, if this system has a way; the old way across if not.
+            ThroughGate = GateJump.TryPlan(app.Galaxy.Network, From, To, out course);
+            leg = 0;
+            departure = ThroughGate ? course[0] : null;
+            arrival = ThroughGate ? departure.Partner : null;
             phase = GateJump.Phase.Approach;
             gateClearance = double.MaxValue;
-            if (ThroughGate) Banner += "   ·   VIA " + departure.Name.ToUpperInvariant();
+            RefreshBanner();
             // What the destination is drawn with starts loading now, in the background (U.SPC-T414), so the most of it
             // is in memory before the view gets there.
             Rendering.AssetStreamer.WarmSystem(To);
@@ -263,6 +296,8 @@ namespace Unity.SpaceGod.Cameras
             if (t < 1) return;
             app.SetSystemVisible(false);
             gateClearance = double.MaxValue;
+            // The next stop is the system this gate leads to, level with its own plane.
+            toUp = app.AutoReorient ? UnitySpaceApp.PlaneNormal(Hop) : Vector3.up;
             phase = GateJump.Phase.Tunnel;
             Stage = Leg.Cross;
             t = 0;
@@ -276,7 +311,7 @@ namespace Unity.SpaceGod.Cameras
             app.SpaceCamera.SetRotation(Look(forward, Vector3.Slerp(fromUp, toUp, Smoother(t))));
             if (!destinationBuilt && t >= GateJump.BuildAt)
             {
-                app.Activate(To);
+                app.Activate(Hop);
                 app.SetSystemVisible(false);
                 destinationBuilt = true;
                 // What will be seen coming out of the far gate streams in first.
@@ -286,7 +321,7 @@ namespace Unity.SpaceGod.Cameras
             }
             if (tunnel.Active) return;
 
-            if (!destinationBuilt) app.Activate(To);
+            if (!destinationBuilt) app.Activate(Hop);
             destinationBuilt = true;
             app.StreamFocus = null;
             app.SpaceCamera.SetUpFrame(Quaternion.FromToRotation(Vector3.up, toUp));
@@ -441,9 +476,37 @@ namespace Unity.SpaceGod.Cameras
             var look = Look(ToVector(-dir), toUp);
             app.SpaceCamera.SetPose(root + dir * d, Quaternion.Slerp(crossStartRotation, look, Smoother(Mathf.Min(1, t * 2f))));
             if (t < 1) return;
+            // Out of a gate with more gates still to take: cross this system to the next one, on to the destination.
+            if (ThroughGate && leg + 1 < course.Count)
+            {
+                BeginNextLeg();
+                return;
+            }
             Active = false;
             Banner = null;
             app.FocusSystemOverview();
+        }
+
+        /// <summary>The next leg of the course (U.SPC-T516): from the view as it stands in the system just come into, down to the
+        /// gate that leads on, through it and so on, as the first leg did from the system left.</summary>
+        void BeginNextLeg()
+        {
+            leg++;
+            departure = course[leg];
+            arrival = departure.Partner;
+            var root = app.BodyScene(0);
+            leaveStart = app.SpaceCamera.ScenePosition - root;
+            if (leaveStart.LengthSquared < 1) leaveStart = new DVec3(0, 0.4, -1);
+            leaveFrom = leaveStart.Length;
+            startRotation = app.SpaceCamera.Rotation;
+            fromUp = toUp;
+            destinationBuilt = false;
+            phase = GateJump.Phase.Approach;
+            Stage = Leg.Leave;
+            t = 0;
+            gateClearance = double.MaxValue;
+            RefreshBanner();
+            Rendering.AssetStreamer.WarmSystem(arrival.Home);
         }
 
         static DVec3 Slerp(DVec3 a, DVec3 b, float t)

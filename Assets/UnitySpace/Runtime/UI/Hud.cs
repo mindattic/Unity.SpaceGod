@@ -123,7 +123,13 @@ namespace Unity.SpaceGod.UI
 
             if (app.Travel.Active) DrawTravel();
             else if (app.InFtlCruise) DrawFtlCruise();
-            else DrawWorldOverlay();
+            else
+            {
+                DrawWorldOverlay();
+                // A plotted course over the gates: the way and the next leg (U.SPC-T516).
+                var courseLine = app.CourseLine();
+                if (courseLine != null) DrawBanner(courseLine);
+            }
             DrawLaneEffects();
             if (!app.ShowHud)
             {

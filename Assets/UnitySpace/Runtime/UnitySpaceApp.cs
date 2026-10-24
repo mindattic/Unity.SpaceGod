@@ -494,7 +494,8 @@ namespace Unity.SpaceGod
             if (InFtlCruise) { ShowToast("Under FTL for " + FtlCruise.ToName + ": the view goes where the hull goes"); return; }
             // The pilot session belongs to this system's ship and world: the gate is the way across while flying.
             if (IsSeated) ReturnToCommand();
-            if (IsPiloting) { ShowToast("Release the helm (P) before travelling to another system, or fly through the gate"); return; }
+            // At the helm the trip is a plotted course, flown gate by gate by the pilot (U.SPC-T516).
+            if (IsPiloting) { PlotCourse(system); return; }
             Select(Target.None);
             Travel.Begin(system);
         }
@@ -1547,6 +1548,7 @@ namespace Unity.SpaceGod
 
             var destination = gate.Destination;
             if (!GateTransit.TryPerform(gate, shipHelioKm, ship, World, Clock.Jd, out var arrived)) return false;
+            AdvanceCourse(gate, arrived);
             // A charge is lost going through a gate (U.SPC-T417).
             StopFtl();
             EndSalvage(null);

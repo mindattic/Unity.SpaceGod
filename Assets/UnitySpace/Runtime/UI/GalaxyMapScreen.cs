@@ -286,11 +286,6 @@ namespace Unity.SpaceGod.UI
         void Travel(StarSystem to)
         {
             if (to == null || to == app.ActiveSystem) return;
-            if (app.IsPiloting)
-            {
-                app.ShowToast("Release the helm (P) before travelling to another system, or fly through the gate");
-                return;
-            }
             app.ShowGalaxyMap = false;
             app.TravelTo(to);
         }
@@ -302,6 +297,8 @@ namespace Unity.SpaceGod.UI
             GUI.BeginClip(canvas);
             var local = new Rect(0, 0, canvas.width, canvas.height);
             var focus = selected != null && selected != app.ActiveSystem ? selected : hovered;
+            // Nothing picked: the helm's plotted course (U.SPC-T516).
+            if ((focus == null || focus == app.ActiveSystem) && app.Course != null && !app.Course.Done) focus = app.Course.Destination;
             var route = focus != null && focus != app.ActiveSystem ? app.Galaxy.Network.Route(app.ActiveSystem, focus, null, jd) : null;
             var onRoute = new HashSet<GateLink>();
             if (route != null)
@@ -574,7 +571,7 @@ namespace Unity.SpaceGod.UI
                 var openRoute = app.Galaxy.Network.Route(app.ActiveSystem, s, app.Piloted.Ship?.Faction ?? app.ActiveSystem.Holder, jd);
                 if (route != null && openRoute == null) Line(ref y, x, w, "Every way there is shut to you just now", FrontColor);
                 Line(ref y, x, w, app.Galaxy.Traffic?.News.Describe(app.ActiveSystem, s, jd) ?? "no news", Dim);
-                if (GUI.Button(new Rect(x, y + 2, w, 28), app.IsPiloting ? "TRAVEL  (release the helm first)" : "TRAVEL HERE THROUGH THE GATES", buttonOn)) Travel(s);
+                if (GUI.Button(new Rect(x, y + 2, w, 28), app.IsPiloting ? "PLOT A COURSE HERE THROUGH THE GATES" : "TRAVEL HERE THROUGH THE GATES", buttonOn)) Travel(s);
                 y += 36;
                 DrawFtlSection(ref y, x, w, FtlTarget.OfStar(s));
             }

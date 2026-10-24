@@ -71,6 +71,28 @@ namespace Unity.SpaceGod.Core
             return true;
         }
 
+        /// <summary>
+        /// The gates the view takes from <paramref name="from"/> to <paramref name="to"/>, one per leg and in order (U.SPC-T516):
+        /// the direct gate if one leads there, else the quickest route over the network (open or not, the view is no ship, though
+        /// a ring out of action stops it). Empty, false, when <paramref name="from"/> has no gates or there is no way through.
+        /// </summary>
+        public static bool TryPlan(GateNetwork network, StarSystem from, StarSystem to, out System.Collections.Generic.List<JumpGate> route)
+        {
+            route = new System.Collections.Generic.List<JumpGate>();
+            if (from == null || to == null || from == to || from.Gates.Count == 0) return false;
+            var direct = from.GateTo(to);
+            if (direct != null && direct.Partner != null && direct.Link.Working)
+            {
+                route.Add(direct);
+                return true;
+            }
+            var planned = network?.Route(from, to);
+            if (planned == null || planned.Count == 0 || planned[0].Home != from || planned[planned.Count - 1].Partner?.Home != to)
+                return false;
+            route = planned;
+            return true;
+        }
+
         /// <summary>How long <paramref name="phase"/> lasts, seconds.</summary>
         public static double Seconds(Phase phase) =>
             phase == Phase.Approach ? ApproachSeconds : phase == Phase.Plunge ? PlungeSeconds : phase == Phase.Tunnel ? TunnelSeconds : EmergeSeconds;
