@@ -17,7 +17,7 @@ Where the game already differs from this canon, the last section says so and nam
 ### Capital ships
 
 - **Carrier.** FTL-capable. A flight deck and hangars launch and recover piloted fighter and bomber squadrons, and a few corvettes or frigates can be clamped to the outside of the hull. Losing the carrier strands its pilots.
-- **Dreadnought / Battleship.** The spinal-mount heavy hitter: a railgun or coilgun, a tachyon lance or a plasma cannon, on a large power plant. It holds the rear.
+- **Dreadnought / Battleship.** The spinal-mount heavy hitter: a railgun or coilgun, a tachyon lance or a plasma cannon, on a large power plant. It holds the rear. In the game (U.SPC-T490, `Core/Combat/SpinalMounts.cs`, `Core/Combat/RearLine.cs`) it is built around two ship-length spinal mounts, a railgun and a coilgun as designed, each fed by a spinal power plant inside the hull (a yard may put a tachyon lance or a plasma spinal cannon in either); its doctrine is to hold the rear behind its escorts and snipe from the extreme reach of its spinal guns, its bow laid on the mark, backing away from anything that closes.
 - **Command Cruiser / Battlecruiser.** Fleet coordination, and the sensor and comms hub. It handles light-lag. In the game (U.SPC-T477, `Core/Combat/FleetCoordination.cs`) it gives up guns for a sensor array, a communications suite and targeting computers inside its hull and carries the fleet's senior officers: ships within its reach in battle find their targets sooner, shoot truer, lay their guns on its shared sensor picture and concentrate on its mark; losing it throws them into confusion for a while, so it is a priority target, and navies build it to lead their groups.
 - **Gate Breaker.** A siege capital built to take or destroy jump gates: heavily armoured, with siege weapons, and with boarding and engineering teams to seize a gate intact.
 
@@ -67,7 +67,7 @@ Battleships are as big as carriers or bigger, so they never land on one.
 
 | Weapon | Range | Character | Carried by |
 | --- | --- | --- | --- |
-| Railguns / Coilguns | Extreme | Kinetic sniping | Dreadnoughts, cruisers |
+| Railguns / Coilguns | Extreme | Kinetic sniping; a dreadnought's are spinal mounts the length of the hull | Dreadnoughts, cruisers |
 | Missiles / Torpedoes | Long | Volley strikes | Frigates, carriers |
 | Tachyon Lances | Long | Near-instant; ignore light-speed delay. Power-hungry, and kept rare and expensive so kinetics and missiles stay relevant | Capitals only |
 | Lasers | Medium | Point defence and radiator sniping | Everything |

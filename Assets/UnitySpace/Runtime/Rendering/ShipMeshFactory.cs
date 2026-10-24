@@ -265,6 +265,54 @@ namespace Unity.SpaceGod.Rendering
             return mesh;
         }
 
+        static readonly Dictionary<(SubsystemKind, Faction), Mesh> SpinalCache = new Dictionary<(SubsystemKind, Faction), Mesh>();
+
+        /// <summary>
+        /// A spinal mount's model (U.SPC-T490): a gun as long as the hull, laid down the keel from its muzzle at the mount
+        /// (+Z, at the bow) back to its breech and power couplings near the stern, in ship lengths. A railgun is a pair of
+        /// rails between armoured braces, a coilgun a barrel ringed by coils along its length, a plasma spinal cannon a fat
+        /// bottle ringed in green, and a tachyon lance an emitter tube ringed in violet.
+        /// </summary>
+        public static Mesh GetSpinal(SubsystemKind kind, Faction faction)
+        {
+            faction = Canon(faction);
+            if (SpinalCache.TryGetValue((kind, faction), out var mesh)) return mesh;
+            var b = new Builder(faction, WholeHull);
+            const float length = 0.8f, back = -length * 0.5f;
+            // The armoured trunk the gun runs in, and its breech block astern.
+            b.Box(new Vector3(0, 0, back), new Vector3(0.03f, 0.024f, length), b.Hull);
+            b.Box(new Vector3(0, 0, -length + 0.03f), new Vector3(0.05f, 0.04f, 0.06f), b.Accent);
+            switch (kind)
+            {
+                case SubsystemKind.Railgun:
+                    b.Box(new Vector3(-0.008f, 0.014f, back), new Vector3(0.005f, 0.008f, length), b.Dark);
+                    b.Box(new Vector3(0.008f, 0.014f, back), new Vector3(0.005f, 0.008f, length), b.Dark);
+                    for (int i = 0; i < 6; i++)
+                        b.Box(new Vector3(0, 0.014f, -0.04f - i * 0.12f), new Vector3(0.026f, 0.012f, 0.008f), b.Hull);
+                    b.Box(new Vector3(0, 0.014f, -0.004f), new Vector3(0.02f, 0.004f, 0.006f), b.Glow(new Color(0.75f, 0.85f, 1f)));
+                    break;
+                case SubsystemKind.Coilgun:
+                    b.Cylinder(new Vector3(0, 0.012f, back), 0.009f, length, b.Dark);
+                    for (int i = 0; i < 8; i++)
+                        b.Cylinder(new Vector3(0, 0.012f, -0.03f - i * 0.095f), 0.013f, 0.012f, b.Glow(new Color(0.55f, 0.8f, 1f)));
+                    break;
+                case SubsystemKind.PlasmaCannon:
+                    b.Cylinder(new Vector3(0, 0.014f, back), 0.014f, length, b.Dark);
+                    for (int i = 0; i < 4; i++)
+                        b.Cylinder(new Vector3(0, 0.014f, -0.05f - i * 0.18f), 0.018f, 0.014f, b.Glow(new Color(0.45f, 1f, 0.55f)));
+                    break;
+                default:
+                    b.Cylinder(new Vector3(0, 0.014f, back), 0.011f, length, b.Dark);
+                    for (int i = 0; i < 5; i++)
+                        b.Cylinder(new Vector3(0, 0.014f, -0.03f - i * 0.15f), 0.015f, 0.01f, b.Glow(new Color(0.7f, 0.45f, 1f)));
+                    b.Cylinder(new Vector3(0, 0.014f, -0.002f), 0.008f, 0.004f, b.Glow(new Color(0.9f, 0.8f, 1f)));
+                    break;
+            }
+            mesh = b.ToMesh("Spinal_" + kind + "_" + faction.Prefix);
+            SpinalCache[(kind, faction)] = mesh;
+            return mesh;
+        }
+
         static readonly Dictionary<Faction, Mesh> PodCache = new Dictionary<Faction, Mesh>();
 
         /// <summary>

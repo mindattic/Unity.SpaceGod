@@ -346,9 +346,10 @@ namespace Unity.SpaceGod.Views
                 mount.localPosition = pos;
                 mount.localRotation = part.Rest;
                 part.Mount = mount;
-                var list = new List<Renderer> { ShipModels.Part(mount, ShipMeshFactory.GetPart(sub.Kind, Ship.Faction, false), "Base") };
-                part.Turret = sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.LaserTurret || sub.Kind == SubsystemKind.PointDefense || sub.Kind == SubsystemKind.PlasmaCannon ||
-                              sub.Kind == SubsystemKind.FlakCannon;
+                // A spinal mount is a gun the length of the hull laid down the keel from its muzzle (U.SPC-T490).
+                var list = new List<Renderer> { ShipModels.Part(mount, d.Spinal ? ShipMeshFactory.GetSpinal(sub.Kind, Ship.Faction) : ShipMeshFactory.GetPart(sub.Kind, Ship.Faction, false), "Base") };
+                part.Turret = !d.Spinal && (sub.Kind == SubsystemKind.HeavyLaser || sub.Kind == SubsystemKind.LaserTurret || sub.Kind == SubsystemKind.PointDefense ||
+                              sub.Kind == SubsystemKind.PlasmaCannon || sub.Kind == SubsystemKind.FlakCannon);
                 if (part.Turret)
                 {
                     var barrels = new GameObject("Barrels").transform;

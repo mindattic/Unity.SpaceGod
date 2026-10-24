@@ -917,8 +917,9 @@ namespace Unity.SpaceGod.Core
                 if (o.Ship != null && !o.Combat.Disabled) score -= RaidDoctrine.TargetBias(u.Faction, o.Ship);
                 // A command ship is the priority target (U.SPC-T477): sink it and its whole fleet fights uncoordinated.
                 if (FleetCoordination.Coordinates(o)) score -= FleetCoordination.Priority.Value;
-                // A frigate's torpedoes are for the capitals (U.SPC-T475).
+                // A frigate's torpedoes are for the capitals (U.SPC-T475), and so are a dreadnought's spinal guns (U.SPC-T490).
                 score -= AlphaStrike.TargetBias(u, o);
+                score -= RearLine.TargetBias(u, o);
                 if (o.Kind == UnitKind.Platform) score += 6;
                 if (flagship != null && flagship != u && flagship.Target == o) score -= 6;
                 if (focus != null && focus == o) score -= FleetCoordination.Focus.Value;
@@ -1004,6 +1005,12 @@ namespace Unity.SpaceGod.Core
                 burn = AlphaStrike.Steer(u, maxSpeed, out desired, out var strikeHeading);
                 maxSpeed *= burn;
                 strikeFace = strikeHeading;
+            }
+            else if (u.Target != null && RearLine.Flies(u) && !Broadsides.HoldsFormation(u))
+            {
+                // A dreadnought holds the rear and snipes from its spinal guns' extreme reach, its bow on the mark (U.SPC-T490).
+                RearLine.Steer(this, u, maxSpeed, out desired, out var laid);
+                strikeFace = laid;
             }
             else if (u.Target != null)
             {
@@ -1297,7 +1304,8 @@ namespace Unity.SpaceGod.Core
             foreach (var s in c.Subsystems)
             {
                 // A fleet out of supply reloads slower: short of rounds, of spares for its mounts, of power to spare (U.SPC-T93).
-                if (s.Def.Weapon != null && !s.Destroyed) s.Cooldown -= dt * c.Readiness * weaponPower;
+                // A spinal mount recharges only as fast as the hull's spinal power plants feed it (U.SPC-T490).
+                if (s.Def.Weapon != null && !s.Destroyed) s.Cooldown -= dt * c.Readiness * weaponPower * SpinalMounts.ChargeRate(c, s);
             }
             // A braced crew is holding on, not working its guns: they load, but only point defence fires (U.SPC-T425).
             bool braced = !Broadsides.Fires(u);
@@ -1487,7 +1495,7 @@ namespace Unity.SpaceGod.Core
                     : s.Kind == SubsystemKind.FighterGuns || s.Kind == SubsystemKind.Autocannon || s.Kind == SubsystemKind.AutoTurret ? FxKind.Guns
                     : w.AntiSmall ? FxKind.PointDefense
                     : w.Lance ? (hit ? FxKind.TachyonLance : FxKind.TachyonLanceMiss)
-                    : s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
+                    : SpinalMounts.IsSlug(s.Kind) ? (hit ? FxKind.Railgun : FxKind.RailgunMiss)
                     : hit ? FxKind.Beam : FxKind.BeamMiss;
 
                 if (w.MuzzleSpeedKmS > 0)
@@ -1541,7 +1549,7 @@ namespace Unity.SpaceGod.Core
             {
                 Pos = origin, Vel = vel, Target = target, TargetSub = targetSub, Damage = w.Damage * damageScale,
                 ArriveIn = arriveIn, Life = arriveIn + (hit ? 0 : 0.5), Side = u.Side, Hit = hit,
-                Railgun = mount.Kind == SubsystemKind.Railgun || mount.Kind == SubsystemKind.LightRailgun,
+                Railgun = SpinalMounts.IsSlug(mount.Kind),
                 SmallCraft = WeakPoints.IsSmallCraft(u),
             });
         }
@@ -1595,18 +1603,19 @@ namespace Unity.SpaceGod.Core
         void FirePlayerGun(BattleUnit u, Subsystem s, DVec3 origin, WeaponSpec w)
         {
             var aim = u.PlayerAim.LengthSquared > 1e-12 ? u.PlayerAim.Normalized : u.Forward;
-            var sight = Gunnery.Gimbal(aim, u.Forward, s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun || w.Lance ? Gunnery.RailgunGimbalDeg : Gunnery.GimbalDeg);
+            var sight = Gunnery.Gimbal(aim, u.Forward, SpinalMounts.IsSlug(s.Kind) || w.Lance || s.Def.Spinal ? Gunnery.RailgunGimbalDeg : Gunnery.GimbalDeg);
             double converge = FirstHostileAlong(u.Side, u.Pos, sight, w.RangeKm, out _);
             if (converge < 0) converge = w.RangeKm;
             var toConverge = u.Pos + sight * converge - origin;
             var dir = toConverge.LengthSquared > 1e-12 ? toConverge.Normalized : sight;
-            double scatter = w.MuzzleSpeedKmS > 0 && s.Kind != SubsystemKind.Railgun && s.Kind != SubsystemKind.LightRailgun ? Gunnery.AutocannonScatterDeg : Gunnery.BeamScatterDeg;
+            double scatter = w.MuzzleSpeedKmS > 0 && !SpinalMounts.IsSlug(s.Kind) ? Gunnery.AutocannonScatterDeg : Gunnery.BeamScatterDeg;
             dir = Gunnery.Scatter(dir, scatter * Astro.Deg2Rad, rng);
             s.Aim = dir;
             // The player's trigger keeps the gun's own rhythm, not a crew's jittered one.
             s.Cooldown = w.Cooldown;
             // A tachyon lance is fed by the reactor and held back by its recharge, not by the guns' heat (U.SPC-T487).
-            if (!w.Lance) u.Heat += w.Damage * Gunnery.HeatPerDamage;
+            // Nor is a spinal mount, which its own power plant feeds (U.SPC-T490).
+            if (!w.Lance && !s.Def.Spinal) u.Heat += w.Damage * Gunnery.HeatPerDamage;
             if (u.Heat >= 1)
             {
                 u.Heat = 1;
@@ -1627,7 +1636,7 @@ namespace Unity.SpaceGod.Core
             s.Aim = PilotFlight.ClampAim(want, current, MountedTurret.TraverseDegS(s.Kind) * Astro.Deg2Rad * dt);
             if (!m.Trigger || s.Cooldown > 0) return;
             s.Cooldown = w.Cooldown;
-            bool slug = s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun;
+            bool slug = SpinalMounts.IsSlug(s.Kind);
             double scatter = (w.MuzzleSpeedKmS > 0 && !slug ? Gunnery.AutocannonScatterDeg : Gunnery.BeamScatterDeg) / Math.Max(accuracyScale, 0.1);
             ResolveShot(u, s, u.PointOf(s.Def), Gunnery.Scatter(s.Aim, scatter * Astro.Deg2Rad, rng), w);
         }
@@ -1662,7 +1671,7 @@ namespace Unity.SpaceGod.Core
             double damage = w.Damage * damageScale;
             if (!beam)
             {
-                bool slug = s.Kind == SubsystemKind.Railgun || s.Kind == SubsystemKind.LightRailgun;
+                bool slug = SpinalMounts.IsSlug(s.Kind);
                 Emit(slug ? FxKind.Railgun : FxKind.Guns, origin, origin + dir * w.RangeKm, 0, u.Side, null, -1);
                 Rounds.Add(new KineticRound
                 {
@@ -2300,7 +2309,9 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.AntimatterTorpedo:
                     case SubsystemKind.MissileLauncher: w = 3; break;
                     // The gun that outranges them all is the one gunners most want silenced (U.SPC-T487).
-                    case SubsystemKind.TachyonLance: w = 4; break;
+                    case SubsystemKind.TachyonLance:
+                    // As are a dreadnought's spinal guns (U.SPC-T490).
+                    case SubsystemKind.Coilgun: w = 4; break;
                     case SubsystemKind.ShieldGenerator: w = s.Shield > 0 ? 2.5 : 0.5; break;
                     case SubsystemKind.Engine: w = 1.4; break;
                     case SubsystemKind.Hangar: w = target.Combat.Fighters > 0 ? 1.8 : 0.4; break;

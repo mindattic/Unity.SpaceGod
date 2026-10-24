@@ -2883,13 +2883,13 @@ namespace Unity.SpaceGod.UI
                 if (i < hardpoints)
                 {
                     var slot = loadout.Slots[i];
-                    string fitted = loadout.Fitted[i] is ModuleKind m ? ModuleSpec.Of(m).Name : "(empty)";
+                    string fitted = loadout.Fitted[i] is ModuleKind m ? loadout.PartAt(i, m).Name : "(empty)";
                     if (slot.LayoutIndex >= 0 && slot.LayoutIndex < ship.Combat.Subsystems.Count)
                     {
                         var sub = ship.Combat.Subsystems[slot.LayoutIndex];
                         fitted += sub.Destroyed ? "  (shot away)" : sub.Health < 0.99 ? "  (" + Percent(sub.Health) + ")" : "";
                     }
-                    if (slot.Stock != null && loadout.Fitted[i] != slot.Stock) fitted += "   was " + ModuleSpec.Of(slot.Stock.Value).Name.ToLowerInvariant();
+                    if (slot.Stock != null && loadout.Fitted[i] != slot.Stock) fitted += "   was " + loadout.PartAt(i, slot.Stock.Value).Name.ToLowerInvariant();
                     string where = slot.BearsOnBow && slot.Kind == SlotKind.HeavyMount ? " (bow)" : "";
                     label = "  " + slot.Name + where + "   " + fitted;
                 }
@@ -2930,7 +2930,7 @@ namespace Unity.SpaceGod.UI
             int hardpoints = loadout.Slots.Count, facilities = loadout.Facilities.Count;
             if (row < hardpoints)
             {
-                foreach (var m in ModuleSpec.Catalogue) if (Outfitting.CanFit(loadout, row, m.Kind)) list.Add((m.Kind, null, m.Name));
+                foreach (var m in ModuleSpec.Catalogue) if (Outfitting.CanFit(loadout, row, m.Kind)) list.Add((m.Kind, null, loadout.PartAt(row, m.Kind).Name));
             }
             else if (row < hardpoints + facilities)
             {

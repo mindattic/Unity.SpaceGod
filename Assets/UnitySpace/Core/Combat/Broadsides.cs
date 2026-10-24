@@ -226,7 +226,8 @@ namespace Unity.SpaceGod.Core
         public static bool IsBatteryGun(Subsystem s)
         {
             var w = s.Def.Weapon;
-            return w != null && !s.Destroyed && !w.Missile && !w.AntiSmall && !w.Supporting && s.Kind != SubsystemKind.BoardingPods;
+            // A spinal mount is no battery: the hull lays it, not the arc's gun crews (U.SPC-T490).
+            return w != null && !s.Destroyed && !w.Missile && !w.AntiSmall && !w.Supporting && s.Kind != SubsystemKind.BoardingPods && !s.Def.Spinal;
         }
 
         /// <summary>Whether a mount covers an arc's centre: the guns that make up that arc's battery.</summary>

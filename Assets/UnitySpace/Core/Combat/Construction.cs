@@ -70,7 +70,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Whether a gun, launcher or tube goes here (not a shield or an engine).</summary>
         public bool IsWeaponMount => Slot == SlotKind.LightMount || Slot == SlotKind.HeavyMount || Slot == SlotKind.GunMount ||
-                                     Slot == SlotKind.UtilityMount || Slot == SlotKind.TorpedoTube;
+                                     Slot == SlotKind.UtilityMount || Slot == SlotKind.TorpedoTube || Slot == SlotKind.SpinalMount;
 
         /// <summary>The key a model library binds a part to: what is fitted (or the slot, when empty) and the socket's size,
         /// e.g. "TorpedoTube/Large" or "HeavyMount/Medium".</summary>
@@ -181,6 +181,7 @@ namespace Unity.SpaceGod.Core
                 case SlotKind.GunMount: return "gun";
                 case SlotKind.UtilityMount: return "utility";
                 case SlotKind.TorpedoTube: return "tube";
+                case SlotKind.SpinalMount: return "spinal";
                 default: return k.ToString().ToLowerInvariant();
             }
         }
@@ -420,8 +421,9 @@ namespace Unity.SpaceGod.Core
                 var stock = Loadout.Slots[i].Stock;
                 var now = Loadout.Fitted[i];
                 if (now == stock) continue;
-                if (now is ModuleKind m) yield return (ModuleSpec.Of(m), 1);
-                if (stock is ModuleKind was) yield return (ModuleSpec.Of(was), -1);
+                // A spinal mount's gun is built to the hull's length (U.SPC-T490).
+                if (now is ModuleKind m) yield return (Loadout.PartAt(i, m), 1);
+                if (stock is ModuleKind was) yield return (Loadout.PartAt(i, was), -1);
             }
             foreach (var f in Loadout.AddedFacilities) if (f.Def != null) yield return (f.Def, 1);
             foreach (var f in Loadout.RemovedFacilities) if (f.Def != null) yield return (f.Def, -1);

@@ -312,7 +312,8 @@ namespace Unity.SpaceGod.Core
         {
             if (part == null || Player.Combat == null) return null;
             foreach (var s in Player.Combat.Subsystems)
-                if (s.Destroyed && s.Kind == part.Kind) return s;
+                // A spinal mount's gun replaces only a spinal mount's, and a turret's only a turret's (U.SPC-T490).
+                if (s.Destroyed && s.Kind == part.Kind && s.Def.Spinal == part.Def.Spinal) return s;
             return null;
         }
 
@@ -496,6 +497,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.FlakCannon: return "flak cannon";
                 case SubsystemKind.InterceptorMissile: return "interceptor launcher";
                 case SubsystemKind.Railgun: return "railgun";
+                case SubsystemKind.Coilgun: return "coilgun";
                 case SubsystemKind.TachyonLance: return "tachyon lance";
                 case SubsystemKind.BoardingPods: return "pod launcher";
                 case SubsystemKind.Drill: return "drill prow";

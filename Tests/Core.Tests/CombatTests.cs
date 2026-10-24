@@ -49,8 +49,9 @@ namespace Unity.SpaceGod.Core.Tests
                 var subsHit = b.Units.SelectMany(u => u.Combat.Subsystems).Count(s => s.Hp < s.Def.MaxHp);
                 Assert.That(subsHit > 0, Is.True, "no hardpoint was ever damaged");
                 // A single fast-resolving seed can end (e.g. via an early boarding) before slower, longer-
-                // cooldown beam weapons ever get a turn; only require beam fire somewhere across the sample.
-                anyBeam |= b.Fx.Any(f => f.Kind == FxKind.Beam);
+                // cooldown beam weapons ever get a turn; only require beam fire somewhere across the sample. The battleship
+                // snipes from the rear with its spinal guns now (U.SPC-T490), beyond its own turrets' reach, so its slugs count.
+                anyBeam |= b.Fx.Any(f => f.Kind == FxKind.Beam || f.Kind == FxKind.Railgun);
                 anyMissileOrImpact |= b.Fx.Any(f => f.Kind == FxKind.MissileLaunch || f.Kind == FxKind.Impact);
                 TestContext.Out.WriteLine($"seed {seed}: winner {b.Winner} after {b.Seconds / 60:0} min, dead {b.Units.Count(u => u.Dead)}, fled {b.Units.Count(u => u.Fled)}");
             }
@@ -66,10 +67,10 @@ namespace Unity.SpaceGod.Core.Tests
             var red = new Faction("Red", "RED", new Rgb(1, 0, 0)) { IsMilitary = true };
             var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 7);
             var battleship = Hull(ShipClass.Battleship, blue, 0);
-            // Knock out the forward/aft spinal HeavyLasers and the bow torpedo tubes (U.SPC-T377) so a broadside battery
-            // becomes the strongest arc.
+            // Knock out the forward/aft HeavyLasers, the bow torpedo tubes (U.SPC-T377) and the spinal mounts (U.SPC-T490, which
+            // would otherwise have it hold its bow on the mark from the rear) so a broadside battery becomes the strongest arc.
             foreach (var s in battleship.Combat.Subsystems)
-                if (s.Kind == SubsystemKind.HeavyLaser || s.Kind == SubsystemKind.TorpedoTube) s.Hp = 0;
+                if (s.Kind == SubsystemKind.HeavyLaser || s.Kind == SubsystemKind.TorpedoTube || s.Def.Spinal) s.Hp = 0;
             var target = Hull(ShipClass.Destroyer, red, 1);
             var bu = b.AddShip(battleship, 0, DVec3.Zero, DVec3.UnitX);
             var tu = b.AddShip(target, 1, new DVec3(20, 0, 0), -DVec3.UnitX);

@@ -191,6 +191,14 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public const string FtlDrive = "ftl-drive";
 
+        /// <summary>
+        /// A spinal power plant (U.SPC-T490, see <see cref="SpinalMounts"/>): the large reactor and capacitor banks a
+        /// ship-length spinal mount draws on, three sections deep in the hull. Only a hull built around spinal mounts may fit
+        /// one; the stock battleship is designed with one for each of its two mounts, and with fewer plants than standing
+        /// mounts they recharge slowly (<see cref="SpinalMounts.ChargeRate"/>).
+        /// </summary>
+        public const string SpinalPlant = "spinal-plant";
+
         // What clamps along a truss freighter's spine (U.SPC-T482, see BulkFreighters).
         public const string CargoPod = "cargo-pod", FuelSphere = "fuel-sphere";
 
@@ -240,6 +248,14 @@ namespace Unity.SpaceGod.Core
                 new[] { HullCategory.Battleship, HullCategory.Warship })
             {
                 ClassFilter = c => c is ShipClass k && FtlRoster.Of(k) == FtlAccess.Fitted,
+            });
+
+            // The spinal mounts' power plants (U.SPC-T490): a fusion plant and its capacitor banks, growing with the hull.
+            Register(new FacilityKind(SpinalPlant, "Spinal power plant", 3, 700, true,
+                new[] { (Good.Alloys, 220.0), (Good.Machinery, 120.0), (Good.Electronics, 70.0), (Good.HeliumThree, 15.0) },
+                new[] { HullCategory.Battleship }, effect: (spec, l, n) => spec.SpinalPlants = Math.Max(0, spec.SpinalPlants + n))
+            {
+                ClassFilter = c => SpinalMounts.CanCarry(c),
             });
 
             // A truss freighter's standard modules (U.SPC-T482): a pod is a share of its hold, a sphere a share of its tanks.
@@ -362,6 +378,9 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.0, -0.06, 2, 260),
                 // Designed with its own FTL drive (U.SPC-T472): a fitting, so a yard may strip it for the space.
                 new FacilitySite(FacilityKinds.FtlDrive, "FTL drive", -0.36, 0, FacilitySite.Amidships),
+                // A power plant for each of its two spinal mounts (U.SPC-T490), beside engineering.
+                new FacilitySite(FacilityKinds.SpinalPlant, "Spinal power plant", -0.3, 0.02, FacilitySite.Amidships),
+                new FacilitySite(FacilityKinds.SpinalPlant, "Spinal power plant", -0.3, -0.02, FacilitySite.Amidships),
             },
             [ShipClass.Cruiser] = new[]
             {
@@ -493,6 +512,16 @@ namespace Unity.SpaceGod.Core
         {
             double n = 0;
             if (facilities != null) foreach (var s in facilities) n += s.BerthsOn(scale);
+            return n;
+        }
+
+        /// <summary>Facilities of kind <paramref name="kind"/> in a layout.</summary>
+        public static int CountOf(IEnumerable<FacilitySite> layout, string kind)
+        {
+            int n = 0;
+            if (layout != null)
+                foreach (var s in layout)
+                    if (string.Equals(s.Kind, kind, StringComparison.OrdinalIgnoreCase)) n++;
             return n;
         }
 

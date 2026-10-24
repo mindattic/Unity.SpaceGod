@@ -74,6 +74,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>An interceptor missile launcher (U.SPC-T489): fast guided rounds that run down incoming missiles and
         /// fighters before they reach the hulls the screen is guarding.</summary>
         InterceptorMissile,
+
+        /// <summary>A spinal coilgun (U.SPC-T490, see <see cref="SpinalMounts"/>): magnetic coils the length of a battleship's
+        /// keel that throw a lighter, slower slug than a spinal railgun's, a little less far, but recharge in half the time.</summary>
+        Coilgun,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
@@ -226,6 +230,10 @@ namespace Unity.SpaceGod.Core
         /// a shot or a collision reaches it only through the hull's full thickness (<see cref="BuriedBridges"/>).</summary>
         public bool Buried;
 
+        /// <summary>A spinal mount (U.SPC-T490, see <see cref="SpinalMounts"/>): a gun as long as the hull, laid down the keel
+        /// with its muzzle at the bow, that the hull itself lays on the target and a spinal power plant feeds.</summary>
+        public bool Spinal;
+
         public SubsystemDef(SubsystemKind kind, double x, double y, double z, bool facesAft = false, double arcCenterDeg = 0, double arcWidthDeg = 360)
         {
             Kind = kind;
@@ -283,6 +291,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AntimatterTorpedo: return 300;
                 case SubsystemKind.FlakCannon: return 110;
                 case SubsystemKind.InterceptorMissile: return 120;
+                case SubsystemKind.Coilgun: return 450;
                 default: return 200;
             }
         }
@@ -312,6 +321,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AntimatterTorpedo: return WeaponSpec.AntimatterTorpedo;
                 case SubsystemKind.FlakCannon: return WeaponSpec.Flak;
                 case SubsystemKind.InterceptorMissile: return WeaponSpec.Interceptor;
+                case SubsystemKind.Coilgun: return SpinalMounts.Coilgun;
                 default: return null;
             }
         }
@@ -346,6 +356,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.AntimatterTorpedo: return "Antimatter torpedo";
                 case SubsystemKind.FlakCannon: return "Flak cannon";
                 case SubsystemKind.InterceptorMissile: return "Interceptor missiles";
+                case SubsystemKind.Coilgun: return "Coilgun";
                 default: return "Reactor";
             }
         }
@@ -418,6 +429,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>People aboard: the ship's company, and the marines who board and repel boarders. The marines are the
         /// complement its marine habitats quarter (U.SPC-T465, <see cref="FacilityLayouts.Complement(ShipClass, CombatSpec)"/>).</summary>
         public double Crew, Marines;
+
+        /// <summary>Spinal power plants inside the hull (U.SPC-T490, <see cref="FacilityKinds.SpinalPlant"/>): what feeds its
+        /// spinal mounts (<see cref="SpinalMounts.ChargeRate"/>).</summary>
+        public int SpinalPlants;
 
         /// <summary>
         /// Propulsion (see <see cref="Propulsion"/>): the hull's mass with empty tanks and an empty hold, its
@@ -508,6 +523,10 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.TorpedoTube, -0.03, -0.025, 0.46, arcCenterDeg: 0, arcWidthDeg: 60),
                     // A dorsal antimatter torpedo launcher ahead of the forward battery (U.SPC-T489).
                     new SubsystemDef(SubsystemKind.AntimatterTorpedo, 0, 0.05, 0.33, arcCenterDeg: 0, arcWidthDeg: 90),
+                    // The two ship-length spinal mounts it is built around (U.SPC-T490, see SpinalMounts): a railgun down the
+                    // dorsal keel and a coilgun down the ventral, their muzzles at the bow, each fed by a spinal power plant.
+                    SpinalMounts.Mount(ModuleKind.Railgun, 0, 0.025, 0.5),
+                    SpinalMounts.Mount(ModuleKind.Coilgun, 0, -0.04, 0.49),
                 },
             } },
             [ShipClass.Cruiser] = new[] { new CombatSpec
@@ -1007,7 +1026,12 @@ namespace Unity.SpaceGod.Core
         static CombatSpec()
         {
             foreach (var kv in Specs)
-                foreach (var design in kv.Value) design.Marines = FacilityLayouts.Complement(kv.Key, design);
+                foreach (var design in kv.Value)
+                {
+                    design.Marines = FacilityLayouts.Complement(kv.Key, design);
+                    // The spinal power plants it is designed with (U.SPC-T490).
+                    design.SpinalPlants = FacilityLayouts.CountOf(FacilityLayouts.For(kv.Key), FacilityKinds.SpinalPlant);
+                }
         }
 
         /// <summary>A copy to refit (U.SPC-T65): every figure the same, the hardpoint list its own array
