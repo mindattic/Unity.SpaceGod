@@ -195,6 +195,9 @@ namespace Unity.SpaceGod.Core.Tests
             var b = NewBattle(7);
             var carrier = b.AddShip(Hull(ShipClass.Carrier, Blue, 0), 0, new DVec3(14, 0, 0), -DVec3.UnitX);
             var victim = b.AddShip(Hull(ShipClass.Destroyer, Red, 1), 1, new DVec3(-10, 0, 0), DVec3.UnitX);
+            // The squadrons are hulls of their own now (U.SPC-T484) and the destroyer's point defence and guns shoot them
+            // all down before they land; this is about landing once the shooting stops, so the victim cannot hit small craft.
+            foreach (var s in victim.Combat.Subsystems) if (s.Def.IsWeapon && s.Def.Weapon.AntiSmall) s.Hp = 0;
             int launched = b.Units.Count(u => u.Kind == UnitKind.Fighter);
             for (int i = 0; i < 4000 && !b.Over; i++) b.Advance(1);
             int landed = b.Units.Count(u => u.Kind == UnitKind.Fighter && u.Docked);
