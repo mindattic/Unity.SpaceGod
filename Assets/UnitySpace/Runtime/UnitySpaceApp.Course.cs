@@ -14,6 +14,9 @@ namespace Unity.SpaceGod
         /// <summary>The course the helm is flying, or null.</summary>
         public TravelCourse Course { get; private set; }
 
+        /// <summary>The hull the course was plotted for: another hull's helm, or a hull lost, ends it.</summary>
+        Ship courseShip;
+
         /// <summary>Plots the quickest open way over the gates to <paramref name="to"/> for the piloted hull.</summary>
         public void PlotCourse(StarSystem to)
         {
@@ -27,6 +30,7 @@ namespace Unity.SpaceGod
                 return;
             }
             Course = course;
+            courseShip = ship;
             ShowToast("Course plotted to " + to.Name.ToUpperInvariant() + ": " + course.Legs + (course.Legs == 1 ? " gate" : " gates") +
                       ", first " + course.Next.Name.ToUpperInvariant());
         }
@@ -47,7 +51,15 @@ namespace Unity.SpaceGod
         /// <summary>The HUD's line for the course being flown, or null: the way by its systems, the next gate and how far off it is.</summary>
         public string CourseLine()
         {
-            if (Course == null || Course.Done || !IsPiloting) return null;
+            if (Course == null) return null;
+            // Another hull's helm ends the course; a system the hull came to some other way (FTL) replans from there.
+            if (!IsPiloting || Piloted.Ship != courseShip) { Course = null; return null; }
+            if (Course.Done || Course.Here != ActiveSystem)
+            {
+                var replanned = Course.Done ? null : TravelCourse.Plan(Galaxy.Network, ActiveSystem, Course.Destination, courseShip.Faction, Clock.Jd);
+                Course = replanned;
+                if (Course == null) return null;
+            }
             var next = Course.Next;
             string line = "COURSE  " + Course.Describe().ToUpperInvariant();
             if (next.Home == ActiveSystem)
