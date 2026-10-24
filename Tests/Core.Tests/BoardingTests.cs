@@ -176,7 +176,8 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (var s in victim.Combat.Subsystems) if (s.Def.IsWeapon && s.Def.Weapon.AntiSmall) s.Hp = 0;
             int launched = b.Units.Count(u => u.Kind == UnitKind.Fighter);
             for (int i = 0; i < 4000 && !b.Over; i++) b.Advance(1);
-            int landed = b.Units.Count(u => u.Kind == UnitKind.Fighter && u.Docked);
+            // A boarding shuttle sent to the beaten destroyer lands in its own berths, not a squadron's (U.SPC-T486).
+            int landed = b.Units.Count(u => u.Kind == UnitKind.Fighter && u.Docked && !BoardingShuttles.Is(u));
             int lost = b.Units.Count(u => u.Kind == UnitKind.Fighter && u.Dead);
             TestContext.Out.WriteLine($"launched {launched}, landed {landed}, lost {lost}, aboard {carrier.Combat.Fighters}");
             Assert.That(b.Over, Is.True);
