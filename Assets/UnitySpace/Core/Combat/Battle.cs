@@ -1707,7 +1707,8 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>The hardpoint nearest where a shot struck, if one is close enough to have taken it (within a
-        /// sixth of the hull's length); otherwise the shot is to the hull.</summary>
+        /// sixth of the hull's length); otherwise the shot is to the hull. A bridge buried at the centre of the hull
+        /// (U.SPC-T492) is never near where a shot strikes the outside.</summary>
         static Subsystem SubsystemNear(BattleUnit target, DVec3 at)
         {
             if (target.Kind == UnitKind.Fighter) return null;
@@ -1715,7 +1716,7 @@ namespace Unity.SpaceGod.Core
             double bestD = target.LengthKm / 6;
             foreach (var s in target.Combat.Subsystems)
             {
-                if (s.Destroyed) continue;
+                if (s.Destroyed || s.Def.Buried) continue;
                 double d = (target.PointOf(s.Def) - at).Length;
                 if (d < bestD)
                 {
@@ -2288,6 +2289,9 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.Reactor: w = 0.25; break;
                     default: w = 0.5; break;
                 }
+                // A bridge buried at the centre of the hull (U.SPC-T492) is worth aiming at only once the hull is holed deep
+                // enough for fire to get through to it.
+                if (s.Def.Buried) w *= BuriedBridges.Reach(target.Combat, s);
                 weights[i] = w;
                 total += w;
             }
@@ -2349,8 +2353,10 @@ namespace Unity.SpaceGod.Core
             Emit(FxKind.Impact, at, at, damage, target.Side, target, sub?.Index ?? -1);
             if (sub != null && !sub.Destroyed)
             {
-                sub.Hp -= damage * 0.65;
-                c.Hull -= damage * 0.35;
+                // A buried bridge (U.SPC-T492) takes only what gets through the hull around it; the rest stays in the hull.
+                double toSub = 0.65 * BuriedBridges.Reach(c, sub);
+                sub.Hp -= damage * toSub;
+                c.Hull -= damage * (1 - toSub);
                 if (sub.Hp <= 0)
                 {
                     c.Hull -= -sub.Hp;

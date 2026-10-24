@@ -300,7 +300,8 @@ namespace Unity.SpaceGod.Core
             for (int i = 0; i < subs.Count; i++)
             {
                 var s = subs[i];
-                if (s.Destroyed) continue;
+                // A bridge buried at the centre of the hull (U.SPC-T492) is behind its full thickness: a collision never reaches it.
+                if (s.Destroyed || s.Def.Buried) continue;
                 var p = new DVec3(s.Def.X, s.Def.Y, s.Def.Z);
                 if (DVec3.Dot(p - onAxis, outward) < 0) continue; // the far side of the hull
                 double near = 1 - (p - local).Length / SubsystemReachLengths;

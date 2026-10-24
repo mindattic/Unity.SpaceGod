@@ -36,6 +36,10 @@ namespace Unity.SpaceGod.Core
 
         public readonly List<int> Links = new List<int>();
 
+        /// <summary>Buried at the centre of the hull (U.SPC-T492, a warship's bridge): no pod, Breacher round or airlock
+        /// opens into it (<see cref="Interior.Nearest"/> passes it by), so boarders reach it only through its neighbours.</summary>
+        public bool Buried;
+
         public double Crew;
         public double Marines;
         public double Boarders;
@@ -176,13 +180,15 @@ namespace Unity.SpaceGod.Core
             return null;
         }
 
-        /// <summary>The compartment nearest a point on the hull (ship lengths along the keel, height).</summary>
+        /// <summary>The compartment nearest a point on the hull (ship lengths along the keel, height) that a breach or an
+        /// airlock can open into: never one buried at the centre (U.SPC-T492), unless the hull has no other.</summary>
         public Compartment Nearest(double z, double y)
         {
             Compartment best = null;
             double bestD = double.MaxValue;
             foreach (var c in Compartments)
             {
+                if (c.Buried) continue;
                 double d = Math.Abs(c.Z - z) + Math.Abs(c.Y - y) * 0.5;
                 if (d < bestD)
                 {
@@ -190,7 +196,7 @@ namespace Unity.SpaceGod.Core
                     best = c;
                 }
             }
-            return best;
+            return best ?? (Compartments.Count > 0 ? Compartments[0] : null);
         }
 
         // ---------------------------------------------------------------- building
@@ -216,7 +222,7 @@ namespace Unity.SpaceGod.Core
             {
                 var site = facilities[f];
                 if (!(site.Def?.Compartment is CompartmentKind kind)) continue;
-                var c = new Compartment { Index = i.Compartments.Count, Name = site.Name, Kind = kind, Z = site.Z, Y = site.Y };
+                var c = new Compartment { Index = i.Compartments.Count, Name = site.Name, Kind = kind, Z = site.Z, Y = site.Y, Buried = site.Buried };
                 var parent = site.Link == FacilitySite.Keel ? last
                     : site.Link >= 0 && site.Link < made.Length ? made[site.Link]
                     : i.Of(CompartmentKind.Midships) ?? (i.Compartments.Count > 0 ? i.Compartments[i.Compartments.Count / 2] : null);

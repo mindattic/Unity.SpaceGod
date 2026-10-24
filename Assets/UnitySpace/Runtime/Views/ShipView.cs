@@ -334,7 +334,8 @@ namespace Unity.SpaceGod.Views
                 g.Engine = true;
                 part.Renderers = new Renderer[0];
             }
-            else if (sub.Kind == SubsystemKind.Reactor)
+            // The reactor, and a bridge buried at the centre of the hull with no viewports (U.SPC-T492), show nothing outside.
+            else if (sub.Kind == SubsystemKind.Reactor || d.Buried)
             {
                 part.Renderers = new Renderer[0];
             }

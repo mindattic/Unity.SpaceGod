@@ -608,9 +608,9 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0.075f, 0.24f), new Vector3(0.016f, 0.07f, 0.03f), b.Hull);
             b.Cylinder(new Vector3(0, 0.12f, 0.25f), 0.055f, 0.008f, b.Light, segments: 16);
             b.Cylinder(new Vector3(0, 0.12f, 0.265f), 0.008f, 0.03f, glow);
-            // The flag bridge's tower amidships, and the fire-control domes either side of it.
+            // The fire-control tower amidships, and its domes either side of it: plated over, with no viewports, since the
+            // flag bridge is buried at the centre of the hull beneath it (U.SPC-T492).
             b.Box(new Vector3(0, 0.06f, 0.05f), new Vector3(0.05f, 0.04f, 0.09f), b.Hull);
-            b.Box(new Vector3(0, 0.082f, 0.07f), new Vector3(0.052f, 0.006f, 0.02f), b.Dark);
             foreach (float side in new[] { -1f, 1f })
             {
                 b.Cylinder(new Vector3(side * 0.04f, 0.05f, -0.02f), 0.012f, 0.02f, glow);
@@ -649,9 +649,9 @@ namespace Unity.SpaceGod.Rendering
             var glow = b.Glow(new Color(0.65f, 0.7f, 1f));
             foreach (float x in new[] { -0.03f, 0.03f })
                 b.Cylinder(new Vector3(x, 0, 0.43f), 0.01f, 0.04f, glow);
-            // The bridge, low on the spine amidships.
+            // A sensor housing low on the spine amidships, plated over: the bridge is buried at the centre of the hull
+            // beneath it, with no viewports (U.SPC-T492).
             b.Box(new Vector3(0, 0.04f, -0.02f), new Vector3(0.035f, 0.02f, 0.06f), b.Hull);
-            b.Box(new Vector3(0, 0.051f, 0.0f), new Vector3(0.036f, 0.004f, 0.015f), b.Dark);
         }
 
         static void BuildDestroyer(Builder b)

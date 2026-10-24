@@ -222,6 +222,10 @@ namespace Unity.SpaceGod.Core
         /// thrust against a stock engine's (see <see cref="Loadout"/>). Ignored for other kinds.</summary>
         public double Rating = 1;
 
+        /// <summary>Buried at the centre of the hull (U.SPC-T492, a warship's bridge): nothing of it shows on the outside, and
+        /// a shot or a collision reaches it only through the hull's full thickness (<see cref="BuriedBridges"/>).</summary>
+        public bool Buried;
+
         public SubsystemDef(SubsystemKind kind, double x, double y, double z, bool facesAft = false, double arcCenterDeg = 0, double arcWidthDeg = 360)
         {
             Kind = kind;
@@ -428,7 +432,7 @@ namespace Unity.SpaceGod.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.035, 0.25),
-                    new SubsystemDef(SubsystemKind.Bridge, 0.07, 0.14, -0.11),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
                     new SubsystemDef(SubsystemKind.Hangar, 0, 0.012, 0.44),
                     new SubsystemDef(SubsystemKind.Hangar, 0.125, -0.01, 0.12),
                     new SubsystemDef(SubsystemKind.Hangar, -0.125, -0.01, 0.12),
@@ -479,7 +483,7 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.PointDefense, -0.075, 0.03, 0.27),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.075, 0.03, -0.36),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.075, 0.03, -0.36),
-                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.105, -0.11),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.06, 0.35, arcCenterDeg: 0, arcWidthDeg: 45),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.07, 0.06, 0.2, arcCenterDeg: 45, arcWidthDeg: 45),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.09, 0.06, -0.05, arcCenterDeg: 90, arcWidthDeg: 45),
@@ -516,7 +520,7 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.MissileLauncher, -0.1, 0.014, -0.05, arcCenterDeg: 270, arcWidthDeg: 150),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.045, 0.025, 0.3),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.045, 0.025, 0.3),
-                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.06, -0.17),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.04, 0.3, arcCenterDeg: 0, arcWidthDeg: 60),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.08, 0.04, 0.05, arcCenterDeg: 60, arcWidthDeg: 60),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.08, 0.04, -0.25, arcCenterDeg: 120, arcWidthDeg: 60),
@@ -549,7 +553,7 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.07, -0.25, arcCenterDeg: 0, arcWidthDeg: 150),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.05, 0.02, 0.2),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.05, 0.02, 0.2),
-                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.055, -0.08),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.25, arcCenterDeg: 0, arcWidthDeg: 90),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.07, 0.03, -0.1, arcCenterDeg: 90, arcWidthDeg: 90),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.4, arcCenterDeg: 180, arcWidthDeg: 90),
@@ -854,7 +858,7 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.MissileLauncher, 0, 0.06, -0.3, arcCenterDeg: 180, arcWidthDeg: 150),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.06, 0.02, 0.1),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.06, 0.02, 0.1),
-                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.05, 0.18),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.2, arcCenterDeg: 0, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.Engine, -0.035, 0, -0.47),
@@ -886,8 +890,8 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.PointDefense, -0.05, 0.03, 0.3),
                     new SubsystemDef(SubsystemKind.PointDefense, 0.06, 0.03, -0.32),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.06, 0.03, -0.32),
-                    // The flag bridge, buried amidships under the array's mast.
-                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.05, 0.05),
+                    // The flag bridge, buried at the centre of the hull under the array's mast (U.SPC-T492).
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.05, 0.34, arcCenterDeg: 0, arcWidthDeg: 60),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.08, 0.05, 0.12, arcCenterDeg: 60, arcWidthDeg: 60),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0.08, 0.05, -0.2, arcCenterDeg: 120, arcWidthDeg: 60),
@@ -927,7 +931,7 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.AntimatterTorpedo, -0.03, 0, 0.42, arcCenterDeg: 0, arcWidthDeg: 90) { Weapon = AlphaStrike.MagazineTorpedo },
                     new SubsystemDef(SubsystemKind.PointDefense, 0.04, 0.03, 0.28),
                     new SubsystemDef(SubsystemKind.PointDefense, -0.04, 0.03, -0.2),
-                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.045, -0.02),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.2, arcCenterDeg: 0, arcWidthDeg: 180),
                     new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.3, arcCenterDeg: 180, arcWidthDeg: 180),
                     // Engine-heavy: four big bells astern, a third of the hull's length in engine rooms.

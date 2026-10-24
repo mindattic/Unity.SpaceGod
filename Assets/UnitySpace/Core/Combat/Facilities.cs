@@ -297,6 +297,10 @@ namespace Unity.SpaceGod.Core
         /// (<see cref="FacilityKind.Berths"/>, grown with the hull): a stock design's habitat holds the complement it was drawn for.</summary>
         public readonly double? Berths;
 
+        /// <summary>A space buried at the centre of the hull (U.SPC-T492, a warship's bridge): no pod, Breacher round or
+        /// airlock opens into it, so boarders reach it only by fighting through the spaces around it.</summary>
+        public bool Buried { get; set; }
+
         public FacilitySite(string kind, string name = null, double z = 0, double y = 0, int link = Keel, double? berths = null)
         {
             Kind = kind ?? throw new ArgumentNullException(nameof(kind));
@@ -332,6 +336,12 @@ namespace Unity.SpaceGod.Core
     /// </summary>
     public static class FacilityLayouts
     {
+        /// <summary>A warship's bridge (U.SPC-T492): buried at the centre of the hull behind its full thickness, with no
+        /// viewports (the crew sees out through its sensors and holo displays), opening only off the space it links to.</summary>
+        static FacilitySite Buried(int link, string name = "Bridge") =>
+            new FacilitySite(FacilityKinds.Bridge, name, 0, 0, link) { Buried = true };
+
+        // The warships' bridges are buried at the centre of the hull, off midships (U.SPC-T492).
         // The warships' marine habitats (U.SPC-T465) are barracks branching off below their quarters (or midships), each
         // quartering the complement the class was drawn with; a freighter keeps a security post for its few guards.
         static readonly Dictionary<ShipClass, FacilitySite[]> ByClass = new Dictionary<ShipClass, FacilitySite[]>
@@ -340,7 +350,7 @@ namespace Unity.SpaceGod.Core
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.4), new FacilitySite(FacilityKinds.Hangar, "Hangar deck", 0.15),
                 new FacilitySite(FacilityKinds.Quarters, "Crew quarters", -0.02), new FacilitySite(FacilityKinds.Midships, "Midships", -0.18),
-                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.4), new FacilitySite(FacilityKinds.Bridge, "Island bridge", -0.11, 0.14, 3),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.4), Buried(3),
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", -0.02, -0.06, 2, 320),
             },
             [ShipClass.Battleship] = new[]
@@ -348,7 +358,7 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.38), new FacilitySite(FacilityKinds.Battery, "Forward battery", 0.16),
                 new FacilitySite(FacilityKinds.Quarters, "Crew quarters", 0.0), new FacilitySite(FacilityKinds.Midships, "Midships", -0.16),
                 new FacilitySite(FacilityKinds.Battery, "Aft battery", -0.28), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.42),
-                new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.11, 0.1, 3),
+                Buried(3),
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.0, -0.06, 2, 260),
                 // Designed with its own FTL drive (U.SPC-T472): a fitting, so a yard may strip it for the space.
                 new FacilitySite(FacilityKinds.FtlDrive, "FTL drive", -0.36, 0, FacilitySite.Amidships),
@@ -357,29 +367,29 @@ namespace Unity.SpaceGod.Core
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.3), new FacilitySite(FacilityKinds.Quarters, "Crew quarters", 0.05),
                 new FacilitySite(FacilityKinds.Midships, "Midships", -0.12), new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.38),
-                new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.17, 0.06, 2),
+                Buried(2),
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", 0.05, -0.05, 1, 140),
             },
             [ShipClass.Destroyer] = new[]
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.25), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
-                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.08, 0.05, 1),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), Buried(1),
                 new FacilitySite(FacilityKinds.MarineHabitat, "Marine barracks", -0.05, -0.04, 1, 50),
             },
             // The lane interdictor (U.SPC-T479): its projector room amidships inside the ring, between its two reactors.
             [ShipClass.Interdictor] = new[]
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.3), new FacilitySite(FacilityKinds.Midships, "Projector room", -0.05),
-                new FacilitySite(FacilityKinds.Engineering, "Reactor rooms", -0.3), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.18, 0.05, 1),
+                new FacilitySite(FacilityKinds.Engineering, "Reactor rooms", -0.3), Buried(1),
             },
-            // The command cruiser (U.SPC-T477): the sensor array forward under its mast, the flag bridge buried amidships with
+            // The command cruiser (U.SPC-T477): the sensor array forward under its mast, the flag bridge buried at the centre with
             // the communications suite and the fire-control centre's targeting computers either side of it, and the staff's
             // quarters aft of them.
             [ShipClass.CommandCruiser] = new[]
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.36), new FacilitySite(FacilityKinds.SensorArray, "Sensor array", 0.24),
                 new FacilitySite(FacilityKinds.Quarters, "Staff quarters", 0.12), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
-                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), new FacilitySite(FacilityKinds.Bridge, "Flag bridge", 0.05, 0.05, 3),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.36), Buried(3, "Flag bridge"),
                 new FacilitySite(FacilityKinds.CommsSuite, "Communications suite", 0.08),
                 new FacilitySite(FacilityKinds.TargetingComputers, "Fire-control centre", 0.0),
                 new FacilitySite(FacilityKinds.TargetingComputers, "Fire-control centre", -0.02),
@@ -388,12 +398,12 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.FtlDrive, "FTL drive", -0.3, 0, FacilitySite.Amidships),
             },
             // The frigate (U.SPC-T475): its torpedo magazine behind the bow launchers and the missile magazine under the racks
-            // forward, the bridge off midships, and long engine rooms for its four big engines. No quarters for marines.
+            // forward, the bridge buried at the centre off midships, and long engine rooms for its four big engines. No quarters for marines.
             [ShipClass.Frigate] = new[]
             {
                 new FacilitySite(FacilityKinds.Bow, "Bow", 0.42), new FacilitySite(FacilityKinds.Battery, "Torpedo magazine", 0.3),
                 new FacilitySite(FacilityKinds.Battery, "Missile magazine", 0.12), new FacilitySite(FacilityKinds.Midships, "Midships", -0.05),
-                new FacilitySite(FacilityKinds.Engineering, "Engine rooms", -0.34), new FacilitySite(FacilityKinds.Bridge, "Bridge", -0.02, 0.045, 3),
+                new FacilitySite(FacilityKinds.Engineering, "Engine rooms", -0.34), Buried(3),
             },
             // A truss freighter (U.SPC-T482): the cockpit at the bow, the pod gantry down the spine, the pods and spheres clamped
             // along it (no space of their own: nobody walks into a pod) and the engine room astern.

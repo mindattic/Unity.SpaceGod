@@ -82,7 +82,7 @@ Phaser arrays are tuned by beam shape, by the captain in battle, every array on 
 The game keeps the feel of real space and drops what would get in the way of play.
 
 - **Inertial dampeners** are why piloted dogfights work: pilots survive the manoeuvres the fight demands.
-- **Bridges** are buried at the centre of the hull with no viewports. The crew sees out through sensors and holo/VR displays.
+- **Bridges** are buried at the centre of the hull with no viewports. The crew sees out through sensors and holo/VR displays. A warship's bridge is a hardpoint and a space marked buried (`SubsystemDef.Buried`, `FacilitySite.Buried`, `Core/Combat/BuriedBridges.cs`, U.SPC-T492): fire reaches it only through deep penetration, once more of the hull is shot away than its depth setting, and boarders reach it only by fighting through midships.
 - **Radiators** are a weak point on big ships, but not a constant worry.
 - **Everything fights in full 3D**: fighters, capitals and stations alike, with no battle plane.
 - **Shields** exist, so bombers knock the shields down first and then torpedo.
@@ -127,4 +127,4 @@ Settled by the owner (2026-10-23): capital ships fight in full 3D, like the figh
 | Antimatter / photon torpedoes, flak, interceptor missiles | In: battleships and carriers carry an antimatter torpedo launcher (a frigate two, from a magazine twice as deep, U.SPC-T475); destroyers carry two rotary flak cannons and an interceptor launcher beside their point defence and keep between their capital and the threat; tunables in Settings > Weapons | U.SPC-T489 |
 | Dreadnought spinal mounts and rear-line doctrine | Not yet | U.SPC-T490 |
 | Radiators and heat on big ships | Not yet | U.SPC-T491 |
-| Bridges buried at the centre of warships | Not yet | U.SPC-T492 |
+| Bridges buried at the centre of warships | In: every warship's bridge (carrier, battleship, cruiser, destroyer, interdictor, command cruiser, frigate) sits at the centre of its hull with nothing of it on the outside; a hit aimed at it stays in the hull until enough of the hull is shot away (Settings > Broadsides > Buried bridge depth, half by default), collisions never reach it, and in the boarding interior it opens only off midships, so no pod, Breacher round or airlock lands in it | U.SPC-T492 |
