@@ -278,7 +278,7 @@ namespace Unity.SpaceGod.Core.Tests
             var picket = w.Fleet.AddShip("Lookout", ShipClass.Fighter, navy, ShipRole.Patrol);
             Fleet.PinAt(picket, root, band.StakeoutKm.Value + new DVec3(300, 0, 0), DVec3.UnitX, StartJd);
             w.Sensors.Sweep(StartJd);
-            double jd = StartJd + 0.05;
+            double jd = StartJd + 0.5; // the gate is out at the system edge: light takes hours to bring the word
             Assert.That(w.War.ChooseNext(leader, port, jd), Is.EqualTo(root), "command did not send the group out to the gates");
             Assert.That(w.War.OrderOf(leader).Kind, Is.EqualTo(OrderKind.HoldGate));
             Assert.That(leader.StakeoutKm, Is.Not.Null);

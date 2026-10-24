@@ -297,7 +297,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>How far from <paramref name="system"/>'s root a cruise engages and drops out, km.</summary>
         public static double WellLimitKm(StarSystem system) =>
-            Math.Max(WellLimit.Value * Astro.AuKm, system == null ? 0 : Galaxy.GateDistanceKm(system) * 4);
+            Math.Max(WellLimit.Value * Astro.AuKm, system == null ? 0 : (system.Catalog.Root.RadiusKm + JumpGate.RadiusKm) * 4);
     }
 
     /// <summary>

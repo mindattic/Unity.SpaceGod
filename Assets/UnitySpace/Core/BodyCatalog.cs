@@ -93,6 +93,41 @@ namespace Unity.SpaceGod.Core
         /// <summary>The root of the system: the Sun, or the barycentre a multiple star orbits.</summary>
         public BodyDefinition Root => bodies[0];
 
+        double outerEdgeKm = double.NaN;
+
+        /// <summary>A companion star on an orbit wider than this (Proxima, 13,000 AU out) is a system of its own, not part of the
+        /// root's reach: it and what orbits it are left out of <see cref="OuterEdgeKm"/>.</summary>
+        const double WideCompanionKm = 1000 * Astro.AuKm;
+
+        /// <summary>
+        /// How far out the system's own bodies reach from its root, km (U.SPC-T515): the far side of the outermost
+        /// planet's, asteroid's or station's orbit (dwarf planets of the far Kuiper reaches and moons are not counted; a
+        /// moon stays within its planet's reach), with a tenth of margin; never less than the root's own radius.
+        /// Where the system's jump gates sit (see <see cref="Galaxy.GateDistanceKm"/>).
+        /// </summary>
+        public double OuterEdgeKm
+        {
+            get
+            {
+                if (!double.IsNaN(outerEdgeKm)) return outerEdgeKm;
+                double reach = bodies[0].RadiusKm;
+                foreach (var b in bodies)
+                {
+                    if (b.ParentIndex < 0 || b.Kind == BodyKind.Moon || b.Kind == BodyKind.DwarfPlanet) continue;
+                    double far = 0;
+                    bool wide = false;
+                    for (var c = b; c.ParentIndex >= 0; c = bodies[c.ParentIndex])
+                    {
+                        double apo = c.Elements.AKm * Math.Abs(c.OrbitScale) * (1 + c.Elements.E);
+                        wide |= apo > WideCompanionKm;
+                        far += apo;
+                    }
+                    if (!wide) reach = Math.Max(reach, far * 1.1);
+                }
+                return outerEdgeKm = reach;
+            }
+        }
+
         public BodyDefinition this[int index] => bodies[index];
         public BodyDefinition this[string name] => byName[name];
         public bool TryGet(string name, out BodyDefinition body) => byName.TryGetValue(name, out body);

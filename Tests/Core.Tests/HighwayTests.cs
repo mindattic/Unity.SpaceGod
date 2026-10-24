@@ -171,7 +171,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(ship.FinalBody, Is.EqualTo(spur.A), "let go of, its crew would bring it back to the network, not into the star");
 
             double end = ship.PhaseEndJd;
-            Assert.That(end - StartJd, Is.GreaterThan(0).And.LessThan(1), "a spur to the gate is ridden in hours");
+            Assert.That(end - StartJd, Is.GreaterThan(0).And.LessThan(30), "a spur to the gate (at the system's outer edge) is ridden in days");
             sol.Ephemeris.Update(end);
             var arrival = sol.World.Fleet.StateOf(ship, end).HelioKm;
             sol.World.Fleet.RampReached(ship, null, DVec3.UnitX, end);

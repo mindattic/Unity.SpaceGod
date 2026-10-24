@@ -61,6 +61,18 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void GatesStandPastTheOutermostPlanetNotAtTheStar()
+        {
+            var g = Create();
+            var sol = g.Systems[0];
+            var neptune = sol.Catalog["Neptune"];
+            double neptuneApoKm = neptune.Elements.AKm * (1 + neptune.Elements.E);
+            Assert.That(Galaxy.GateDistanceKm(sol), Is.GreaterThan(neptuneApoKm));
+            foreach (var gate in sol.Gates)
+                Assert.That(gate.PositionKm.Length, Is.GreaterThan(neptuneApoKm), gate.Name);
+        }
+
+        [Test]
         public void EveryGateIsPairedAndFacesTheStarItLeadsTo()
         {
             var g = Create();
@@ -70,7 +82,7 @@ namespace Unity.SpaceGod.Core.Tests
                     Assert.That(gate.Home, Is.SameAs(s));
                     Assert.That(gate.Partner.Partner, Is.SameAs(gate));
                     Assert.That(gate.Link.GateIn(s), Is.SameAs(gate));
-                    Assert.That(gate.PositionKm.Length, Is.EqualTo(Galaxy.GateDistanceKm(s)).Within(1e-6));
+                    Assert.That(gate.PositionKm.Length, Is.EqualTo(Galaxy.GateDistanceKm(s)).Within(Galaxy.GateDistanceKm(s) * 1e-12));
                     Assert.That(DVec3.Dot(gate.PositionKm.Normalized, Galaxy.Direction(s, gate.Destination)), Is.GreaterThan(0.9999), gate.Name);
                     // Owned by the system's leading power.
                     Assert.That(gate.Owner, Is.SameAs(s.World.Sol));
@@ -167,7 +179,7 @@ namespace Unity.SpaceGod.Core.Tests
             // Watched at the market rather than by an empty hold: a trader that sells may load its next cargo in the same step.
             bool sold = false;
             there.World.Economy.Sold += (ship, port, good, tonnes) => sold |= ship == trader;
-            RunUntil(g, jd, 60, () => trader.Destroyed || sold);
+            RunUntil(g, jd, 150, () => trader.Destroyed || sold);
             Assume.That(trader.Destroyed, Is.False, "lost on the way to market");
             Assert.That(sold, Is.True, "never sold its cargo");
             Assert.That(trader.Credits, Is.Not.EqualTo(credits), "the sale was booked to the ship");

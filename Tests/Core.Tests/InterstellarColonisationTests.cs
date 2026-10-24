@@ -133,6 +133,9 @@ namespace Unity.SpaceGod.Core.Tests
             var earth = sol.World.Economy.Settlements.First(s => s.Name == "Earth Orbital");
             earth.Overflow = Colonisation.PartySize * 2;
             double treasury = fed.Treasury;
+            // (the world keeps only its latest 400 events, and the longer trip out to the gates can scroll the sailing off)
+            bool sailed = false;
+            sol.World.Logged += e => sailed |= e.Text.Contains("in Ross 154, through the gates");
             var ship = sol.World.Colonisation.TryLaunch(sol.World.Economy, fed, jd);
             Assert.That(ship, Is.Not.Null);
             Assert.That(ship.Abroad, Is.True);
@@ -145,7 +148,7 @@ namespace Unity.SpaceGod.Core.Tests
             var route = g.Network.Route(sol, frontier, fed, jd);
             Assert.That(route, Is.Not.Null);
             Assert.That(ship.ArriveJd - jd, Is.GreaterThan(GateNetwork.RouteDays(route) + 2));
-            Assert.That(ship.ArriveJd - jd, Is.LessThan(GateNetwork.RouteDays(route) + 30));
+            Assert.That(ship.ArriveJd - jd, Is.LessThan(GateNetwork.RouteDays(route) + 60));
             // The system is spoken for: no other colony ship is sent there meanwhile.
             Assert.That(frontier.World.Colonisation.Awaited, Is.True);
             var ac = g.Find("Alpha Centauri");
@@ -168,7 +171,7 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(frontier.Holder, Is.SameAs(fed));
             Assert.That(frontier.World.Fleet.Factions, Does.Contain(fed));
             Assert.That(frontier.World.Events.Any(e => e.Text.Contains("found Ross 154 Habitat")), Is.True);
-            Assert.That(sol.World.Events.Any(e => e.Text.Contains("in Ross 154, through the gates")), Is.True);
+            Assert.That(sailed, Is.True);
 
             // It lives on in that system's markets, at coarse detail while the player is away ...
             double landed = frontier.World.Jd;

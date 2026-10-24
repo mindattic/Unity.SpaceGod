@@ -33,8 +33,8 @@ namespace Unity.SpaceGod.Core.Tests
             var sol = g.Systems[0];
             var ac = g.Systems[1];
 
-            Assert.That(sol.GateTo(ac).PositionKm.Length, Is.EqualTo(sol.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
-            Assert.That(ac.GateTo(sol).PositionKm.Length, Is.EqualTo(ac.Catalog.Root.RadiusKm + JumpGate.RadiusKm).Within(1e-6));
+            Assert.That(sol.GateTo(ac).PositionKm.Length, Is.EqualTo(Galaxy.GateDistanceKm(sol)).Within(1e-3));
+            Assert.That(ac.GateTo(sol).PositionKm.Length, Is.EqualTo(Galaxy.GateDistanceKm(ac)).Within(1e-3));
             // Clear of the root's own body: the Sun's gate isn't inside the Sun.
             Assert.That(sol.GateTo(ac).PositionKm.Length - sol.Catalog.Root.RadiusKm, Is.GreaterThanOrEqualTo(JumpGate.RadiusKm - 1e-6));
 
@@ -72,7 +72,7 @@ namespace Unity.SpaceGod.Core.Tests
             var arrival = sol.GateTo(ac).ArrivalOffsetKm;
             double distanceFromAcRoot = arrival.Length;
             Assert.That(distanceFromAcRoot < ac.GateTo(sol).PositionKm.Length, Is.True, "arrival should be closer to the destination's root than its gate");
-            Assert.That(distanceFromAcRoot, Is.EqualTo(JumpGate.RadiusKm - JumpGate.ArrivalInsetKm).Within(1e-6));
+            Assert.That(distanceFromAcRoot, Is.EqualTo(ac.GateTo(sol).PositionKm.Length - JumpGate.ArrivalInsetKm).Within(1e-3));
 
             // Facing back toward the destination's own root (into the system, not out past the gate).
             double facingInward = DVec3.Dot(sol.GateTo(ac).ArrivalForward, -ac.GateTo(sol).PositionKm.Normalized);

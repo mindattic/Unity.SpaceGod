@@ -422,9 +422,10 @@ namespace Unity.SpaceGod.Core
             return null;
         }
 
-        /// <summary>How far a system's gate sits from its root: <see cref="JumpGate.RadiusKm"/> clear of
-        /// the root's surface, so a star's gate is outside its photosphere (a barycentre has no surface).</summary>
-        public static double GateDistanceKm(StarSystem s) => s.Catalog.Root.RadiusKm + JumpGate.RadiusKm;
+        /// <summary>How far a system's gate sits from its root (U.SPC-T515): at the system's extreme edge, past its
+        /// outermost planet, belt or station (<see cref="BodyCatalog.OuterEdgeKm"/>) by <see cref="JumpGate.RadiusKm"/>, so
+        /// it is clear of the star and of every world; a lone star or barycentre is its radius plus that.</summary>
+        public static double GateDistanceKm(StarSystem s) => s.Catalog.OuterEdgeKm + JumpGate.RadiusKm;
 
         /// <summary>Unit direction (J2000 ecliptic) from one system to another.</summary>
         public static DVec3 Direction(StarSystem from, StarSystem to) => (to.PositionLy - from.PositionLy).Normalized;
