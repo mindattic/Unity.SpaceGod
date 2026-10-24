@@ -257,6 +257,14 @@ namespace Unity.SpaceGod.Rendering
                 case SubsystemKind.Hangar:
                     b.Box(new Vector3(0, 0, 0), new Vector3(0.05f, 0.014f, 0.006f), b.Glow(new Color(1f, 0.85f, 0.55f)));
                     break;
+                case SubsystemKind.Radiator:
+                    // A radiator panel (U.SPC-T491): a broad thin sheet spread flat to the sky across the flank, on a
+                    // stub boom, its coolant channels glowing a dull red.
+                    b.Box(new Vector3(0, 0, 0), new Vector3(0.11f, 0.003f, 0.07f), new Color(0.78f, 0.8f, 0.82f, 1f));
+                    b.Box(new Vector3(0, 0.002f, 0), new Vector3(0.012f, 0.004f, 0.075f), b.Dark);
+                    for (int k = 0; k < 4; k++)
+                        b.Box(new Vector3(-0.045f + k * 0.03f, 0.0018f, 0), new Vector3(0.004f, 0.0008f, 0.064f), b.Glow(new Color(1f, 0.35f, 0.18f)));
+                    break;
                 default:
                     b.Box(Vector3.zero, new Vector3(0.01f, 0.01f, 0.01f), b.Dark);
                     break;

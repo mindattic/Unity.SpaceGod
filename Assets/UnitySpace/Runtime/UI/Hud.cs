@@ -971,7 +971,8 @@ namespace Unity.SpaceGod.UI
                 + "    2 SHIELDS " + (cmd.ShieldTrim == null ? "even" : Facings.Label(cmd.ShieldTrim.Value))
                 + "    " + brace
                 + "    4 DAMAGE CONTROL " + Broadsides.Label(cmd.Focus) + " (" + Broadsides.Teams(me) + " teams)"
-                + (EnergyWeapons.HasPhasers(me.Combat) ? "    INS PHASERS " + EnergyWeapons.Label(me.Combat.PhaserTuning) : "");
+                + (EnergyWeapons.HasPhasers(me.Combat) ? "    INS PHASERS " + EnergyWeapons.Label(me.Combat.PhaserTuning) : "")
+                + HeatText(me);
             DrawLabel(orders, new Vector2(x, y - 62), cmd.Braced ? LockColor : Dim, true);
             double turn = me.Ship != null ? PilotTuning.Of(me.Ship.Spec.Class).TurnRateDegS : me.Combat.Spec.TurnRateDegS;
             double about = Broadsides.ComeAboutSeconds(turn);
@@ -1001,6 +1002,24 @@ namespace Unity.SpaceGod.UI
                 DrawLabel("INCOMING BROADSIDE  ·  " + incoming.Name + " " + side + "BATTERY " + loaded + "%  ·  3 BRACE",
                     new Vector2(Screen.width * 0.5f - 160, Screen.height * 0.28f), HostileColor, false);
             }
+        }
+
+        /// <summary>A big ship's heat at the helm (U.SPC-T491): how full its sinks are, its radiators standing, and whether
+        /// the crew is throttling for it or running hot. Empty for a hull with none to manage.</summary>
+        static string HeatText(BattleUnit me)
+        {
+            if (!Radiators.Carries(me.Combat)) return "";
+            int standing = 0, panels = 0;
+            foreach (var s in me.Combat.Subsystems)
+                if (s.Kind == SubsystemKind.Radiator)
+                {
+                    panels++;
+                    if (!s.Destroyed) standing++;
+                }
+            double throttle = Radiators.Throttle(me);
+            string state = Radiators.RunsHot(me) ? (me.HullHeat > 1 ? "RUNNING HOT, COOKING" : "running hot")
+                : throttle < 0.999 ? "throttled " + Mathf.RoundToInt((float)throttle * 100) + "%" : "SHIFT+INS run hot";
+            return "    HEAT " + Mathf.RoundToInt((float)me.HullHeat * 100) + "% (radiators " + standing + "/" + panels + ", " + state + ")";
         }
 
         /// <summary>A mount's rounds left and its key, or that it is still cycling.</summary>

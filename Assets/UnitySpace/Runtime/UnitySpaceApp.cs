@@ -1704,6 +1704,12 @@ namespace Unity.SpaceGod
             // The phaser arrays' tuning, on any hull that carries them (U.SPC-T488).
             if (Input.TunePhasers && EnergyWeapons.HasPhasers(unit.Combat))
                 ShowToast("Phaser arrays tuned to a " + EnergyWeapons.Label(EnergyWeapons.Retune(unit.Combat)));
+            // Run hot or throttle down, on a big ship with radiators to manage (U.SPC-T491).
+            if (Input.ToggleRunHot && Radiators.Carries(unit.Combat) && Broadsides.Of(unit) is BroadsideCommand cmd)
+            {
+                cmd.RunHot = !cmd.RunHot;
+                ShowToast(cmd.RunHot ? "Run hot: guns and drive at full, whatever the heat does" : "Throttle down for the heat as needed");
+            }
         }
 
         /// <summary>

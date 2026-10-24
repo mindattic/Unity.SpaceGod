@@ -69,6 +69,10 @@ namespace Unity.SpaceGod.Core
         public double Heat;
         public bool Overheated;
 
+        /// <summary>A big ship's heat (U.SPC-T491, see <see cref="Radiators"/>): 0 cold, 1 with its heat sinks at their
+        /// limit, past which its crew and systems cook. Zero always for a hull with no radiators to manage.</summary>
+        public double HullHeat;
+
         /// <summary>The missile lock on <see cref="PlayerLockTarget"/>, 0-1: made at 1 (see <see cref="Gunnery.LockSeconds"/>).</summary>
         public double LockProgress;
 
@@ -731,6 +735,8 @@ namespace Unity.SpaceGod.Core
                 var c = u.Combat;
                 // A capital ship's captain angles its shields, braces and works damage control (U.SPC-T425).
                 if (Broadsides.Commands(u)) Broadsides.Step(this, u, dt);
+                // A big ship's heat fills or drains, and past its sinks' limit its crew and systems cook (U.SPC-T491).
+                StepHeat(u, dt);
                 if (u.Stunned > 0) u.Stunned -= dt;
                 // A small craft with power to spare for its shields recharges them that much faster (U.SPC-T424).
                 // A charging tachyon lance draws on the reactor, and the shields recover that much slower (U.SPC-T487).
@@ -987,7 +993,8 @@ namespace Unity.SpaceGod.Core
                 Dogfight(u, dt);
                 return;
             }
-            double maxSpeed = c.Spec.MaxSpeed * (0.25 + 0.75 * c.EngineFactor);
+            // ...and its drive (U.SPC-T491).
+            double maxSpeed = c.Spec.MaxSpeed * (0.25 + 0.75 * c.EngineFactor) * Radiators.Throttle(u);
             if (maxSpeed <= 0)
             {
                 u.Vel = DVec3.Zero;
@@ -1305,7 +1312,8 @@ namespace Unity.SpaceGod.Core
             // The shared sensor picture: gunners lay on the command ship's track, not their own (U.SPC-T477).
             double picture = FleetCoordination.SharedPicture(u);
             // A small craft's weapons reload as fast as the power it gives them (U.SPC-T424).
-            double weaponPower = PowerDistribution.FactorOf(u, PowerSystem.Weapons);
+            // A big ship that cannot shed its heat has its crew throttle the guns' reloading (U.SPC-T491).
+            double weaponPower = PowerDistribution.FactorOf(u, PowerSystem.Weapons) * Radiators.Throttle(u);
             foreach (var s in c.Subsystems)
             {
                 // A fleet out of supply reloads slower: short of rounds, of spares for its mounts, of power to spare (U.SPC-T93).
@@ -2010,6 +2018,24 @@ namespace Unity.SpaceGod.Core
             Mines.RemoveAll(m => m.Gone);
         }
 
+        readonly List<Subsystem> burnedOut = new List<Subsystem>();
+
+        /// <summary>A big ship's heat this step (U.SPC-T491, <see cref="Radiators.Step"/>), with the guns reloading as fast as
+        /// <see cref="Fire"/> lets them, and every system the heat burns out shown going.</summary>
+        void StepHeat(BattleUnit u, double dt)
+        {
+            var c = u.Combat;
+            bool working = !u.Captured && !u.Surrendering && u.Stunned <= 0;
+            double reload = working ? c.Readiness * PowerDistribution.FactorOf(u, PowerSystem.Weapons) : 0;
+            burnedOut.Clear();
+            Radiators.Step(u, dt, reload, burnedOut);
+            foreach (var s in burnedOut)
+            {
+                var at = u.PointOf(s.Def);
+                Emit(FxKind.SubsystemDestroyed, at, at, u.LengthKm * 0.12, u.Side, u, s.Index);
+            }
+        }
+
         /// <summary>
         /// The player's guns cool and the missile lock builds or slips (U.SPC-T270): the lock grows while the
         /// crosshair sits on the locked target and, once made, holds while the target stays ahead of the nose.
@@ -2326,6 +2352,8 @@ namespace Unity.SpaceGod.Core
                     case SubsystemKind.FlakCannon:
                     case SubsystemKind.InterceptorMissile: w = 1.2; break;
                     case SubsystemKind.Reactor: w = 0.25; break;
+                    // A radiator panel is a weak point, the more worth it on a hull already running hot (U.SPC-T491).
+                    case SubsystemKind.Radiator: w = Radiators.TargetWeight(target); break;
                     default: w = 0.5; break;
                 }
                 // A bridge buried at the centre of the hull (U.SPC-T492) is worth aiming at only once the hull is holed deep

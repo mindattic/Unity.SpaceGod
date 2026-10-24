@@ -118,6 +118,9 @@ namespace Unity.SpaceGod.Input
 
         /// <summary>B at the controls (in the strategy view B watches a battle): the boarding command panel, for a fight aboard the piloted hull or one its marines are boarding (U.SPC-T468).</summary>
         public bool ToggleBoarding;
+        /// <summary>At a big ship's helm (U.SPC-T491): Shift+Insert orders the crew to run hot, keeping the guns and drive at full however
+        /// hot the hull gets, or to throttle down again.</summary>
+        public bool ToggleRunHot;
 
         /// <summary>While piloting: locks (or clears) the camera's tracking onto the hovered/selected
         /// ship. Shares its key with <see cref="ResetTime"/>, which is gated off while piloting so the
@@ -252,8 +255,10 @@ namespace Unity.SpaceGod.Input
             Pilot = kb.pKey.wasPressedThisFrame;
             CycleSeat = kb.quoteKey.wasPressedThisFrame ? 1 : kb.semicolonKey.wasPressedThisFrame ? -1 : 0;
             ManGun = kb.slashKey.wasPressedThisFrame;
-            TunePhasers = kb.insertKey.wasPressedThisFrame;
+            bool shifted = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
+            TunePhasers = kb.insertKey.wasPressedThisFrame && !shifted;
             ToggleBoarding = kb.bKey.wasPressedThisFrame;
+            ToggleRunHot = kb.insertKey.wasPressedThisFrame && shifted;
             ActivateGate = kb.yKey.wasPressedThisFrame;
             EngageFtl = kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame;
             ToggleFtlAutopilot = kb.endKey.wasPressedThisFrame;
@@ -297,6 +302,7 @@ namespace Unity.SpaceGod.Input
             ManGun = false;
             TunePhasers = false;
             ToggleBoarding = false;
+            ToggleRunHot = false;
             NumberKey = -1;
         }
 

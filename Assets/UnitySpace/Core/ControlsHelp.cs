@@ -108,6 +108,8 @@ namespace Unity.SpaceGod.Core
                 L("8  9", "screen, engage at will"),
                 L("0", "all batteries at will"),
                 More("angle the hull to the enemy's line to make shots glance"),
+                L("Shift+Insert", "big ships: run hot (guns and drive at full past the heat limit, the crew and systems cook) or throttle for the heat"),
+                More("shoot a hull's radiators away to make it overheat"),
                 L("B", "boarding (a fight aboard your hull, or one your marines are in): the panel of compartments and orders"),
                 L("1  2  3  0", "with it open: pick a compartment, push for it / muster on it, hold, auto-resolve")),
 

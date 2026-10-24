@@ -135,6 +135,10 @@ namespace Unity.SpaceGod.Core
         public BattleUnit ReadyingOn;
         public double ReadyingLoaded;
 
+        /// <summary>Keep the guns and drive at full however hot the hull gets (U.SPC-T491, see <see cref="Radiators"/>): past
+        /// the heat sinks' limit the crew and systems take the heat instead of the crew throttling down.</summary>
+        public bool RunHot;
+
         /// <summary>Hit points damage control has put back this battle (for the HUD and the tests).</summary>
         public double Repaired;
 

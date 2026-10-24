@@ -78,6 +78,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>A spinal coilgun (U.SPC-T490, see <see cref="SpinalMounts"/>): magnetic coils the length of a battleship's
         /// keel that throw a lighter, slower slug than a spinal railgun's, a little less far, but recharge in half the time.</summary>
         Coilgun,
+
+        /// <summary>A radiator panel on a big ship's hull (U.SPC-T491, see <see cref="Radiators"/>): it sheds the heat the
+        /// engines and guns build. Thin and spread out to the sky, so it is a weak point: a hull that loses its radiators
+        /// must throttle down or cook.</summary>
+        Radiator,
     }
 
     /// <summary>What a non-gun weapon puts out into the battle instead of firing at a target.</summary>
@@ -258,7 +263,9 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>Hardpoints are built to take punishment; a capital ship loses guns one at a time.</summary>
-        static double DefaultHp(SubsystemKind k) => BaseHp(k) * (k == SubsystemKind.FighterGuns || k == SubsystemKind.Torpedo || k == SubsystemKind.Autocannon ? 1 : 3);
+        /// <summary>A radiator panel is the exception (U.SPC-T491): a thin sheet out in the open, not built to take a hit.</summary>
+        static double DefaultHp(SubsystemKind k) => BaseHp(k) * (k == SubsystemKind.FighterGuns || k == SubsystemKind.Torpedo || k == SubsystemKind.Autocannon
+                                                                 || k == SubsystemKind.Radiator ? 1 : 3);
 
         static double BaseHp(SubsystemKind k)
         {
@@ -292,6 +299,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.FlakCannon: return 110;
                 case SubsystemKind.InterceptorMissile: return 120;
                 case SubsystemKind.Coilgun: return 450;
+                case SubsystemKind.Radiator: return Radiators.PanelHp;
                 default: return 200;
             }
         }
@@ -357,6 +365,7 @@ namespace Unity.SpaceGod.Core
                 case SubsystemKind.FlakCannon: return "Flak cannon";
                 case SubsystemKind.InterceptorMissile: return "Interceptor missiles";
                 case SubsystemKind.Coilgun: return "Coilgun";
+                case SubsystemKind.Radiator: return "Radiator";
                 default: return "Reactor";
             }
         }
@@ -1056,6 +1065,8 @@ namespace Unity.SpaceGod.Core
                     design.Marines = FacilityLayouts.Complement(kv.Key, design);
                     // The spinal power plants it is designed with (U.SPC-T490).
                     design.SpinalPlants = FacilityLayouts.CountOf(FacilityLayouts.For(kv.Key), FacilityKinds.SpinalPlant);
+                    // A big ship's radiator panels (U.SPC-T491) go on after its own hardpoints, so theirs keep their places.
+                    design.Layout = Radiators.Fit(kv.Key, design.Layout);
                 }
         }
 
