@@ -32,7 +32,7 @@ param([switch]$Launch, [switch]$SkipHdrp)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$repoDir  = Split-Path $PSScriptRoot   # tools\ -> UnitySpace\
+$repoDir  = Split-Path $PSScriptRoot   # tools\ -> the repo folder (Unity.SpaceGod\)
 $out      = 'C:\Apps\Unity.SpaceGod'
 $exeName  = 'Unity.SpaceGod.exe'
 $buildDir = Join-Path $repoDir 'Builds\Windows'
@@ -87,8 +87,9 @@ if ($upToDate) {
 $ver = (Select-String -Path "$repoDir/ProjectSettings/ProjectVersion.txt" -Pattern "m_EditorVersion: (.+)").Matches[0].Groups[1].Value.Trim()
 $unity = "C:\Program Files\Unity\Hub\Editor\$ver\Editor\Unity.exe"
 if (-not (Test-Path $unity)) { throw "Unity $ver not installed at $unity" }
-if (Get-Process -Name Unity -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*UnitySpace*" }) {
-    throw "UnitySpace is open in the Unity Editor. Close it (File > Quit) and re-run."
+$projName = Split-Path -Leaf $repoDir   # the Editor title carries the folder name
+if (Get-Process -Name Unity -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*$projName*" }) {
+    throw "$projName is open in the Unity Editor. Close it (File > Quit) and re-run."
 }
 
 # ── Stop running instance ──────────────────────────────────────────────────
