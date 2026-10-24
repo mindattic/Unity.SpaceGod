@@ -549,7 +549,7 @@ Planned, from the open tickets in [docs/USER_STORIES.md](docs/USER_STORIES.md):
 
 ## Documentation
 
-- [docs/USER_STORIES.md](docs/USER_STORIES.md): every story and ticket, with the test that proves each one. It is generated from the MindAttic.Workflow database; change tickets with the workflow CLI, not by hand.
+- [docs/USER_STORIES.md](docs/USER_STORIES.md): every story and ticket, with the test that proves each one. It is generated from the MindAttic.Tickets database; change tickets with the tickets CLI, not by hand.
 - [Assets/UnitySpace/Resources/Textures/SOURCES.md](Assets/UnitySpace/Resources/Textures/SOURCES.md): where every surface map comes from and its caveats.
 - [Assets/UnitySpace/Core/Systems/SOURCES.md](Assets/UnitySpace/Core/Systems/SOURCES.md): Alpha Centauri, nearby stars, spacecraft orbits and ring sites, with the assumptions made.
 - [docs/FLIGHT_MODELS.md](docs/FLIGHT_MODELS.md): how each family of craft flies, the flight-model extension point, and the plan for the families still to come.
