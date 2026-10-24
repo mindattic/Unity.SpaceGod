@@ -362,12 +362,17 @@ namespace Unity.SpaceGod.Core
         /// Puts <paramref name="ships"/> (the same hulls, flagship first, already out of every fleet) into open space at
         /// <paramref name="fromKm"/> in <paramref name="from"/> (km from its root), bound for <paramref name="to"/> on
         /// <paramref name="drive"/>; it charges from <paramref name="jd"/> (or engages at once if already <paramref name="charged"/>).
+        /// It drops out at the edge of <paramref name="to"/>'s well on the side facing the way it comes, or, given
+        /// <paramref name="dropDir"/> (a way out from the star in its system's frame), there: a jump strike group coming in on
+        /// a flank (U.SPC-T474).
         /// </summary>
         public Cruise Launch(IEnumerable<Ship> ships, StarSystem from, DVec3 fromKm, StarSystem to, CruiseDriveSpec drive, double jd,
-            List<SystemReport> news = null, bool charged = false)
+            List<SystemReport> news = null, bool charged = false, DVec3? dropDir = null)
         {
             var start = from.At(fromKm);
-            return Launch(ships, from, start, to, to.Name, ArrivalPoint(to.Origin, start, CruiseDrives.WellLimitKm(to)), drive, jd, news, charged);
+            double wellKm = CruiseDrives.WellLimitKm(to);
+            var target = dropDir is DVec3 d && d.LengthSquared > 0 ? to.Origin.Offset(d.Normalized * wellKm) : ArrivalPoint(to.Origin, start, wellKm);
+            return Launch(ships, from, start, to, to.Name, target, drive, jd, news, charged);
         }
 
         /// <summary>As <see cref="Launch(IEnumerable{Ship}, StarSystem, DVec3, StarSystem, CruiseDriveSpec, double, List{SystemReport})"/>, but bound

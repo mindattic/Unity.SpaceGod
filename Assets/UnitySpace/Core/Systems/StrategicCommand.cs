@@ -274,6 +274,9 @@ namespace Unity.SpaceGod.Core
     {
         public Faction Faction;
         public int Systems, Ports, Warships, Groups, Commanded, Campaigns;
+
+        /// <summary>Its groups by kind of force (U.SPC-T474, see <see cref="FleetDoctrine"/>): gate fleets and jump strike groups.</summary>
+        public int GateFleets, StrikeGroups;
         public double Population, Treasury, Strength, Unrest, MarineQuality, Morale, CrewLost;
         public readonly List<Faction> AtWarWith = new List<Faction>();
         public readonly List<GroupLine> Fleet = new List<GroupLine>();
@@ -758,6 +761,11 @@ namespace Unity.SpaceGod.Core
                         }
                     var o = ObjectiveOf(s);
                     if (o != null) r.Commanded++;
+                    if (!s.PatrolWing && s.PicketGate == null)
+                    {
+                        if (FleetDoctrine.IsStrikeGroup(w, s)) r.StrikeGroups++;
+                        else r.GateFleets++;
+                    }
                     string order = s.Voyage != null ? "bound for " + (s.Voyage.Destination?.Name ?? "another system") : DescribeOrder(w.War?.OrderOf(s), w.Catalog);
                     r.Fleet.Add(new GroupLine(s, w, name, order, Describe(o), hulls, strength));
                 }

@@ -59,9 +59,25 @@ namespace Unity.SpaceGod.Core
         /// <summary>What it has left of its propellant, munitions and spares, and its supply line (U.SPC-T93, see <see cref="MilitaryLogistics"/>).</summary>
         public readonly FleetSupply Supply = new FleetSupply();
 
+        /// <summary>The kind of force sent (U.SPC-T474, see <see cref="FleetDoctrine"/>): a gate fleet marching through the gates,
+        /// or a jump strike group crossing under its own drives.</summary>
+        public ForceKind Force;
+
+        /// <summary>What it was sent to do (U.SPC-T474): invade, open a second front, relieve or raid.</summary>
+        public CampaignMission Mission;
+
+        /// <summary>When a strike group reached the system it was sent to (NaN until then).</summary>
+        public double ArrivedJd = double.NaN;
+
+        /// <summary>Ports a raid has broken the defences of, and garrisons a relief has stiffened.</summary>
+        public int PortsRaided, Relieved;
+
+        /// <summary>The ports a raid has fallen on, or a relief has seen to, so far.</summary>
+        public readonly List<Settlement> Raided = new List<Settlement>();
+
         public bool Active => Stage != CampaignStage.Over;
 
-        public override string ToString() => $"{Faction?.Name} campaign for {Goal?.Name} ({Stage})";
+        public override string ToString() => $"{Faction?.Name} {(Force == ForceKind.JumpStrikeGroup ? "strike group" : "campaign")} ({Mission}) for {Goal?.Name} ({Stage})";
     }
 
     /// <summary>Marines put down on an enemy settlement, fighting its garrison (U.SPC-T92).</summary>
@@ -352,15 +368,34 @@ namespace Unity.SpaceGod.Core
             return list;
         }
 
-        /// <summary>Sends <paramref name="f"/>'s best group fit to go on a campaign for its next goal, when it has none in the field and the group is strong enough for what it expects to meet.</summary>
+        /// <summary>
+        /// A day of <paramref name="f"/>'s strategic command in <paramref name="w"/> (U.SPC-T474, see <see cref="FleetDoctrine"/>):
+        /// with no gate fleet in the field, its best one marches on its next goal; with no strike group out, its best jump
+        /// strike group is given the mission its objectives call for. Neither goes if it would leave a system of its own
+        /// short of the reserve it keeps against the enemy's strike groups.
+        /// </summary>
         void Plan(Conflict w, Faction f, double jd)
         {
+            Campaign main = null, strike = null;
             foreach (var c in w.Campaigns)
                 if (c.Active && c.Faction == f)
                 {
                     w.LastActiveJd = jd;
-                    return;
+                    if (c.Force == ForceKind.JumpStrikeGroup) strike ??= c;
+                    else main ??= c;
                 }
+            bool doctrine = FleetDoctrine.StrikeGroups.Value;
+            // Before the doctrine, a navy kept one fleet in the field whatever it was.
+            if (!doctrine && (main != null || strike != null)) return;
+            double threat = FleetDoctrine.StrikeThreat(galaxy, f);
+            if (main == null) PlanGateFleet(w, f, jd, doctrine, threat);
+            if (doctrine && strike == null) PlanStrike(w, f, jd, threat);
+        }
+
+        /// <summary>Sends <paramref name="f"/>'s best gate fleet fit to go on a campaign for its next goal, when the group is strong
+        /// enough for what it expects to meet (with the <paramref name="doctrine"/> off, its best group of any kind).</summary>
+        void PlanGateFleet(Conflict w, Faction f, double jd, bool doctrine, double threat)
+        {
             var goals = GoalsOf(w, f);
             if (goals.Count == 0) return;
 
@@ -373,6 +408,9 @@ namespace Unity.SpaceGod.Core
                 foreach (var ship in world.Fleet.Ships)
                 {
                     if (!Fit(world, ship, f)) continue;
+                    // A jump strike group is kept for the missions only it can fly (U.SPC-T474).
+                    if (doctrine && FleetDoctrine.IsStrikeGroup(world, ship)) continue;
+                    if (!FleetDoctrine.LeavesReserve(world, ship, f, threat)) continue;
                     double strength = world.War.GroupStrength(ship);
                     if (strength > bestStrength)
                     {
@@ -415,6 +453,181 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
+        /// Gives <paramref name="f"/>'s best idle jump strike group the mission its objectives call for (U.SPC-T474), in this
+        /// order: relieve one of its own systems the enemy is attacking; open a second front against a goal the gate fleet is not
+        /// marching on (or, with no gate fleet out, jump on the nearest goal itself); else raid the nearest enemy system with a
+        /// port it outguns. Each only within <see cref="FleetDoctrine.StrikeRangeLy"/> under its own drive and against what it
+        /// outweighs there, the gates' forts left behind.
+        /// </summary>
+        void PlanStrike(Conflict w, Faction f, double jd, double threat)
+        {
+            Ship best = null;
+            StarSystem from = null;
+            double strength = 0;
+            foreach (var s in galaxy.Systems)
+            {
+                var world = s.World;
+                foreach (var ship in world.Fleet.Ships)
+                {
+                    if (!FitStrike(world, ship, f) || !FleetDoctrine.IsStrikeGroup(world, ship) || !FleetDoctrine.LeavesReserve(world, ship, f, threat)) continue;
+                    double g = world.War.GroupStrength(ship);
+                    if (g > strength)
+                    {
+                        strength = g;
+                        best = ship;
+                        from = s;
+                    }
+                }
+            }
+            if (best == null) return;
+            var enemy = w.Enemy(f);
+            double range = FleetDoctrine.StrikeRangeLy.Value;
+            bool InReach(StarSystem t) => t != from && t.Origin.DistanceLy(from.Origin) <= range;
+
+            // Relieve: one of its own systems the enemy is attacking.
+            StarSystem goal = null;
+            var mission = CampaignMission.Relieve;
+            double nearest = double.MaxValue;
+            foreach (var t in galaxy.Systems)
+            {
+                if (!InReach(t)) continue;
+                double attackers = Attacking(t.World, f, enemy);
+                if (attackers <= 0 || strength < LaunchRatio * attackers) continue;
+                double ly = t.Origin.DistanceLy(from.Origin);
+                if (ly < nearest)
+                {
+                    nearest = ly;
+                    goal = t;
+                }
+            }
+
+            // A second front: a goal the gate fleet is not marching on (with none out, the nearest goal itself), if it has
+            // the marines to take it.
+            if (goal == null && GroupMarines(from.World, best) > 0)
+            {
+                Campaign main = null;
+                foreach (var c in w.Campaigns)
+                    if (c.Active && c.Faction == f && c.Force == ForceKind.GateFleet) main = c;
+                double bestScore = double.MaxValue;
+                foreach (var g in GoalsOf(w, f))
+                {
+                    if (!InReach(g) || strength < LaunchRatio * DefenceOf(enemy, g)) continue;
+                    // The gate fleet's own goal only when there is no other.
+                    double score = g.Origin.DistanceLy(from.Origin) + (main != null && main.Goal == g ? 1e6 : 0);
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        goal = g;
+                    }
+                }
+                if (goal != null) mission = main != null ? CampaignMission.SecondFront : CampaignMission.Invade;
+            }
+
+            // A raid: the nearest enemy system with a port it outguns.
+            if (goal == null)
+            {
+                nearest = double.MaxValue;
+                foreach (var t in galaxy.Systems)
+                {
+                    if (!InReach(t) || !EnemyHolds(enemy, t)) continue;
+                    if (RaidTarget(t.World, f, enemy, strength, null) == null) continue;
+                    double ly = t.Origin.DistanceLy(from.Origin);
+                    if (ly < nearest)
+                    {
+                        nearest = ly;
+                        goal = t;
+                    }
+                }
+                mission = CampaignMission.Raid;
+            }
+            if (goal == null) return;
+            LaunchStrike(w, best, from, goal, mission, jd);
+        }
+
+        /// <summary>Sends <paramref name="leader"/>'s jump strike group from <paramref name="from"/> on <paramref name="mission"/>
+        /// against <paramref name="goal"/> in <paramref name="w"/>, under its own drives. Null if it cannot go.</summary>
+        Campaign LaunchStrike(Conflict w, Ship leader, StarSystem from, StarSystem goal, CampaignMission mission, double jd)
+        {
+            var f = leader.Faction;
+            var c = new Campaign
+            {
+                War = w, Faction = f, Home = from, Goal = goal, Stage = CampaignStage.Marching, SetOutJd = jd, Flagship = leader.Name,
+                Force = ForceKind.JumpStrikeGroup, Mission = mission,
+            };
+            if (Traffic.SendStrike(leader, from, goal, c, jd) == null) return null;
+            w.Campaigns.Add(c);
+            campaigns.Add(c);
+            w.LastActiveJd = jd;
+            string why = mission switch
+            {
+                CampaignMission.Relieve => "to relieve",
+                CampaignMission.Raid => "to raid",
+                CampaignMission.SecondFront => "to open a second front at",
+                _ => "against",
+            };
+            from.World.Log(jd, $"The {leader.Name} leads a {f.Name} jump strike group out under its own drives {why} {goal.Name}, " +
+                               $"{goal.Origin.DistanceLy(from.Origin).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} ly away",
+                WorldEventKind.Diplomacy, from.Catalog.Root.Index);
+            return c;
+        }
+
+        /// <summary>The strength of <paramref name="enemy"/>'s warships loose in <paramref name="world"/>, where <paramref name="f"/>
+        /// holds a port (at least a token when only its marines are down on one). 0 when nobody is attacking it there.</summary>
+        double Attacking(World world, Faction f, Faction enemy)
+        {
+            bool holds = false;
+            foreach (var s in world.Economy.Settlements)
+                if (s.Owner == f && !s.Fallen && s.Kind != SettlementKind.Haven) holds = true;
+            if (!holds) return 0;
+            double total = 0;
+            foreach (var s in world.Fleet.Ships)
+                if (EnemyWarship(s, enemy)) total += s.Combat.Strength;
+            if (total > 0) return total;
+            foreach (var l in landings)
+                if (l.By == enemy && l.Troops > 0 && l.Target.Owner == f && Polities.WorldOf(l.Target) == world) return 1;
+            return 0;
+        }
+
+        /// <summary>Whether <paramref name="s"/> is a warship of <paramref name="enemy"/>'s that fights: not a picket, not a hulk.</summary>
+        static bool EnemyWarship(Ship s, Faction enemy) =>
+            !s.Destroyed && !s.Derelict && s.Faction == enemy && s.Spec.IsMilitary && s.PicketGate == null && s.Combat != null;
+
+        /// <summary>What <paramref name="enemy"/> holds <paramref name="goal"/> with: its platforms and warships there (a strike
+        /// group jumping in meets no gate forts).</summary>
+        static double DefenceOf(Faction enemy, StarSystem goal)
+        {
+            double there = 0;
+            foreach (var st in goal.World.Economy.Settlements)
+                if (st.Owner == enemy)
+                    foreach (var p in st.Platforms) there += p.Strength;
+            foreach (var s in goal.World.Fleet.Ships)
+                if (!s.Destroyed && s.Faction == enemy && s.Spec.IsMilitary) there += s.Combat.Strength;
+            return there;
+        }
+
+        /// <summary>The port of <paramref name="enemy"/>'s in <paramref name="world"/> a raid of <paramref name="strength"/> falls on
+        /// next: the most worth breaking (people, a yard) for what defends it, of those it outguns whose defences still stand
+        /// (or that still have people to frighten off), none of <paramref name="done"/>. Null when there is none.</summary>
+        static Settlement RaidTarget(World world, Faction f, Faction enemy, double strength, List<Settlement> done)
+        {
+            Settlement best = null;
+            double bestValue = 0;
+            foreach (var s in world.Economy.Settlements)
+            {
+                if (s.Owner != enemy || s.Fallen || s.Kind == SettlementKind.Haven || (done != null && done.Contains(s))) continue;
+                double defence = world.War.DefenceAt(s.Body, f);
+                if (strength < defence * 1.25) continue;
+                double value = (s.Population / 1e5 + 2) * (s.HasShipyard ? 2 : 1) / (defence + 200);
+                if (value > bestValue)
+                {
+                    bestValue = value;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
         /// Sends <paramref name="leader"/>'s group (idle in <paramref name="from"/>) on a campaign to take <paramref name="goal"/>,
         /// on its polity's orders (U.SPC-T423, see <see cref="StrategicCommand"/>): the war it is fighting against whoever holds
         /// ports there. Null if it is at war with nobody there or there is no way to fight through.
@@ -432,6 +645,17 @@ namespace Unity.SpaceGod.Core
                 }
             // A defender's campaigns take back only what was taken from it; anything else is the group's own work there.
             if (w == null || (f == w.Defender && !GoalsOf(w, f).Contains(goal))) return null;
+            // A jump strike group jumps in on the flank under its own drives (U.SPC-T474), a second front if a gate fleet of its
+            // side is already out.
+            if (FleetDoctrine.StrikeGroups.Value && InterstellarTraffic.CanCruise(leader) && FleetDoctrine.IsStrikeGroup(from.World, leader))
+            {
+                bool marching = false;
+                foreach (var c in w.Campaigns)
+                    if (c.Active && c.Faction == f && c.Force == ForceKind.GateFleet) marching = true;
+                var strike = LaunchStrike(w, leader, from, goal, marching ? CampaignMission.SecondFront : CampaignMission.Invade, jd);
+                if (strike != null && f == w.Aggressor && !w.Goals.Contains(goal)) w.Goals.Add(goal);
+                return strike;
+            }
             var route = galaxy.Network.Route(from, goal, f, jd, force: true);
             if (route == null || route.Count == 0) return null;
             var campaign = new Campaign { War = w, Faction = f, Home = from, Goal = goal, Stage = CampaignStage.Marching, SetOutJd = jd, Flagship = leader.Name };
@@ -445,8 +669,12 @@ namespace Unity.SpaceGod.Core
             return campaign;
         }
 
-        /// <summary>A group <paramref name="f"/> can send: a sound, armed flagship of its navy idle in port, not its home guard.</summary>
-        static bool Fit(World world, Ship ship, Faction f)
+        /// <summary>A group <paramref name="f"/> can send: a sound, armed flagship of its navy idle in port, not its home guard,
+        /// with marines to land.</summary>
+        static bool Fit(World world, Ship ship, Faction f) => FitStrike(world, ship, f) && GroupMarines(world, ship) > 0;
+
+        /// <summary>A group <paramref name="f"/> can send on a raid or a relief (U.SPC-T474): as <see cref="Fit"/>, marines or none.</summary>
+        static bool FitStrike(World world, Ship ship, Faction f)
         {
             // Nor a patrol wing: it keeps to its beat at home (U.SPC-T371).
             if (ship.Destroyed || ship.IsEscort || ship.Faction != f || !ship.Spec.IsMilitary || ship.Derelict || ship.Battle != null || ship.PatrolWing) return false;
@@ -456,8 +684,7 @@ namespace Unity.SpaceGod.Core
             if (world.Holdings != null && world.Holdings.Owns(ship)) return false;
             // Nor one its polity's command has given an objective of its own (U.SPC-T423).
             if (world.Polities.Command.Holds(ship)) return false;
-            if (ship.Combat.HullDamage > 0.2 || !ship.Combat.Armed || world.War.IsHomeGuard(ship)) return false;
-            return GroupMarines(world, ship) > 0;
+            return ship.Combat.HullDamage <= 0.2 && ship.Combat.Armed && !world.War.IsHomeGuard(ship);
         }
 
         static double GroupMarines(World world, Ship leader)
@@ -512,13 +739,21 @@ namespace Unity.SpaceGod.Core
             return false;
         }
 
+        /// <summary>Whether a campaign's group is out between the stars under its own drives (a jump strike group, U.SPC-T474).</summary>
+        bool InCruise(Campaign c)
+        {
+            foreach (var cr in galaxy.DeepSpace.Cruises)
+                if (cr.Ships.Count > 0 && !cr.Leader.Destroyed && cr.Leader.Voyage?.Campaign == c) return true;
+            return false;
+        }
+
         /// <summary>A day of a campaign: at an enemy gate, fight it or hold it; in the goal system, reduce and take each enemy settlement.</summary>
         void Step(Campaign c, double jd)
         {
             var (system, ship) = Locate(c);
             if (ship == null)
             {
-                if (InGate(c))
+                if (InGate(c) || InCruise(c))
                 {
                     Logistics.InGate(c, jd);
                     return;
@@ -570,6 +805,13 @@ namespace Unity.SpaceGod.Core
             }
             if (c.Stage == CampaignStage.Returning || system != c.Goal || ship.GateKm != null) return;
 
+            // A jump strike group on a relief or a raid (U.SPC-T474).
+            if (c.Mission == CampaignMission.Relieve || c.Mission == CampaignMission.Raid)
+            {
+                StrikeStep(c, system, ship, jd);
+                return;
+            }
+
             // In the goal system.
             var target = Objective(c, system);
             if (target == null)
@@ -600,6 +842,133 @@ namespace Unity.SpaceGod.Core
             }
             Land(c, world, ship, target, jd);
             if (defence > 0) world.War.TryStartBattle(target.Body, c.Faction, jd);
+        }
+
+        /// <summary>
+        /// A day of a jump strike group's relief or raid in the system it was sent to (U.SPC-T474). A relief makes for the
+        /// port of its own the enemy is at (else wherever the enemy's warships loose in the system are) and fights them off,
+        /// and at a port of its own with the orbit clear puts its marines down to stiffen the garrison; with nobody left
+        /// attacking, it goes home. A raid falls on the enemy's ports it outguns one after another, breaking their defences,
+        /// and jumps out for home when it has none left. Either jumps home when its time is up
+        /// (<see cref="FleetDoctrine.StrikeDays"/>), before the enemy can gather.
+        /// </summary>
+        void StrikeStep(Campaign c, StarSystem system, Ship ship, double jd)
+        {
+            var world = system.World;
+            c.Stage = CampaignStage.Invading;
+            bool relief = c.Mission == CampaignMission.Relieve;
+            string done = relief ? "the system relieved" : $"its raid done ({c.PortsRaided} port{(c.PortsRaided == 1 ? "" : "s")} struck)";
+            // Its time runs from when it first reaches its work, not from the edge of the well.
+            if (!double.IsNaN(c.ArrivedJd) && jd - c.ArrivedJd > FleetDoctrine.StrikeDays.Value)
+            {
+                Recall(c, system, ship, jd, done);
+                return;
+            }
+            var (body, port) = StrikeObjective(c, system, ship, jd);
+            if (body < 0)
+            {
+                Recall(c, system, ship, jd, done);
+                return;
+            }
+            if (port != null && c.Objective != port)
+            {
+                c.Objective = port;
+                world.Log(jd, relief
+                        ? $"The {c.Faction.Name} strike group under the {ship.Name} jumps in to relieve {port.Name} ({world.Catalog[body].Name})"
+                        : $"The {c.Faction.Name} strike group under the {ship.Name} falls on {port.Name} ({world.Catalog[body].Name})",
+                    WorldEventKind.Battle, body);
+            }
+            if (!Fleet.IsAt(ship, body))
+            {
+                if (ship.Phase == ShipPhase.Parked && ship.DestinationBody != body) world.Fleet.ScheduleNext(ship, jd);
+                return;
+            }
+            if (double.IsNaN(c.ArrivedJd)) c.ArrivedJd = jd;
+            if (world.War.BattleAt(body) != null) return;
+            if (relief)
+            {
+                if (world.War.EnemiesAt(body, c.Faction))
+                {
+                    world.War.TryStartBattle(body, c.Faction, jd);
+                    return;
+                }
+                if (port == null || c.Raided.Contains(port)) return;
+                // The orbit clear over its own port: its marines go down to the garrison, to fight beside it.
+                double marines = 0;
+                foreach (var s in new List<Ship>(world.Fleet.Ships))
+                    if (!s.Destroyed && (s == ship || s.Leader == ship) && s.Battle == null)
+                        marines += s.Combat.Interior.TakeMarines(s.Combat.MarinesAvailable);
+                if (marines >= 1)
+                {
+                    port.Garrison = GarrisonOf(port) + marines;
+                    c.Relieved++;
+                    world.Log(jd, $"{marines:0} {c.Faction.Name} marines from the {ship.Name} go down to stiffen {port.Name}'s garrison", WorldEventKind.Battle, body);
+                }
+                c.Raided.Add(port);
+                return;
+            }
+            if (world.War.DefenceAt(body, c.Faction) > 0)
+            {
+                world.War.TryStartBattle(body, c.Faction, jd);
+                return;
+            }
+            // Its defences broken: on to the next.
+            c.Raided.Add(port);
+            c.PortsRaided++;
+            world.Log(jd, $"The {c.Faction.Name} strike group under the {ship.Name} leaves {port.Name}'s defences broken", WorldEventKind.Battle, body);
+        }
+
+        /// <summary>
+        /// Where a strike group on a relief or a raid makes for next in <paramref name="system"/>: the body, and the port there
+        /// (null when it is going after the enemy's warships away from any port of its own); -1 when it has nothing left to do.
+        /// </summary>
+        (int Body, Settlement Port) StrikeObjective(Campaign c, StarSystem system, Ship ship, double jd)
+        {
+            var world = system.World;
+            var enemy = c.War.Enemy(c.Faction);
+            if (c.Mission == CampaignMission.Raid)
+            {
+                var mark = RaidTarget(world, c.Faction, enemy, world.War.GroupStrength(ship), c.Raided);
+                return mark != null ? (mark.Body, mark) : (-1, null);
+            }
+            // A relief: its own port with the enemy at it; else one with the enemy's marines down on it; else, while the
+            // enemy is loose in the system, the nearest of its ports it has not yet stiffened; else the enemy's warships
+            // wherever they are.
+            bool loose = false;
+            foreach (var s in world.Fleet.Ships)
+                if (EnemyWarship(s, enemy)) loose = true;
+            Settlement landed = null, unseen = null;
+            double unseenDays = double.MaxValue;
+            int here = ship.Orbit?.Body ?? -1;
+            foreach (var s in world.Economy.Settlements)
+            {
+                if (s.Owner != c.Faction || s.Fallen || s.Kind == SettlementKind.Haven) continue;
+                if (world.War.EnemiesAt(s.Body, c.Faction)) return (s.Body, s);
+                if (c.Raided.Contains(s)) continue;
+                foreach (var l in landings)
+                    if (l.Target == s && l.By == enemy && l.Troops > 0) landed ??= s;
+                if (!loose || here < 0) continue;
+                double days = s.Body == here ? 0 : world.Fleet.EstimateTravelDays(ship, here, s.Body, jd);
+                if (days < unseenDays)
+                {
+                    unseenDays = days;
+                    unseen = s;
+                }
+            }
+            if (landed != null) return (landed.Body, landed);
+            if (unseen != null) return (unseen.Body, unseen);
+            foreach (var s in world.Fleet.Ships)
+            {
+                if (!EnemyWarship(s, enemy)) continue;
+                var e = s.Controller;
+                int at = e.Phase == ShipPhase.Parked && e.Orbit != null ? e.Orbit.Body : e.DestinationBody;
+                if (at < 0) continue;
+                Settlement own = null;
+                foreach (var st in world.Economy.At(at))
+                    if (st.Owner == c.Faction && !st.Fallen && st.Kind != SettlementKind.Haven) own = st;
+                return (at, own);
+            }
+            return (-1, null);
         }
 
         static double GroupDamage(World world, Ship leader)
@@ -723,6 +1092,11 @@ namespace Unity.SpaceGod.Core
             if (c == null || !c.Active) return -1;
             if (v.HoldGate != null) return here;
             if (c.Stage == CampaignStage.Returning || system != c.Goal) return -1;
+            if (c.Mission == CampaignMission.Relieve || c.Mission == CampaignMission.Raid)
+            {
+                var (mark, _) = StrikeObjective(c, system, ship, jd);
+                return mark >= 0 ? mark : here;
+            }
             var target = Objective(c, system);
             return target != null ? target.Body : here;
         }

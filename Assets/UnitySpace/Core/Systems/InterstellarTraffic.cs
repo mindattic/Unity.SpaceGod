@@ -131,6 +131,11 @@ namespace Unity.SpaceGod.Core
         public GalacticPosition? Station;
         public string StationName;
 
+        /// <summary>The way out from its destination's star (its system's km frame) a jump strike group drops out at, on the
+        /// flank away from the gates held against it (U.SPC-T474, <see cref="FleetDoctrine.DropDirection"/>); null to drop
+        /// out on the side facing the way it came.</summary>
+        public DVec3? DropDir;
+
         public JumpGate NextGate => Route != null && Leg < Route.Count ? Route[Leg] : null;
         public bool Homeward => Destination == Home;
     }
@@ -759,7 +764,7 @@ namespace Unity.SpaceGod.Core
                 ? galaxy.DeepSpace.LaunchToPoint(ships, system, at, v.Station.Value, v.StationName ?? "open space", drive, jd, news)
                 : star != null
                 ? galaxy.DeepSpace.LaunchToStar(ships, system, at, star.Value, drive, jd, news)
-                : galaxy.DeepSpace.Launch(ships, system, at, v.Destination, drive, jd, news);
+                : galaxy.DeepSpace.Launch(ships, system, at, v.Destination, drive, jd, news, dropDir: v.DropDir);
             foreach (var h in hired) c.Hired.Add(h);
             foreach (var kv in aboard) c.Aboard[kv.Key] = kv.Value;
             string group = ships.Count > 1 ? $" and {ships.Count - 1} more" : "";
@@ -779,6 +784,7 @@ namespace Unity.SpaceGod.Core
             if (v != null)
             {
                 v.ByCruise = false;
+                v.DropDir = null;
                 if (v.Homeward) Home(system, leader, jd);
                 else if (v.Destination == system) Arrive(system, leader, null, jd);
                 else
@@ -1290,6 +1296,23 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
+        /// Sends a jump strike group (<paramref name="ship"/>, its carrier or FTL capital flagship idle in <paramref name="from"/>)
+        /// on <paramref name="campaign"/> to <paramref name="to"/> under its own drives (U.SPC-T474, see <see cref="FleetDoctrine"/>):
+        /// out to the edge of the well, across open space with its escorts clamped to the carrier, and in on the flank of
+        /// <paramref name="to"/> away from the gates held against it. Null if it cannot go.
+        /// </summary>
+        public Voyage SendStrike(Ship ship, StarSystem from, StarSystem to, Campaign campaign, double jd)
+        {
+            if (to == null || from == to || !Idle(from.World, ship) || !CanCruise(ship)) return null;
+            var v = SetOutByCruise(from, to, null, ship, VoyagePurpose.Campaign, jd);
+            if (v == null) return null;
+            v.Campaign = campaign;
+            v.StayUntilJd = double.PositiveInfinity;
+            v.DropDir = FleetDoctrine.DropDirection(to, from.Origin, ship.Faction);
+            return v;
+        }
+
+        /// <summary>
         /// Sends a navy group (<paramref name="ship"/>, a flagship idle in <paramref name="from"/>) to <paramref name="to"/> on its
         /// polity's orders (U.SPC-T423, see <see cref="StrategicCommand"/>), by the quickest way open to it, or under its own
         /// drive where no gate goes. It stays there while its objective there stands. Null if it cannot go.
@@ -1297,10 +1320,19 @@ namespace Unity.SpaceGod.Core
         public Voyage SendDirected(Ship ship, StarSystem from, StarSystem to, double jd)
         {
             if (from == to || !Idle(from.World, ship)) return null;
-            var route = Network.Route(from, to, ship.Faction, jd);
             Voyage v;
-            if (route == null || route.Count == 0) v = CanCruise(ship) ? SetOutByCruise(from, to, null, ship, VoyagePurpose.Directed, jd) : null;
-            else v = SetOut(from, to, ship, VoyagePurpose.Directed, route, jd);
+            if (CanCruise(ship) && FleetDoctrine.IsStrikeGroup(from.World, ship))
+            {
+                // A jump strike group jumps in on the flank, gates or none (U.SPC-T474).
+                v = SetOutByCruise(from, to, null, ship, VoyagePurpose.Directed, jd);
+                if (v != null) v.DropDir = FleetDoctrine.DropDirection(to, from.Origin, ship.Faction);
+            }
+            else
+            {
+                var route = Network.Route(from, to, ship.Faction, jd);
+                if (route == null || route.Count == 0) v = CanCruise(ship) ? SetOutByCruise(from, to, null, ship, VoyagePurpose.Directed, jd) : null;
+                else v = SetOut(from, to, ship, VoyagePurpose.Directed, route, jd);
+            }
             if (v != null) v.StayUntilJd = double.PositiveInfinity;
             return v;
         }
@@ -1314,6 +1346,24 @@ namespace Unity.SpaceGod.Core
         {
             var v = ship.Voyage;
             if (v == null) return false;
+            // A jump strike group goes on, or home, under its own drives (U.SPC-T474): no gates to fight through.
+            if (system != to && v.Campaign != null && v.Campaign.Force == ForceKind.JumpStrikeGroup && CanCruise(ship))
+            {
+                atGates.RemoveAll(e => e.ship == ship);
+                v.AtGate = false;
+                v.HoldGate = null;
+                v.WaitingSinceJd = double.NaN;
+                v.Destination = to;
+                v.ByCruise = true;
+                v.StarName = null;
+                v.Station = null;
+                v.Route = new List<JumpGate>();
+                v.Leg = 0;
+                v.DropDir = to == v.Home ? (DVec3?)null : FleetDoctrine.DropDirection(to, system.Origin, ship.Faction);
+                ship.GateKm = DeepSpace.DeparturePointKm(system, to.Origin);
+                if (ship.Battle == null) system.World.Fleet.ScheduleNext(ship, jd);
+                return true;
+            }
             List<JumpGate> route = null;
             if (system != to)
             {

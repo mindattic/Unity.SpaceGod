@@ -2931,7 +2931,7 @@ namespace Unity.SpaceGod.Core
             return false;
         }
 
-        bool EnemiesAt(int body, Faction f)
+        public bool EnemiesAt(int body, Faction f)
         {
             if (BattleAt(body) is Battle b && (b.SideLeaders[0] == f || b.SideLeaders[1] == f)) return true;
             foreach (var s in Fleet.Ships)

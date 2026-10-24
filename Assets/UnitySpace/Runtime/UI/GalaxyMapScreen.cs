@@ -699,7 +699,7 @@ namespace Unity.SpaceGod.UI
             Line(ref y, x, w, report.Systems + (report.Systems == 1 ? " system held, " : " systems held, ") + report.Ports + (report.Ports == 1 ? " port, " : " ports, ") +
                               People(report.Population), Color.white);
             Line(ref y, x, w, "Treasury " + report.Treasury.ToString("N0", inv) + " cr   ·   unrest " + (report.Unrest * 100).ToString("0", inv) + "%", Color.white);
-            Line(ref y, x, w, "Navy: " + report.Warships + " hulls in " + report.Groups + " groups, strength " + report.Strength.ToString("N0", inv) + "; " +
+            Line(ref y, x, w, "Navy: " + report.Warships + " hulls in " + report.Groups + " groups (" + report.GateFleets + " gate, " + report.StrikeGroups + " jump strike), strength " + report.Strength.ToString("N0", inv) + "; " +
                               report.Commanded + " under your orders" + (report.Campaigns > 0 ? ", " + report.Campaigns + " on campaign" : ""), Color.white);
             Line(ref y, x, w, report.AtWarWith.Count == 0 ? "At peace" : "At war with the " + string.Join(", the ", report.AtWarWith.ConvertAll(f => f.Name)),
                 report.AtWarWith.Count == 0 ? Dim : FrontColor);
