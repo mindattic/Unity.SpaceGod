@@ -22,7 +22,7 @@ namespace Unity.SpaceGod.UI
         Texture2D panelTexture, rowHoverTexture, rowSelectedTexture, buttonTexture, buttonActiveTexture;
 
         Vector2 navigatorScroll;
-        bool navigatorOpen = true;
+        bool navigatorOpen = false;
         float lastRowClick = -10f;
         Target lastRowTarget = Target.None;
 
