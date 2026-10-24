@@ -20,6 +20,7 @@ namespace Unity.SpaceGod.Core.Tests
             eph.Update(StartJd);
             var w = World.CreateDefault(eph, StartJd);
             w.War.Battles.Clear();
+            foreach (var s in w.Fleet.Ships) s.Battle = null; // the battles are gone, so no ship is still in one
             return w;
         }
 
