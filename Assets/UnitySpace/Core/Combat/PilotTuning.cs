@@ -99,6 +99,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Frigate] = new PilotTuning(0.38, 40, 1.6, 30, 8, 3.0),
             // The corvette (U.SPC-T476): a patrol hull, handier than a destroyer, for running down a smuggler in its system.
             [ShipClass.Corvette] = new PilotTuning(0.3, 34, 1.5, 26, 7.5, 3.2),
+            // The gate breaker (U.SPC-T478): a battleship's helm under more plate, slower and stiffer still.
+            [ShipClass.GateBreaker] = new PilotTuning(0.08, 9, 1.25, 30, 4.5, 4.5),
         };
 
         public static PilotTuning Of(ShipClass c) =>

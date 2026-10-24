@@ -3587,6 +3587,15 @@ namespace Unity.SpaceGod.Core
             double share = command?.NavyShare(f) ?? 1;
             if (share != 1) cap = (int)Math.Round(cap * share);
             if (count >= cap) return null;
+            // At war, a gate breaker to take the enemy's gates (U.SPC-T478), when the yard has its keel's worth to hand.
+            var breaker = ShipClass.GateBreaker;
+            if (yard.BuildPoints >= Economy.HullCost(breaker) && f.Treasury >= Economy.HullPrice(breaker) && Crews.CanCrew(f, breaker))
+            {
+                int breakers = 0;
+                foreach (var s in Fleet.Ships)
+                    if (!s.Destroyed && s.Faction == f && GateBreakers.IsClass(s.Spec.Class)) breakers++;
+                if (GateBreakers.Wanted(f, AtWar(f), breakers)) return breaker;
+            }
             return plan.Cycle[(builtWarships + yard.Id) % plan.Cycle.Length];
         }
 

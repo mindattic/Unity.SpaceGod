@@ -211,6 +211,14 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public const string FieldProjector = "field-projector";
 
+        /// <summary>
+        /// A siege engineering bay (U.SPC-T478, see <see cref="GateBreakers"/>): the gate breaker's engineering teams, their
+        /// workshops, cutting gear, gate-control rigs and demolition charges, two sections deep. With its boarding teams they
+        /// seize a jump gate intact and patch its ring. Part of the hull as designed, not a fitting, and only a hull of a
+        /// gate-breaking class has one (<see cref="GateBreakers.Classes"/>).
+        /// </summary>
+        public const string SiegeEngineering = "siege-engineering";
+
         static FacilityKinds()
         {
             Register(Structure(Bridge, "Bridge", 1, CompartmentKind.Bridge));
@@ -274,6 +282,15 @@ namespace Unity.SpaceGod.Core
                 LaneInterdictors.Hulls)
             {
                 ClassFilter = c => c is ShipClass k && LaneInterdictors.CanCarry(k),
+            });
+
+            // The gate breaker's engineering teams (U.SPC-T478): structure, built into the frame, a working space boarders can
+            // fight through like engineering.
+            Register(new FacilityKind(SiegeEngineering, "Siege engineering bay", 2, 650, false,
+                new[] { (Good.Alloys, 180.0), (Good.Machinery, 140.0), (Good.Electronics, 60.0), (Good.Munitions, 30.0) },
+                new[] { HullCategory.Battleship }, false, CompartmentKind.Engineering)
+            {
+                ClassFilter = c => c is ShipClass k && GateBreakers.IsClass(k),
             });
 
             // A truss freighter's standard modules (U.SPC-T482): a pod is a share of its hold, a sphere a share of its tanks.
@@ -444,6 +461,19 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Quarters, "Crew quarters", 0.0), new FacilitySite(FacilityKinds.Midships, "Midships", -0.12),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.34), new FacilitySite(FacilityKinds.Bridge, "Bridge", 0.05, 0.05, 2),
             },
+            // The gate breaker (U.SPC-T478): an armoured ram bow, the plasma batteries' magnetic bottles forward, the boarding
+            // teams' barracks (the biggest marine complement afloat) off the crew quarters, the shuttle deck their two boarding
+            // shuttles fly from, the engineering teams' siege bay, and the bridge buried at the centre. Its FTL drive is its own
+            // (FtlAccess.Own), built into engineering like a carrier's, not a fitting a yard could strip.
+            [ShipClass.GateBreaker] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bow, "Ram bow", 0.4), new FacilitySite(FacilityKinds.Battery, "Plasma batteries", 0.2),
+                new FacilitySite(FacilityKinds.Quarters, "Crew quarters", 0.04), new FacilitySite(FacilityKinds.Midships, "Midships", -0.12),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.4), Buried(3),
+                new FacilitySite(FacilityKinds.MarineHabitat, "Boarding teams' barracks", 0.04, -0.06, 2, 340),
+                new FacilitySite(FacilityKinds.Hangar, "Shuttle deck", -0.05, -0.05, 3),
+                new FacilitySite(FacilityKinds.SiegeEngineering, "Siege engineering bay", -0.26, 0, 3),
+            },
             // A truss freighter (U.SPC-T482): the cockpit at the bow, the pod gantry down the spine, the pods and spheres clamped
             // along it (no space of their own: nobody walks into a pod) and the engine room astern.
             [ShipClass.Freighter] = BulkFreighters.StockLayout(),
@@ -578,6 +608,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Battleship: return 6;
                 case ShipClass.Cruiser:
                 case ShipClass.CommandCruiser:
+                // Its plate and siege bay fill most of a gate breaker (U.SPC-T478).
+                case ShipClass.GateBreaker:
                 case ShipClass.Freighter: return 4;
                 case ShipClass.Destroyer:
                 case ShipClass.Miner:

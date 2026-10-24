@@ -1026,6 +1026,52 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.28),
                 },
             } },
+            [ShipClass.GateBreaker] = new[] { new CombatSpec
+            {
+                // The gate breaker (U.SPC-T478, see GateBreakers): a siege capital shorter than a battleship and heavier, all
+                // of the difference plate, so it takes a gate's forts' fire as it closes and is the slowest warship hull. Its
+                // siege guns are brawling batteries of plasma cannons, a pair in the bow and three down either beam and
+                // nothing longer-ranged, so it fights inside their reach; its shuttle deck keeps two boarding shuttles to
+                // put its boarding teams aboard a silenced fort or gate.
+                DesignName = "Gate breaker", LengthKm = 2.0,
+                MassKt = 34000, MainThrustMN = 85000, RetroThrustMN = 63750, LateralThrustMN = 29750, VerticalThrustMN = 29750, PitchYawTorqueMNKm = 2300000, RollTorqueMNKm = 575000,
+                Hull = 34000, Shield = 12000, ShieldRegen = 80, Armor = 14, MaxSpeed = 0.075, Accel = 0.0025, Decel = 0.0025,
+                BoostSpeedMultiplier = 1.25, BoostDurationS = 30, TurnRateDegS = 4.5, Shuttles = 2,
+                Crew = 2200,
+                DryMassTonnes = 135000, PropellantTonnes = 60000, ExhaustVelocityKmS = 4000,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.BoardingPods, 0, -0.05, 0.3),
+                    // The shuttle deck, ventral amidships: two boarding shuttles and their marine teams.
+                    new SubsystemDef(SubsystemKind.Hangar, 0, -0.045, -0.05),
+                    // The siege batteries: plasma cannons, a pair bearing ahead and three down either beam.
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.04, 0.05, 0.3, arcCenterDeg: 0, arcWidthDeg: 120),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.04, 0.05, 0.3, arcCenterDeg: 0, arcWidthDeg: 120),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, 0.15, arcCenterDeg: 90, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, -0.02, arcCenterDeg: 90, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, 0.085, 0.03, -0.2, arcCenterDeg: 90, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, 0.15, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, -0.02, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PlasmaCannon, -0.085, 0.03, -0.2, arcCenterDeg: 270, arcWidthDeg: 150),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0.07, 0.04, 0.36),
+                    new SubsystemDef(SubsystemKind.PointDefense, -0.07, 0.04, 0.36),
+                    new SubsystemDef(SubsystemKind.PointDefense, 0.07, 0.04, -0.34),
+                    new SubsystemDef(SubsystemKind.PointDefense, -0.07, 0.04, -0.34),
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0, 0) { Buried = true },
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.065, 0.35),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0.07, 0.065, 0.2),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0.09, 0.065, -0.05),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0.07, 0.065, -0.3),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.065, -0.44),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, -0.07, 0.065, -0.3),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, -0.09, 0.065, -0.05),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, -0.07, 0.065, 0.2),
+                    new SubsystemDef(SubsystemKind.Engine, -0.045, 0, -0.48),
+                    new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.48),
+                    new SubsystemDef(SubsystemKind.Engine, 0.045, 0, -0.48),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
+                },
+            } },
         };
 
         /// <summary>Every class's marines are what its design's habitats quarter (U.SPC-T465, <see cref="MarineHabitats"/>), not

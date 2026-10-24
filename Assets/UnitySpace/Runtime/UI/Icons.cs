@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.UI
     {
         const int Size = 64;
 
-        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, scout, pennant, arrow, badge, shuttle, white, prograde, retrograde, blip, lost, singularity;
+        static Texture2D ring, dot, star, diamond, triangle, chevron, carrier, square, hexagon, dart, wedge, needle, broad, scout, pennant, arrow, badge, shuttle, breaker, white, prograde, retrograde, blip, lost, singularity;
 
         public static Texture2D White => white ??= Solid();
 
@@ -95,6 +95,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Corvette: return badge ??= Draw(p => Mathf.Min(Ring(p, 0.85f, 0.1f), Chevron(p * 1.5f)));
                 // The boarding shuttle (U.SPC-T486): a stubby box with a bar across it, its docking collar.
                 case ShipClass.AssaultShuttle: return shuttle ??= Draw(p => Mathf.Min(Box(p, new Vector2(0.3f, 0.5f)), Box(p, new Vector2(0.55f, 0.08f))));
+                // The gate breaker (U.SPC-T478): a battleship's diamond inside the ring of the gate it breaks.
+                case ShipClass.GateBreaker: return breaker ??= Draw(p => Mathf.Min(Ring(p, 0.84f, 0.1f), Mathf.Abs(p.x) * 2.0f + Mathf.Abs(p.y) * 1.6f - 0.85f));
                 default: return square ??= Draw(p => Outline(Box(p, new Vector2(0.62f, 0.62f)), 0.14f));
             }
         }
@@ -106,6 +108,8 @@ namespace Unity.SpaceGod.UI
             {
                 case ShipClass.Carrier: return 22;
                 case ShipClass.Battleship: return 20;
+                // A siege capital, a battleship's weight (U.SPC-T478).
+                case ShipClass.GateBreaker: return 20;
                 case ShipClass.Cruiser: return 16;
                 case ShipClass.Destroyer: return 13;
                 case ShipClass.Courier:

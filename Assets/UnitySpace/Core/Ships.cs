@@ -88,6 +88,13 @@ namespace Unity.SpaceGod.Core
         /// intact: slower and gentler than a fired Breacher round (U.SPC-T466), no drill and no breach. See
         /// <see cref="BoardingShuttles"/>; carriers launch it as <see cref="FighterRole.AssaultShuttle"/>.</summary>
         AssaultShuttle,
+
+        /// <summary>A gate breaker (U.SPC-T478): the siege capital built to take a jump gate. The most heavily armoured hull
+        /// in the game, it closes with a gate's forts behind brawling batteries of plasma cannons, and carries boarding teams
+        /// (a big marine habitat and two boarding shuttles) and engineering teams (a siege engineering bay) to seize the gate
+        /// intact and repair its ring. It always carries its own FTL drive, since it attacks the gates the rest of the fleet
+        /// would use (see <see cref="GateBreakers"/>).</summary>
+        GateBreaker,
     }
 
     public enum ShipRole
@@ -200,6 +207,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.Recon, "Recon fighter", 1.3, true),
             // A boarding shuttle (U.SPC-T486): heavy for its size, no faster than a bomber.
             new ShipClassSpec(ShipClass.AssaultShuttle, "Assault shuttle", 0.5, true),
+            // The siege capital (U.SPC-T478): its plate makes it the slowest warship hull.
+            new ShipClassSpec(ShipClass.GateBreaker, "Gate breaker", 0.25, true),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];

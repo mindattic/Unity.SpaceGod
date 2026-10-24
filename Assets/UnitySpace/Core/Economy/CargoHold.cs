@@ -44,6 +44,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Cruiser] = new CargoHoldSpec(7, 6),
             [ShipClass.CommandCruiser] = new CargoHoldSpec(8, 6),
             [ShipClass.Battleship] = new CargoHoldSpec(9, 7),
+            // Its siege bay's stores take the room a battleship keeps for a hold (U.SPC-T478).
+            [ShipClass.GateBreaker] = new CargoHoldSpec(7, 6),
             [ShipClass.Carrier] = new CargoHoldSpec(10, 8),
         };
 

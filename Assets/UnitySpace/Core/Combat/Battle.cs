@@ -957,6 +957,8 @@ namespace Unity.SpaceGod.Core
                 // A frigate's torpedoes are for the capitals (U.SPC-T475), and so are a dreadnought's spinal guns (U.SPC-T490).
                 score -= AlphaStrike.TargetBias(u, o);
                 score -= RearLine.TargetBias(u, o);
+                // A gate breaker is there to break the gate's forts (U.SPC-T478).
+                score -= GateBreakers.TargetBias(u, o);
                 if (o.Kind == UnitKind.Platform) score += 6;
                 if (flagship != null && flagship != u && flagship.Target == o) score -= 6;
                 if (focus != null && focus == o) score -= FleetCoordination.Focus.Value;

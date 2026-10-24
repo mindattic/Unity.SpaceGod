@@ -162,6 +162,8 @@ namespace Unity.SpaceGod.Core
         {
             [ShipClass.Carrier] = FtlAccess.Own,
             [ShipClass.Explorer] = FtlAccess.Own,
+            // The gate breaker (U.SPC-T478) always has its own: it attacks the gates the rest of the fleet would use.
+            [ShipClass.GateBreaker] = FtlAccess.Own,
             [ShipClass.Battleship] = FtlAccess.Fitted,
             [ShipClass.CommandCruiser] = FtlAccess.Fitted,
             [ShipClass.Cruiser] = FtlAccess.Gates,
@@ -254,6 +256,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Battleship] = Capital,
             // A command cruiser, like a battleship, only when its design fits the drive facility (U.SPC-T477, U.SPC-T472).
             [ShipClass.CommandCruiser] = Capital,
+            // The gate breaker's own capital drive, built into its engineering (U.SPC-T478).
+            [ShipClass.GateBreaker] = Capital,
             [ShipClass.Explorer] = Survey,
         };
 
@@ -322,6 +326,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Carrier] = 12,
             [ShipClass.Battleship] = 4,
             [ShipClass.CommandCruiser] = 3,
+            // Its shuttle deck (U.SPC-T478): room for its own two boarding shuttles' worth of small craft.
+            [ShipClass.GateBreaker] = 4,
         };
 
         /// <summary>How many berths a craft of each class takes up; a class not listed cannot be carried.</summary>

@@ -247,7 +247,9 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Freighter:
                 case ShipClass.Miner:
                 case ShipClass.OreTug: return HullCategory.Freighter;
-                case ShipClass.Battleship: return HullCategory.Battleship;
+                case ShipClass.Battleship:
+                // A siege capital, as heavy as a battleship (U.SPC-T478).
+                case ShipClass.GateBreaker: return HullCategory.Battleship;
                 case ShipClass.Carrier: return HullCategory.Carrier;
                 case ShipClass.LaneTender: return HullCategory.Support;
                 default: return HullCategory.Warship;

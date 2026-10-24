@@ -1013,10 +1013,15 @@ namespace Unity.SpaceGod.Core
                 c.BesiegedDays = 0;
             }
             c.BesiegedDays += 1;
-            // Boarding shuttles in the group put marines aboard the gate and take it sooner (U.SPC-T486).
-            bool shuttles = BoardingShuttles.CanSeizeGate(Group(system.World, ship));
-            if (c.BesiegedDays < BoardingShuttles.GateHoldDays(GateHoldDays, shuttles)) return;
-            SeizeGate(c, gate, jd, shuttles);
+            // Boarding shuttles in the group put marines aboard the gate and take it sooner (U.SPC-T486); a gate breaker's
+            // boarding and engineering teams storm it the first day and take it intact (U.SPC-T478).
+            var group = new List<Ship>(Group(system.World, ship));
+            bool shuttles = BoardingShuttles.CanSeizeGate(group);
+            var breaker = GateBreakers.Stormer(group);
+            double hold = BoardingShuttles.GateHoldDays(GateHoldDays, shuttles);
+            if (breaker != null) hold = GateBreakers.GateHoldDays(hold);
+            if (c.BesiegedDays < hold) return;
+            SeizeGate(c, gate, jd, shuttles, breaker);
             if (v.HoldGate != null) Traffic.Release(system, ship, jd);
         }
 
@@ -1044,9 +1049,11 @@ namespace Unity.SpaceGod.Core
         void TakeGate(Campaign c, JumpGate gate, double jd) => SeizeGate(c, gate, jd, false);
 
         /// <summary>Takes <paramref name="gate"/> for the campaign; <paramref name="boarded"/> when its boarding shuttles put the
-        /// marines aboard (U.SPC-T486).</summary>
-        void SeizeGate(Campaign c, JumpGate gate, double jd, bool boarded)
+        /// marines aboard (U.SPC-T486); <paramref name="breaker"/>, the gate breaker whose boarding and engineering teams stormed
+        /// it, its engineers making good the damage the ring has taken (U.SPC-T478).</summary>
+        void SeizeGate(Campaign c, JumpGate gate, double jd, bool boarded, Ship breaker = null)
         {
+            double patched = breaker != null ? GateBreakers.MakeGood(gate) : 0;
             var old = gate.Owner;
             if (takenGates.TryGetValue(gate, out var taken) && taken.War == c.War)
             {
@@ -1063,7 +1070,10 @@ namespace Unity.SpaceGod.Core
             c.Besieging = null;
             c.BesiegedDays = 0;
             var world = gate.Home.World;
-            string how = boarded ? "its forts silenced, their boarding shuttles put marines aboard and take it intact" : "its forts silenced, the gate is theirs";
+            string how = breaker != null
+                ? $"its forts silenced, the {breaker.Name}'s boarding and engineering teams storm it and take it intact" +
+                  (patched > 0 ? $", patching its ring to {gate.Integrity * 100:0}% whole" : "")
+                : boarded ? "its forts silenced, their boarding shuttles put marines aboard and take it intact" : "its forts silenced, the gate is theirs";
             world.Log(jd, $"The {c.Faction.Name} take the {gate.Name} at {gate.Home.Name} from the {old?.Name ?? "nobody"}: {how}", WorldEventKind.Capture,
                 world.Catalog.Root.Index);
         }

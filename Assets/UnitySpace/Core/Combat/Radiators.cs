@@ -96,6 +96,8 @@ namespace Unity.SpaceGod.Core
             // Two pairs off the flanks between the beam batteries and the drive.
             [ShipClass.Battleship] = Pairs(0.12, 0.0, -0.14, -0.33),
             [ShipClass.CommandCruiser] = Pairs(0.12, 0.0, -0.1, -0.26),
+            // Two pairs off the flanks abaft the beam batteries, the plasma bottles' and the drive's heat (U.SPC-T478).
+            [ShipClass.GateBreaker] = Pairs(0.12, -0.02, -0.28, -0.38),
             // One pair amidships forward of the engine nacelles, one pair abaft them.
             [ShipClass.Cruiser] = Pairs(0.14, 0.0, 0.12, -0.36),
         };

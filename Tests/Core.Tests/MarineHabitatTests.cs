@@ -29,6 +29,8 @@ namespace Unity.SpaceGod.Core.Tests
                 (ShipClass.AssaultShuttle, 24),
                 // The command cruiser (U.SPC-T477) quarters a small marine guard for the flag.
                 (ShipClass.CommandCruiser, 120),
+                // The gate breaker (U.SPC-T478) quarters the boarding teams it takes a gate with.
+                (ShipClass.GateBreaker, 340),
             };
             foreach (var (cls, marines) in expected)
                 Assert.That(CombatSpec.Of(cls).Marines, Is.EqualTo(marines), cls.ToString());

@@ -172,13 +172,14 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// The hull classes each role-bound weapon is fitted to (docs/SHIP_ROSTER.md): phaser arrays to destroyers and cruisers,
-        /// plasma cannons to the brawlers (the battleship's line and the breacher's assault) and, once it is a class, the gate
-        /// breaker. A module not listed fits any hull with a slot that takes it. A new class joins a role with <see cref="Allow"/>.
+        /// plasma cannons to the brawlers (the battleship's line and the breacher's assault) and the gate breaker's siege
+        /// batteries (U.SPC-T478). A module not listed fits any hull with a slot that takes it. A new class joins a role with
+        /// <see cref="Allow"/>.
         /// </summary>
         static readonly Dictionary<ModuleKind, HashSet<ShipClass>> Roles = new Dictionary<ModuleKind, HashSet<ShipClass>>
         {
             [ModuleKind.PhaserArray] = new HashSet<ShipClass> { ShipClass.Destroyer, ShipClass.Cruiser },
-            [ModuleKind.PlasmaCannon] = new HashSet<ShipClass> { ShipClass.Battleship, ShipClass.Breacher },
+            [ModuleKind.PlasmaCannon] = new HashSet<ShipClass> { ShipClass.Battleship, ShipClass.Breacher, ShipClass.GateBreaker },
         };
 
         /// <summary>Lets hulls of <paramref name="cls"/> take <paramref name="module"/> (a new class taking up a weapon's role).</summary>

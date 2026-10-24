@@ -362,6 +362,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.CommandCruiser] = Default.With(comeAboutS: 12, spoolS: 4.5),
             // The frigate: the fastest warship hull, quick to flip end for end.
             [ShipClass.Frigate] = Default.With(comeAboutS: 5, spoolS: 2.5, fullFactor: 0.8),
+            // The gate breaker (U.SPC-T478): heavier than a battleship for its length, the slowest to bring about and spool.
+            [ShipClass.GateBreaker] = Default.With(comeAboutS: 16, spoolS: 5.5),
         };
 
         /// <summary>The handling of a capital of class <paramref name="c"/>; <see cref="Default"/> for one with none of its own.</summary>
@@ -590,6 +592,7 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.CommandCruiser, FlightFamily.Capital);
             r.Assign(ShipClass.Frigate, FlightFamily.Capital);
             r.Assign(ShipClass.Corvette, FlightFamily.Capital);
+            r.Assign(ShipClass.GateBreaker, FlightFamily.Capital);
             r.Register(FlightFamily.LightFighter, new LightFighterFlightModel());
             r.Register(FlightFamily.Interceptor, new LightFighterFlightModel(LightFighterHandling.Interceptor, "Interceptor"));
             r.Register(FlightFamily.Bomber, new BomberFlightModel());

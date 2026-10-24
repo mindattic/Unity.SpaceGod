@@ -42,7 +42,8 @@ namespace Unity.SpaceGod.Rendering
         }
 
         public static bool IsWarship(ShipClass c) => c == ShipClass.Carrier || c == ShipClass.Battleship || c == ShipClass.Cruiser || c == ShipClass.Destroyer
-                                                    || c == ShipClass.CommandCruiser || c == ShipClass.Frigate || c == ShipClass.Corvette;
+                                                    || c == ShipClass.CommandCruiser || c == ShipClass.Frigate || c == ShipClass.Corvette
+                                                    || c == ShipClass.GateBreaker;
 
         /// <summary>The whole hull (both sections).</summary>
         public static Mesh Get(ShipClass shipClass, Faction faction) => GetSection(shipClass, faction, WholeHull);
@@ -75,6 +76,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Corvette: BuildCorvette(b); break;
                 case ShipClass.Recon: BuildRecon(b); break;
                 case ShipClass.AssaultShuttle: BuildShuttle(b); break;
+                case ShipClass.GateBreaker: BuildGateBreaker(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -611,6 +613,44 @@ namespace Unity.SpaceGod.Rendering
             b.Box(new Vector3(0, 0, -0.45f), new Vector3(0.13f, 0.075f, 0.06f), b.Dark);
             foreach (float x in new[] { -0.042f, 0f, 0.042f })
                 b.Nozzle(new Vector3(x, 0, -0.48f), 0.022f, 0.04f);
+        }
+
+        /// <summary>A gate breaker (U.SPC-T478): a short, broad, slab-sided siege hull under thick armour belts, its blunt ram
+        /// bow banded in plate, the plasma batteries' barbettes down both beams (the cannons themselves are parts) with their
+        /// magnetic bottles glowing between them, the shuttle deck's doors under the keel, the siege engineering bay's cranes
+        /// and gate-control mast on the dorsal spine, and three big bells astern.</summary>
+        static void BuildGateBreaker(Builder b)
+        {
+            b.Frustum(-0.44f, 0.34f, new Vector2(0.17f, 0.1f), new Vector2(0.15f, 0.09f), 0, b.Hull);
+            b.Frustum(0.34f, 0.50f, new Vector2(0.15f, 0.09f), new Vector2(0.07f, 0.05f), 0, b.Hull);
+            // The ram bow's armour bands.
+            foreach (float z in new[] { 0.38f, 0.44f })
+                b.Box(new Vector3(0, 0, z), new Vector3(0.14f, 0.085f, 0.015f), b.Dark);
+            var glow = b.Glow(new Color(0.75f, 0.55f, 1f));
+            foreach (float side in new[] { -1f, 1f })
+            {
+                // An armour belt down each beam, and the battery barbettes along it.
+                b.Box(new Vector3(side * 0.088f, 0.0f, -0.04f), new Vector3(0.012f, 0.07f, 0.66f), b.Accent);
+                foreach (float z in new[] { 0.15f, -0.02f, -0.2f })
+                {
+                    b.Box(new Vector3(side * 0.085f, 0.03f, z), new Vector3(0.03f, 0.016f, 0.045f), b.Dark);
+                    // The plasma bottle feeding each cannon, lit with its containment.
+                    b.Cylinder(new Vector3(side * 0.07f, 0.05f, z - 0.05f), 0.008f, 0.03f, glow);
+                }
+                b.Box(new Vector3(side * 0.04f, 0.05f, 0.3f), new Vector3(0.028f, 0.014f, 0.04f), b.Dark);
+            }
+            // The siege engineering bay's cranes and gate-control mast on the dorsal spine, plated over amidships where the
+            // bridge is buried at the centre (U.SPC-T492).
+            b.Box(new Vector3(0, 0.07f, -0.05f), new Vector3(0.07f, 0.03f, 0.2f), b.Hull);
+            b.Box(new Vector3(0, 0.09f, -0.26f), new Vector3(0.05f, 0.04f, 0.08f), b.Hull);
+            b.Box(new Vector3(0, 0.14f, -0.26f), new Vector3(0.01f, 0.07f, 0.01f), b.Light);
+            foreach (float side in new[] { -1f, 1f })
+                b.Box(new Vector3(side * 0.03f, 0.1f, -0.16f), new Vector3(0.006f, 0.006f, 0.14f), b.Light);
+            // The shuttle deck's doors under the keel.
+            b.Box(new Vector3(0, -0.047f, -0.05f), new Vector3(0.07f, 0.006f, 0.12f), b.Dark);
+            b.Box(new Vector3(0, 0, -0.46f), new Vector3(0.15f, 0.09f, 0.05f), b.Dark);
+            foreach (float x in new[] { -0.045f, 0f, 0.045f })
+                b.Nozzle(new Vector3(x, 0, -0.48f), 0.024f, 0.042f);
         }
 
         static void BuildCarrier(Builder b)

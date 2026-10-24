@@ -387,6 +387,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Corvette: return 6000;
                 // A bomber's armour round a troop bay and a docking collar (U.SPC-T486).
                 case ShipClass.AssaultShuttle: return 4000;
+                // More plate than a battleship, its own FTL drive and a siege engineering bay (U.SPC-T478).
+                case ShipClass.GateBreaker: return 80000;
                 default: return 3000;
             }
         }
