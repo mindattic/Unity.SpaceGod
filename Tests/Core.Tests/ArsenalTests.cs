@@ -22,7 +22,7 @@ namespace Unity.SpaceGod.Core.Tests
             {
                 // The hull with its utility mount fitted with that module instead of its stock one.
                 var l = new Loadout(spec, c, 0);
-                l.Fitted[l.Slots.FindIndex(s => s.Kind == SlotKind.UtilityMount)] = m;
+                l.Fitted[l.Slots.FindIndex(s => s.Type == MountType.Missile)] = m;
                 spec = l.Build();
             }
             return new Ship { Id = id, Name = f.Prefix + " " + c + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(spec, c) };
@@ -44,30 +44,37 @@ namespace Unity.SpaceGod.Core.Tests
         // ------------------------------------------------------------ fitting
 
         [Test]
-        public void SmallCraftCarryAGunMountAndAUtilityMountThatTakeTheNewArsenal()
+        public void SmallCraftCarryASmallBallisticMountAndASmallMissileMountThatTakeTheNewArsenal()
         {
             foreach (var c in new[] { ShipClass.Fighter, ShipClass.Courier })
             {
                 var l = new Loadout(CombatSpec.Of(c), c, 0);
-                int gun = l.Slots.FindIndex(s => s.Kind == SlotKind.GunMount);
-                int utility = l.Slots.FindIndex(s => s.Kind == SlotKind.UtilityMount);
-                Assert.That(gun, Is.GreaterThanOrEqualTo(0), c + " has no gun mount");
-                Assert.That(utility, Is.GreaterThanOrEqualTo(0), c + " has no utility mount");
+                int gun = l.Slots.FindIndex(s => s.Type == MountType.Ballistic);
+                int utility = l.Slots.FindIndex(s => s.Type == MountType.Missile);
+                Assert.That(gun, Is.GreaterThanOrEqualTo(0), c + " has no ballistic mount");
+                Assert.That(utility, Is.GreaterThanOrEqualTo(0), c + " has no missile mount");
+                Assert.That(l.Slots[gun].Size, Is.EqualTo(HardpointSize.Small));
                 Assert.That(Outfitting.CanFit(l, gun, ModuleKind.LightRailgun), Is.True);
-                Assert.That(Outfitting.CanFit(l, gun, ModuleKind.HeavyLaser), Is.False, "a heavy laser is no fighter's gun");
-                foreach (var m in new[] { ModuleKind.EmpLauncher, ModuleKind.MineLayer, ModuleKind.AutoTurret, ModuleKind.MissileLauncher })
-                    Assert.That(Outfitting.CanFit(l, utility, m), Is.True, c + " utility mount refused " + m);
+                Assert.That(Outfitting.CanFit(l, gun, ModuleKind.AutoTurret), Is.True);
+                Assert.That(Outfitting.CanFit(l, gun, ModuleKind.Railgun), Is.False, "a capital railgun is too big for a fighter's gun mount");
+                Assert.That(Outfitting.CanFit(l, gun, ModuleKind.LaserTurret), Is.False, "a laser goes on an energy mount, not a ballistic one");
+                foreach (var m in new[] { ModuleKind.EmpLauncher, ModuleKind.MineLayer, ModuleKind.MissileLauncher })
+                    Assert.That(Outfitting.CanFit(l, utility, m), Is.True, c + " missile mount refused " + m);
+                Assert.That(Outfitting.CanFit(l, utility, ModuleKind.AutoTurret), Is.False, "an auto turret is a gun: a missile mount takes none");
             }
+            var destroyer = new Loadout(CombatSpec.Of(ShipClass.Destroyer), ShipClass.Destroyer, 0);
+            int flak = destroyer.Slots.FindIndex(s => s.Stock == ModuleKind.FlakCannon);
+            Assert.That(Outfitting.CanFit(destroyer, flak, ModuleKind.Autocannon), Is.True, "a warship's small ballistic mount takes an autocannon");
             var cruiser = new Loadout(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser, 0);
-            int light = cruiser.Slots.FindIndex(s => s.Kind == SlotKind.LightMount);
-            Assert.That(Outfitting.CanFit(cruiser, light, ModuleKind.Autocannon), Is.True, "a warship's light mount takes an autocannon");
+            int pd = cruiser.Slots.FindIndex(s => s.Stock == ModuleKind.PointDefense);
+            Assert.That(Outfitting.CanFit(cruiser, pd, ModuleKind.Autocannon), Is.False, "a point-defence mount is an energy mount");
         }
 
         [Test]
         public void ALightRailgunFittedToAFighterFiresHarderSlowerSlugs()
         {
             var l = new Loadout(CombatSpec.Of(ShipClass.Fighter), ShipClass.Fighter, 0);
-            int gun = l.Slots.FindIndex(s => s.Kind == SlotKind.GunMount);
+            int gun = l.Slots.FindIndex(s => s.Type == MountType.Ballistic);
             l.Fitted[gun] = ModuleKind.LightRailgun;
             var spec = l.Build();
             Assert.That(spec.Layout.Count(d => d.Kind == SubsystemKind.LightRailgun), Is.EqualTo(1));
@@ -230,11 +237,11 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void AnAutoTurretFitsAWarshipsLightMountAsWellAsASmallCraftsUtilityMount()
+        public void AnAutoTurretFitsAWarshipsSmallBallisticMountAsWellAsASmallCrafts()
         {
-            var cruiser = new Loadout(CombatSpec.Of(ShipClass.Cruiser), ShipClass.Cruiser, 0);
-            int light = cruiser.Slots.FindIndex(s => s.Kind == SlotKind.LightMount);
-            Assert.That(Outfitting.CanFit(cruiser, light, ModuleKind.AutoTurret), Is.True);
+            var destroyer = new Loadout(CombatSpec.Of(ShipClass.Destroyer), ShipClass.Destroyer, 0);
+            int flak = destroyer.Slots.FindIndex(s => s.Stock == ModuleKind.FlakCannon);
+            Assert.That(Outfitting.CanFit(destroyer, flak, ModuleKind.AutoTurret), Is.True);
             Assert.That(new ShipCombat(CombatSpec.Of(ShipClass.Breacher), ShipClass.Breacher).Subsystems.Any(s => s.Kind == SubsystemKind.AutoTurret), Is.True,
                 "the Breacher is built with an auto turret on its utility mount");
         }

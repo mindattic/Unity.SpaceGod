@@ -36,11 +36,11 @@ namespace Unity.SpaceGod.Core.Tests
             return ship;
         }
 
-        static int SlotOf(Ship ship, SlotKind kind, Func<OutfitSlot, bool> also = null)
+        static int SlotOf(Ship ship, MountType type, Func<OutfitSlot, bool> also = null)
         {
             var l = Outfitting.LoadoutOf(ship);
             for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == kind && l.Fitted[i] != ModuleKind.Railgun && (also == null || also(l.Slots[i]))) return i;
+                if (l.Slots[i].Type == type && l.Fitted[i] != ModuleKind.Railgun && (also == null || also(l.Slots[i]))) return i;
             return -1;
         }
 
@@ -61,9 +61,9 @@ namespace Unity.SpaceGod.Core.Tests
             var ship = Hull(ShipClass.Cruiser, Navy);
             var l = Outfitting.LoadoutOf(ship);
             var spec = CombatSpec.Of(ShipClass.Cruiser);
-            Assert.That(l.Slots.Count(s => s.Kind == SlotKind.ShieldMount), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.ShieldGenerator)));
-            Assert.That(l.Slots.Count(s => s.Kind == SlotKind.EngineMount), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.Engine)));
-            Assert.That(l.Slots.Count(s => s.Kind == SlotKind.LightMount), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.PointDefense)));
+            Assert.That(l.Slots.Count(s => s.Type == MountType.Shield), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.ShieldGenerator)));
+            Assert.That(l.Slots.Count(s => s.Type == MountType.Engine), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.Engine)));
+            Assert.That(l.Slots.Count(s => s.Type == MountType.Energy && s.Size == HardpointSize.Small), Is.EqualTo(spec.Layout.Count(d => d.Kind == SubsystemKind.PointDefense)));
             Assert.That(l.Facilities, Is.EqualTo(FacilityLayouts.For(ShipClass.Cruiser)), "the design's own facilities");
             Assert.That(l.FreeSpace, Is.EqualTo(FacilityLayouts.SpareSpace(ShipClass.Cruiser)), "and the free space beyond them, as many sections as it had bays");
             Assert.That(l.Slots.Any(s => s.LayoutIndex >= 0 && (spec.Layout[s.LayoutIndex].Kind == SubsystemKind.Bridge || spec.Layout[s.LayoutIndex].Kind == SubsystemKind.Reactor
@@ -77,14 +77,24 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var ship = Hull(ShipClass.Battleship, Navy);
             var l = Outfitting.LoadoutOf(ship);
-            int light = SlotOf(ship, SlotKind.LightMount);
-            int broadside = SlotOf(ship, SlotKind.HeavyMount, s => !s.BearsOnBow);
-            int bow = SlotOf(ship, SlotKind.HeavyMount, s => s.BearsOnBow);
+            int light = SlotOf(ship, MountType.Energy, s => s.Size == HardpointSize.Small);
+            int broadside = SlotOf(ship, MountType.Energy, s => !s.BearsOnBow && s.Size == HardpointSize.Large);
+            int bow = SlotOf(ship, MountType.Energy, s => s.BearsOnBow && s.Size == HardpointSize.Large);
+            int launcher = SlotOf(ship, MountType.Missile, s => !s.Spinal);
+            int tube = SlotOf(ship, MountType.Missile, s => s.Stock == ModuleKind.TorpedoTube);
             Assert.That(Outfitting.CanFit(l, light, ModuleKind.LaserTurret), Is.True);
-            Assert.That(Outfitting.CanFit(l, light, ModuleKind.HeavyLaser), Is.False, "a point-defence mount is too light for a heavy laser");
-            Assert.That(Outfitting.CanFit(l, broadside, ModuleKind.Railgun), Is.False, "a railgun is spinal: only a mount bearing on the bow takes one");
-            Assert.That(Outfitting.CanFit(l, bow, ModuleKind.Railgun), Is.True);
-            Assert.That(Outfitting.CanFit(l, SlotOf(ship, SlotKind.ShieldMount), ModuleKind.ArmourPlating), Is.False);
+            Assert.That(Outfitting.CanFit(l, light, ModuleKind.HeavyLaser), Is.False, "a point-defence mount is too small for a heavy laser");
+            Assert.That(Outfitting.CanFit(l, light, ModuleKind.Autocannon), Is.False, "a point-defence mount is an energy mount: it takes no gun");
+            Assert.That(Outfitting.CanFit(l, broadside, ModuleKind.PlasmaCannon), Is.True, "a large energy mount takes any energy weapon its hull's role allows");
+            Assert.That(Outfitting.CanFit(l, broadside, ModuleKind.TachyonLance), Is.False, "the lance is spinal: only a mount bearing on the bow takes one");
+            Assert.That(Outfitting.CanFit(l, bow, ModuleKind.TachyonLance), Is.True);
+            Assert.That(Outfitting.CanFit(l, bow, ModuleKind.Railgun), Is.False, "a railgun is ballistic: an energy mount takes none, however big");
+            Assert.That(Outfitting.CanFit(l, bow, ModuleKind.MissileLauncher), Is.False, "nor a launcher");
+            Assert.That(Outfitting.CanFit(l, launcher, ModuleKind.InterceptorMissile), Is.True, "a missile mount takes any launcher no bigger than itself");
+            Assert.That(Outfitting.CanFit(l, launcher, ModuleKind.TorpedoTube), Is.False, "a tube is fixed: a broadside launcher mount takes none");
+            Assert.That(Outfitting.CanFit(l, tube, ModuleKind.AntimatterTorpedo), Is.True);
+            Assert.That(Outfitting.CanFit(l, tube, ModuleKind.HeavyLaser), Is.False);
+            Assert.That(Outfitting.CanFit(l, SlotOf(ship, MountType.Shield), ModuleKind.ArmourPlating), Is.False);
             Assert.That(Outfitting.CanFit(l, light, ModuleKind.Scanner), Is.False, "a scanner suite goes inside the hull, not on a mount");
             Assert.That(Outfitting.CanFit(l, light, null), Is.False, "a hardpoint is never left empty");
             Assert.That(l.CanAdd(FacilityKinds.Of(FacilityKinds.Scanner)), Is.EqualTo(OutfitOutcome.Ok));
@@ -99,7 +109,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (economy, yard) = Yard(Navy);
             var ship = Hull(ShipClass.Cruiser, Navy, 1e9);
-            int slot = SlotOf(ship, SlotKind.HeavyMount, s => s.Stock == ModuleKind.LaserTurret);
+            int slot = SlotOf(ship, MountType.Energy, s => s.Stock == ModuleKind.LaserTurret);
             double strength = ship.Combat.Strength;
             double alloys = yard.Stock[(int)Good.Alloys], electronics = yard.Stock[(int)Good.Electronics];
             var quote = Outfitting.Quote(ship, yard, slot, ModuleKind.HeavyLaser);
@@ -128,7 +138,7 @@ namespace Unity.SpaceGod.Core.Tests
             var (economy, yard) = Yard(Navy);
             yard.Stock[(int)Good.Electronics] = 5;
             var ship = Hull(ShipClass.Destroyer, Navy);
-            int slot = SlotOf(ship, SlotKind.ShieldMount);
+            int slot = SlotOf(ship, MountType.Shield);
             var before = ship.Combat;
             var quote = Outfitting.Quote(ship, yard, slot, ModuleKind.HardenedShield);
             Assert.That(quote.InStock, Is.False);
@@ -185,7 +195,7 @@ namespace Unity.SpaceGod.Core.Tests
             var (economy, yard) = Yard(Navy);
             var ship = Hull(ShipClass.Destroyer, Navy);
             var stock = CombatSpec.Of(ShipClass.Destroyer);
-            int slot = SlotOf(ship, SlotKind.ShieldMount);
+            int slot = SlotOf(ship, MountType.Shield);
             int index = Outfitting.LoadoutOf(ship).Slots[slot].LayoutIndex;
             Assert.That(Fit(economy, ship, yard, slot, ModuleKind.HardenedShield), Is.EqualTo(OutfitOutcome.Ok));
             int gens = stock.Layout.Count(d => d.Kind == SubsystemKind.ShieldGenerator);
@@ -224,7 +234,7 @@ namespace Unity.SpaceGod.Core.Tests
             var stock = CombatSpec.Of(ShipClass.Destroyer);
             var l = Outfitting.LoadoutOf(ship);
             for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == SlotKind.EngineMount) Assert.That(Fit(economy, ship, yard, i, ModuleKind.TorchEngine), Is.EqualTo(OutfitOutcome.Ok));
+                if (l.Slots[i].Type == MountType.Engine) Assert.That(Fit(economy, ship, yard, i, ModuleKind.TorchEngine), Is.EqualTo(OutfitOutcome.Ok));
             var spec = ship.Combat.Spec;
             Assert.That(spec.MainThrustMN, Is.EqualTo(stock.MainThrustMN * Loadout.TorchRating).Within(1e-6));
             Assert.That(spec.Accel, Is.GreaterThan(stock.Accel * 1.2));
@@ -242,7 +252,7 @@ namespace Unity.SpaceGod.Core.Tests
             lost.Hp = 0;
             ship.Combat.Interior.TakeCrew(100);
             double crew = ship.Combat.Interior.Crew;
-            int slot = SlotOf(ship, SlotKind.ShieldMount);
+            int slot = SlotOf(ship, MountType.Shield);
             Assert.That(Fit(economy, ship, yard, slot, ModuleKind.HardenedShield), Is.EqualTo(OutfitOutcome.Ok));
             Assert.That(ship.Combat.HullFraction, Is.EqualTo(0.6).Within(1e-9));
             Assert.That(ship.Combat.Subsystems[lost.Index].Destroyed, Is.True, "the shot-away launcher is still shot away");
@@ -254,11 +264,11 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var (economy, yard) = Yard(Navy);
             var ship = Hull(ShipClass.Cruiser, Navy);
-            int slot = SlotOf(ship, SlotKind.HeavyMount, s => s.Stock == ModuleKind.MissileLauncher);
+            int slot = SlotOf(ship, MountType.Missile, s => s.Stock == ModuleKind.MissileLauncher);
             int index = Outfitting.LoadoutOf(ship).Slots[slot].LayoutIndex;
             ship.Combat.Subsystems[index].Hp = 0;
-            Assert.That(Outfitting.Quote(ship, yard, slot, ModuleKind.HeavyLaser).TradeIn, Is.EqualTo(0));
-            Assert.That(Fit(economy, ship, yard, slot, ModuleKind.HeavyLaser), Is.EqualTo(OutfitOutcome.Ok));
+            Assert.That(Outfitting.Quote(ship, yard, slot, ModuleKind.InterceptorMissile).TradeIn, Is.EqualTo(0));
+            Assert.That(Fit(economy, ship, yard, slot, ModuleKind.InterceptorMissile), Is.EqualTo(OutfitOutcome.Ok));
             Assert.That(ship.Combat.Subsystems[index].Health, Is.EqualTo(1));
             // And back to a launcher: it comes loaded.
             Assert.That(Fit(economy, ship, yard, slot, ModuleKind.MissileLauncher), Is.EqualTo(OutfitOutcome.Ok));
@@ -339,10 +349,44 @@ namespace Unity.SpaceGod.Core.Tests
             var fitted = Enumerable.Range(0, 40).Select(_ => Outfitting.AiRefit(economy, ship, yard)).Where(m => m != null).ToList();
             var l = Outfitting.LoadoutOf(ship);
             Assert.That(l.Count(ModuleKind.Brig), Is.EqualTo(1));
-            Assert.That(l.Count(ModuleKind.HardenedShield), Is.EqualTo(l.Slots.Count(s => s.Kind == SlotKind.ShieldMount)));
+            Assert.That(l.Count(ModuleKind.HardenedShield), Is.EqualTo(l.Slots.Count(s => s.Type == MountType.Shield)));
             Assert.That(l.Count(ModuleKind.HeavyLaser), Is.GreaterThan(0), "a big hull's lasers become heavy lasers");
-            Assert.That(l.Count(ModuleKind.TorchEngine), Is.EqualTo(l.Slots.Count(s => s.Kind == SlotKind.EngineMount)));
+            Assert.That(l.Count(ModuleKind.TorchEngine), Is.EqualTo(l.Slots.Count(s => s.Type == MountType.Engine)));
             Assert.That(Outfitting.AiRefit(economy, ship, yard), Is.Null, "nothing left to want");
+            for (int i = 0; i < l.Slots.Count; i++)
+                Assert.That(Outfitting.CanFit(l, i, l.Fitted[i]), Is.True, "the AI's refits obey each mount's type and size (U.SPC-T508)");
+        }
+
+        [Test]
+        public void EveryHardpointIsTypedAndSizedAndEveryStockDesignKeepsItsOwnParts()
+        {
+            // U.SPC-T508: a hardpoint is Ballistic, Missile or Energy (or a shield or engine mount) with a size, and each
+            // module that goes on one has a type and size of its own; the facility modules go inside the hull instead.
+            foreach (var m in ModuleSpec.Catalogue)
+                Assert.That(m.Mount == null, Is.EqualTo(m.Facility != null), m.Name);
+            foreach (var f in HullFrames.Catalogue)
+            {
+                var l = f.NewLoadout();
+                for (int i = 0; i < l.Slots.Count; i++)
+                {
+                    var s = l.Slots[i];
+                    Assert.That(s.Stock, Is.Not.Null, f.Id);
+                    // A spinal mount (U.SPC-T490) is a type of its own that takes any gun built to the hull's length.
+                    if (s.Type == MountType.Spinal) Assert.That(SpinalMounts.Takes(s.Stock.Value), Is.True, f.Id);
+                    else Assert.That(s.Type, Is.EqualTo(ModuleSpec.Of(s.Stock.Value).Mount), f.Id + " " + s.Name + ": a mount is of its stock part's type");
+                    Assert.That(s.Size, Is.GreaterThanOrEqualTo(ModuleSpec.Of(s.Stock.Value).Size), f.Id + " " + s.Name);
+                    Assert.That(Outfitting.CanFit(l, i, s.Stock), Is.True, f.Id + ": " + s.Name + " refuses its own " + s.Stock);
+                    Assert.That(f.Hardpoints[i].Type, Is.EqualTo(s.Type));
+                    Assert.That(f.Hardpoints[i].Size, Is.EqualTo(s.Size));
+                }
+                Assert.That(l.Build(), Is.SameAs(f.Design), f.Id + ": the stock design is unchanged");
+            }
+            var battleship = HullFrames.ForClass(ShipClass.Battleship).NewLoadout();
+            var bow = battleship.Slots.First(s => s.Stock == ModuleKind.HeavyLaser && s.BearsOnBow);
+            Assert.That(bow.Name, Is.EqualTo("Large energy mount"), "the outfitting screen names a mount by its size and type");
+            Assert.That(battleship.Slots.First(s => s.Type == MountType.Shield).Name, Is.EqualTo("Shield mount"));
+            Assert.That(battleship.Slots.Count(s => s.Type == MountType.Spinal), Is.EqualTo(2), "and its two spinal mounts are their own type");
+            Assert.That(battleship.Slots.First(s => s.Type == MountType.Spinal).Name, Is.EqualTo("Spinal mount"));
         }
 
         [Test]

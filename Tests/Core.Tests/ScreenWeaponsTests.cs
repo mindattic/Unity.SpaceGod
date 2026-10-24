@@ -80,15 +80,18 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(ModuleSpec.SubsystemOf(ModuleKind.FlakCannon), Is.EqualTo(SubsystemKind.FlakCannon));
             Assert.That(ModuleSpec.SubsystemOf(ModuleKind.InterceptorMissile), Is.EqualTo(SubsystemKind.InterceptorMissile));
 
-            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, SlotKind.TorpedoTube, false), Is.True, "a tube takes an antimatter launcher");
-            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, SlotKind.HeavyMount, true), Is.True, "so does a mount bearing on the bow");
-            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, SlotKind.HeavyMount, false), Is.False, "a broadside mount does not");
-            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, SlotKind.LightMount, true), Is.False);
+            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, MountType.Missile, HardpointSize.Medium, true), Is.True, "a spinal missile mount takes an antimatter launcher");
+            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, MountType.Missile, HardpointSize.Large, false), Is.False, "a broadside mount does not");
+            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, MountType.Missile, HardpointSize.Small, true), Is.False, "nor a small one");
+            Assert.That(ModuleSpec.Fits(ModuleKind.AntimatterTorpedo, MountType.Energy, HardpointSize.Large, true), Is.False, "nor an energy mount");
+            Assert.That(ModuleSpec.Of(ModuleKind.FlakCannon).Mount, Is.EqualTo(MountType.Ballistic), "flak is a ballistic gun");
+            Assert.That(ModuleSpec.Of(ModuleKind.InterceptorMissile).Mount, Is.EqualTo(MountType.Missile));
             foreach (var m in new[] { ModuleKind.FlakCannon, ModuleKind.InterceptorMissile })
             {
-                Assert.That(ModuleSpec.Fits(m, SlotKind.LightMount, false), Is.True, m + " in a light mount");
-                Assert.That(ModuleSpec.Fits(m, SlotKind.HeavyMount, false), Is.True, m + " in a heavy mount");
-                Assert.That(ModuleSpec.Fits(m, SlotKind.GunMount, false), Is.False, m + " is no fighter's gun");
+                var type = ModuleSpec.Of(m).Mount.Value;
+                Assert.That(ModuleSpec.Fits(m, type, HardpointSize.Small, false), Is.True, m + " in a small mount of its type");
+                Assert.That(ModuleSpec.Fits(m, type, HardpointSize.Large, false), Is.True, m + " in a large one");
+                Assert.That(ModuleSpec.Fits(m, MountType.Energy, HardpointSize.Large, false), Is.False, m + " on no energy mount");
             }
 
             // The stock destroyer's screen mounts are refittable slots carrying their own modules.

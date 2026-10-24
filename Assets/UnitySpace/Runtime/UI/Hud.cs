@@ -2890,7 +2890,10 @@ namespace Unity.SpaceGod.UI
                         fitted += sub.Destroyed ? "  (shot away)" : sub.Health < 0.99 ? "  (" + Percent(sub.Health) + ")" : "";
                     }
                     if (slot.Stock != null && loadout.Fitted[i] != slot.Stock) fitted += "   was " + loadout.PartAt(i, slot.Stock.Value).Name.ToLowerInvariant();
-                    string where = slot.BearsOnBow && slot.Kind == SlotKind.HeavyMount ? " (bow)" : "";
+                    // Each mount's type and size (U.SPC-T508), and where a turret mount takes a spinal part (a railgun, a tube,
+                    // the lance): one bearing on the bow, or a fixed tube.
+                    string where = slot.IsWeapon && slot.Type != MountType.Spinal && slot.Spinal && slot.Size != HardpointSize.Small
+                        ? (slot.BearsOnBow ? " (bow)" : " (fixed)") : "";
                     label = "  " + slot.Name + where + "   " + fitted;
                 }
                 else if (i < hardpoints + facilities)

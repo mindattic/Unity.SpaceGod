@@ -51,7 +51,7 @@ namespace Unity.SpaceGod.Core.Tests
 
             // Nowhere to put a gun: its only hardpoints are its shield emitters and its engine.
             var l = new Loadout(spec, ShipClass.Freighter, Economy.CapacityOf(ShipClass.Freighter));
-            Assert.That(l.Slots.All(s => s.Kind == SlotKind.ShieldMount || s.Kind == SlotKind.EngineMount), Is.True);
+            Assert.That(l.Slots.All(s => s.Type == MountType.Shield || s.Type == MountType.Engine), Is.True);
 
             var layout = FacilityLayouts.For(ShipClass.Freighter);
             Assert.That(layout.Count(f => f.Kind == FacilityKinds.CargoPod), Is.EqualTo(BulkFreighters.StockPods));

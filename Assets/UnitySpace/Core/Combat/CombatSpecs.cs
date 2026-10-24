@@ -28,7 +28,7 @@ namespace Unity.SpaceGod.Core
         Hangar,
         Reactor,
 
-        /// <summary>A fittable rapid-fire kinetic gun (U.SPC-T271): a fighter's main gun, or a light mount's on a bigger hull.</summary>
+        /// <summary>A fittable rapid-fire kinetic gun (U.SPC-T271): a fighter's main gun, or on a small ballistic mount of a bigger hull.</summary>
         Autocannon,
 
         /// <summary>A fighter-sized railgun: a slow, hard, fast-flying slug for a gun mount (U.SPC-T271).</summary>

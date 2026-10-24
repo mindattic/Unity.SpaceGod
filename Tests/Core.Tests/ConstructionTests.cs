@@ -49,7 +49,7 @@ namespace Unity.SpaceGod.Core.Tests
             }
             // Every armed hull has weapon sockets, a fighter's small and a battleship's large.
             Assert.That(HullFrames.ForClass(ShipClass.Fighter).Hardpoints.Where(h => h.IsWeaponMount).All(h => h.Size == HardpointSize.Small), Is.True);
-            Assert.That(HullFrames.ForClass(ShipClass.Battleship).Hardpoints.Any(h => h.Slot == SlotKind.HeavyMount && h.Size == HardpointSize.Large), Is.True);
+            Assert.That(HullFrames.ForClass(ShipClass.Battleship).Hardpoints.Any(h => h.Type == MountType.Energy && h.Size == HardpointSize.Large), Is.True);
             foreach (var f in HullFrames.InCategory(HullCategory.Satellite).Concat(HullFrames.InCategory(HullCategory.Station)))
                 Assert.That(f.Hardpoints.Any(h => h.IsWeaponMount), Is.True, f.Id);
         }
@@ -57,24 +57,26 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void CapitalShipsAndTheOrbitalStationCarryTorpedoTubes()
         {
-            Assert.That(HullFrames.ForClass(ShipClass.Battleship).Hardpoints.Count(h => h.Slot == SlotKind.TorpedoTube), Is.EqualTo(2));
-            Assert.That(HullFrames.ForClass(ShipClass.Cruiser).Hardpoints.Count(h => h.Slot == SlotKind.TorpedoTube), Is.EqualTo(1));
+            Assert.That(HullFrames.ForClass(ShipClass.Battleship).Hardpoints.Count(h => h.Stock == ModuleKind.TorpedoTube), Is.EqualTo(2));
+            Assert.That(HullFrames.ForClass(ShipClass.Cruiser).Hardpoints.Count(h => h.Stock == ModuleKind.TorpedoTube), Is.EqualTo(1));
             var station = HullFrames.Of("station/orbital-station");
-            Assert.That(station.Hardpoints.Count(h => h.Slot == SlotKind.TorpedoTube), Is.EqualTo(2));
-            var tube = station.Hardpoints.First(h => h.Slot == SlotKind.TorpedoTube);
+            Assert.That(station.Hardpoints.Count(h => h.Stock == ModuleKind.TorpedoTube), Is.EqualTo(2));
+            var tube = station.Hardpoints.First(h => h.Stock == ModuleKind.TorpedoTube);
+            Assert.That(tube.Type, Is.EqualTo(MountType.Missile));
+            Assert.That(station.Hardpoints.Where(h => h.Stock == ModuleKind.TorpedoTube).All(h => h.Spinal), Is.True, "a fixed tube takes a tube even facing aft");
             Assert.That(tube.Stock, Is.EqualTo(ModuleKind.TorpedoTube));
             Assert.That(Hardpoint.ArtKey(tube, tube.Stock), Is.EqualTo("TorpedoTube/Large"));
         }
 
         [Test]
-        public void ATorpedoTubeTakesATubeOrALauncherAndABowMountTakesATube()
+        public void ATorpedoTubeGoesOnlyOnASpinalMissileMountBigEnoughForIt()
         {
-            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, SlotKind.TorpedoTube, false), Is.True);
-            Assert.That(ModuleSpec.Fits(ModuleKind.MissileLauncher, SlotKind.TorpedoTube, false), Is.True);
-            Assert.That(ModuleSpec.Fits(ModuleKind.HeavyLaser, SlotKind.TorpedoTube, true), Is.False);
-            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, SlotKind.HeavyMount, true), Is.True);
-            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, SlotKind.HeavyMount, false), Is.False, "a tube is fixed: only a mount that bears on the bow");
-            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, SlotKind.UtilityMount, true), Is.False);
+            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, MountType.Missile, HardpointSize.Medium, true), Is.True);
+            Assert.That(ModuleSpec.Fits(ModuleKind.MissileLauncher, MountType.Missile, HardpointSize.Large, true), Is.True, "a spinal missile mount takes a launcher too");
+            Assert.That(ModuleSpec.Fits(ModuleKind.HeavyLaser, MountType.Missile, HardpointSize.Large, true), Is.False, "a missile mount takes no laser");
+            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, MountType.Energy, HardpointSize.Large, true), Is.False, "nor an energy mount a tube");
+            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, MountType.Missile, HardpointSize.Large, false), Is.False, "a tube is fixed: only a mount that bears on the bow");
+            Assert.That(ModuleSpec.Fits(ModuleKind.TorpedoTube, MountType.Missile, HardpointSize.Small, true), Is.False, "a small missile mount is too small for a tube");
         }
 
         [Test]
@@ -83,7 +85,7 @@ namespace Unity.SpaceGod.Core.Tests
             var plan = new ConstructionPlan(HullFrames.ForClass(ShipClass.Destroyer));
             Assert.That(plan.Bill()[Good.Alloys], Is.EqualTo(Economy.HullCost(ShipClass.Destroyer)));
             Assert.That(plan.BasePrice(), Is.EqualTo(Economy.HullPrice(ShipClass.Destroyer)));
-            int bow = plan.Hardpoints.First(h => h.Slot == SlotKind.HeavyMount && h.BearsOnBow && h.Stock == ModuleKind.MissileLauncher).SlotIndex;
+            int bow = plan.Hardpoints.First(h => h.Type == MountType.Missile && h.BearsOnBow && h.Stock == ModuleKind.MissileLauncher).SlotIndex;
             Assert.That(plan.Fit(bow, ModuleKind.TorpedoTube), Is.EqualTo(ConstructionOutcome.Ok));
             Assert.That(plan.FitFacility(FacilityKinds.Of(FacilityKinds.ArmourPlating)), Is.EqualTo(ConstructionOutcome.Ok));
             Assert.That(plan.Fit(bow, ModuleKind.ArmourPlating), Is.EqualTo(ConstructionOutcome.WontFit), "plate goes inside the hull, not on a mount");

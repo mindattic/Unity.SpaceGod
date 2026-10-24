@@ -12,13 +12,15 @@ namespace Unity.SpaceGod.Core
         Support,
     }
 
-    /// <summary>How big a hardpoint's socket is, for the part a model library sets in it: a fighter's gun, a
-    /// destroyer's turret, a battleship's or a station's.</summary>
+    /// <summary>How big a hardpoint is (a fighter's gun, a destroyer's turret, a battleship's or a station's), and so the
+    /// biggest part it takes (U.SPC-T508): a part's own size (<see cref="ModuleSpec.Size"/>) must be no bigger. A model
+    /// library sizes the part it sets in the socket by it too.</summary>
     public enum HardpointSize { Small, Medium, Large }
 
     /// <summary>
     /// One hardpoint of a hull frame (U.SPC-T377): a place on the hull's surface -- where it sits (hull lengths, nose +Z,
-    /// up +Y), which way it faces and fires (its yaw arc), how big it is, what kind of mount it is and what the design
+    /// up +Y), which way it faces and fires (its yaw arc), its type and size (Ballistic, Missile or Energy, or a shield or
+    /// engine mount, U.SPC-T508: the kind and the biggest part it takes) and what the design
     /// builds onto it. The positions are the same ones the battle fires from, so a model library that sets a turret,
     /// launcher or tube on each socket puts it exactly where the fight thinks it is. What is inside the hull is not a
     /// hardpoint but a facility (<see cref="FacilitySite"/>, U.SPC-T470), with a size and no arc.
@@ -31,30 +33,38 @@ namespace Unity.SpaceGod.Core
         /// <summary>The hardpoint's index in the design's <see cref="CombatSpec.Layout"/>.</summary>
         public readonly int LayoutIndex;
 
-        public readonly SlotKind Slot;
+        /// <summary>The kind of part it is reserved for (U.SPC-T508).</summary>
+        public readonly MountType Type;
+
+        /// <summary>The biggest part it takes.</summary>
         public readonly HardpointSize Size;
         public readonly double X, Y, Z;
         public readonly bool FacesAft;
         public readonly double ArcCenterDeg, ArcWidthDeg;
 
-        /// <summary>A mount that bears on the bow (it can take a spinal railgun or a torpedo tube).</summary>
+        /// <summary>A mount that bears on the bow.</summary>
         public readonly bool BearsOnBow;
+
+        /// <summary>A mount that takes a spinal or fixed part (a railgun, a torpedo tube, the lance): one that bears on the
+        /// bow, or a fixed launcher.</summary>
+        public readonly bool Spinal;
 
         /// <summary>What the design builds here.</summary>
         public readonly ModuleKind? Stock;
 
-        /// <summary>A stable name for the socket within its frame ("heavy-2", "tube-0"), for a model library's prefab
+        /// <summary>A stable name for the socket within its frame ("energy-2", "missile-0"), for a model library's prefab
         /// bindings and for saves.</summary>
         public readonly string Socket;
 
-        public Hardpoint(int slotIndex, int layoutIndex, SlotKind slot, HardpointSize size, SubsystemDef def, ModuleKind? stock, bool bearsOnBow, string socket)
+        public Hardpoint(int slotIndex, OutfitSlot slot, SubsystemDef def, string socket)
         {
             SlotIndex = slotIndex;
-            LayoutIndex = layoutIndex;
-            Slot = slot;
-            Size = size;
-            Stock = stock;
-            BearsOnBow = bearsOnBow;
+            LayoutIndex = slot.LayoutIndex;
+            Type = slot.Type;
+            Size = slot.Size;
+            Stock = slot.Stock;
+            BearsOnBow = slot.BearsOnBow;
+            Spinal = slot.Spinal;
             Socket = socket;
             if (def != null)
             {
@@ -68,13 +78,12 @@ namespace Unity.SpaceGod.Core
             else ArcWidthDeg = 360;
         }
 
-        /// <summary>Whether a gun, launcher or tube goes here (not a shield or an engine).</summary>
-        public bool IsWeaponMount => Slot == SlotKind.LightMount || Slot == SlotKind.HeavyMount || Slot == SlotKind.GunMount ||
-                                     Slot == SlotKind.UtilityMount || Slot == SlotKind.TorpedoTube || Slot == SlotKind.SpinalMount;
+        /// <summary>Whether a gun, launcher or tube goes here (a Ballistic, Missile or Energy mount; not a shield or an engine).</summary>
+        public bool IsWeaponMount => OutfitSlot.IsWeaponType(Type);
 
-        /// <summary>The key a model library binds a part to: what is fitted (or the slot, when empty) and the socket's size,
-        /// e.g. "TorpedoTube/Large" or "HeavyMount/Medium".</summary>
-        public static string ArtKey(Hardpoint h, ModuleKind? fitted) => (fitted?.ToString() ?? h.Slot.ToString()) + "/" + h.Size;
+        /// <summary>The key a model library binds a part to: what is fitted (or the mount's type, when empty) and the
+        /// socket's size, e.g. "TorpedoTube/Large" or "EnergyMount/Medium".</summary>
+        public static string ArtKey(Hardpoint h, ModuleKind? fitted) => (fitted?.ToString() ?? h.Type + "Mount") + "/" + h.Size;
     }
 
     /// <summary>
@@ -151,39 +160,16 @@ namespace Unity.SpaceGod.Core
         {
             var l = NewLoadout();
             var list = new List<Hardpoint>(l.Slots.Count);
-            var counts = new Dictionary<SlotKind, int>();
+            var counts = new Dictionary<MountType, int>();
             for (int i = 0; i < l.Slots.Count; i++)
             {
+                // Each hardpoint's type and size are its loadout slot's (Loadout.MountSize, U.SPC-T508).
                 var s = l.Slots[i];
-                counts.TryGetValue(s.Kind, out int n);
-                counts[s.Kind] = n + 1;
-                list.Add(new Hardpoint(i, s.LayoutIndex, s.Kind, SizeOf(s.Kind), Design.Layout[s.LayoutIndex], s.Stock, s.BearsOnBow, SocketPrefix(s.Kind) + "-" + n));
+                counts.TryGetValue(s.Type, out int n);
+                counts[s.Type] = n + 1;
+                list.Add(new Hardpoint(i, s, Design.Layout[s.LayoutIndex], s.Type.ToString().ToLowerInvariant() + "-" + n));
             }
             return list;
-        }
-
-        /// <summary>A socket's size: a fighter's are small; a gun or utility mount and point defence are small on any hull;
-        /// other sockets are large on a capital hull or station (a kilometre long or more) and medium otherwise.</summary>
-        HardpointSize SizeOf(SlotKind k)
-        {
-            if (SmallCraft || k == SlotKind.GunMount || k == SlotKind.UtilityMount || k == SlotKind.LightMount) return HardpointSize.Small;
-            return Design.LengthKm >= 1 ? HardpointSize.Large : HardpointSize.Medium;
-        }
-
-        static string SocketPrefix(SlotKind k)
-        {
-            switch (k)
-            {
-                case SlotKind.LightMount: return "light";
-                case SlotKind.HeavyMount: return "heavy";
-                case SlotKind.ShieldMount: return "shield";
-                case SlotKind.EngineMount: return "engine";
-                case SlotKind.GunMount: return "gun";
-                case SlotKind.UtilityMount: return "utility";
-                case SlotKind.TorpedoTube: return "tube";
-                case SlotKind.SpinalMount: return "spinal";
-                default: return k.ToString().ToLowerInvariant();
-            }
         }
     }
 
@@ -339,7 +325,7 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// Building a hull from scratch (U.SPC-T377): pick a <see cref="HullFrame"/>, fit what goes on each of its hardpoints
-    /// (a torpedo tube in a bow mount, a heavy laser for a turret) and the facilities that go into its free internal space
+    /// (a torpedo tube in a bow missile mount, a heavy laser for a turret on an energy one) and the facilities that go into its free internal space
     /// (plate, racks, a scanner suite, a brig, U.SPC-T470), and the plan gives the hull's fighting spec, its bill of
     /// materials and its price. A plan launches as a new ship's loadout (<see cref="Apply"/>) or as a station's or
     /// satellite's combat state (<see cref="BuildCombat"/>), its interior built from its facilities.

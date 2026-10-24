@@ -51,35 +51,40 @@ namespace Unity.SpaceGod.Core
         /// capital hull only, built only at the greatest yards, and dear.</summary>
         TachyonLance,
 
-        /// <summary>A phaser-style beam array (U.SPC-T488): destroyers and cruisers only, on a weapon or light mount.</summary>
+        /// <summary>A phaser-style beam array (U.SPC-T488): destroyers and cruisers only, on any energy mount (U.SPC-T508), a point-defence one included.</summary>
         PhaserArray,
 
-        /// <summary>A plasma cannon (U.SPC-T488): the brawlers' heavy gun (battleships, breachers), on a weapon mount.</summary>
+        /// <summary>A plasma cannon (U.SPC-T488): the brawlers' heavy gun (battleships, breachers), on a medium or large energy mount.</summary>
         PlasmaCannon,
 
         // Heavy warheads and the anti-fighter screen (U.SPC-T489).
 
-        /// <summary>An antimatter torpedo launcher, with its first four rounds: a tube or a mount bearing on the bow takes one.</summary>
+        /// <summary>An antimatter torpedo launcher, with its first four rounds: a medium or large missile mount that bears on the bow, or a tube, takes one.</summary>
         AntimatterTorpedo,
 
-        /// <summary>A rotary flak cannon: a light or heavy mount takes one.</summary>
+        /// <summary>A rotary flak cannon: any ballistic mount takes one.</summary>
         FlakCannon,
 
-        /// <summary>An interceptor missile launcher, with its first twenty rounds: a light or heavy mount takes one.</summary>
+        /// <summary>An interceptor missile launcher, with its first twenty rounds: any missile mount takes one.</summary>
         InterceptorMissile,
 
         /// <summary>A spinal coilgun (U.SPC-T490, see <see cref="SpinalMounts"/>): only a spinal mount takes one.</summary>
         Coilgun,
     }
 
-    /// <summary>The kinds of hardpoint a hull offers on its surface: its weapon hardpoints (light ones take point defence, a
-    /// laser or an autocannon, heavy ones any turret), its shield and engine mounts, a small craft's gun mounts (an
-    /// autocannon, a light railgun or a laser) and utility mount (missiles, an EMP launcher, mines or an auto turret)
-    /// (U.SPC-T271), and a capital hull's torpedo tubes (a tube or a missile launcher, U.SPC-T377). What is inside the
-    /// hull is not a slot but a facility (<see cref="FacilityKind"/>, U.SPC-T470). A dreadnought's spinal mount (U.SPC-T490)
-    /// is a gun the length of the hull: it takes a railgun, a coilgun, a tachyon lance or a plasma cannon built to its length
-    /// (<see cref="SpinalMounts"/>).</summary>
-    public enum SlotKind { LightMount, HeavyMount, ShieldMount, EngineMount, GunMount, UtilityMount, TorpedoTube, SpinalMount }
+    /// <summary>
+    /// What kind of part a hull's hardpoint is reserved for, MechWarrior style (U.SPC-T508). A weapon hardpoint is
+    /// <see cref="Ballistic"/> (railguns, autocannons, flak, an auto turret), <see cref="Missile"/> (missile racks,
+    /// torpedo tubes, antimatter torpedoes, interceptors, an EMP launcher, mines) or <see cref="Energy"/> (lasers,
+    /// point-defence lasers, phaser arrays, plasma cannons, the tachyon lance), and each has a size
+    /// (<see cref="HardpointSize"/>): it takes a part of its own type no bigger than itself. Shield and engine mounts
+    /// take only generators and drives. So a design is shaped by which kinds of mount its hull has, not just how many.
+    /// A module's type and size are data on its <see cref="ModuleSpec"/>. What is inside the hull is not a hardpoint but
+    /// a facility (<see cref="FacilityKind"/>, U.SPC-T470). A dreadnought's <see cref="Spinal"/> mount (U.SPC-T490) is a
+    /// gun the length of the hull, a type of its own: it takes a railgun, a coilgun, a tachyon lance or a plasma cannon
+    /// built to its length (<see cref="SpinalMounts"/>).
+    /// </summary>
+    public enum MountType { Ballistic, Missile, Energy, Shield, Engine, Spinal }
 
     /// <summary>One module: what it is called, what a yard builds it from (tonnes of alloys, electronics,
     /// machinery and munitions, scaled with the hull for plate, drives, generators and racks) and its mass.</summary>
@@ -97,54 +102,73 @@ namespace Unity.SpaceGod.Core
         /// <summary>Whether the bill and mass grow with the hull (plate, drives, generators, racks) or are one fixed part (a gun).</summary>
         public readonly bool Scaled;
 
-        ModuleSpec(ModuleKind kind, string name, double mass, bool scaled, params (Good, double)[] bill)
+        /// <summary>The kind of hardpoint it goes on (U.SPC-T508), or null for a facility module (plate, racks, a scanner
+        /// suite, a brig), which goes inside the hull.</summary>
+        public readonly MountType? Mount;
+
+        /// <summary>The smallest hardpoint of its <see cref="Mount"/> type that takes it.</summary>
+        public readonly HardpointSize Size;
+
+        /// <summary>A spinal or fixed part (a railgun, a torpedo tube, an antimatter launcher, the tachyon lance): it goes
+        /// only on a mount that bears on the bow or is a fixed launcher (<see cref="OutfitSlot.Spinal"/>).</summary>
+        public readonly bool Spinal;
+
+        ModuleSpec(ModuleKind kind, string name, double mass, bool scaled, MountType? mount, HardpointSize size, bool spinal, params (Good, double)[] bill)
         {
             Kind = kind;
             Name = name;
             MassTonnes = mass;
             Scaled = scaled;
+            Mount = mount;
+            Size = size;
+            Spinal = spinal;
             Bill = bill;
         }
 
+        const MountType B = MountType.Ballistic, Mi = MountType.Missile, E = MountType.Energy, Sh = MountType.Shield, En = MountType.Engine;
+        const HardpointSize S = HardpointSize.Small, M = HardpointSize.Medium, L = HardpointSize.Large;
+
+        // Each module's mount type and size (U.SPC-T508): the light guns and launchers (and a phaser array, light enough
+        // for a point-defence mount) are small, the heavy guns, tubes and launchers medium, the tachyon lance large.
         static readonly ModuleSpec[] All =
         {
-            new ModuleSpec(ModuleKind.LaserTurret, "Laser turret", 120, false, (Good.Alloys, 40), (Good.Electronics, 12), (Good.Machinery, 6)),
-            new ModuleSpec(ModuleKind.HeavyLaser, "Heavy laser", 300, false, (Good.Alloys, 90), (Good.Electronics, 30), (Good.Machinery, 14)),
-            new ModuleSpec(ModuleKind.Railgun, "Railgun", 420, false, (Good.Alloys, 120), (Good.Electronics, 20), (Good.Machinery, 30)),
+            new ModuleSpec(ModuleKind.LaserTurret, "Laser turret", 120, false, E, S, false, (Good.Alloys, 40), (Good.Electronics, 12), (Good.Machinery, 6)),
+            new ModuleSpec(ModuleKind.HeavyLaser, "Heavy laser", 300, false, E, M, false, (Good.Alloys, 90), (Good.Electronics, 30), (Good.Machinery, 14)),
+            new ModuleSpec(ModuleKind.Railgun, "Railgun", 420, false, B, M, true, (Good.Alloys, 120), (Good.Electronics, 20), (Good.Machinery, 30)),
             // A launcher comes with its first full load: 16 rounds at the 1.5 t a round a yard rearms at.
-            new ModuleSpec(ModuleKind.MissileLauncher, "Missile launcher", 160, false, (Good.Alloys, 50), (Good.Electronics, 15), (Good.Machinery, 10), (Good.Munitions, 24)),
-            new ModuleSpec(ModuleKind.PointDefense, "Point defence", 40, false, (Good.Alloys, 15), (Good.Electronics, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
-            new ModuleSpec(ModuleKind.ShieldGenerator, "Shield generator", 60, true, (Good.Alloys, 30), (Good.Electronics, 20)),
-            new ModuleSpec(ModuleKind.HardenedShield, "Hardened shield", 90, true, (Good.Alloys, 50), (Good.Electronics, 45), (Good.Machinery, 5)),
-            new ModuleSpec(ModuleKind.Engine, "Fusion drive", 150, true, (Good.Alloys, 60), (Good.Machinery, 30), (Good.Electronics, 5)),
-            new ModuleSpec(ModuleKind.TorchEngine, "Torch drive", 190, true, (Good.Alloys, 90), (Good.Machinery, 55), (Good.Electronics, 12)),
-            new ModuleSpec(ModuleKind.ArmourPlating, "Armour plating", 450, true, (Good.Alloys, 300), (Good.Machinery, 4)),
-            new ModuleSpec(ModuleKind.CargoRack, "Cargo racks", 120, true, (Good.Alloys, 80), (Good.Machinery, 10)),
-            new ModuleSpec(ModuleKind.Scanner, "Scanner suite", 25, false, (Good.Electronics, 25), (Good.Alloys, 10)),
-            new ModuleSpec(ModuleKind.Brig, "Brig", 80, false, (Good.Alloys, 40), (Good.Electronics, 6), (Good.Machinery, 4)),
-            new ModuleSpec(ModuleKind.Autocannon, "Autocannon", 20, false, (Good.Alloys, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
-            new ModuleSpec(ModuleKind.LightRailgun, "Light railgun", 35, false, (Good.Alloys, 12), (Good.Electronics, 6), (Good.Machinery, 5)),
-            new ModuleSpec(ModuleKind.EmpLauncher, "EMP launcher", 25, false, (Good.Alloys, 6), (Good.Electronics, 14), (Good.Munitions, 2)),
-            new ModuleSpec(ModuleKind.MineLayer, "Mine layer", 40, false, (Good.Alloys, 10), (Good.Machinery, 4), (Good.Munitions, 9)),
-            new ModuleSpec(ModuleKind.AutoTurret, "Auto turret", 30, false, (Good.Alloys, 10), (Good.Electronics, 9), (Good.Machinery, 4), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.MissileLauncher, "Missile launcher", 160, false, Mi, S, false, (Good.Alloys, 50), (Good.Electronics, 15), (Good.Machinery, 10), (Good.Munitions, 24)),
+            new ModuleSpec(ModuleKind.PointDefense, "Point defence", 40, false, E, S, false, (Good.Alloys, 15), (Good.Electronics, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.ShieldGenerator, "Shield generator", 60, true, Sh, S, false, (Good.Alloys, 30), (Good.Electronics, 20)),
+            new ModuleSpec(ModuleKind.HardenedShield, "Hardened shield", 90, true, Sh, S, false, (Good.Alloys, 50), (Good.Electronics, 45), (Good.Machinery, 5)),
+            new ModuleSpec(ModuleKind.Engine, "Fusion drive", 150, true, En, S, false, (Good.Alloys, 60), (Good.Machinery, 30), (Good.Electronics, 5)),
+            new ModuleSpec(ModuleKind.TorchEngine, "Torch drive", 190, true, En, S, false, (Good.Alloys, 90), (Good.Machinery, 55), (Good.Electronics, 12)),
+            new ModuleSpec(ModuleKind.ArmourPlating, "Armour plating", 450, true, null, S, false, (Good.Alloys, 300), (Good.Machinery, 4)),
+            new ModuleSpec(ModuleKind.CargoRack, "Cargo racks", 120, true, null, S, false, (Good.Alloys, 80), (Good.Machinery, 10)),
+            new ModuleSpec(ModuleKind.Scanner, "Scanner suite", 25, false, null, S, false, (Good.Electronics, 25), (Good.Alloys, 10)),
+            new ModuleSpec(ModuleKind.Brig, "Brig", 80, false, null, S, false, (Good.Alloys, 40), (Good.Electronics, 6), (Good.Machinery, 4)),
+            new ModuleSpec(ModuleKind.Autocannon, "Autocannon", 20, false, B, S, false, (Good.Alloys, 8), (Good.Machinery, 3), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.LightRailgun, "Light railgun", 35, false, B, S, false, (Good.Alloys, 12), (Good.Electronics, 6), (Good.Machinery, 5)),
+            new ModuleSpec(ModuleKind.EmpLauncher, "EMP launcher", 25, false, Mi, S, false, (Good.Alloys, 6), (Good.Electronics, 14), (Good.Munitions, 2)),
+            new ModuleSpec(ModuleKind.MineLayer, "Mine layer", 40, false, Mi, S, false, (Good.Alloys, 10), (Good.Machinery, 4), (Good.Munitions, 9)),
+            new ModuleSpec(ModuleKind.AutoTurret, "Auto turret", 30, false, B, S, false, (Good.Alloys, 10), (Good.Electronics, 9), (Good.Machinery, 4), (Good.Munitions, 2)),
             // A tube comes with its six torpedoes at 6 t a round.
-            new ModuleSpec(ModuleKind.TorpedoTube, "Torpedo tube", 260, false, (Good.Alloys, 70), (Good.Electronics, 18), (Good.Machinery, 16), (Good.Munitions, 36)),
+            new ModuleSpec(ModuleKind.TorpedoTube, "Torpedo tube", 260, false, Mi, M, true, (Good.Alloys, 70), (Good.Electronics, 18), (Good.Machinery, 16), (Good.Munitions, 36)),
             // The tachyon lance (U.SPC-T487): its own power plant and capacitor banks, and the platinum and rare earths of
             // its emitter, some eight times a railgun's worth.
-            new ModuleSpec(ModuleKind.TachyonLance, "Tachyon lance", 950, false, (Good.Alloys, 260), (Good.Electronics, 180), (Good.Machinery, 90), (Good.Platinum, 30), (Good.RareEarths, 45)),
+            new ModuleSpec(ModuleKind.TachyonLance, "Tachyon lance", 950, false, E, L, true, (Good.Alloys, 260), (Good.Electronics, 180), (Good.Machinery, 90), (Good.Platinum, 30), (Good.RareEarths, 45)),
             // Energy weapons (U.SPC-T488): an array is mostly emitters and their power conditioning; a plasma cannon a
             // magnetic bottle, its injectors and heavy plate round both.
-            new ModuleSpec(ModuleKind.PhaserArray, "Phaser array", 200, false, (Good.Alloys, 55), (Good.Electronics, 40), (Good.Machinery, 10)),
-            new ModuleSpec(ModuleKind.PlasmaCannon, "Plasma cannon", 380, false, (Good.Alloys, 120), (Good.Electronics, 30), (Good.Machinery, 28)),
+            new ModuleSpec(ModuleKind.PhaserArray, "Phaser array", 200, false, E, S, false, (Good.Alloys, 55), (Good.Electronics, 40), (Good.Machinery, 10)),
+            new ModuleSpec(ModuleKind.PlasmaCannon, "Plasma cannon", 380, false, E, M, false, (Good.Alloys, 120), (Good.Electronics, 30), (Good.Machinery, 28)),
 
             // Four antimatter rounds at 9 t a round: the containment is most of the price.
-            new ModuleSpec(ModuleKind.AntimatterTorpedo, "Antimatter torpedo", 300, false, (Good.Alloys, 80), (Good.Electronics, 40), (Good.Machinery, 18), (Good.Munitions, 36)),
-            new ModuleSpec(ModuleKind.FlakCannon, "Flak cannon", 70, false, (Good.Alloys, 25), (Good.Electronics, 6), (Good.Machinery, 8), (Good.Munitions, 6)),
+            new ModuleSpec(ModuleKind.AntimatterTorpedo, "Antimatter torpedo", 300, false, Mi, M, true, (Good.Alloys, 80), (Good.Electronics, 40), (Good.Machinery, 18), (Good.Munitions, 36)),
+            new ModuleSpec(ModuleKind.FlakCannon, "Flak cannon", 70, false, B, S, false, (Good.Alloys, 25), (Good.Electronics, 6), (Good.Machinery, 8), (Good.Munitions, 6)),
             // Twenty interceptors at 0.6 t a round.
-            new ModuleSpec(ModuleKind.InterceptorMissile, "Interceptor missiles", 90, false, (Good.Alloys, 25), (Good.Electronics, 16), (Good.Machinery, 5), (Good.Munitions, 12)),
+            new ModuleSpec(ModuleKind.InterceptorMissile, "Interceptor missiles", 90, false, Mi, S, false, (Good.Alloys, 25), (Good.Electronics, 16), (Good.Machinery, 5), (Good.Munitions, 12)),
             // A spinal coilgun (U.SPC-T490): the coils and their capacitors down a battleship's keel, a little cheaper than a
-            // spinal railgun's rails.
-            new ModuleSpec(ModuleKind.Coilgun, "Coilgun", 1400, false, (Good.Alloys, 380), (Good.Electronics, 90), (Good.Machinery, 110)),
+            // spinal railgun's rails. Only a spinal mount takes one.
+            new ModuleSpec(ModuleKind.Coilgun, "Coilgun", 1400, false, B, L, true, (Good.Alloys, 380), (Good.Electronics, 90), (Good.Machinery, 110)),
         };
 
         public static ModuleSpec Of(ModuleKind k) => All[(int)k];
@@ -167,33 +191,18 @@ namespace Unity.SpaceGod.Core
         /// hardpoint), or null.</summary>
         public FacilityKind Facility => FacilityKinds.ForModule(Kind);
 
-        /// <summary>Whether a module goes in a slot (a railgun is spinal: only a mount that bears on the bow takes one).</summary>
-        public static bool Fits(ModuleKind m, SlotKind slot, bool bearsOnBow)
+        /// <summary>Whether a module goes on a hardpoint of <paramref name="type"/> and <paramref name="size"/> (U.SPC-T508):
+        /// a part of the mount's own type, no bigger than it, and a spinal part only on a <paramref name="spinal"/> mount.</summary>
+        public static bool Fits(ModuleKind m, MountType type, HardpointSize size, bool spinal)
         {
-            switch (slot)
-            {
-                // A phaser array is light enough for a point-defence mount: a destroyer's screen sweeps fighters from one.
-                case SlotKind.LightMount:
-                    return m == ModuleKind.PointDefense || m == ModuleKind.LaserTurret || m == ModuleKind.Autocannon || m == ModuleKind.AutoTurret || m == ModuleKind.PhaserArray ||
-                           m == ModuleKind.FlakCannon || m == ModuleKind.InterceptorMissile;
-                case SlotKind.HeavyMount:
-                    return m == ModuleKind.LaserTurret || m == ModuleKind.HeavyLaser || m == ModuleKind.MissileLauncher ||
-                           m == ModuleKind.PointDefense || m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun ||
-                           m == ModuleKind.PhaserArray || m == ModuleKind.PlasmaCannon ||
-                           m == ModuleKind.FlakCannon || m == ModuleKind.InterceptorMissile ||
-                           ((m == ModuleKind.Railgun || m == ModuleKind.TorpedoTube || m == ModuleKind.TachyonLance || m == ModuleKind.AntimatterTorpedo) && bearsOnBow);
-                // A torpedo tube is a fixed launcher: it takes a tube, an antimatter launcher or a missile launcher, nothing that traverses.
-                case SlotKind.TorpedoTube: return m == ModuleKind.TorpedoTube || m == ModuleKind.AntimatterTorpedo || m == ModuleKind.MissileLauncher;
-                case SlotKind.GunMount: return m == ModuleKind.Autocannon || m == ModuleKind.LightRailgun || m == ModuleKind.LaserTurret;
-                case SlotKind.UtilityMount:
-                    return m == ModuleKind.MissileLauncher || m == ModuleKind.EmpLauncher || m == ModuleKind.MineLayer || m == ModuleKind.AutoTurret;
-                case SlotKind.ShieldMount: return m == ModuleKind.ShieldGenerator || m == ModuleKind.HardenedShield;
-                case SlotKind.EngineMount: return m == ModuleKind.Engine || m == ModuleKind.TorchEngine;
-                // A spinal mount takes only a gun built to the hull's length (U.SPC-T490).
-                case SlotKind.SpinalMount: return SpinalMounts.Takes(m);
-                default: return false;
-            }
+            // A spinal mount takes only a gun built to the hull's length, of whatever type (U.SPC-T490).
+            if (type == MountType.Spinal) return SpinalMounts.Takes(m);
+            var spec = Of(m);
+            return spec.Mount == type && spec.Size <= size && (!spec.Spinal || spinal);
         }
+
+        /// <summary>Whether a module goes on <paramref name="slot"/> by its type and size.</summary>
+        public static bool Fits(ModuleKind m, OutfitSlot slot) => slot != null && Fits(m, slot.Type, slot.Size, slot.Spinal);
 
         /// <summary>The hardpoint kind a mount module becomes in the hull's layout.</summary>
         public static SubsystemKind SubsystemOf(ModuleKind m)
@@ -225,10 +234,15 @@ namespace Unity.SpaceGod.Core
         }
     }
 
-    /// <summary>One hardpoint slot of a hull: its kind, which hardpoint of the layout it is and what the design put there.</summary>
+    /// <summary>One hardpoint of a hull: its type and size (U.SPC-T508), which hardpoint of the layout it is and what the
+    /// design put there.</summary>
     public sealed class OutfitSlot
     {
-        public readonly SlotKind Kind;
+        /// <summary>The kind of part the hardpoint is reserved for.</summary>
+        public readonly MountType Type;
+
+        /// <summary>The biggest part it takes.</summary>
+        public readonly HardpointSize Size;
 
         /// <summary>The hardpoint's index in <see cref="CombatSpec.Layout"/>.</summary>
         public readonly int LayoutIndex;
@@ -236,35 +250,32 @@ namespace Unity.SpaceGod.Core
         /// <summary>What the design was built with here.</summary>
         public readonly ModuleKind? Stock;
 
-        /// <summary>A mount that bears on the bow, so it can take a spinal railgun.</summary>
+        /// <summary>A mount that bears on the bow.</summary>
         public readonly bool BearsOnBow;
 
-        public OutfitSlot(SlotKind kind, int layoutIndex, ModuleKind? stock, bool bearsOnBow)
+        /// <summary>A mount that takes a spinal or fixed part (a railgun, a torpedo tube, the lance): one that bears on the
+        /// bow, or a fixed launcher the design built with one.</summary>
+        public readonly bool Spinal;
+
+        public OutfitSlot(MountType type, HardpointSize size, int layoutIndex, ModuleKind? stock, bool bearsOnBow)
         {
-            Kind = kind;
+            Type = type;
+            Size = size;
             LayoutIndex = layoutIndex;
             Stock = stock;
             BearsOnBow = bearsOnBow;
+            Spinal = bearsOnBow || (stock is ModuleKind s && ModuleSpec.Of(s).Spinal);
         }
 
-        public string Name
-        {
-            get
-            {
-                switch (Kind)
-                {
-                    case SlotKind.LightMount: return "Light mount";
-                    case SlotKind.HeavyMount: return "Weapon mount";
-                    case SlotKind.GunMount: return "Gun mount";
-                    case SlotKind.UtilityMount: return "Utility mount";
-                    case SlotKind.TorpedoTube: return "Torpedo tube";
-                    case SlotKind.ShieldMount: return "Shield mount";
-                    case SlotKind.EngineMount: return "Engine mount";
-                    case SlotKind.SpinalMount: return "Spinal mount";
-                    default: return Kind.ToString();
-                }
-            }
-        }
+        /// <summary>Whether a gun or launcher goes here (not a shield generator or a drive).</summary>
+        public bool IsWeapon => IsWeaponType(Type);
+
+        public static bool IsWeaponType(MountType t) => t == MountType.Ballistic || t == MountType.Missile || t == MountType.Energy || t == MountType.Spinal;
+
+        /// <summary>"Large energy mount", "Small missile mount", "Spinal mount", "Shield mount".</summary>
+        public string Name => IsWeapon && Type != MountType.Spinal ? Size + " " + TypeName(Type).ToLowerInvariant() + " mount" : TypeName(Type) + " mount";
+
+        public static string TypeName(MountType t) => t.ToString();
     }
 
     /// <summary>
@@ -305,7 +316,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>The trade hold the hull was built with, tonnes, before any racks.</summary>
         public readonly double BaseCapacityTonnes;
 
-        /// <summary>A small craft, whose missile rack is a utility mount rather than a turret mount.</summary>
+        /// <summary>A small craft, whose hardpoints are all small ones (bar any bigger part its design builds in).</summary>
         public readonly bool SmallCraft;
 
         public Loadout(CombatSpec design, ShipClass cls, double baseCapacityTonnes)
@@ -324,10 +335,10 @@ namespace Unity.SpaceGod.Core
             for (int i = 0; i < design.Layout.Length; i++)
             {
                 var d = design.Layout[i];
-                // A spinal mount is its own kind of hardpoint, whatever gun is in it (U.SPC-T490).
-                var slot = d.Spinal ? SlotKind.SpinalMount : SlotOf(d.Kind, smallCraft);
-                if (slot == null) continue;
-                Slots.Add(new OutfitSlot(slot.Value, i, StockOf(d.Kind), d.ContainsYaw(0)));
+                if (!(StockOf(d.Kind) is ModuleKind stock) || !(ModuleSpec.Of(stock).Mount is MountType type)) continue;
+                // A spinal mount is its own type of hardpoint, whatever gun is in it, and large (U.SPC-T490).
+                if (d.Spinal) Slots.Add(new OutfitSlot(MountType.Spinal, HardpointSize.Large, i, stock, true));
+                else Slots.Add(new OutfitSlot(type, MountSize(d.Kind, stock, smallCraft, design.LengthKm), i, stock, d.ContainsYaw(0)));
             }
             Fitted = new ModuleKind?[Slots.Count];
             for (int i = 0; i < Slots.Count; i++) Fitted[i] = Slots[i].Stock;
@@ -336,41 +347,28 @@ namespace Unity.SpaceGod.Core
             InternalSpace = FacilityLayouts.SpaceOf(StockFacilities) + Math.Max(0, spareSpace);
         }
 
-        /// <summary>The hulls flown as fighters, whose missile rack is a utility mount.</summary>
+        /// <summary>The hulls flown as fighters, whose hardpoints are small.</summary>
         public static bool IsSmallCraft(ShipClass cls) =>
             cls == ShipClass.Fighter || cls == ShipClass.Interceptor || cls == ShipClass.Bomber || cls == ShipClass.Courier || cls == ShipClass.Gunship
             || cls == ShipClass.Breacher || cls == ShipClass.Recon;
 
-        /// <summary>The kind of slot a hardpoint of the design becomes, or null if it is part of the hull (a bridge, a reactor).</summary>
-        public static SlotKind? SlotOf(SubsystemKind k, bool small)
+        /// <summary>The type of hardpoint a part of the design becomes (that of the module it was built with, U.SPC-T508),
+        /// or null if it is part of the hull (a bridge, a reactor).</summary>
+        public static MountType? MountOf(SubsystemKind k) => StockOf(k) is ModuleKind m ? ModuleSpec.Of(m).Mount : null;
+
+        /// <summary>The screen mounts (point defence, flak, interceptors): small on any hull.</summary>
+        static bool IsScreen(SubsystemKind k) => k == SubsystemKind.PointDefense || k == SubsystemKind.FlakCannon || k == SubsystemKind.InterceptorMissile;
+
+        /// <summary>
+        /// How big a hardpoint of the design is (U.SPC-T508): a small craft's and a screen mount's are small; any other is
+        /// large on a hull a kilometre long or more (a capital ship, a station) and medium otherwise; and never smaller than
+        /// what the design built there, so every stock design keeps its own parts.
+        /// </summary>
+        public static HardpointSize MountSize(SubsystemKind k, ModuleKind stock, bool smallCraft, double lengthKm)
         {
-            switch (k)
-            {
-                // A small craft's missile rack is its utility mount, not a warship's turret mount.
-                case SubsystemKind.MissileLauncher when small: return SlotKind.UtilityMount;
-                case SubsystemKind.Autocannon:
-                case SubsystemKind.LightRailgun: return SlotKind.GunMount;
-                case SubsystemKind.EmpLauncher:
-                case SubsystemKind.MineLayer:
-                case SubsystemKind.AutoTurret: return SlotKind.UtilityMount;
-                case SubsystemKind.PointDefense:
-                case SubsystemKind.FlakCannon:
-                case SubsystemKind.InterceptorMissile: return SlotKind.LightMount;
-                // A bow launcher, so it takes what a bow mount takes (a railgun, a tube, a heavy turret).
-                case SubsystemKind.AntimatterTorpedo:
-                case SubsystemKind.LaserTurret:
-                case SubsystemKind.HeavyLaser:
-                case SubsystemKind.MissileLauncher:
-                case SubsystemKind.PhaserArray:
-                case SubsystemKind.PlasmaCannon:
-                case SubsystemKind.Railgun:
-                case SubsystemKind.TachyonLance: return SlotKind.HeavyMount;
-                case SubsystemKind.ShieldGenerator: return SlotKind.ShieldMount;
-                case SubsystemKind.Engine: return SlotKind.EngineMount;
-                case SubsystemKind.TorpedoTube: return SlotKind.TorpedoTube;
-                case SubsystemKind.Coilgun: return SlotKind.SpinalMount;
-                default: return null;
-            }
+            var size = smallCraft || IsScreen(k) ? HardpointSize.Small : lengthKm >= 1 ? HardpointSize.Large : HardpointSize.Medium;
+            var built = ModuleSpec.Of(stock).Size;
+            return built > size ? built : size;
         }
 
         static ModuleKind? StockOf(SubsystemKind k)
@@ -538,7 +536,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>What <paramref name="m"/> is on hardpoint <paramref name="slot"/>: built to the hull's length in a spinal
         /// mount (U.SPC-T490, <see cref="SpinalMounts.Part"/>), else the module itself.</summary>
         public IPartSpec PartAt(int slot, ModuleKind m) =>
-            slot >= 0 && slot < Slots.Count && Slots[slot].Kind == SlotKind.SpinalMount ? SpinalMounts.Part(m) : ModuleSpec.Of(m);
+            slot >= 0 && slot < Slots.Count && Slots[slot].Type == MountType.Spinal ? SpinalMounts.Part(m) : ModuleSpec.Of(m);
 
         /// <summary>
         /// The hull's fighting spec with this loadout: each refitted hardpoint swapped in place (same position and
@@ -559,12 +557,12 @@ namespace Unity.SpaceGod.Core
                 var slot = Slots[i];
                 if (!(Fitted[i] is ModuleKind m)) continue;
                 double rating = m == ModuleKind.HardenedShield ? HardenedRating : m == ModuleKind.TorchEngine ? TorchRating : 1;
-                if (slot.Kind == SlotKind.ShieldMount) ratings += rating;
-                if (slot.Kind == SlotKind.EngineMount) { engines++; thrust += rating; }
+                if (slot.Type == MountType.Shield) ratings += rating;
+                if (slot.Type == MountType.Engine) { engines++; thrust += rating; }
                 if (m == slot.Stock) continue;
                 var was = Base.Layout[slot.LayoutIndex];
                 // A spinal mount takes the ship-length version of the gun, laid by the hull (U.SPC-T490).
-                if (slot.Kind == SlotKind.SpinalMount)
+                if (slot.Type == MountType.Spinal)
                 {
                     spec.Layout[slot.LayoutIndex] = SpinalMounts.Mount(m, was);
                     continue;
@@ -806,8 +804,9 @@ namespace Unity.SpaceGod.Core
             return ship.Combat.Subsystems[slot.LayoutIndex].Health;
         }
 
-        /// <summary>Whether <paramref name="module"/> may go on hardpoint <paramref name="slot"/> (a hardpoint is never left
-        /// empty; a facility goes into free space, <see cref="Loadout.CanAdd"/>).</summary>
+        /// <summary>Whether <paramref name="module"/> may go on hardpoint <paramref name="slot"/>: a part of the mount's
+        /// type no bigger than it (U.SPC-T508), spinal parts only on a spinal mount, and only on the hulls its role allows
+        /// (a hardpoint is never left empty; a facility goes into free space, <see cref="Loadout.CanAdd"/>).</summary>
         public static bool CanFit(Loadout l, int slot, ModuleKind? module)
         {
             if (l == null || slot < 0 || slot >= l.Slots.Count || !(module is ModuleKind m)) return false;
@@ -816,9 +815,9 @@ namespace Unity.SpaceGod.Core
             if (m == ModuleKind.TachyonLance && !TachyonLances.CanCarry(l.Class)) return false;
             // A spinal mount is only on a hull built around one, and a role-bound weapon there is the spinal version, not the
             // role's turret (U.SPC-T490).
-            if (s.Kind == SlotKind.SpinalMount) return SpinalMounts.CanCarry(l.Class) && ModuleSpec.Fits(m, s.Kind, s.BearsOnBow);
+            if (s.Type == MountType.Spinal) return SpinalMounts.CanCarry(l.Class) && ModuleSpec.Fits(m, s);
             // A role-bound weapon (a phaser array, a plasma cannon) goes only on the hulls of its role (U.SPC-T488).
-            return ModuleSpec.Fits(m, s.Kind, s.BearsOnBow) && EnergyWeapons.RoleAllows(m, l.Class);
+            return ModuleSpec.Fits(m, s) && EnergyWeapons.RoleAllows(m, l.Class);
         }
 
         /// <summary>Whether the ship can be refitted at the yard now: a yard that lets it dock, out of battle and not boarded.</summary>
@@ -1047,13 +1046,15 @@ namespace Unity.SpaceGod.Core
             }
             bool big = ship.Spec.Class == ShipClass.Cruiser || ship.Spec.Class == ShipClass.Battleship || ship.Spec.Class == ShipClass.Carrier
                        || ship.Spec.Class == ShipClass.CommandCruiser;
+            // Every upgrade obeys the hardpoint's type and size (U.SPC-T508): a heavy laser only on an energy mount big
+            // enough for it, never on a point-defence mount.
             for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == SlotKind.ShieldMount && l.Fitted[i] == ModuleKind.ShieldGenerator) yield return (i, ModuleKind.HardenedShield, null);
+                if (l.Fitted[i] == ModuleKind.ShieldGenerator && CanFit(l, i, ModuleKind.HardenedShield)) yield return (i, ModuleKind.HardenedShield, null);
             if (big)
                 for (int i = 0; i < l.Slots.Count; i++)
-                    if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Fitted[i] == ModuleKind.LaserTurret) yield return (i, ModuleKind.HeavyLaser, null);
+                    if (l.Fitted[i] == ModuleKind.LaserTurret && CanFit(l, i, ModuleKind.HeavyLaser)) yield return (i, ModuleKind.HeavyLaser, null);
             for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == SlotKind.EngineMount && l.Fitted[i] == ModuleKind.Engine) yield return (i, ModuleKind.TorchEngine, null);
+                if (l.Fitted[i] == ModuleKind.Engine && CanFit(l, i, ModuleKind.TorchEngine)) yield return (i, ModuleKind.TorchEngine, null);
             // Last of all, once everything else is fitted: one tachyon lance for a capital hull, in place of a bow heavy
             // laser, where the yard can build one and the navy is flush enough for it (U.SPC-T487).
             if (TachyonLances.CanCarry(l.Class) && l.Count(ModuleKind.TachyonLance) == 0)
@@ -1061,14 +1062,14 @@ namespace Unity.SpaceGod.Core
                 // A hull built around spinal mounts takes it in place of its coilgun (U.SPC-T490).
                 int spinal = -1;
                 for (int i = 0; i < l.Slots.Count && spinal < 0; i++)
-                    if (l.Slots[i].Kind == SlotKind.SpinalMount && l.Fitted[i] == ModuleKind.Coilgun && CanFit(l, i, ModuleKind.TachyonLance)) spinal = i;
+                    if (l.Slots[i].Type == MountType.Spinal && l.Fitted[i] == ModuleKind.Coilgun && CanFit(l, i, ModuleKind.TachyonLance)) spinal = i;
                 if (spinal >= 0)
                 {
                     yield return (spinal, ModuleKind.TachyonLance, null);
                     yield break;
                 }
                 for (int i = 0; i < l.Slots.Count; i++)
-                    if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Slots[i].BearsOnBow && l.Fitted[i] == ModuleKind.HeavyLaser)
+                    if (l.Fitted[i] == ModuleKind.HeavyLaser && CanFit(l, i, ModuleKind.TachyonLance))
                     {
                         yield return (i, ModuleKind.TachyonLance, null);
                         break;

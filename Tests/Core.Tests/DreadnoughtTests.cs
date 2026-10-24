@@ -35,7 +35,7 @@ namespace Unity.SpaceGod.Core.Tests
             return (economy, yard);
         }
 
-        static int[] SpinalSlots(Loadout l) => Enumerable.Range(0, l.Slots.Count).Where(i => l.Slots[i].Kind == SlotKind.SpinalMount).ToArray();
+        static int[] SpinalSlots(Loadout l) => Enumerable.Range(0, l.Slots.Count).Where(i => l.Slots[i].Type == MountType.Spinal).ToArray();
 
         [Test]
         public void TheBattleshipIsBuiltAroundTwoShipLengthSpinalMountsOnLargePowerPlants()
@@ -92,12 +92,12 @@ namespace Unity.SpaceGod.Core.Tests
             {
                 var lc = Outfitting.LoadoutOf(Hull(c, Navy, 3));
                 for (int i = 0; i < lc.Slots.Count; i++)
-                    if (lc.Slots[i].Kind != SlotKind.SpinalMount) Assert.That(Outfitting.CanFit(lc, i, ModuleKind.Coilgun), Is.False, c + " slot " + i);
+                    if (lc.Slots[i].Type != MountType.Spinal) Assert.That(Outfitting.CanFit(lc, i, ModuleKind.Coilgun), Is.False, c + " slot " + i);
             }
 
             // Built to the hull's length: dearer than the turret of the same name.
             var (economy, yard) = Yard(Navy);
-            int heavy = Enumerable.Range(0, l.Slots.Count).First(i => l.Slots[i].Kind == SlotKind.HeavyMount && l.Slots[i].BearsOnBow);
+            int heavy = Enumerable.Range(0, l.Slots.Count).First(i => l.Slots[i].Type == MountType.Energy && l.Slots[i].Size == HardpointSize.Large && l.Slots[i].BearsOnBow);
             Assert.That(Outfitting.Quote(ship, yard, slot, ModuleKind.PlasmaCannon).Materials,
                 Is.GreaterThan(Outfitting.Quote(ship, yard, heavy, ModuleKind.PlasmaCannon).Materials * 3), "a plasma spinal cannon is no turret");
 

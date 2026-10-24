@@ -33,12 +33,12 @@ namespace Unity.SpaceGod.Core.Tests
             return new Ship { Id = id, Name = c.ToString() + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(CombatSpec.Of(c), c) };
         }
 
-        /// <summary>The hull's first bow heavy mount (a battleship's forward heavy laser).</summary>
+        /// <summary>The hull's first large energy mount bearing on the bow (a battleship's forward heavy laser).</summary>
         static int BowMount(Ship ship)
         {
             var l = Outfitting.LoadoutOf(ship);
             for (int i = 0; i < l.Slots.Count; i++)
-                if (l.Slots[i].Kind == SlotKind.HeavyMount && l.Slots[i].BearsOnBow) return i;
+                if (l.Slots[i].Type == MountType.Energy && l.Slots[i].Size == HardpointSize.Large && l.Slots[i].BearsOnBow) return i;
             return -1;
         }
 
@@ -56,7 +56,7 @@ namespace Unity.SpaceGod.Core.Tests
             var battleship = Hull(ShipClass.Battleship, Navy);
             var l = Outfitting.LoadoutOf(battleship);
             Assert.That(Outfitting.CanFit(l, BowMount(battleship), ModuleKind.TachyonLance), Is.True, "a battleship's bow mount");
-            int broadside = Enumerable.Range(0, l.Slots.Count).First(i => l.Slots[i].Kind == SlotKind.HeavyMount && !l.Slots[i].BearsOnBow);
+            int broadside = Enumerable.Range(0, l.Slots.Count).First(i => l.Slots[i].Type == MountType.Energy && l.Slots[i].Size == HardpointSize.Large && !l.Slots[i].BearsOnBow);
             Assert.That(Outfitting.CanFit(l, broadside, ModuleKind.TachyonLance), Is.False, "a lance is spinal: no broadside mount takes one");
 
             // A carrier is a capital ship too, though its stock hull has no bow mount to put one in.
@@ -97,7 +97,7 @@ namespace Unity.SpaceGod.Core.Tests
             var (smallEconomy, small) = Yard(Navy, 1);
             Assert.That(Outfitting.Fit(smallEconomy, ship, small, bow, ModuleKind.TachyonLance, out _), Is.EqualTo(OutfitOutcome.YardCannotBuild));
             Assert.That(Outfitting.LoadoutOf(ship).Fitted[bow], Is.EqualTo(ModuleKind.HeavyLaser), "nothing changed");
-            Assert.That(Outfitting.Fit(smallEconomy, ship, small, bow, ModuleKind.Railgun, out _), Is.EqualTo(OutfitOutcome.Ok), "a lesser yard still fits a railgun");
+            Assert.That(Outfitting.Fit(smallEconomy, ship, small, bow, ModuleKind.PlasmaCannon, out _), Is.EqualTo(OutfitOutcome.Ok), "a lesser yard still fits a plasma cannon");
 
             var (havenEconomy, haven) = Yard(Raiders, 3, SettlementKind.Haven);
             Assert.That(TachyonLances.YardBuilds(haven), Is.False, "no raider haven builds one");

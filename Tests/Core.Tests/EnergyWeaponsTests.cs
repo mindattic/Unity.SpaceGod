@@ -21,13 +21,13 @@ namespace Unity.SpaceGod.Core.Tests
             Id = id, Name = f.Prefix + " " + c + id, Spec = ShipClassSpec.Of(c), Faction = f, Combat = new ShipCombat(CombatSpec.Of(c), c),
         };
 
-        /// <summary>Fits <paramref name="module"/> into the hull's first slot of <paramref name="kind"/> that takes it, as a yard would.</summary>
-        static int Arm(Ship ship, ModuleKind module, SlotKind kind = SlotKind.HeavyMount)
+        /// <summary>Fits <paramref name="module"/> into the hull's first energy mount that takes it, as a yard would.</summary>
+        static int Arm(Ship ship, ModuleKind module)
         {
             var l = Outfitting.LoadoutOf(ship);
             for (int i = 0; i < l.Slots.Count; i++)
             {
-                if (l.Slots[i].Kind != kind || l.Fitted[i] == module || !Outfitting.CanFit(l, i, module)) continue;
+                if (l.Slots[i].Type != MountType.Energy || l.Fitted[i] == module || !Outfitting.CanFit(l, i, module)) continue;
                 l.Fitted[i] = module;
                 ship.Combat = ship.Combat.Refitted(l.Build(), l.Class, l.Slots[i].LayoutIndex);
                 return l.Slots[i].LayoutIndex;
@@ -35,24 +35,26 @@ namespace Unity.SpaceGod.Core.Tests
             return -1;
         }
 
-        static bool Takes(ShipClass c, ModuleKind m, SlotKind kind)
+        /// <summary>Whether any of the hull's mounts of <paramref name="type"/> (and <paramref name="size"/>, if given) takes <paramref name="m"/>.</summary>
+        static bool Takes(ShipClass c, ModuleKind m, MountType type, HardpointSize? size = null)
         {
             var ship = Hull(c, Blue);
             var l = Outfitting.LoadoutOf(ship);
-            return Enumerable.Range(0, l.Slots.Count).Any(i => l.Slots[i].Kind == kind && Outfitting.CanFit(l, i, m));
+            return Enumerable.Range(0, l.Slots.Count).Any(i => l.Slots[i].Type == type && (size == null || l.Slots[i].Size == size) && Outfitting.CanFit(l, i, m));
         }
 
         // ---------------------------------------------------------------- fitting by role
 
         [Test]
-        public void PhaserArraysGoOnlyOnDestroyersAndCruisersOnAWeaponOrLightMount()
+        public void PhaserArraysGoOnlyOnDestroyersAndCruisersOnAnEnergyMount()
         {
-            Assert.That(Takes(ShipClass.Cruiser, ModuleKind.PhaserArray, SlotKind.HeavyMount), Is.True);
-            Assert.That(Takes(ShipClass.Destroyer, ModuleKind.PhaserArray, SlotKind.HeavyMount), Is.True);
-            Assert.That(Takes(ShipClass.Destroyer, ModuleKind.PhaserArray, SlotKind.LightMount), Is.True, "a destroyer's point-defence mounts take an array for its screen");
-            Assert.That(Takes(ShipClass.Battleship, ModuleKind.PhaserArray, SlotKind.HeavyMount), Is.False, "not a destroyer's or cruiser's");
-            Assert.That(Takes(ShipClass.Carrier, ModuleKind.PhaserArray, SlotKind.LightMount), Is.False);
-            Assert.That(Takes(ShipClass.Fighter, ModuleKind.PhaserArray, SlotKind.GunMount), Is.False);
+            Assert.That(Takes(ShipClass.Cruiser, ModuleKind.PhaserArray, MountType.Energy, HardpointSize.Large), Is.True);
+            Assert.That(Takes(ShipClass.Destroyer, ModuleKind.PhaserArray, MountType.Energy, HardpointSize.Small), Is.True, "a destroyer's point-defence mounts take an array for its screen");
+            Assert.That(Takes(ShipClass.Destroyer, ModuleKind.PhaserArray, MountType.Ballistic), Is.False, "an array is an energy weapon: the railgun's mount takes none");
+            Assert.That(Takes(ShipClass.Destroyer, ModuleKind.PhaserArray, MountType.Missile), Is.False);
+            Assert.That(Takes(ShipClass.Battleship, ModuleKind.PhaserArray, MountType.Energy), Is.False, "not a destroyer's or cruiser's");
+            Assert.That(Takes(ShipClass.Carrier, ModuleKind.PhaserArray, MountType.Energy), Is.False);
+            Assert.That(Takes(ShipClass.Fighter, ModuleKind.PhaserArray, MountType.Ballistic), Is.False);
             Assert.That(EnergyWeapons.RoleAllows(ModuleKind.PhaserArray, null), Is.False, "nor a station's");
             Assert.That(EnergyWeapons.RoleAllows(ModuleKind.LaserTurret, ShipClass.Battleship), Is.True, "a weapon with no role fits any hull");
         }
@@ -60,12 +62,13 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void PlasmaCannonsGoOnlyOnTheBrawlersWeaponMounts()
         {
-            Assert.That(Takes(ShipClass.Battleship, ModuleKind.PlasmaCannon, SlotKind.HeavyMount), Is.True);
-            Assert.That(Takes(ShipClass.Breacher, ModuleKind.PlasmaCannon, SlotKind.HeavyMount), Is.True);
-            Assert.That(Takes(ShipClass.Battleship, ModuleKind.PlasmaCannon, SlotKind.LightMount), Is.False, "too heavy for a point-defence mount");
-            Assert.That(Takes(ShipClass.Cruiser, ModuleKind.PlasmaCannon, SlotKind.HeavyMount), Is.False);
-            Assert.That(Takes(ShipClass.Destroyer, ModuleKind.PlasmaCannon, SlotKind.HeavyMount), Is.False);
-            Assert.That(ModuleSpec.Fits(ModuleKind.PlasmaCannon, SlotKind.TorpedoTube, true), Is.False);
+            Assert.That(Takes(ShipClass.Battleship, ModuleKind.PlasmaCannon, MountType.Energy, HardpointSize.Large), Is.True);
+            Assert.That(Takes(ShipClass.Breacher, ModuleKind.PlasmaCannon, MountType.Energy, HardpointSize.Medium), Is.True, "the breacher's heavy laser mount");
+            Assert.That(Takes(ShipClass.Battleship, ModuleKind.PlasmaCannon, MountType.Energy, HardpointSize.Small), Is.False, "too big for a point-defence mount");
+            Assert.That(Takes(ShipClass.Battleship, ModuleKind.PlasmaCannon, MountType.Missile), Is.False, "an energy weapon, on no missile mount");
+            Assert.That(Takes(ShipClass.Cruiser, ModuleKind.PlasmaCannon, MountType.Energy), Is.False);
+            Assert.That(Takes(ShipClass.Destroyer, ModuleKind.PlasmaCannon, MountType.Energy), Is.False);
+            Assert.That(ModuleSpec.Fits(ModuleKind.PlasmaCannon, MountType.Missile, HardpointSize.Large, true), Is.False);
         }
 
         [Test]
@@ -107,8 +110,8 @@ namespace Unity.SpaceGod.Core.Tests
         public void TheCaptainsTuningIsWhatEveryArrayOnTheHullFiresAndItOutlastsARefit()
         {
             var ship = Hull(ShipClass.Destroyer, Blue);
-            int a = Arm(ship, ModuleKind.PhaserArray, SlotKind.LightMount);
-            int b = Arm(ship, ModuleKind.PhaserArray, SlotKind.LightMount);
+            int a = Arm(ship, ModuleKind.PhaserArray);
+            int b = Arm(ship, ModuleKind.PhaserArray);
             Assert.That(a, Is.Not.EqualTo(b));
             var c = ship.Combat;
             Assert.That(c.PhaserTuning, Is.EqualTo(PhaserTuning.Lance), "an array starts as a lance");
@@ -186,7 +189,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void ASweepingArrayShootsDownMissilesInBattle()
         {
             var mine = Hull(ShipClass.Destroyer, Blue, 0);
-            Arm(mine, ModuleKind.PhaserArray, SlotKind.LightMount);
+            Arm(mine, ModuleKind.PhaserArray);
             var (b, me, them) = Fight(mine, Hull(ShipClass.Cruiser, Red, 1), 30, seed: 4);
             me.Combat.PhaserTuning = PhaserTuning.Sweep;
             me.PlayerControlled = true;
