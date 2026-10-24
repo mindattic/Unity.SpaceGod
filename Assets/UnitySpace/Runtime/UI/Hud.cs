@@ -40,7 +40,7 @@ namespace Unity.SpaceGod.UI
         /// <summary>Collapse state for panels that can sit over the 3D view and get in the way --
         /// same "[-]/[+] TITLE" bar <see cref="DrawNavigator"/> already uses, so Market/Cargo/Help can
         /// be shrunk to just their title bar without closing them outright.</summary>
-        bool marketOpen = true, cargoOpen = true, helpOpen = true;
+        bool marketOpen = true, cargoOpen = true;
 
         /// <summary>The outfitting panel's chosen slot (-1: none) and how far its slot list is scrolled.</summary>
         int outfitSlot = -1;
@@ -97,6 +97,9 @@ namespace Unity.SpaceGod.UI
         GalaxyMapScreen galaxyMap;
         bool galaxyMapOpen;
 
+        /// <summary>The Help screen (H / F1, or Help in the Esc menu), made the first time it is opened.</summary>
+        HelpScreen helpScreen;
+
         public void Draw()
         {
             EnsureStyles();
@@ -115,6 +118,17 @@ namespace Unity.SpaceGod.UI
 
             // Spawn & Pilot is its own full screen, not an overlay panel -- everything else waits.
             if (app.ShowSpawn) { DrawSpawn(); return; }
+
+            // So is Help (U.SPC-T494): every key and control, by group, over the whole view.
+            if (app.ShowHelp)
+            {
+                helpScreen ??= new HelpScreen();
+                var whole = new Rect(0, 0, Screen.width, Screen.height);
+                if (!app.UiRects.Contains(whole)) app.UiRects.Add(whole); // the world under it takes no clicks
+                if (helpScreen.Draw("Esc, H or F1 to close")) app.ShowHelp = false;
+                DrawToast();
+                return;
+            }
 
             // So is the galaxy map (U.SPC-T103), between the stars aside: a trip under way has the screen.
             if (app.ShowGalaxyMap && !app.Travel.Active)
@@ -172,7 +186,6 @@ namespace Unity.SpaceGod.UI
             if (app.ShowContracts) DrawContracts();
             if (app.ShowFleet) DrawFleet();
             if (app.ShowTrade) DrawTradeDesk();
-            if (app.ShowHelp) DrawHelp();
             if (app.ShowSaves) DrawSaves();
             DrawToast();
         }
@@ -3424,59 +3437,6 @@ namespace Unity.SpaceGod.UI
             return sceneSpeed * perUnit;
         }
 
-        void DrawHelp()
-        {
-            string[] help =
-            {
-                "W A S D   swim          Q / E  or  C / ]   down / up          Space   pause (eases to a stop and back)",
-                "Shift   boost           Ctrl   fine             Wheel   swim speed / zoom",
-                "Right-drag   look / orbit                Left-click   select    (double: focus)",
-                "F   focus selection     Esc   close panels / leave focus / deselect, then the pause menu     Home   system view",
-                "Esc   pause menu (straight away at the helm): Resume, Save / Load, Settings > Display (resolution, window mode, VSync), Main Menu, Quit",
-                "G  or  `   toggle GAMEPLAY / REALISTIC scale",
-                "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
-                "K   satellites    R   auto-reorient on/off (keep this system's plane level)",
-                "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
-                "[   galaxy map: every system, who holds it, gate traffic, war fronts, blockades and raiders, as far as the news goes; click a star to inspect, double-click to travel",
-                "F12  hail the polity of the ship locked or selected (or the patrol hailing you) and treat with it; the galaxy map's DIPLOMACY panel: pacts, tribute, fealty, war and peace",
-                "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD (names stay)   F11  clear screen (reticle only)",
-                "Take charge, any time   '  ;   jump into the next seat in the fight in view (a ship's helm, a fighter or bomber)   /   man the next gun on the hull",
-                "   in a fighter: mouse aims, W/S throttle, left mouse guns, right mouse torpedoes   P hands the seat back to its AI and returns you to command",
-                "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
-                "   fighters: the mouse aims and the hull turns after it   heavy fighters, freighters: the mouse turns the nose   capital ships: A/D Q/E turn the hull, the mouse looks around",
-                "Combat  (piloting)   left mouse: guns, down the crosshair (watch the heat)   T lock the hull under it, hold the crosshair on it to lock   right mouse: missiles",
-                "   capital ships: look at a side and hold left mouse to build a broadside, let go to fire it; the turrets fight on their own, at the locked hull first",
-                "   captain's orders, to the side you look at: 1 that battery at will / hold fire / volley   2 angle the shields there   3 brace   4 damage control focus",
-                "      5 line ahead  6 line abreast  7 echelon  8 screen  9 engage at will   0 all batteries at will   angle the hull to the enemy's line to make shots glance",
-                "   middle mouse: EMP (knocks out a small craft's drives and shields)   Ctrl: drop a mine astern   an auto turret fires on its own",
-                "   Insert: retune the phaser arrays, a narrow lance for hulls or a wide sweep for fighters and missiles   a plasma cannon hits hardest close in",
-                "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
-                "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
-                "FTL  (capital ships, survey hulls)   beyond the system's outer rim, put the nose on another star, Enter to spool (hold it there), it engages for that star",
-                "   PgDn/PgUp plot a course to the next star or beacon (nearest first), or pick one on the galaxy map ([): ETA, fuel, wells on the way   Del clear",
-                "   End  FTL autopilot: flies out beyond the rim, turns onto the star, spools and engages, time compressed (Settings > FTL)   End again takes the helm back",
-                "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
-                "F2  outfitting at a shipyard (or Outfit on the market): guns, shields and drives on the hardpoints; plate, racks, scanners, a brig in the internal space",
-                "F3  silent running (piloting): transponder off, heat damped -- only what your scanners hold is shown: blips, then class, then name",
-                "F7  contracts board of the port in view: freight, passengers, colonists, escorts, patrols, surveys, bounties",
-                "F10  your fleet: buy hulls, warehouses, station shares and claims; hire captains and give them standing orders",
-                "\\  trade desk: runs from your price intelligence, brokers, trade news, charters, insurance, warehouses, the back door",
-                "F4  bounty board of the port in view: outlaws wanted there, their records, where last seen, who hunts them",
-                "Derelicts and wrecks  (while piloting)   match velocity alongside, 1 latch on, then 1-4 as the panel shows",
-                "M   market  Buy/Sell and Refuel appear while piloting near the shown settlement's body",
-                "X   news feed: shocks, price spikes, embargoes, battles and captures as they happen",
-                "Law   T lock a ship, hold fire on it to attack (a crime if seen)   patrols scan: hold still   1 pay a fine when hailed",
-                "V   spawn & pilot: pick a hull from the grid to spawn and pilot it at the camera",
-                "F5  quicksave   F8  quickload   F6  save slots   (autosaves every 5 minutes and on quit; -continue resumes the latest)",
-            };
-            float w = 610, h = helpOpen ? 42 + help.Length * 17 : 34;
-            var r = Panel(new Rect(SafeLeft + 10, Screen.height - h - 10, w, h));
-            if (GUI.Button(new Rect(r.x + 8, r.y + 6, w - 16, 22), (helpOpen ? "[-]  " : "[+]  ") + "CONTROLS", title)) helpOpen = !helpOpen;
-            if (!helpOpen) return;
-            for (int i = 0; i < help.Length; i++)
-                GUI.Label(new Rect(r.x + 12, r.y + 34 + i * 17, w - 20, 17), help[i], small);
-        }
-
         /// <summary>
         /// At a seat taken from command (U.SPC-T422: a fighter's cockpit, a gun mount): a crosshair where the stick is
         /// pointing (the middle of the screen, which the view follows) and a line saying what is held and how to leave it.
@@ -3640,6 +3600,7 @@ namespace Unity.SpaceGod.UI
             if (buttonActiveTexture != null) UnityEngine.Object.Destroy(buttonActiveTexture);
             panelTexture = rowHoverTexture = rowSelectedTexture = buttonTexture = buttonActiveTexture = null;
             galaxyMap?.DestroyOwnedTextures();
+            helpScreen?.DestroyOwnedTextures();
         }
     }
 }

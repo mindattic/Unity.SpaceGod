@@ -6,7 +6,7 @@ namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// The pause menu (U.SPC-T276), opened by Esc once there is nothing left for it to back out of (or at the
-    /// helm): Resume, Save / Load, Settings, Main Menu and Quit. Settings lists every setting the game's systems
+    /// helm): Resume, Help, Save / Load, Settings, Main Menu and Quit. Settings lists every setting the game's systems
     /// declare in the <see cref="SettingsRegistry"/> (U.SPC-T431), by group, with a search across them all, each
     /// taking effect at once and remembered in the profile, with Reset per setting and per group; a new setting
     /// shows up here by being declared, never by an edit to this menu. Settings also holds the Display page, where
@@ -61,6 +61,9 @@ namespace Unity.SpaceGod.UI
 
         /// <summary>Save / Load: the game's saves panel (the menu closes first).</summary>
         public System.Action ShowSaves;
+
+        /// <summary>Help: the game's Help screen, every key and control (the menu closes first, U.SPC-T494).</summary>
+        public System.Action ShowHelp;
 
         /// <summary>Main Menu: leaves the game for the main menu scene.</summary>
         public System.Action ToMainMenu;
@@ -213,25 +216,30 @@ namespace Unity.SpaceGod.UI
 
         void DrawMain()
         {
-            const float w = 320, h = 302;
+            const float w = 320, h = 346;
             var r = Centred(w, h);
             GUI.Box(r, GUIContent.none, panel);
             GUI.Label(new Rect(r.x + 20, r.y + 14, w - 40, 22), "PAUSED", title);
             GUI.Label(new Rect(r.x + 20, r.y + 38, w - 40, 18), "Every system stands still  ·  Esc to resume", small);
             float y = r.y + 70;
             if (GUI.Button(new Rect(r.x + 20, y, w - 40, 34), "Resume", button)) Close();
-            if (GUI.Button(new Rect(r.x + 20, y + 44, w - 40, 34), "Save / Load", button))
+            if (GUI.Button(new Rect(r.x + 20, y + 44, w - 40, 34), "Help", button))
+            {
+                Close();
+                ShowHelp?.Invoke();
+            }
+            if (GUI.Button(new Rect(r.x + 20, y + 88, w - 40, 34), "Save / Load", button))
             {
                 Close();
                 ShowSaves?.Invoke();
             }
-            if (GUI.Button(new Rect(r.x + 20, y + 88, w - 40, 34), "Settings", button)) page = Page.Settings;
-            if (GUI.Button(new Rect(r.x + 20, y + 132, w - 40, 34), "Main Menu", button))
+            if (GUI.Button(new Rect(r.x + 20, y + 132, w - 40, 34), "Settings", button)) page = Page.Settings;
+            if (GUI.Button(new Rect(r.x + 20, y + 176, w - 40, 34), "Main Menu", button))
             {
                 Close();
                 ToMainMenu?.Invoke();
             }
-            if (GUI.Button(new Rect(r.x + 20, y + 176, w - 40, 34), "Quit", button))
+            if (GUI.Button(new Rect(r.x + 20, y + 220, w - 40, 34), "Quit", button))
             {
                 Time.timeScale = timeScaleBefore;
                 Quit();

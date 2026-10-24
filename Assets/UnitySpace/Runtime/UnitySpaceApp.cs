@@ -179,7 +179,8 @@ namespace Unity.SpaceGod
 
         public bool ShowOrbits { get; set; } = true;
         public bool ShowLabels { get; set; } = true;
-        public bool ShowHelp { get; set; } = true;
+        /// <summary>The Help screen (H / F1, or Help in the Esc menu, U.SPC-T494): every key and control over the whole view; closed at the start.</summary>
+        public bool ShowHelp { get; set; }
 
         /// <summary>U: the lighter toggle; off, the HUD's panels and readouts go while the names and markers on the view stay.</summary>
         public bool ShowHud { get; set; } = true;
@@ -245,7 +246,7 @@ namespace Unity.SpaceGod
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => !ScreenCleared && (ShowSpawn || ShowSaves || ShowGalaxyMap || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet || ShowTrade))); // a cleared screen (F11) shows none of them; market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
+        bool ClickPanelOpen => !ScreenCleared && (ShowSpawn || ShowSaves || ShowGalaxyMap || ShowHelp || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet || ShowTrade))); // a cleared screen (F11) shows none of them; market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -378,6 +379,7 @@ namespace Unity.SpaceGod
             GameSettingsHost.Bind(); // every declared setting, from the active profile (U.SPC-T431)
             DisplayOptions.ApplySaved(); // the resolution, window mode and VSync last kept (VSync on until then)
             pauseMenu.ShowSaves = () => ShowSaves = true;
+            pauseMenu.ShowHelp = () => ShowHelp = true;
             pauseMenu.ToMainMenu = () => pendingMainMenu = true;
 
             Clock = SimClock.StartingNow();
@@ -615,7 +617,7 @@ namespace Unity.SpaceGod
             bool overUi = IsPointerOverUi();
             Input.Poll(overUi, ModelViewer.CapturesInput);
             // The galaxy map turns with its own drag: the camera behind it does not look about meanwhile.
-            if (ShowGalaxyMap && !ScreenCleared) Input.ReleaseLook();
+            if ((ShowGalaxyMap || ShowHelp) && !ScreenCleared) Input.ReleaseLook();
             // The pause menu has the frame: nothing else moves, and the stick and trigger do nothing, until it closes.
             if (pauseMenu.IsOpen)
             {
@@ -854,7 +856,7 @@ namespace Unity.SpaceGod
             switch (EscapeKey.Route(ClickPanelOpen, AtControls, SpaceCamera.Mode != SpaceCamera.CameraMode.Free, !Selected.IsNone))
             {
                 case EscapeAction.ClosePanels:
-                    ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = ShowTrade = ShowGalaxyMap = false;
+                    ShowSpawn = ShowSaves = ShowMarket = ShowCargo = ShowNews = ShowOutfit = ShowBounties = ShowContracts = ShowFleet = ShowTrade = ShowGalaxyMap = ShowHelp = false;
                     break;
                 case EscapeAction.LeaveFocus:
                     SpaceCamera.ExitFocus();

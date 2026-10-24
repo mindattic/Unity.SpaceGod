@@ -12,7 +12,8 @@ namespace Unity.SpaceGod.UI
 {
     /// <summary>
     /// The main menu, the scene the game opens on: Continue (the profile's latest save), New Game, Load Game,
-    /// Profiles (switch to another, or make a new one), Settings (the pause menu's own pages) and Quit, over a
+    /// Profiles (switch to another, or make a new one), Settings (the pause menu's own pages), Help (every key
+    /// and control, U.SPC-T494) and Quit, over a
     /// slowly turning sky. The game scene is loaded only once the player picks a game; a run for the tour, a
     /// capture or <c>-continue</c> never stops here (<see cref="Bootstrap"/>). Esc goes back a page.
     /// </summary>
@@ -24,10 +25,12 @@ namespace Unity.SpaceGod.UI
             Load,
             Profiles,
             AssetLibraries,
+            Help,
         }
 
         Page page;
         readonly PauseMenu settings = new PauseMenu();
+        readonly HelpScreen help = new HelpScreen();
 
         SaveSlots slots;
         List<string> saveNames = new List<string>();
@@ -87,6 +90,7 @@ namespace Unity.SpaceGod.UI
             if (fieldTexture != null) Object.Destroy(fieldTexture);
             panelTexture = buttonTexture = buttonActiveTexture = rowTexture = fieldTexture = null;
             settings.DestroyOwnedTextures();
+            help.DestroyOwnedTextures();
         }
 
         /// <summary>The profile in use and its saves, read again (after a switch, a delete, or coming back to the menu).</summary>
@@ -168,6 +172,9 @@ namespace Unity.SpaceGod.UI
                 case Page.Load: DrawLoad(); break;
                 case Page.Profiles: DrawProfiles(); break;
                 case Page.AssetLibraries: DrawAssetLibraries(); break;
+                case Page.Help:
+                    if (help.Draw("Esc to go back")) Open(Page.Main);
+                    break;
                 default: DrawMain(); break;
             }
         }
@@ -176,7 +183,7 @@ namespace Unity.SpaceGod.UI
 
         void DrawMain()
         {
-            const float w = 380, h = 420;
+            const float w = 380, h = 468;
             var r = Centred(w, h);
             GUI.Label(new Rect(r.x, r.y - 70, w, 48), "UNITYSPACE", heading);
             GUI.Box(r, GUIContent.none, panel);
@@ -195,8 +202,9 @@ namespace Unity.SpaceGod.UI
             GUI.enabled = enabled;
             if (GUI.Button(new Rect(r.x + 20, y + 144, bw, 38), "Profiles", button)) Open(Page.Profiles);
             if (GUI.Button(new Rect(r.x + 20, y + 192, bw, 38), "Settings", button)) settings.OpenSettings();
-            if (GUI.Button(new Rect(r.x + 20, y + 240, bw, 38), "Asset Library POC", button)) Open(Page.AssetLibraries);
-            if (GUI.Button(new Rect(r.x + 20, y + 288, bw, 38), "Quit", button)) Quit();
+            if (GUI.Button(new Rect(r.x + 20, y + 240, bw, 38), "Help", button)) Open(Page.Help);
+            if (GUI.Button(new Rect(r.x + 20, y + 288, bw, 38), "Asset Library POC", button)) Open(Page.AssetLibraries);
+            if (GUI.Button(new Rect(r.x + 20, y + 336, bw, 38), "Quit", button)) Quit();
         }
 
         void DrawLoad()
