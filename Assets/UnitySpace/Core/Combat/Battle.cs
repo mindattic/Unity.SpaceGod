@@ -207,7 +207,7 @@ namespace Unity.SpaceGod.Core
         /// once it has tried, U.SPC-T424).</summary>
         public bool PlayerDecoyRequested;
 
-        /// <summary>A capital ship's orders in the broadside game (U.SPC-T425): battery orders by arc, shield angling, the
+        /// <summary>A capital ship's orders in the broadside game (U.SPC-T425): battery orders by arc, focus fire on a weakened shield patch, the
         /// brace, damage control and the formation it leads, given by the player at the helm or by its captain's doctrine.
         /// Null for anything smaller (see <see cref="Broadsides.Of"/>).</summary>
         public BroadsideCommand Broadside;
@@ -252,6 +252,26 @@ namespace Unity.SpaceGod.Core
             Basis(out var right, out var up);
             var d = (point - Pos) / Math.Max(LengthKm, 1e-9);
             return new DVec3(DVec3.Dot(d, right), DVec3.Dot(d, up), DVec3.Dot(d, Forward));
+        }
+
+        /// <summary>A battle-local direction expressed in this hull's frame (right, up, forward), unscaled.</summary>
+        public DVec3 DirToLocal(DVec3 dir)
+        {
+            Basis(out var right, out var up);
+            return new DVec3(DVec3.Dot(dir, right), DVec3.Dot(dir, up), DVec3.Dot(dir, Forward));
+        }
+
+        /// <summary>
+        /// Where on this hull, in ship lengths in its frame, a strike at battle-local <paramref name="point"/> travelling
+        /// along <paramref name="incoming"/> meets the shield (U.SPC-T501, see <see cref="ShieldEmitters.StrikePoint"/>):
+        /// the patch whose emitter's field takes it.
+        /// </summary>
+        public DVec3 ShieldStrike(DVec3 point, DVec3? incoming = null)
+        {
+            var local = ToLocal(point);
+            var spec = Combat?.Spec;
+            if (spec == null) return local;
+            return ShieldEmitters.StrikePoint(spec, local, incoming.HasValue ? DirToLocal(incoming.Value) : (DVec3?)null);
         }
 
         /// <summary>Yaw angle (degrees) of a battle-local point relative to this hull's own facing:
@@ -471,7 +491,7 @@ namespace Unity.SpaceGod.Core
         public BattleUnit Unit;
 
         /// <summary>The subsystem index concerned, or -1: the hardpoint hit or lost, or for a
-        /// <see cref="FxKind.ShieldHit"/> the shield generator whose arc took the hit.</summary>
+        /// <see cref="FxKind.ShieldHit"/> the shield emitter whose patch took the hit.</summary>
         public int Sub;
     }
 
@@ -733,7 +753,7 @@ namespace Unity.SpaceGod.Core
                 if (!u.Present) continue;
                 u.SeenVel += (u.Vel - u.SeenVel) * track;
                 var c = u.Combat;
-                // A capital ship's captain angles its shields, braces and works damage control (U.SPC-T425).
+                // A capital ship's captain orders its batteries, braces and works damage control (U.SPC-T425).
                 if (Broadsides.Commands(u)) Broadsides.Step(this, u, dt);
                 // A big ship's heat fills or drains, and past its sinks' limit its crew and systems cook (U.SPC-T491).
                 StepHeat(u, dt);
@@ -2310,13 +2330,15 @@ namespace Unity.SpaceGod.Core
             return best;
         }
 
-        /// <summary>Gunners go for weapons first, then shields, engines and the bridge; the reactor is a lucky shot. Raiders
+        /// <summary>Gunners go for weapons first, then shields, engines and the bridge; the reactor is a lucky shot; and any of
+        /// them the more in a patch of hull whose shield field is weakened (U.SPC-T501, <see cref="ShieldEmitters.FocusWeight"/>). Raiders
         /// working a merchant or civilian hull (<paramref name="shooter"/>, see <see cref="RaidDoctrine"/>, U.SPC-T374) go for
         /// its shields and engines instead, to leave it dead in space, and never its reactor.</summary>
         public Subsystem PickSubsystem(BattleUnit target, BattleUnit shooter = null)
         {
             bool robbing = shooter != null && !shooter.PlayerControlled && RaidDoctrine.Robs(shooter.Faction, target.Ship);
             if (target.Kind == UnitKind.Fighter) return null;
+            bool focus = Broadsides.FocusesFire(shooter);
             double total = 0;
             var subs = target.Combat.Subsystems;
             var weights = new double[subs.Count];
@@ -2359,6 +2381,9 @@ namespace Unity.SpaceGod.Core
                 // A bridge buried at the centre of the hull (U.SPC-T492) is worth aiming at only once the hull is holed deep
                 // enough for fire to get through to it.
                 if (s.Def.Buried) w *= BuriedBridges.Reach(target.Combat, s);
+                // Fire goes where the shield is already weak (U.SPC-T501): a mount in a patch whose field is down or whose
+                // emitter is shot away, unless a captain at the helm has told the crews to spread it.
+                if (focus) w *= ShieldEmitters.FocusWeight(target.Combat, s);
                 weights[i] = w;
                 total += w;
             }
@@ -2384,9 +2409,11 @@ namespace Unity.SpaceGod.Core
         {
             if (!target.Present) return;
             var c = target.Combat;
-            // Guided munitions are judged against the arc on the side they came in from, not the hardpoint's (U.SPC-T380).
-            var shieldPoint = shieldAt ?? at;
-            var generator = c.GeneratorFor(target.YawDegOf(shieldPoint));
+            // The shield that takes it is the field over the patch of hull it strikes, in 3D (U.SPC-T501); a guided munition
+            // strikes where it crossed into the hull on the side it came in from, not at the hardpoint it homed on (U.SPC-T380).
+            var strike = target.ShieldStrike(shieldAt ?? at, incoming);
+            var shieldPoint = target.PointLocal(strike);
+            var generator = c.EmitterFor(strike);
             if (strikeTorpedo) damage *= StrikeTorpedoes.Factor(target, generator == null || generator.Shield <= 0);
             if (generator != null)
             {
@@ -2396,7 +2423,7 @@ namespace Unity.SpaceGod.Core
                     double soaked = Math.Min(generator.Shield, damage);
                     generator.Shield -= soaked;
                     damage -= soaked;
-                    // Sub names the generator whose arc took it, so the bubble it raises is that arc's (U.SPC-T40).
+                    // Sub names the emitter whose field took it, so the bubble it raises is that patch's (U.SPC-T40).
                     Emit(FxKind.ShieldHit, shieldPoint, target.Pos, target.LengthKm, target.Side, target, generator.Index);
                     if (damage <= 0) return;
                 }
@@ -2455,7 +2482,7 @@ namespace Unity.SpaceGod.Core
             if (!target.Present || hp <= 0) return;
             var c = target.Combat;
             double shieldBefore = c.Shield;
-            var generator = c.GeneratorFor(target.YawDegOf(at));
+            var generator = c.EmitterFor(target.ShieldStrike(at));
             var lost = new List<Subsystem>();
             double through = Collisions.ApplyDamage(c, target.ToLocal(at), hp, Seconds, lost);
             if (c.Shield < shieldBefore) Emit(FxKind.ShieldHit, at, target.Pos, target.LengthKm, target.Side, target, generator?.Index ?? -1);
@@ -2594,7 +2621,7 @@ namespace Unity.SpaceGod.Core
         void PodHit(Missile m, BattleUnit t, DVec3 at, DVec3? shieldAt = null)
         {
             var c = t.Combat;
-            var generator = c.GeneratorFor(t.YawDegOf(shieldAt ?? at));
+            var generator = c.EmitterFor(t.ShieldStrike(shieldAt ?? at, m.Vel - t.Vel));
             if (generator != null && generator.Shield > 0)
             {
                 Emit(FxKind.PodBounce, at, at, t.LengthKm, t.Side, t, -1);

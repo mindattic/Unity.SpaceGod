@@ -105,13 +105,13 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void AShieldHitNamesTheGeneratorWhoseArcTookItAndACollapsedArcRaisesNoBubble()
         {
-            // U.SPC-T40: the bubble a shield hit raises is drawn on the struck arc, in that generator's colour at
+            // U.SPC-T40: the bubble a shield hit raises is drawn on the struck patch, in that emitter's colour at
             // its charge, so the hit has to say which generator it was; a collapsed arc lets hits through to the hull.
             var (b, _, _) = Skirmish(3, new[] { (ShipClass.Cruiser, 0), (ShipClass.Cruiser, 1) });
             var target = b.Units[1];
             var bowPoint = target.PointLocal(new DVec3(0, 0, 0.5));
-            var gen = target.Combat.GeneratorFor(target.YawDegOf(bowPoint));
-            Assert.That(gen, Is.Not.Null, "the cruiser's bow arc has no generator");
+            var gen = target.Combat.EmitterFor(target.ShieldStrike(bowPoint));
+            Assert.That(gen, Is.Not.Null, "the cruiser's bow patch has no emitter");
             Assert.That(gen.ShieldFraction, Is.EqualTo(1).Within(1e-9));
 
             b.ApplyDamage(target, null, gen.MaxShield * 0.25, bowPoint);

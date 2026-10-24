@@ -106,8 +106,8 @@ namespace Unity.SpaceGod.Core
                 Layout = new[]
                 {
                     new SubsystemDef(SubsystemKind.Bridge, 0, 0.04, 0.25),
-                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.1, arcCenterDeg: 0, arcWidthDeg: 180),
-                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2, arcCenterDeg: 180, arcWidthDeg: 180),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, 0.1),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.03, -0.2),
                     new SubsystemDef(SubsystemKind.Engine, 0, 0, -0.45),
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
                 },

@@ -254,7 +254,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void A_shield_on_the_struck_side_soaks_the_impact_first_and_a_lost_reactor_takes_the_ship()
         {
             var combat = new ShipCombat(Spec(ShipClass.Destroyer), ShipClass.Destroyer);
-            var bowShield = combat.GeneratorFor(0);
+            var bowShield = combat.EmitterFor(new DVec3(0, 0, 0.5));
             double charge = bowShield.Shield;
             Assert.That(Collisions.ApplyDamage(combat, new DVec3(0, 0, 0.5), charge * 0.5), Is.EqualTo(0));
             Assert.That(bowShield.Shield, Is.EqualTo(charge * 0.5).Within(1e-9));

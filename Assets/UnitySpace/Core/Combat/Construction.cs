@@ -278,10 +278,10 @@ namespace Unity.SpaceGod.Core
                 new SubsystemDef(SubsystemKind.PointDefense, -0.3, 0.1, 0.3),
                 new SubsystemDef(SubsystemKind.PointDefense, 0.3, 0.1, -0.3),
                 new SubsystemDef(SubsystemKind.PointDefense, -0.3, 0.1, -0.3),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.2, 0.2, arcCenterDeg: 0, arcWidthDeg: 90),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0.2, 0.2, 0, arcCenterDeg: 90, arcWidthDeg: 90),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.2, -0.2, arcCenterDeg: 180, arcWidthDeg: 90),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, -0.2, 0.2, 0, arcCenterDeg: 270, arcWidthDeg: 90),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.2, 0.2),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0.2, 0.2, 0),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.2, -0.2),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, -0.2, 0.2, 0),
                 new SubsystemDef(SubsystemKind.Bridge, 0, 0.25, 0),
                 new SubsystemDef(SubsystemKind.Hangar, 0, -0.1, 0),
                 new SubsystemDef(SubsystemKind.Reactor, 0, 0, 0),
@@ -300,7 +300,7 @@ namespace Unity.SpaceGod.Core
                 new SubsystemDef(SubsystemKind.LaserTurret, 0, 0.2, 0.1),
                 new SubsystemDef(SubsystemKind.MissileLauncher, 0, -0.2, 0),
                 new SubsystemDef(SubsystemKind.PointDefense, 0.25, 0, -0.1),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0, arcCenterDeg: 0, arcWidthDeg: 360),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0),
                 new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
             },
         };
@@ -314,7 +314,7 @@ namespace Unity.SpaceGod.Core
             Layout = new[]
             {
                 new SubsystemDef(SubsystemKind.PointDefense, 0, 0.25, 0),
-                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0, arcCenterDeg: 0, arcWidthDeg: 360),
+                new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0),
                 new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.3),
             },
         };

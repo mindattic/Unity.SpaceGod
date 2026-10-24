@@ -7,8 +7,8 @@ namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
     /// The capital-ship broadside game (U.SPC-T425): batteries ordered by the arc they fire into, volleys that hold for the
-    /// battery and telegraph themselves, shields angled to a facing, armour that turns oblique hits, the brace, damage
-    /// control, formations a flagship orders its line into, turning circles, and AI captains using the same commands.
+    /// battery and telegraph themselves, gunners focusing a weakened shield patch, armour that turns oblique hits, the brace,
+    /// damage control and its emergency repair crews, formations a flagship orders its line into, turning circles, and AI captains using the same commands.
     /// </summary>
     [TestFixture]
     public class BroadsideTests
@@ -133,34 +133,17 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(heavies.All(h => h.Cooldown > 0), Is.True, "every loaded gun bearing went with it, in the same step");
         }
 
-        // ------------------------------------------------------------ shields
+        // ------------------------------------------------------------ focus fire (U.SPC-T501)
 
         [Test]
-        public void AngledShieldsDrawChargeToThatFacingWithoutMakingAnyMore()
+        public void TheCaptainCanOrderTheGunnersToSpreadTheirFireAndBackToFocus()
         {
             var (_, me, _) = Helm(90);
-            var c = me.Combat;
-            double total = c.Shield;
-            var starboard = c.GeneratorFor(90);
-            var port = c.GeneratorFor(270);
-            Broadsides.TrimShields(me, Facing.Starboard);
-            for (int i = 0; i < 120; i++)
-            {
-                Broadsides.StepShields(me, 1);
-                c.RegenShields(1000 + i, 1);
-            }
-            Assert.That(starboard.Shield, Is.GreaterThan(starboard.MaxShield * 1.3), "the starboard arc holds well over its even share");
-            Assert.That(port.Shield, Is.LessThan(port.MaxShield * 0.8), "the far side gives it up");
-            Assert.That(c.Shield, Is.EqualTo(total).Within(1e-6), "the whole is what it was");
-
-            Broadsides.TrimShields(me, null);
-            for (int i = 0; i < 120; i++)
-            {
-                Broadsides.StepShields(me, 1);
-                c.RegenShields(2000 + i, 1);
-            }
-            Assert.That(starboard.Shield, Is.EqualTo(starboard.MaxShield).Within(starboard.MaxShield * 0.01), "spread evenly again");
-            Assert.That(c.Shield, Is.EqualTo(total).Within(1e-6));
+            Assert.That(Broadsides.FocusesFire(me), Is.True, "a player's crews go for a weakened patch by default");
+            Assert.That(Broadsides.ToggleSpreadFire(me), Is.True);
+            Assert.That(Broadsides.FocusesFire(me), Is.False, "ordered to spread their fire");
+            Assert.That(Broadsides.ToggleSpreadFire(me), Is.False);
+            Assert.That(Broadsides.FocusesFire(me), Is.True);
         }
 
         // ------------------------------------------------------------ armour
@@ -278,16 +261,16 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void DamageControlPatchesMountsInTheFieldButNotWhatWasShotAway()
+        public void DamageControlPatchesMountsInTheFieldButNotAnEngineShotAway()
         {
             var (_, me, _) = Helm(90);
             var turret = me.Combat.Subsystems.First(s => s.Kind == SubsystemKind.LaserTurret);
-            var lost = me.Combat.Subsystems.First(s => s.Kind == SubsystemKind.HeavyLaser);
+            var lost = me.Combat.Subsystems.First(s => s.Kind == SubsystemKind.Engine);
             turret.Hp = turret.Def.MaxHp * 0.3;
             lost.Hp = 0;
             for (int i = 0; i < 600; i++) Broadsides.StepDamageControl(me, 1);
             Assert.That(turret.Hp, Is.EqualTo(turret.Def.MaxHp * Broadsides.FieldRepairCap).Within(1e-6), "patched up to what the field allows");
-            Assert.That(lost.Destroyed, Is.True, "a mount shot away waits for a yard");
+            Assert.That(lost.Destroyed, Is.True, "an engine shot away waits for a yard");
             Assert.That(me.Broadside.Repaired, Is.GreaterThan(0));
         }
 
@@ -389,7 +372,7 @@ namespace Unity.SpaceGod.Core.Tests
         // ------------------------------------------------------------ AI captains
 
         [Test]
-        public void AnAiCaptainFiresBroadsidesFromItsBeamAndAnglesItsShieldsToTheEnemy()
+        public void AnAiCaptainFiresBroadsidesFromItsBeamAndItsGunnersFocusAWeakenedPatch()
         {
             var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
             var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
@@ -401,11 +384,11 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(cmd[Facing.Port], Is.EqualTo(BatteryOrder.Volley));
             Assert.That(cmd[Facing.Bow], Is.EqualTo(BatteryOrder.FireAtWill));
             Assert.That(blue.Target, Is.SameAs(red));
-            Assert.That(cmd.ShieldTrim, Is.EqualTo(Facings.Toward(blue, red.Pos)), "shields angled to the enemy");
+            Assert.That(Broadsides.FocusesFire(blue), Is.True, "its gunners go for a weakened shield patch");
         }
 
         [Test]
-        public void TurningTheAiVolleySettingOffAndBackOnLeavesTheCaptainFiringAndAngling()
+        public void TurningTheAiVolleySettingOffAndBackOnLeavesTheCaptainFiringAndFocusing()
         {
             bool saved = Broadsides.AiVolleys.Value;
             try
@@ -420,11 +403,11 @@ namespace Unity.SpaceGod.Core.Tests
                 Broadsides.AiVolleys.Set(true);
                 var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
                 var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
-                var red = b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
+                b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
                 Run(b, 2);
                 Assert.That(blue.Broadside[Facing.Starboard], Is.EqualTo(BatteryOrder.Volley));
                 Assert.That(blue.Broadside[Facing.Port], Is.EqualTo(BatteryOrder.Volley));
-                Assert.That(blue.Broadside.ShieldTrim, Is.EqualTo(Facings.Toward(blue, red.Pos)), "shields still angled to the enemy");
+                Assert.That(Broadsides.FocusesFire(blue), Is.True, "its gunners still focus a weakened patch");
             }
             finally
             {
@@ -448,9 +431,8 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(SettingsRegistry.Default.Find("broadside.armourAngling"), Is.SameAs(Broadsides.ArmourAngling));
             Assert.That(SettingsRegistry.Default.Find("broadside.brace"), Is.SameAs(Broadsides.BraceReduction));
             Assert.That(SettingsRegistry.Default.Find("broadside.damageControl"), Is.SameAs(Broadsides.DamageControlRate));
-            Assert.That(SettingsRegistry.Default.Find("broadside.shieldAngling"), Is.SameAs(Broadsides.ShieldAngling));
             Assert.That(SettingsRegistry.Default.Find("broadside.aiVolleys"), Is.SameAs(Broadsides.AiVolleys));
-            Assert.That(SettingsRegistry.Default.Find("broadside.aiShields"), Is.SameAs(Broadsides.AiAnglesShields));
+            Assert.That(SettingsRegistry.Default.Find("broadside.aiFocusFire"), Is.SameAs(Broadsides.AiFocusFire));
             Assert.That(SettingsRegistry.Default.Find("broadside.aiBrace"), Is.SameAs(Broadsides.AiBraces));
         }
     }

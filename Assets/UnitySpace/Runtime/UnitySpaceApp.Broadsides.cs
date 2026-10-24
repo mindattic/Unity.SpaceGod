@@ -6,7 +6,8 @@ namespace Unity.SpaceGod
     /// The broadside game at a capital ship's helm (U.SPC-T425, see <see cref="Broadsides"/>). The trigger still calls the
     /// volley on the side the player is looking (U.SPC-T272); the number keys give the captain's orders, each to the arc
     /// the player is looking toward where it takes one: 1 that arc's battery to its next order (at will, hold fire,
-    /// volley), 2 the shields angled to that arc (again to spread them evenly), 3 brace, 4 damage control's next focus,
+    /// volley), 2 the gun crews' fire spread over the enemy's hull or (again, the default) focused on the patch of it whose shield
+    /// field is weakest (U.SPC-T501), 3 brace, 4 damage control's next focus,
     /// 5-8 the line into line ahead, line abreast, echelon or a screen, 9 engage at will, 0 every battery back to fire at will.
     /// The number keys answer a hail first, while one is open, then the boarding panel (B), while that is open.
     /// </summary>
@@ -22,7 +23,6 @@ namespace Unity.SpaceGod
             if (key < 0) return;
             var look = PilotLookDirection;
             var arc = Facings.Toward(unit, unit.Pos + look);
-            var cmd = Broadsides.Of(unit);
             switch (key)
             {
                 case 1:
@@ -30,8 +30,7 @@ namespace Unity.SpaceGod
                     ShowToast(Cap(Facings.Label(arc)) + " battery: " + Broadsides.Label(order));
                     break;
                 case 2:
-                    var trim = Broadsides.TrimShields(unit, cmd.ShieldTrim == arc ? (Facing?)null : arc);
-                    ShowToast(trim == null ? "Shields spread evenly" : "Shields angled to " + Facings.Label(trim.Value));
+                    ShowToast(Broadsides.ToggleSpreadFire(unit) ? "Gunners: spread your fire" : "Gunners: go for the weakened shields");
                     break;
                 case 3:
                     ShowToast(Broadsides.Brace(unit) ? "Brace, brace, brace!" : "The crew is still getting back to their stations");

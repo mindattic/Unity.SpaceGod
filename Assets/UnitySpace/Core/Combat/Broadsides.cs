@@ -5,13 +5,15 @@ using System.Globalization;
 namespace Unity.SpaceGod.Core
 {
     // The capital-ship broadside game (U.SPC-T425): commanding a capital ship as a naval battle, Black Flag / Rebel Galaxy
-    // style. Batteries are ordered by the arc they fire into, a volley is called and telegraphed, shields are angled toward
-    // a facing, the hull is angled so shots strike its armour obliquely, the crew braces for a broadside and damage control
-    // teams patch mounts under fire, and the flagship orders its line into formation. AI captains use the same commands
+    // style. Batteries are ordered by the arc they fire into, a volley is called and telegraphed, the gun crews go for a
+    // weakened patch of the enemy's shields or spread their fire (shields are emitters on the hull, not arcs: U.SPC-T501,
+    // see ShieldEmitters), the hull is angled so shots strike its armour obliquely, the crew braces for a broadside and damage control
+    // teams patch mounts under fire and bring back shield emitters and gun mounts shot away, and the flagship orders its line into formation. AI captains use the same commands
     // by doctrine. The handling itself (engine telegraph, steerage, keel, full 3D) is the capital flight model's
     // (U.SPC-T499, docs/FLIGHT_MODELS.md); this file is everything a captain does on top of it.
 
-    /// <summary>The four arcs a capital ship's batteries, shields and armour are ordered by (U.SPC-T425).</summary>
+    /// <summary>The four arcs a capital ship's batteries and armour are ordered by (U.SPC-T425). Shields have no arcs: they are
+    /// emitters on the hull, each covering its own patch of it (U.SPC-T501, see <see cref="ShieldEmitters"/>).</summary>
     public enum Facing
     {
         Bow,
@@ -42,7 +44,7 @@ namespace Unity.SpaceGod.Core
 
         Weapons,
 
-        /// <summary>Shield generators, and keeping their arcs charging under fire.</summary>
+        /// <summary>Shield emitters: bringing back those shot away first, and keeping the fields of those under fire charging.</summary>
         Shields,
 
         Engines,
@@ -102,7 +104,7 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// A capital ship's standing orders and state in the broadside game (U.SPC-T425), on its <see cref="BattleUnit"/>: the
-    /// order each arc's battery fires under, the facing its shields are angled to, its crew's brace, where damage control
+    /// order each arc's battery fires under, whether its gun crews go for a weakened patch of the enemy's shields, its crew's brace, where damage control
     /// works, the formation it has ordered its line into, and the broadside it is building (its telegraph).
     /// </summary>
     public sealed class BroadsideCommand
@@ -115,8 +117,9 @@ namespace Unity.SpaceGod.Core
             set => orders[(int)f] = value;
         }
 
-        /// <summary>The facing the shields are angled to, or null for an even spread.</summary>
-        public Facing? ShieldTrim;
+        /// <summary>The gun crews spread their fire over the enemy's hull instead of going for the patch of it whose shield field
+        /// is weakest (U.SPC-T501, see <see cref="ShieldEmitters.FocusWeight"/>): false (focus) unless the captain orders it.</summary>
+        public bool SpreadFire;
 
         /// <summary>Seconds the crew stays braced, and until it can brace again.</summary>
         public double BraceLeft, BraceCooldown;
@@ -142,13 +145,16 @@ namespace Unity.SpaceGod.Core
         /// <summary>Hit points damage control has put back this battle (for the HUD and the tests).</summary>
         public double Repaired;
 
+        /// <summary>Mounts shot away that the emergency repair crews have brought back this battle (U.SPC-T501).</summary>
+        public int Restored;
+
         /// <summary>This step: the arcs whose volley goes now.</summary>
         internal readonly bool[] Releasing = new bool[Facings.Count];
 
         public bool Releases(Facing f) => Releasing[(int)f];
     }
 
-    /// <summary>The broadside game's rules (U.SPC-T425): batteries, shield angling, armour angling, the brace, damage
+    /// <summary>The broadside game's rules (U.SPC-T425): batteries, focus fire on a weakened shield patch, armour angling, the brace, damage
     /// control, formations and turning circles. Tunables are declared settings.</summary>
     [SettingsSource]
     public static class Broadsides
@@ -170,20 +176,15 @@ namespace Unity.SpaceGod.Core
             "How fast a capital ship's damage control teams patch its mounts, shields and engines in battle: 0 turns damage control off, 1 is as designed.",
             v => v.ToString("0.##", CultureInfo.InvariantCulture) + "x", "repair crew damage control capital");
 
-        public static readonly RangeSetting ShieldAngling = new RangeSetting("broadside.shieldAngling", SettingGroups.Broadsides,
-            "Shield angling strength", 1.5, 0, 3, 0.25,
-            "How much of the shield's charge angling it to a facing draws to that side: 0 leaves the spread even.",
-            v => v.ToString("0.##", CultureInfo.InvariantCulture), "shield angle deflector facing capital");
-
         public static readonly ToggleSetting AiVolleys = new ToggleSetting("broadside.aiVolleys", SettingGroups.Broadsides,
             "AI captains fire broadsides", true,
             "AI capital ships hold their beam batteries for a volley and fire them together, telegraphing it, as the player can.",
             "volley broadside ai doctrine");
 
-        public static readonly ToggleSetting AiAnglesShields = new ToggleSetting("broadside.aiShields", SettingGroups.Broadsides,
-            "AI captains angle shields", true,
-            "AI capital ships angle their shields toward the hull they are fighting.",
-            "shield angle ai doctrine");
+        public static readonly ToggleSetting AiFocusFire = new ToggleSetting("broadside.aiFocusFire", SettingGroups.Broadsides,
+            "AI gunners focus a weakened patch", true,
+            "AI gun crews go for the hardpoints in a patch of the enemy's hull whose shield field is weakened or holed (how strongly is the shield focus setting).",
+            "shield emitter patch focus fire ai doctrine");
 
         public static readonly ToggleSetting AiBraces = new ToggleSetting("broadside.aiBrace", SettingGroups.Broadsides,
             "AI captains brace", true,
@@ -209,9 +210,6 @@ namespace Unity.SpaceGod.Core
         public const double CrewPerTeam = 250, RepairHpPerTeamS = 1.5, FieldRepairCap = 0.85;
 
         public const int MaxTeams = 8;
-
-        /// <summary>The share of the hull's whole shield that angling moves between arcs a second.</summary>
-        public const double TrimRatePerS = 0.08;
 
         /// <summary>The thinnest a hit can find the armour by angle: obliquity no more than this multiplies it.</summary>
         public const double MaxObliquity = 3;
@@ -307,67 +305,28 @@ namespace Unity.SpaceGod.Core
             cmd.ReadyingLoaded = guns == 0 ? 1 : (double)loaded / guns;
         }
 
-        // ------------------------------------------------------------ shields
+        // ------------------------------------------------------------ focus fire
 
-        /// <summary>Angles <paramref name="u"/>'s shields to <paramref name="f"/> (null spreads them evenly again); returns the trim.</summary>
-        public static Facing? TrimShields(BattleUnit u, Facing? f)
+        /// <summary>Toggles whether <paramref name="u"/>'s gun crews spread their fire (true) or go for a weakened shield patch
+        /// (false, the default); returns whether they now spread it.</summary>
+        public static bool ToggleSpreadFire(BattleUnit u)
         {
             var cmd = Of(u);
-            if (cmd == null) return null;
-            cmd.ShieldTrim = f;
-            return f;
+            if (cmd == null) return false;
+            cmd.SpreadFire = !cmd.SpreadFire;
+            return cmd.SpreadFire;
         }
 
         /// <summary>
-        /// How much of an even share of the shield a generator covering <paramref name="arcCenterDeg"/> holds with the
-        /// shields angled to <paramref name="trim"/>, before the live generators' shares are evened back to a mean of 1:
-        /// those facing the trim most squarely hold most.
+        /// Whether <paramref name="shooter"/>'s gunners favour the hardpoints in a weakened patch of their target's shields
+        /// (U.SPC-T501, see <see cref="ShieldEmitters.FocusWeight"/>): an AI's crews by doctrine (<see cref="AiFocusFire"/>),
+        /// a player's unless the captain has ordered the fire spread. With no shooter named (a stray hit), they do not.
         /// </summary>
-        static double TrimWeight(double arcCenterDeg, Facing? trim)
+        public static bool FocusesFire(BattleUnit shooter)
         {
-            if (trim == null) return 1;
-            double off = Facings.OffDeg(arcCenterDeg, trim.Value) * Astro.Deg2Rad;
-            return 1 + ShieldAngling.Value * Math.Max(0, Math.Cos(off));
-        }
-
-        /// <summary>
-        /// The shields settle toward their angling: each live generator's cap is its share of the hull's shield times its
-        /// trim weight (the weights averaging 1, so the whole stays what it was), and charge flows from those over their
-        /// cap to those under it at <see cref="TrimRatePerS"/> of the hull's shield a second.
-        /// </summary>
-        public static void StepShields(BattleUnit u, double dt)
-        {
-            var cmd = u.Broadside;
-            var c = u.Combat;
-            double sum = 0;
-            int n = 0;
-            foreach (var s in c.Subsystems)
-            {
-                if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed) continue;
-                sum += TrimWeight(s.Def.ArcCenterDeg, cmd?.ShieldTrim);
-                n++;
-            }
-            if (n == 0) return;
-            double mean = sum / n;
-            double over = 0, under = 0;
-            foreach (var s in c.Subsystems)
-            {
-                if (s.Kind != SubsystemKind.ShieldGenerator) continue;
-                s.ShieldCapScale = s.Destroyed ? 1 : TrimWeight(s.Def.ArcCenterDeg, cmd?.ShieldTrim) / mean;
-                if (s.Destroyed) continue;
-                double cap = s.ShieldCap;
-                if (s.Shield > cap) over += s.Shield - cap;
-                else under += cap - s.Shield;
-            }
-            double move = Math.Min(Math.Min(over, under), TrimRatePerS * c.Spec.Shield * dt);
-            if (move <= 0) return;
-            foreach (var s in c.Subsystems)
-            {
-                if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed) continue;
-                double cap = s.ShieldCap;
-                if (s.Shield > cap) s.Shield -= (s.Shield - cap) / over * move;
-                else s.Shield += (cap - s.Shield) / under * move;
-            }
+            if (shooter == null) return false;
+            if (shooter.Broadside != null && shooter.Broadside.SpreadFire) return false;
+            return shooter.PlayerControlled || AiFocusFire.Value;
         }
 
         // ------------------------------------------------------------ armour
@@ -485,8 +444,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// The teams work: each puts back <see cref="RepairHpPerTeamS"/> a second (times <see cref="DamageControlRate"/> and
         /// the fleet's supply readiness) into damaged mounts, those in the focus first and the worst-hurt first among them, up
-        /// to <see cref="FieldRepairCap"/> of whole. A mount shot away stays lost until a yard refits it, and the hull itself
-        /// is not patched in the field. With the focus on shields, generators keep charging under fire at half their rate.
+        /// to <see cref="FieldRepairCap"/> of whole. Its emergency repair crews bring back a shield emitter or gun mount shot
+        /// away (U.SPC-T501): <see cref="ShieldEmitters.EmergencyRepairWork"/> of its hit points' worth of work, at
+        /// <see cref="ShieldEmitters.EmergencyRepairRate"/>, restores it to <see cref="ShieldEmitters.RestoredHealth"/> (an
+        /// emitter's field then regrows from nothing); anything else shot away, and the hull itself, wait for a yard.
+        /// With the focus on shields, emitters under fire keep their fields charging at half their rate.
         /// </summary>
         public static void StepDamageControl(BattleUnit u, double dt)
         {
@@ -518,6 +480,7 @@ namespace Unity.SpaceGod.Core
                 cmd.Repaired += fix;
                 budget -= fix;
             }
+            StepEmergencyRepair(c, cmd, teams, dt);
             if (cmd.Focus == DamageControlFocus.Shields)
             {
                 double ratings = 0, room = 0;
@@ -531,12 +494,51 @@ namespace Unity.SpaceGod.Core
                 foreach (var s in c.Subsystems)
                 {
                     if (room <= 0) return;
-                    if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed || s.Shield >= s.ShieldCap) continue;
-                    // RegenShields already charges an arc that has not been hit lately: this is for the ones under fire.
-                    double add = Math.Min(room, Math.Min(s.ShieldCap - s.Shield, c.Spec.ShieldRegen * s.Def.Rating / ratings * 0.5 * rate * dt));
+                    if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed || s.Shield >= s.MaxShield) continue;
+                    // RegenShields already regrows a patch that has not been hit lately: this is for the ones under fire.
+                    double add = Math.Min(room, Math.Min(s.MaxShield - s.Shield, c.Spec.ShieldRegen * s.Def.Rating / ratings * 0.5 * rate * dt));
                     s.Shield += add;
                     room -= add;
                 }
+            }
+        }
+
+        /// <summary>
+        /// The emergency repair crews (U.SPC-T501): <paramref name="teams"/> teams' work, at
+        /// <see cref="ShieldEmitters.EmergencyRepairRate"/>, goes into the shield emitters and gun mounts shot away, those in
+        /// the damage control focus first and among them the one nearest done, each coming back at
+        /// <see cref="ShieldEmitters.RestoredHealth"/> once its <see cref="ShieldEmitters.EmergencyRepairWork"/> is in.
+        /// </summary>
+        static void StepEmergencyRepair(ShipCombat c, BroadsideCommand cmd, int teams, double dt)
+        {
+            double rate = ShieldEmitters.EmergencyRepairRate.Value;
+            if (rate <= 0) return;
+            double work = teams * RepairHpPerTeamS * rate * c.Readiness * dt;
+            double share = ShieldEmitters.EmergencyRepairWork.Value;
+            for (int pass = 0; pass < 8 && work > 1e-9; pass++)
+            {
+                Subsystem next = null;
+                double nextScore = double.MaxValue;
+                foreach (var s in c.Subsystems)
+                {
+                    if (!ShieldEmitters.Restorable(s)) continue;
+                    double score = -s.Restoring / s.Def.MaxHp - (InFocus(s, cmd.Focus) ? 10 : 0);
+                    if (score < nextScore)
+                    {
+                        nextScore = score;
+                        next = s;
+                    }
+                }
+                if (next == null) return;
+                double need = share * next.Def.MaxHp - next.Restoring;
+                double put = Math.Min(work, Math.Max(0, need));
+                next.Restoring += put;
+                work -= put;
+                if (next.Restoring < share * next.Def.MaxHp - 1e-9) continue;
+                next.Hp = next.Def.MaxHp * ShieldEmitters.RestoredHealth.Value;
+                next.Restoring = 0;
+                next.Shield = 0;
+                cmd.Restored++;
             }
         }
 
@@ -544,8 +546,8 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// A capital ship's broadside step, run by the battle each step before its shields regenerate: the brace wears off,
-        /// an AI captain follows doctrine (beam batteries in volleys, shields angled to its target, a brace when a broadside
-        /// is about to come in), the shields settle toward their angling and damage control works.
+        /// an AI captain follows doctrine (beam batteries in volleys, a brace when a broadside is about to come in) and damage
+        /// control works, its emergency repair crews bringing back what has been shot away.
         /// </summary>
         public static void Step(Battle b, BattleUnit u, double dt)
         {
@@ -554,12 +556,11 @@ namespace Unity.SpaceGod.Core
             cmd.BraceLeft = Math.Max(0, cmd.BraceLeft - dt);
             cmd.BraceCooldown = Math.Max(0, cmd.BraceCooldown - dt);
             if (!u.PlayerControlled && !u.Captured && !u.Surrendering && !u.Combat.Disabled) Doctrine(b, u, cmd);
-            StepShields(u, dt);
             StepDamageControl(u, dt);
         }
 
         /// <summary>What an AI captain orders on its own (each part a setting): its beam batteries fire in volleys and its
-        /// bow and stern at will, its shields are angled to the hull it is fighting, and it braces for a broadside about to come in.</summary>
+        /// bow and stern at will, and it braces for a broadside about to come in.</summary>
         static void Doctrine(Battle b, BattleUnit u, BroadsideCommand cmd)
         {
             var beam = AiVolleys.Value ? BatteryOrder.Volley : BatteryOrder.FireAtWill;
@@ -567,9 +568,6 @@ namespace Unity.SpaceGod.Core
             cmd[Facing.Stern] = BatteryOrder.FireAtWill;
             cmd[Facing.Starboard] = beam;
             cmd[Facing.Port] = beam;
-            var t = u.Target;
-            // Toward another capital ship: a small craft is round the hull and gone again before the charge could follow it.
-            cmd.ShieldTrim = AiAnglesShields.Value && t != null && t.Present && Commands(t) ? Facings.Toward(u, t.Pos) : (Facing?)null;
             if (AiBraces.Value && !cmd.Braced && cmd.BraceCooldown <= 0 && IncomingBroadside(b, u) != null) Brace(u);
         }
 

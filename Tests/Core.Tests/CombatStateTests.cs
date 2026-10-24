@@ -38,7 +38,7 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void ContainsYawRespectsItsWidthAroundAZeroCenter()
         {
-            var def = new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0, arcCenterDeg: 0, arcWidthDeg: 90);
+            var def = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0, 0, arcCenterDeg: 0, arcWidthDeg: 90);
 
             Assert.That(def.ContainsYaw(0), Is.True);
             Assert.That(def.ContainsYaw(45), Is.True);
@@ -51,7 +51,7 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void ContainsYawWrapsAcrossTheZeroThreeSixtyBoundary()
         {
-            var def = new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0, 0, arcCenterDeg: 350, arcWidthDeg: 60);
+            var def = new SubsystemDef(SubsystemKind.LaserTurret, 0, 0, 0, arcCenterDeg: 350, arcWidthDeg: 60);
 
             Assert.That(def.ContainsYaw(350), Is.True);
             Assert.That(def.ContainsYaw(0), Is.True);
@@ -63,19 +63,22 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(def.ContainsYaw(200), Is.False);
         }
 
-        // ---------------------------------------------------------------- GeneratorFor
+        // ---------------------------------------------------------------- EmitterFor (U.SPC-T501)
 
         [Test]
-        public void GeneratorForReturnsTheLiveGeneratorCoveringAYawAndSkipsDestroyedOnes()
+        public void EmitterForReturnsTheLiveEmitterWhosePatchCoversAPointAndNoneWhereItIsShotAway()
         {
             var combat = Make(ShipClass.Destroyer);
-            var bow = combat.Subsystems.Single(s => s.Kind == SubsystemKind.ShieldGenerator && s.Def.ArcCenterDeg == 0);
+            var bow = combat.Subsystems.Where(s => s.Kind == SubsystemKind.ShieldGenerator).OrderByDescending(s => s.Def.Z).First();
+            var stern = combat.Subsystems.Where(s => s.Kind == SubsystemKind.ShieldGenerator).OrderBy(s => s.Def.Z).First();
 
-            Assert.That(combat.GeneratorFor(0), Is.SameAs(bow));
-            Assert.That(combat.GeneratorFor(40), Is.SameAs(bow));
+            Assert.That(combat.EmitterFor(new DVec3(0, 0, 0.5)), Is.SameAs(bow));
+            Assert.That(combat.EmitterFor(new DVec3(0, 0.03, 0.3)), Is.SameAs(bow));
 
             bow.Hp = 0;
-            Assert.That(combat.GeneratorFor(0), Is.Null);
+            Assert.That(combat.EmitterFor(new DVec3(0, 0, 0.5)), Is.Null, "the bow patch is holed");
+            Assert.That(combat.PatchAt(new DVec3(0, 0, 0.5)), Is.SameAs(bow), "the patch is still the bow emitter's");
+            Assert.That(combat.EmitterFor(new DVec3(0, 0, -0.5)), Is.SameAs(stern), "the stern stays covered");
         }
 
         // ---------------------------------------------------------------- RegenShields

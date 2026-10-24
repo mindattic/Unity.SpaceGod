@@ -957,8 +957,8 @@ namespace Unity.SpaceGod.UI
         }
 
         /// <summary>
-        /// The captain's orders at a capital ship's helm (U.SPC-T425), above the gauges: each battery's order, the shields'
-        /// angling, the brace, damage control and the line's formation, the turning circle at this speed, and a hostile
+        /// The captain's orders at a capital ship's helm (U.SPC-T425), above the gauges: each battery's order, whether the gunners focus a weakened shield patch
+        /// (U.SPC-T501), the brace, damage control and the line's formation, the turning circle at this speed, and a hostile
         /// broadside building on this hull, which is the moment to brace.
         /// </summary>
         void DrawCaptain(Battle battle, BattleUnit me, float x, float y)
@@ -968,7 +968,7 @@ namespace Unity.SpaceGod.UI
             string Order(Facing f) => Facings.Label(f).ToUpperInvariant().Substring(0, 1) + ":" + (cmd[f] == BatteryOrder.HoldFire ? "HOLD" : cmd[f] == BatteryOrder.Volley ? "VOLLEY" : "AT WILL");
             string brace = cmd.Braced ? "BRACED" : cmd.BraceCooldown > 0 ? "brace in " + Mathf.CeilToInt((float)cmd.BraceCooldown) + "s" : "3 brace";
             string orders = "1 BATTERIES " + Order(Facing.Bow) + " " + Order(Facing.Starboard) + " " + Order(Facing.Stern) + " " + Order(Facing.Port)
-                + "    2 SHIELDS " + (cmd.ShieldTrim == null ? "even" : Facings.Label(cmd.ShieldTrim.Value))
+                + "    2 GUNNERS " + (cmd.SpreadFire ? "spread" : "focus")
                 + "    " + brace
                 + "    4 DAMAGE CONTROL " + Broadsides.Label(cmd.Focus) + " (" + Broadsides.Teams(me) + " teams)"
                 + (EnergyWeapons.HasPhasers(me.Combat) ? "    INS PHASERS " + EnergyWeapons.Label(me.Combat.PhaserTuning) : "")

@@ -101,7 +101,7 @@ namespace Unity.SpaceGod.Core
                 More("the turrets fight on their own, at the locked hull first"),
                 More("captain's orders, to the side you look at:"),
                 L("1", "that battery at will / hold fire / volley"),
-                L("2", "angle the shields there"),
+                L("2", "gunners: focus the weakest shield patch / spread fire"),
                 L("3", "brace"),
                 L("4", "damage control focus"),
                 L("5  6  7", "line ahead, line abreast, echelon"),

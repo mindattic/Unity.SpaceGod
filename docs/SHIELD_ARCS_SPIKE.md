@@ -1,5 +1,13 @@
 # Shield arc selection: spike findings (U.SPC-T244)
 
+> **Retired (U.SPC-T501, owner 2026-10-23).** The facing-arc shield model this spike studied is gone: there are no
+> bow, beam and stern shield arcs, no `GeneratorFor(yaw)`, no shield angling (`Broadsides.ShieldTrim`,
+> `StepShields`). Since everything fights in full 3D, a hull's shields are its shield emitters, each covering the patch
+> of hull around it, and a shot drains the field of the patch it strikes in 3D. See
+> [SHIP_ROSTER.md, "Shields"](SHIP_ROSTER.md#shields) and `Core/Combat/ShieldEmitters.cs`. What carries over from
+> this spike is the entry-point rule for guided munitions (U.SPC-T380): a missile is judged against the patch it
+> crosses into on the side it came from, not the hardpoint it homed on. The rest is kept as a record.
+
 Question: shield arcs are chosen by which part of the hull was hit, not the direction the shot came from.
 Should a hit land on the arc facing the incoming shot?
 

@@ -44,9 +44,9 @@ namespace Unity.SpaceGod.Views
         bool detailed = true;
         float wreckSpin;
 
-        // Shield ring: one wedge per shield generator, built once (geometry is fixed) and recoloured
-        // each frame from that generator's own charge. Built for every ship, not just warships, so a
-        // freighter's shields show too.
+        // Shield fields: one disc per shield emitter over the patch of hull it covers (U.SPC-T501), built once
+        // (geometry is fixed) and recoloured each frame from that emitter's own field. Built for every ship, not
+        // just warships, so a freighter's shields show too.
         readonly List<Subsystem> shieldGenerators = new List<Subsystem>();
         MeshRenderer shieldRingRenderer;
         Mesh shieldRingMesh;
@@ -215,12 +215,13 @@ namespace Unity.SpaceGod.Views
         }
 
         /// <summary>
-        /// Builds the ring's geometry once: one flat annular wedge per shield generator, in the hull's
-        /// own normalized (nose +Z, up +Y) space, just outside the hull. Every vertex shares one UV so
-        /// the Fx shader's radial shape term comes out a constant multiplier everywhere — the wedge
-        /// geometry itself is what draws the ring; the shader just makes it glow additively from the
-        /// vertex colour, which is where each generator's own charge gets shown (recoloured every frame
-        /// in <see cref="UpdateShieldRing"/>, never rebuilt).
+        /// Builds the shield fields' geometry once (U.SPC-T501): one glowing disc per shield emitter, over the patch of hull
+        /// its field covers, in the hull's own normalized (nose +Z, up +Y) space. Each disc sits just off the hull over its
+        /// emitter, facing out from the keel, as wide as half the way to the nearest other emitter (the patch's own reach,
+        /// see <see cref="ShipCombat.PatchAt"/>). Every vertex shares one UV so the Fx shader's radial shape term comes out
+        /// a constant multiplier everywhere; the shader just makes it glow additively from the vertex colour, which is
+        /// where each emitter's own field gets shown (recoloured every frame in <see cref="UpdateShieldRing"/>, never
+        /// rebuilt), so a patch shot away shows as a dark hole in the hull's shields.
         /// </summary>
         void BuildShieldRing()
         {
@@ -228,19 +229,8 @@ namespace Unity.SpaceGod.Views
                 if (s.Kind == SubsystemKind.ShieldGenerator) shieldGenerators.Add(s);
             if (shieldGenerators.Count == 0) return;
 
-            // Size the ring off the hull's own (local) bounds rather than a guessed constant, so it
-            // clears whatever the actual mesh's proportions are — hull shapes vary a lot by design.
-            var hullBounds = new Bounds();
-            bool any = false;
-            foreach (var r in renderers)
-            {
-                if (!any) { hullBounds = r.localBounds; any = true; }
-                else hullBounds.Encapsulate(r.localBounds);
-            }
-            float hullRadius = any ? Mathf.Max(Mathf.Abs(hullBounds.extents.x), Mathf.Abs(hullBounds.extents.z)) : 0.5f;
-            float innerR = hullRadius * 1.15f, outerR = hullRadius * 1.3f;
-            const int segsPerWedge = 6;
-            const float gapFraction = 0.92f; // a hair narrower than the mechanical arc: a visible seam between neighbours
+            const int segs = 16;
+            const float lift = 0.03f;
             var verts = new List<Vector3>();
             var uvs = new List<Vector3>();
             var cols = new List<Color>();
@@ -251,43 +241,54 @@ namespace Unity.SpaceGod.Views
             for (int gi = 0; gi < shieldGenerators.Count; gi++)
             {
                 var def = shieldGenerators[gi].Def;
-                shieldWedgeStart[gi] = verts.Count;
-                float halfDeg = (float)(def.ArcWidthDeg * 0.5 * gapFraction);
-                float centerDeg = (float)def.ArcCenterDeg;
-                float a0 = (centerDeg - halfDeg) * Mathf.Deg2Rad;
-                float a1 = (centerDeg + halfDeg) * Mathf.Deg2Rad;
-                for (int k = 0; k <= segsPerWedge; k++)
+                var at = new Vector3((float)def.X, (float)def.Y, (float)def.Z);
+                // The patch reaches halfway to the nearest other emitter; a lone emitter covers the whole hull.
+                float nearest = float.MaxValue;
+                foreach (var o in shieldGenerators)
                 {
-                    float t = Mathf.Lerp(a0, a1, (float)k / segsPerWedge);
-                    float s = Mathf.Sin(t), c = Mathf.Cos(t);
-                    int baseIdx = verts.Count;
-                    verts.Add(new Vector3(s * innerR, 0, c * innerR));
-                    verts.Add(new Vector3(s * outerR, 0, c * outerR));
-                    uvs.Add(new Vector3(0.5f, 0.5f, 0f));
+                    if (o == shieldGenerators[gi]) continue;
+                    nearest = Mathf.Min(nearest, Vector3.Distance(at, new Vector3((float)o.Def.X, (float)o.Def.Y, (float)o.Def.Z)));
+                }
+                float radius = nearest == float.MaxValue ? 0.5f : Mathf.Clamp(nearest * 0.5f, 0.05f, 0.5f);
+                // Out from the keel line at the emitter's station; one sitting on the keel faces up.
+                var normal = new Vector3(at.x, at.y, 0);
+                normal = normal.sqrMagnitude > 1e-6f ? normal.normalized : Vector3.up;
+                var u = Vector3.Cross(normal, Vector3.forward);
+                if (u.sqrMagnitude < 1e-6f) u = Vector3.right;
+                u.Normalize();
+                var v = Vector3.Cross(normal, u).normalized;
+                var centre = at + normal * lift;
+
+                shieldWedgeStart[gi] = verts.Count;
+                int hub = verts.Count;
+                verts.Add(centre);
+                uvs.Add(new Vector3(0.5f, 0.5f, 0f));
+                cols.Add(Color.clear);
+                for (int k = 0; k < segs; k++)
+                {
+                    float t = k * Mathf.PI * 2 / segs;
+                    verts.Add(centre + (u * Mathf.Cos(t) + v * Mathf.Sin(t)) * radius);
                     uvs.Add(new Vector3(0.5f, 0.5f, 0f));
                     cols.Add(Color.clear);
-                    cols.Add(Color.clear);
-                    if (k > 0)
-                    {
-                        int p = baseIdx - 2;
-                        // Both windings, so the ring reads whichever side the camera is on.
-                        tris.Add(p); tris.Add(p + 1); tris.Add(baseIdx + 1);
-                        tris.Add(p); tris.Add(baseIdx + 1); tris.Add(baseIdx);
-                        tris.Add(p); tris.Add(baseIdx + 1); tris.Add(p + 1);
-                        tris.Add(p); tris.Add(baseIdx); tris.Add(baseIdx + 1);
-                    }
+                }
+                for (int k = 0; k < segs; k++)
+                {
+                    int a = hub + 1 + k, b = hub + 1 + (k + 1) % segs;
+                    // Both windings, so the field reads whichever side the camera is on.
+                    tris.Add(hub); tris.Add(a); tris.Add(b);
+                    tris.Add(hub); tris.Add(b); tris.Add(a);
                 }
                 shieldWedgeCount[gi] = verts.Count - shieldWedgeStart[gi];
             }
 
-            shieldRingMesh = Materials.Own(new Mesh { name = "ShieldRing" });
+            shieldRingMesh = Materials.Own(new Mesh { name = "ShieldFields" });
             shieldRingMesh.SetVertices(verts);
             shieldRingMesh.SetUVs(0, uvs);
             shieldRingMesh.SetColors(cols);
             shieldRingMesh.SetTriangles(tris, 0);
             shieldRingMesh.RecalculateBounds();
 
-            var go = new GameObject("ShieldRing");
+            var go = new GameObject("ShieldFields");
             go.transform.SetParent(Root.transform, false);
             go.AddComponent<MeshFilter>().sharedMesh = shieldRingMesh;
             shieldRingRenderer = go.AddComponent<MeshRenderer>();
@@ -299,13 +300,13 @@ namespace Unity.SpaceGod.Views
 
         /// <summary>
         /// A shield generator's colour at <paramref name="charge"/> (0 to 1 of its cap): dim and translucent when
-        /// nearly drained, bright when full. The ring's wedge and the bubble a hit raises on that generator's arc
-        /// (<see cref="BattleFx"/>, U.SPC-T40) share it, so a bubble reads as the arc that took the hit.
+        /// nearly drained, bright when full. Its patch's disc and the bubble a hit raises on that patch
+        /// (<see cref="BattleFx"/>, U.SPC-T40) share it, so a bubble reads as the patch that took the hit.
         /// </summary>
         public static Color ShieldColor(float charge) =>
             Color.Lerp(new Color(0.1f, 0.25f, 0.5f, 0.22f), new Color(0.4f, 0.75f, 1f, 1f), Mathf.Clamp01(charge));
 
-        /// <summary>Recolours each wedge from its own generator's live charge; only shown while fighting.</summary>
+        /// <summary>Recolours each patch's disc from its own emitter's live field (none for one shot away); only shown while fighting.</summary>
         void UpdateShieldRing(bool fighting)
         {
             if (shieldRingRenderer == null) return;

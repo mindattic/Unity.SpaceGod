@@ -315,7 +315,7 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// Does <paramref name="hp"/> of impact damage to a hull struck at <paramref name="local"/> (ship lengths
-        /// in its frame): the shield generator covering that side soaks what it can, as it would a shot; then the
+        /// in its frame): the field of the shield emitter whose patch is struck soaks what it can, as it would a shot; then the
         /// hardpoints on the struck side take <see cref="SubsystemShare"/> between them by nearness (what a lost
         /// one cannot take goes through to the hull) and the hull the rest. A lost reactor takes the ship with it.
         /// Returns the damage that got past the shields; hardpoints knocked out go into <paramref name="destroyed"/>.
@@ -323,8 +323,8 @@ namespace Unity.SpaceGod.Core
         public static double ApplyDamage(ShipCombat c, DVec3 local, double hp, double nowSeconds = -999, List<Subsystem> destroyed = null)
         {
             if (hp <= 0 || !c.Alive) return 0;
-            double yaw = Astro.WrapDegrees360(Math.Atan2(local.X, local.Z) * Astro.Rad2Deg);
-            var generator = c.GeneratorFor(yaw);
+            // The field over the patch of hull struck takes it (U.SPC-T501).
+            var generator = c.EmitterFor(ShieldEmitters.StrikePoint(c.Spec, local));
             if (generator != null)
             {
                 generator.LastHitSeconds = nowSeconds;

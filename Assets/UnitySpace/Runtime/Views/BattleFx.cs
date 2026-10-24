@@ -181,7 +181,7 @@ namespace Unity.SpaceGod.Views
                     e.Life = 0.1f;
                     break;
                 case FxKind.ShieldHit:
-                    // Coloured at draw time by the struck arc's generator (see DrawShieldHit); this is only the
+                    // Coloured at draw time by the struck patch's emitter (see DrawShieldHit); this is only the
                     // fallback for a hit that names none.
                     e.Color = new Color(0.35f, 0.7f, 1f) * 0.55f;
                     e.Life = 0.55f;

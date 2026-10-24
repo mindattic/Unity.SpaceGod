@@ -489,7 +489,7 @@ namespace Unity.SpaceGod.Core
             return list;
         }
 
-        /// <summary>The weak point a run should go for: the most telling one still standing (a shield emitter whose arc is
+        /// <summary>The weak point a run should go for: the most telling one still standing (a shield emitter whose field is
         /// already down is passed over while anything else is left), or null.</summary>
         public static Subsystem Preferred(BattleUnit target)
         {
@@ -551,11 +551,11 @@ namespace Unity.SpaceGod.Core
         public static double Factor(BattleUnit target, bool shieldDown) =>
             shieldDown && WeakPoints.IsCapital(target) ? Math.Max(1, BareHullDamage.Value) : 1;
 
-        /// <summary>Whether <paramref name="target"/>'s shield facing a craft at <paramref name="from"/> is down (or it has none
-        /// on that side): where a bomber's torpedo does its work.</summary>
+        /// <summary>Whether the field over the patch of <paramref name="target"/>'s hull facing a craft at <paramref name="from"/>
+        /// is down (or its emitter is shot away, or it has none, U.SPC-T501): where a bomber's torpedo does its work.</summary>
         public static bool ShieldDownToward(BattleUnit target, DVec3 from)
         {
-            var g = target.Combat.GeneratorFor(target.YawDegOf(from));
+            var g = target.Combat.EmitterFor(target.ShieldStrike(from));
             return g == null || g.Shield <= 0;
         }
     }

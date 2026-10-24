@@ -97,7 +97,7 @@ The game keeps the feel of real space and drops what would get in the way of pla
 
 Hardpoints are places on the hull's surface. Facilities are things inside the body of the ship. Each hull has limited internal space for facilities (U.SPC-T470).
 
-- **Hardpoints** (`Hardpoint`, `OutfitSlot`, `MountType` in `Core/Combat/Construction.cs` and `Outfitting.cs`) are gun and turret mounts, launchers, torpedo tubes, shield emitters and engine mounts. Each is one entry of the design's layout, with a position on the hull and a firing arc, and is never empty.
+- **Hardpoints** (`Hardpoint`, `OutfitSlot`, `MountType` in `Core/Combat/Construction.cs` and `Outfitting.cs`) are gun and turret mounts, launchers, torpedo tubes, shield emitters and engine mounts. Each is one entry of the design's layout, with a position on the hull and a firing arc (a shield emitter has none: its field covers the patch of hull around it, see Shields below), and is never empty.
 - **Typed hardpoints** (U.SPC-T508, MechWarrior style). Each hardpoint is reserved for one kind of part and has a size, so a design is shaped by which kinds of mount its hull has, not just how many. A part goes only on a mount of its own type that is at least as big as it is.
 
   | Type | Parts (size) |
@@ -131,6 +131,18 @@ Hardpoints are places on the hull's surface. Facilities are things inside the bo
 ## Capital ships fight in full 3D
 
 Settled by the owner (2026-10-23): capital ships fight in full 3D, like the fighters, never on a battle plane. U.SPC-T499 builds the capital flight model that way (it replaces U.SPC-T442, which assumed a plane).
+
+## Shields
+
+Shields come from emitters on the hull, not facing arcs (U.SPC-T501, `Core/Combat/ShieldEmitters.cs`). Since everything fights in full 3D, there is no bow, beam and stern shield any more, and no angling the shields to a facing: the arc model of [SHIELD_ARCS_SPIKE.md](SHIELD_ARCS_SPIKE.md) is retired.
+
+- **Emitters are hardpoints.** Like turrets, a hull carries shield emitters (shield mounts, see Construction above) at places on its hull. Each projects its own field over the patch of hull around it: the part of the hull nearer to it than to any other emitter, in 3D (`ShipCombat.PatchAt`). An emitter's field holds its rating's share of the hull's shield (evenly, on a stock hull; a hardened emitter holds more).
+- **A shot hits the field of the patch it strikes.** Beams and aimed rounds strike where they meet the hull; a guided munition where it crosses into the hull on the side it came in from; a hit on the hull as a whole lands on the side it came from; a collision at its contact point (`ShieldEmitters.StrikePoint`, `ShipCombat.EmitterFor`). Only that emitter's field is drained.
+- **Holed in one place, covered elsewhere.** A field shot away, or its emitter destroyed, leaves that patch of hull bare: fire there goes straight to the armour and hardpoints under it, while every other patch stays covered. Each patch regrows on its own clock once it has gone unhit for a while, so the patch under fire stays down while the rest recover. A torpedo bomber's bare-hull bonus and a boarding pod's bounce go by the patch they strike.
+- **Focus fire.** Gunners favour the hardpoints in a weakened patch, the more the weaker its field (`ShieldEmitters.FocusWeight` in `Battle.PickSubsystem`): AI crews by doctrine, and a player's crews at the helm unless the captain orders the fire spread (key 2). The player's own aimed shots hit whichever patch they land on, so aiming at a holed spot gets through.
+- **Emergency repair.** A capital ship's damage control teams also crew emergency repairs: given time they bring back a shield emitter or gun mount shot away, to part of its health, and a restored emitter's field regrows from nothing (`Broadsides.StepDamageControl`). Engines, reactors and the rest shot away still wait for a yard. The damage control focus on shields sends them to emitters first.
+- **Seen on the hull.** Each emitter's field glows over its patch in the shield colour at its charge (`ShipView`), and a patch shot away shows dark; a hit raises a bubble on the patch it struck.
+- **Every rate is a setting** (Settings > Broadsides): how long a field waits before it regrows and how fast it does, how strongly gunners focus a weakened patch and whether AI gunners do, and the emergency repair rate, the work it takes and how whole a restored mount comes back.
 
 ## Where the game is today
 

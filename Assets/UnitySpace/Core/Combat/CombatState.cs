@@ -12,19 +12,17 @@ namespace Unity.SpaceGod.Core
         public double Cooldown;
         public int Ammo;
 
-        /// <summary>This generator's own shield charge and its cap (an even share of the hull's total),
-        /// meaningful only for <see cref="SubsystemKind.ShieldGenerator"/>; set by <see cref="ShipCombat"/>.</summary>
+        /// <summary>This shield emitter's own field charge and its cap (its rating's share of the hull's total),
+        /// meaningful only for <see cref="SubsystemKind.ShieldGenerator"/>; set by <see cref="ShipCombat"/>. The field
+        /// covers the emitter's own patch of hull (U.SPC-T501, see <see cref="ShieldEmitters"/>).</summary>
         public double Shield, MaxShield;
 
-        /// <summary>How much of its even share this generator holds while the shields are angled (U.SPC-T425, see
-        /// <see cref="Broadsides.StepShields"/>): above 1 on the facing they are angled to, below it elsewhere.</summary>
-        public double ShieldCapScale = 1;
-
-        /// <summary>The charge this generator regenerates to: its share, as angled.</summary>
-        public double ShieldCap => MaxShield * ShieldCapScale;
-
-        /// <summary>Battle-clock seconds this generator's arc was last hit, for its own regen pause.</summary>
+        /// <summary>Battle-clock seconds this emitter's patch was last hit, for its own regen pause.</summary>
         public double LastHitSeconds = -999;
+
+        /// <summary>Work (hit points' worth) emergency repair crews have put into bringing this mount back since it was
+        /// shot away (U.SPC-T501, see <see cref="Broadsides.StepDamageControl"/>); 0 while it stands.</summary>
+        public double Restoring;
 
         /// <summary>World direction (ecliptic) the mount is aimed, for turret rendering; zero when idle.</summary>
         public DVec3 Aim;
@@ -42,9 +40,9 @@ namespace Unity.SpaceGod.Core
         public double Health => Math.Max(0, Hp / Def.MaxHp);
 
         /// <summary>
-        /// This generator's arc's live charge as a fraction of its cap, 0 to 1: what its shield ring wedge and the
-        /// bubble a hit raises on its arc are shown at (U.SPC-T40). Zero for a collapsed or shot-away generator,
-        /// whose arc then shows no bubble, and for anything that is not a shield generator.
+        /// This emitter's live field as a fraction of its cap, 0 to 1: what its field glow on the hull and the bubble a
+        /// hit raises on its patch are shown at (U.SPC-T40, U.SPC-T501). Zero for a collapsed or shot-away emitter,
+        /// whose patch then shows no bubble, and for anything that is not a shield emitter.
         /// </summary>
         public double ShieldFraction => Kind == SubsystemKind.ShieldGenerator && !Destroyed && MaxShield > 0 && Shield > 0
             ? Math.Min(1, Shield / MaxShield) : 0;
@@ -172,8 +170,8 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>Total shield charge across every generator — a coarse summary (HUD display, AI
-        /// heuristics); combat itself should hit a specific generator via <see cref="GeneratorFor"/>.</summary>
+        /// <summary>Total shield charge across every emitter — a coarse summary (HUD display, AI
+        /// heuristics); combat itself drains the emitter whose patch is struck, via <see cref="EmitterFor"/>.</summary>
         public double Shield
         {
             get
@@ -184,12 +182,35 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>The live shield generator covering a yaw angle (degrees, 0 = bow), or null if none does.</summary>
-        public Subsystem GeneratorFor(double yawDeg)
+        /// <summary>
+        /// The shield emitter whose patch a point on the hull (ship lengths, hull frame: right, up, forward) lies in, live
+        /// or shot away (U.SPC-T501): the emitter nearest to it in 3D, so each emitter's field covers the part of the hull
+        /// nearer to it than to any other. Null for a hull with no emitters.
+        /// </summary>
+        public Subsystem PatchAt(DVec3 local)
         {
+            Subsystem best = null;
+            double bestD = double.MaxValue;
             foreach (var s in Subsystems)
-                if (s.Kind == SubsystemKind.ShieldGenerator && !s.Destroyed && s.Def.ContainsYaw(yawDeg)) return s;
-            return null;
+            {
+                if (s.Kind != SubsystemKind.ShieldGenerator) continue;
+                double dx = s.Def.X - local.X, dy = s.Def.Y - local.Y, dz = s.Def.Z - local.Z;
+                double d = dx * dx + dy * dy + dz * dz;
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>The live shield emitter whose field covers a point on the hull (see <see cref="PatchAt"/>), or null when
+        /// that patch's emitter has been shot away (the hull is holed there, however whole the rest is) or there is none.</summary>
+        public Subsystem EmitterFor(DVec3 local)
+        {
+            var s = PatchAt(local);
+            return s != null && !s.Destroyed ? s : null;
         }
 
         public void ZeroAllShields()
@@ -203,26 +224,22 @@ namespace Unity.SpaceGod.Core
             foreach (var s in Subsystems) if (s.Kind == SubsystemKind.ShieldGenerator) s.LastHitSeconds = -999;
         }
 
-        /// <summary>Regens every live generator that has not been hit in the last 8 battle-seconds, each
-        /// toward its own cap, sharing the hull's total regen rate across its generators by their ratings (evenly, on a stock hull).</summary>
+        /// <summary>Regrows every live emitter's field whose patch has not been hit for <see cref="ShieldEmitters.RegenDelay"/>
+        /// battle-seconds, each toward its own cap, sharing the hull's total regen rate (times <see cref="ShieldEmitters.RegenRate"/>)
+        /// across its emitters by their ratings (evenly, on a stock hull). The patch under fire stays down while the rest recover.</summary>
         public void RegenShields(double nowSeconds, double dt)
         {
             double ratings = GeneratorRatings;
             if (ratings <= 0) return;
-            // Angled shields (U.SPC-T425) move charge between arcs but never make more of it: no regen past the whole's cap.
-            double room = 0;
-            foreach (var s in Subsystems)
-                if (s.Kind == SubsystemKind.ShieldGenerator && !s.Destroyed) room += s.MaxShield - s.Shield;
+            double delay = ShieldEmitters.RegenDelay.Value, rate = Spec.ShieldRegen * ShieldEmitters.RegenRate.Value;
+            if (rate <= 0) return;
             foreach (var s in Subsystems)
             {
-                if (room <= 0) return;
                 if (s.Kind != SubsystemKind.ShieldGenerator || s.Destroyed) continue;
-                // Toward its cap as angled; a generator above it is left for the angling to drain.
-                if (nowSeconds - s.LastHitSeconds > 8 && s.Shield < s.ShieldCap)
+                if (nowSeconds - s.LastHitSeconds > delay && s.Shield < s.MaxShield)
                 {
-                    double add = Math.Min(room, Math.Min(s.ShieldCap - s.Shield, Spec.ShieldRegen * s.Def.Rating / ratings * dt));
-                    s.Shield = add >= s.ShieldCap - s.Shield ? s.ShieldCap : s.Shield + add;
-                    room -= add;
+                    double add = rate * s.Def.Rating / ratings * dt;
+                    s.Shield = add >= s.MaxShield - s.Shield ? s.MaxShield : s.Shield + add;
                 }
             }
         }
@@ -306,6 +323,7 @@ namespace Unity.SpaceGod.Core
             foreach (var s in Subsystems)
             {
                 s.Hp = Math.Min(s.Def.MaxHp, Math.Max(s.Hp, 0) + s.Def.MaxHp * share * 1.5);
+                if (!s.Destroyed) s.Restoring = 0;
                 if (s.Kind == SubsystemKind.ShieldGenerator) s.Shield = s.MaxShield;
             }
         }
