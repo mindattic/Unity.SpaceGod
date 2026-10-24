@@ -81,6 +81,9 @@ namespace Unity.SpaceGod.Core
             return true;
         }
 
+        /// <summary>Brings the course up to a hull that has taken <paramref name="taken"/> gates of it (a crew flying it by its voyage).</summary>
+        public void SyncTo(int taken) => index = Math.Max(index, Math.Min(taken, gates.Count));
+
         /// <summary>The course in a line: the systems in order, the next leg marked.</summary>
         public string Describe()
         {

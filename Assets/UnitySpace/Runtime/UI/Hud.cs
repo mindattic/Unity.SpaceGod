@@ -129,6 +129,11 @@ namespace Unity.SpaceGod.UI
                 // A plotted course over the gates: the way and the next leg (U.SPC-T516).
                 var courseLine = app.CourseLine();
                 if (courseLine != null) DrawBanner(courseLine);
+                if (app.CourseAutopilotOffered)
+                {
+                    var autopilot = new Rect((Screen.width - 240f) * 0.5f, Mathf.Max(Screen.height * 0.26f, 170f) + 34f, 240f, 26f);
+                    if (GUI.Button(autopilot, "AUTOPILOT: CREW FLIES THE COURSE", button)) app.EngageCourseAutopilot();
+                }
             }
             DrawLaneEffects();
             if (!app.ShowHud)

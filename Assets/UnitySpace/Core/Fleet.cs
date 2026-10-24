@@ -666,7 +666,14 @@ namespace Unity.SpaceGod.Core
             ship.JourneyIndex = 0;
             if (ship.GateKm is DVec3 gate && to == catalog.Root.Index)
             {
-                // Out to a jump gate: a fixed point off the system's root, never by hyperlane.
+                // A plotted course (U.SPC-T516) crosses the system by the hyperlanes where they run to the gate.
+                if (ship.Voyage != null && ship.Voyage.Purpose == VoyagePurpose.Plotted && TryGateJourney(ship, from, gate, departJd))
+                {
+                    var first = ship.Journey[0];
+                    Burn(ship, departJd, first.From, () => RampOrbit(first, first.From, departJd), allowConic: true);
+                    return;
+                }
+                // Out to a jump gate: a fixed point off the system's root.
                 Burn(ship, departJd, to, () => FixedPoint(to, gate));
                 return;
             }
@@ -724,6 +731,54 @@ namespace Unity.SpaceGod.Core
             }
         }
 
+        /// <summary>How near a gate a hull must be to count as at it, to set out along its spur, km.</summary>
+        const double AtGateKm = 100000;
+
+        /// <summary>
+        /// The lanes a hull on a plotted course takes across a system to <paramref name="gate"/> (U.SPC-T516): out along the spur
+        /// of the gate it has just come through (or from its planetary system), across the network between, and in along the
+        /// spur of the gate it is bound for. False, leaving no journey, where no lane runs to that gate (a frontier system, a Void
+        /// Base) or the network does not join, and the hull flies straight across as any ship bound for a gate does.
+        /// </summary>
+        bool TryGateJourney(Ship ship, int from, DVec3 gate, double jd)
+        {
+            if (Lanes == null || Lanes.GateSpurs.Count == 0) return false;
+            Lane target = null;
+            foreach (var spur in Lanes.GateSpurs)
+                if ((Hyperlanes.GateHelio(spur.Gate) - gate).LengthSquared < 1) target = spur;
+            if (target == null) return false;
+            var hops = new List<LaneHop>();
+            int at;
+            if (from == catalog.Root.Index)
+            {
+                // At the gate it came through: out from there along its spur.
+                var here = ship.Orbit.OffsetAt(jd);
+                Lane start = null;
+                double nearest = AtGateKm;
+                foreach (var spur in Lanes.GateSpurs)
+                {
+                    double km = (Hyperlanes.GateHelio(spur.Gate) - here).Length;
+                    if (km >= nearest) continue;
+                    nearest = km;
+                    start = spur;
+                }
+                if (start == null || start == target) return false;
+                hops.Add(new LaneHop(start, start.B, start.A));
+                at = start.A;
+            }
+            else at = Lanes.SystemOf(from);
+            if (at != target.A)
+            {
+                var between = Lanes.Route(at, target.A, jd);
+                if (between == null) return false;
+                hops.AddRange(between);
+            }
+            hops.Add(new LaneHop(target, target.A, target.B));
+            ship.Journey = hops;
+            ship.JourneyIndex = 0;
+            return true;
+        }
+
         /// <summary>
         /// A spot out in open space near a world for a free ship to drift in: a slow orbit at any tilt,
         /// anywhere from three radii out to well past its moons (but inside the world's neighbourhood).
@@ -778,6 +833,7 @@ namespace Unity.SpaceGod.Core
                 var next = route[0];
                 Burn(ship, jd, next.From, () => RampOrbit(next, next.From, jd), allowConic: true);
             }
+            else if (ship.GateKm is DVec3 gate && to == catalog.Root.Index) Burn(ship, jd, to, () => FixedPoint(to, gate));
             else Burn(ship, jd, to, () => ArrivalFor(ship, to), allowConic: true);
         }
 
@@ -885,7 +941,9 @@ namespace Unity.SpaceGod.Core
             else
             {
                 int to = ship.FinalBody;
-                Burn(ship, jd, to, () => ArrivalFor(ship, to), allowConic: true);
+                // Off the spur at a jump gate (a plotted course): in to the gate itself, not into an orbit round the star.
+                if (ship.GateKm is DVec3 gate && to == catalog.Root.Index) Burn(ship, jd, to, () => FixedPoint(to, gate));
+                else Burn(ship, jd, to, () => ArrivalFor(ship, to), allowConic: true);
             }
         }
 

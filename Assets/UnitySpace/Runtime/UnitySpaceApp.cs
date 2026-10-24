@@ -496,6 +496,8 @@ namespace Unity.SpaceGod
             if (IsSeated) ReturnToCommand();
             // At the helm the trip is a plotted course, flown gate by gate by the pilot (U.SPC-T516).
             if (IsPiloting) { PlotCourse(system); return; }
+            // A ship followed in the god view is sent on the course and the view goes with it (U.SPC-T516); no ship, the view's own trip.
+            if (TrySendFollowedShip(system)) return;
             Select(Target.None);
             Travel.Begin(system);
         }
@@ -635,6 +637,7 @@ namespace Unity.SpaceGod
 
             DropLostTargets();
             BattleTime();
+            UpdateCourseShip();
             if (Travel.Active) Travel.Update(dt);
             // Between the stars under the hull's own drive (U.SPC-T417): the view goes with it.
             else if (InFtlCruise) UpdateFtlCruiseView(dt);

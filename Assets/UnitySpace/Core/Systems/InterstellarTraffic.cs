@@ -41,6 +41,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>A navy group sent by its polity's command to carry out an objective in another system (U.SPC-T423, see
         /// <see cref="StrategicCommand"/>): there until the objective is done or called off.</summary>
         Directed,
+
+        /// <summary>A hull its captain sent along a plotted course (U.SPC-T516, see <see cref="TravelCourse"/>): the crew flies it
+        /// gate by gate (by the hyperlanes across each system where they run, see <see cref="Fleet"/>), through every system on the
+        /// way, and its voyage ends on arrival.</summary>
+        Plotted,
     }
 
     /// <summary>
@@ -921,6 +926,7 @@ namespace Unity.SpaceGod.Core
             VoyagePurpose.Relocate => "a move beyond the gates",
             VoyagePurpose.Ambush => "lying in wait between the stars",
             VoyagePurpose.Directed => "its orders beyond the gates",
+            VoyagePurpose.Plotted => "a plotted course beyond the gates",
             _ => "a run beyond the gates",
         };
 
@@ -976,6 +982,11 @@ namespace Unity.SpaceGod.Core
                     ship.Ports = null;
                     v.StayUntilJd = double.PositiveInfinity;
                     break;
+                case VoyagePurpose.Plotted:
+                    // The course is run: the voyage ends and the hull is its own again (see the end of this method).
+                    ship.Route = null;
+                    ship.Ports = null;
+                    break;
                 case VoyagePurpose.Campaign:
                     // Here until the campaign is won, lost or called off (see InterstellarWars), not for a set stay.
                     ship.Route = null;
@@ -993,11 +1004,12 @@ namespace Unity.SpaceGod.Core
             }
             ship.Role = v.Purpose == VoyagePurpose.Survey ? ShipRole.Free : v.HomeRole;
             if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign || v.Purpose == VoyagePurpose.Hunt ||
-                v.Purpose == VoyagePurpose.Directed)
+                v.Purpose == VoyagePurpose.Directed || v.Purpose == VoyagePurpose.Plotted)
                 ship.Ports ??= world.FreeShipPorts();
             world.Log(jd, cameIn != null
                     ? $"{ship.Name} of {ship.Faction.Name} comes through the {cameIn.Partner.Name} from {v.Home.Name}"
                     : $"{ship.Name} of {ship.Faction.Name} comes in from {v.Home.Name} under its own drive", WorldEventKind.Info, system.Catalog.Root.Index);
+            if (v.Purpose == VoyagePurpose.Plotted) ship.Voyage = null;
             world.Fleet.ScheduleNext(ship, jd);
         }
 
@@ -1256,6 +1268,25 @@ namespace Unity.SpaceGod.Core
             v.Campaign = campaign;
             v.StayUntilJd = double.PositiveInfinity;
             return v;
+        }
+
+        /// <summary>
+        /// Sends <paramref name="ship"/> (the player's hull, handed to its crew, or one the god view follows, standing in
+        /// <paramref name="from"/>) to <paramref name="to"/> along the quickest open course (U.SPC-T516): gate by gate, each system
+        /// on the way crossed to its next gate, never a jump to the far system. Null if there is no way or it is not free to go.
+        /// </summary>
+        public Voyage SendPlotted(Ship ship, StarSystem from, StarSystem to, double jd)
+        {
+            if (ship == null || from == null || to == null || from == to) return null;
+            var world = from.World;
+            // Its own master, not fighting, with nothing else on and standing still (a hull just let go of at the helm is):
+            // the player's own hull is not "idle in port" the way a fleet's trader is, so the rest of the usual test is waived.
+            if (ship.Destroyed || ship.IsEscort || ship.Derelict || ship.Battle != null || ship == world.PilotedShip || ship.Voyage != null ||
+                ship.GateKm != null || ship.Orbit == null || (ship.Phase != ShipPhase.Parked && ship.Phase != ShipPhase.Landed) ||
+                ship.Id < 0 || ship.Id >= world.Fleet.Ships.Count || world.Fleet.Ships[ship.Id] != ship) return null;
+            var route = Network.Route(from, to, ship.Faction, jd);
+            if (route == null || route.Count == 0) return null;
+            return SetOut(from, to, ship, VoyagePurpose.Plotted, route, jd);
         }
 
         /// <summary>
