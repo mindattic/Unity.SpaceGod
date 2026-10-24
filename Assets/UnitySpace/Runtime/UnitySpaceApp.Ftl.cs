@@ -434,7 +434,7 @@ namespace Unity.SpaceGod
             var target = PlottedCourse?.Target ?? FtlPointed;
             if (target == null)
             {
-                ShowToast("No course plotted: put the nose on a star, Page Down for the nearest, or pick one on the galaxy map (F11)");
+                ShowToast("No course plotted: put the nose on a star, Page Down for the nearest, or pick one on the galaxy map ([)");
                 return false;
             }
             if (!PlotFtlCourse(target, quiet: true))

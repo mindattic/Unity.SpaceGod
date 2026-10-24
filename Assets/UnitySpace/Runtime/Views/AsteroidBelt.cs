@@ -79,7 +79,7 @@ namespace Unity.SpaceGod.Views
 
         void OnGUI()
         {
-            if (app == null || !app.ShowLabels || !app.ShowHud || Event.current.type != EventType.Repaint || app.Travel.Active || !app.SystemVisible) return;
+            if (app == null || !app.ShowLabels || !app.ShowHud || app.ScreenCleared || Event.current.type != EventType.Repaint || app.Travel.Active || !app.SystemVisible) return;
             // Not over a screen that has taken over from the HUD (the model viewer, the spawn grid).
             if (ModelViewer.CapturesInput || app.ShowSpawn) return;
             labelStyle ??= new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(0.82f, 0.78f, 0.7f, 0.9f) } };

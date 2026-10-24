@@ -55,7 +55,11 @@ namespace Unity.SpaceGod.Input
         public bool ToggleOrbits;
         public bool ToggleLabels;
         public bool ToggleHelp;
+        /// <summary>U: the lighter toggle, the HUD's panels and readouts off while the names and markers on the view stay.</summary>
         public bool ToggleHud;
+
+        /// <summary>F11 (U.SPC-T496): clears the screen of all its UI but the reticle in use, and brings it all back.</summary>
+        public bool ClearScreen;
         public bool ToggleMarket;
         public bool ToggleCargo;
         public bool ToggleOutfit;
@@ -75,7 +79,7 @@ namespace Unity.SpaceGod.Input
         /// <summary>The trade desk (backslash, U.SPC-T426): runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
         public bool ToggleTrade;
 
-        /// <summary>F11: the galaxy map (U.SPC-T103).</summary>
+        /// <summary>[ (left bracket): the galaxy map (U.SPC-T103; on F11 until U.SPC-T496 gave that to the clear screen).</summary>
         public bool ToggleGalaxyMap;
 
         /// <summary>F12 (U.SPC-T427): hails the polity of the ship locked, selected or hailing you, and opens the envoy screen to treat with it.</summary>
@@ -226,7 +230,8 @@ namespace Unity.SpaceGod.Input
             ToggleContracts = kb.f7Key.wasPressedThisFrame;
             ToggleFleet = kb.f10Key.wasPressedThisFrame;
             ToggleTrade = kb.backslashKey.wasPressedThisFrame;
-            ToggleGalaxyMap = kb.f11Key.wasPressedThisFrame;
+            ToggleGalaxyMap = kb.leftBracketKey.wasPressedThisFrame;
+            ClearScreen = kb.f11Key.wasPressedThisFrame;
             HailPolity = kb.f12Key.wasPressedThisFrame;
             ToggleNews = kb.xKey.wasPressedThisFrame;
             ToggleSpawn = kb.vKey.wasPressedThisFrame;
@@ -275,7 +280,7 @@ namespace Unity.SpaceGod.Input
             Boost = Slow = Fire = Cruise = FireEmp = DropMine = false;
             SelectClicked = SelectDoubleClicked = RightClicked = false;
             Focus = Escape = ToggleScale = TimeFaster = TimeSlower = TogglePause = ResetTime = false;
-            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleTrade = ToggleGalaxyMap = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = EngageFtl = false;
+            ToggleOrbits = ToggleLabels = ToggleHelp = ToggleHud = ClearScreen = ToggleMarket = ToggleCargo = ToggleOutfit = ToggleSilent = ToggleBounties = ToggleContracts = ToggleFleet = ToggleTrade = ToggleGalaxyMap = ToggleNews = ToggleSpawn = WatchBattle = ToggleLanes = ToggleSatellites = ToggleReorient = CycleShips = CycleBackward = Home = Pilot = LockTarget = ActivateGate = EngageFtl = false;
             QuickSave = QuickLoad = ToggleSaves = false;
             ToggleFtlAutopilot = ClearFtlCourse = false;
             CycleFtlTarget = 0;

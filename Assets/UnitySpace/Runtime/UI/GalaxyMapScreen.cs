@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Unity.SpaceGod.UI
 {
     /// <summary>
-    /// The galaxy map (U.SPC-T103, F11 or the navigator's GALAXY MAP): every simulated star system at its real position,
+    /// The galaxy map (U.SPC-T103, [ or the navigator's GALAXY MAP): every simulated star system at its real position,
     /// seen from above the ecliptic and tilted to show depth, with the gate network between them. Each system is haloed
     /// in the colour of the polity that holds it; each gate link is drawn as thick as the traffic through it, with that
     /// traffic flowing along it; war fronts, shut gates, sieges and blockades are marked in red, raiders in orange, and
@@ -542,7 +542,7 @@ namespace Unity.SpaceGod.UI
             var old = GUI.contentColor;
             GUI.contentColor = Dim;
             GUI.Label(new Rect(x, r.yMax - 92, w, 86),
-                "Click a star to inspect it, double-click to travel.\nAt the helm: plot an FTL course to any star.\nDrag to turn, shift-drag to pan, wheel to zoom.\nF11 or Esc closes the map.", small);
+                "Click a star to inspect it, double-click to travel.\nAt the helm: plot an FTL course to any star.\nDrag to turn, shift-drag to pan, wheel to zoom.\n[ or Esc closes the map.", small);
             GUI.contentColor = old;
         }
 

@@ -180,7 +180,18 @@ namespace Unity.SpaceGod
         public bool ShowOrbits { get; set; } = true;
         public bool ShowLabels { get; set; } = true;
         public bool ShowHelp { get; set; } = true;
+
+        /// <summary>U: the lighter toggle; off, the HUD's panels and readouts go while the names and markers on the view stay.</summary>
         public bool ShowHud { get; set; } = true;
+
+        /// <summary>
+        /// F11 (U.SPC-T496): the screen cleared of all its UI, in the strategy view and at the helm alike -- HUD, navigator,
+        /// help, panels, banners, toasts, names and markers -- all but the reticle in use (the helm's aim, a seat's sight).
+        /// F11 again brings it all back as it was; opening a panel or a screen meanwhile brings it back too, so nothing
+        /// opens unseen. The pause menu still shows over it.
+        /// </summary>
+        public bool ScreenCleared { get; set; }
+
         public bool ShowMarket { get; set; }
         public bool ShowCargo { get; set; }
 
@@ -199,7 +210,7 @@ namespace Unity.SpaceGod
         /// <summary>The trade desk (backslash, U.SPC-T426): the trader's rank, runs, brokers, trade news, charters, insurance, warehouses, the back door.</summary>
         public bool ShowTrade { get; set; }
 
-        /// <summary>The galaxy map (F11, U.SPC-T103): a full screen of every system, its holder, the gate traffic, fronts and raiders.</summary>
+        /// <summary>The galaxy map ([, U.SPC-T103): a full screen of every system, its holder, the gate traffic, fronts and raiders.</summary>
         public bool ShowGalaxyMap { get; set; }
 
         /// <summary>The polity the galaxy map's envoy screen opens on next (U.SPC-T427), set by a hail; the map takes it and clears it.</summary>
@@ -234,7 +245,7 @@ namespace Unity.SpaceGod
 
         /// <summary>A screen the player clicks through is open (market, cargo hold, spawn grid): the cursor is
         /// freed for it, so the mouse stops steering (and firing) the piloted hull meanwhile.</summary>
-        bool ClickPanelOpen => ShowSpawn || ShowSaves || ShowGalaxyMap || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet || ShowTrade)); // market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
+        bool ClickPanelOpen => !ScreenCleared && (ShowSpawn || ShowSaves || ShowGalaxyMap || (ShowHud && (ShowMarket || ShowCargo || ShowNews || ShowOutfit || ShowBounties || ShowContracts || ShowFleet || ShowTrade))); // a cleared screen (F11) shows none of them; market, cargo, outfitting, bounties, contracts and news are HUD panels, hidden with it
         public bool ShowLanes { get; set; } = true;
 
         /// <summary>Satellite constellations (thousands of points round Earth); off by default, K toggles.</summary>
@@ -604,7 +615,7 @@ namespace Unity.SpaceGod
             bool overUi = IsPointerOverUi();
             Input.Poll(overUi, ModelViewer.CapturesInput);
             // The galaxy map turns with its own drag: the camera behind it does not look about meanwhile.
-            if (ShowGalaxyMap) Input.ReleaseLook();
+            if (ShowGalaxyMap && !ScreenCleared) Input.ReleaseLook();
             // The pause menu has the frame: nothing else moves, and the stick and trigger do nothing, until it closes.
             if (pauseMenu.IsOpen)
             {
@@ -612,7 +623,10 @@ namespace Unity.SpaceGod
                 FreeCursorForMenu();
                 return;
             }
+            int screensOpen = OpenScreens();
             HandleCommands();
+            // A panel or screen opened while the screen is cleared (F11) brings the UI back, rather than opening unseen.
+            if (ScreenCleared && (OpenScreens() & ~screensOpen) != 0) ScreenCleared = false;
             if (pauseMenu.IsOpen)
             {
                 FreeCursorForMenu();
@@ -753,10 +767,17 @@ namespace Unity.SpaceGod
 
         // ---------------------------------------------------------------- commands
 
+        /// <summary>The panels and full screens open now, one bit each: what a cleared screen (F11) watches for newly opened.</summary>
+        int OpenScreens() =>
+            (ShowSpawn ? 1 : 0) | (ShowSaves ? 2 : 0) | (ShowGalaxyMap ? 4 : 0) | (ShowMarket ? 8 : 0) | (ShowCargo ? 16 : 0) | (ShowNews ? 32 : 0) |
+            (ShowOutfit ? 64 : 0) | (ShowBounties ? 128 : 0) | (ShowContracts ? 256 : 0) | (ShowFleet ? 512 : 0) | (ShowTrade ? 1024 : 0) | (ShowHelp ? 2048 : 0);
+
         void HandleCommands()
         {
             var i = Input;
             HandleSaveCommands();
+            // F11 clears the screen anywhere, between the stars too (U.SPC-T496).
+            if (i.ClearScreen) ScreenCleared = !ScreenCleared;
             if (Travel.Active || InFtlCruise)
             {
                 // Between the stars only time and the escape hatch work (and under the hull's own drive, U.SPC-T417, not

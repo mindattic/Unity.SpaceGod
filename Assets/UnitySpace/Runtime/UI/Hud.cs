@@ -93,7 +93,7 @@ namespace Unity.SpaceGod.UI
 
         public Hud(UnitySpaceApp app) => this.app = app;
 
-        /// <summary>The galaxy map screen (F11), made the first time it is opened; and whether it was up last frame.</summary>
+        /// <summary>The galaxy map screen ([), made the first time it is opened; and whether it was up last frame.</summary>
         GalaxyMapScreen galaxyMap;
         bool galaxyMapOpen;
 
@@ -104,6 +104,13 @@ namespace Unity.SpaceGod.UI
             {
                 app.UiRects.Clear();
                 app.ShipNameRects.Clear();
+            }
+
+            // F11 (U.SPC-T496): a clear screen, nothing on it but the reticle in use.
+            if (app.ScreenCleared)
+            {
+                DrawReticleOnly();
+                return;
             }
 
             // Spawn & Pilot is its own full screen, not an overlay panel -- everything else waits.
@@ -359,7 +366,7 @@ namespace Unity.SpaceGod.UI
                 // A plotted course (U.SPC-T420): the way there, the ETA and the fuel, and how to fly it.
                 head = "COURSE  ·  " + course.Target.KindName.ToUpperInvariant() + "  " + course.Target.Name.ToUpperInvariant() + "  ·  " + app.Distance(course.Target);
                 mid = course.Flyable ? CourseLine(course) : course.Refusal;
-                tail = (course.Flyable ? "End  autopilot: out to the rim, onto it, spool and engage    " : "") + "PgUp/PgDn  another star or beacon    Del  clear    F11  galaxy map";
+                tail = (course.Flyable ? "End  autopilot: out to the rim, onto it, spool and engage    " : "") + "PgUp/PgDn  another star or beacon    Del  clear    [  galaxy map";
             }
             else
             {
@@ -754,12 +761,7 @@ namespace Unity.SpaceGod.UI
             if (!app.IsPiloting || app.Travel.Active || Event.current.type != EventType.Repaint) return;
             var vel = app.PilotVelocityKmS;
             double speed = vel.Length;
-            bool noseOn = DirectionToGui(app.PilotForward, out var nose);
-            if (noseOn) DrawBoresight(nose, new Color(1, 1, 1, 0.8f));
-            // Where the stick points the hull (U.SPC-T269): far ahead of the nose in free aim, a little ahead
-            // of it on a hull steered by the nose; a capital ship's helm is its heading, the nose itself.
-            if (app.PilotControlMode != PilotControl.Helm && DirectionToGui(app.PilotAimDirection, out var aim) && (!noseOn || (aim - nose).sqrMagnitude > 4))
-                DrawCrosshair(aim, CrosshairColor);
+            bool noseOn = DrawAimReticle(out var nose);
 
             double driftDeg = 0;
             if (speed > 1e-6)
@@ -782,6 +784,31 @@ namespace Unity.SpaceGod.UI
             var size = small.CalcSize(content);
             var p = new Vector2((Screen.width - size.x) * 0.5f, Screen.height - 66);
             DrawLabel(readout, p, assist ? Dim : RetrogradeColor, true);
+        }
+
+        /// <summary>
+        /// The helm's aim reticle: the boresight where the nose points and, where the stick points the hull elsewhere
+        /// (U.SPC-T269: far ahead of the nose in free aim, a little ahead of it on a hull steered by the nose; a capital
+        /// ship's helm is its heading, the nose itself), the crosshair. Returns whether the nose is on screen, and where.
+        /// </summary>
+        bool DrawAimReticle(out Vector2 nose)
+        {
+            bool noseOn = DirectionToGui(app.PilotForward, out nose);
+            if (noseOn) DrawBoresight(nose, new Color(1, 1, 1, 0.8f));
+            if (app.PilotControlMode != PilotControl.Helm && DirectionToGui(app.PilotAimDirection, out var aim) && (!noseOn || (aim - nose).sqrMagnitude > 4))
+                DrawCrosshair(aim, CrosshairColor);
+            return noseOn;
+        }
+
+        /// <summary>
+        /// The cleared screen (F11, U.SPC-T496): only the reticle in use -- a seat's sight when one is held (U.SPC-T422),
+        /// else the helm's aim reticle while piloting -- and nothing at all in the strategy view or between the stars.
+        /// </summary>
+        void DrawReticleOnly()
+        {
+            if (Event.current.type != EventType.Repaint || app.Travel.Active) return;
+            if (app.SeatLine() != null) DrawSeatSight();
+            else if (app.IsPiloting) DrawAimReticle(out _);
         }
 
         // ---------------------------------------------------------------- the chase (U.SPC-T273)
@@ -1498,7 +1525,7 @@ namespace Unity.SpaceGod.UI
             GUI.Label(new Rect(r.x + 12, sy, w - 24, 16), "STAR SYSTEMS", small);
             GUI.contentColor = oldColor;
             // The whole neighbourhood at once: territory, traffic, fronts and raiders, as far as the news goes (U.SPC-T103).
-            if (GUI.Button(new Rect(r.x + w - 126, sy - 2, 116, 18), "GALAXY MAP   F11", button)) app.ShowGalaxyMap = true;
+            if (GUI.Button(new Rect(r.x + w - 126, sy - 2, 116, 18), "GALAXY MAP   [", button)) app.ShowGalaxyMap = true;
             sy += 17;
             var network = app.Galaxy.Network;
             double jd = app.Clock.Jd;
@@ -3410,9 +3437,9 @@ namespace Unity.SpaceGod.UI
                 "1-9, 0   planets (twice to focus)    Tab   cycle ships    M   market    B   watch a battle    N   hyperlanes",
                 "K   satellites    R   auto-reorient on/off (keep this system's plane level)",
                 "Navigator  STAR SYSTEMS   fly to another star (Esc to skip the trip)",
-                "F11  galaxy map: every system, who holds it, gate traffic, war fronts, blockades and raiders, as far as the news goes; click a star to inspect, double-click to travel",
+                "[   galaxy map: every system, who holds it, gate traffic, war fronts, blockades and raiders, as far as the news goes; click a star to inspect, double-click to travel",
                 "F12  hail the polity of the ship locked or selected (or the patrol hailing you) and treat with it; the galaxy map's DIPLOMACY panel: pacts, tribute, fealty, war and peace",
-                "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD",
+                "P   pilot the selected ship     ,  .   time warp     T   now     O  orbits   L  labels   H  help   U  HUD (names stay)   F11  clear screen (reticle only)",
                 "Take charge, any time   '  ;   jump into the next seat in the fight in view (a ship's helm, a fighter or bomber)   /   man the next gun on the hull",
                 "   in a fighter: mouse aims, W/S throttle, left mouse guns, right mouse torpedoes   P hands the seat back to its AI and returns you to command",
                 "Piloting   mouse steer   W/S thrust   A/D Q/E strafe   Z/X roll   F flight assist (off: drift, turn and burn)",
@@ -3426,7 +3453,7 @@ namespace Unity.SpaceGod.UI
                 "Hyperlanes  (piloting)   fly through a ramp's ring gate to ride the lane   1 come off / 2-9 carry on at the off-ramp",
                 "Interdiction  (riding)   a raider's field ahead: Shift surge through, Ctrl drop out short of it   Y back into the lane where you left it",
                 "FTL  (capital ships, survey hulls)   beyond the system's outer rim, put the nose on another star, Enter to spool (hold it there), it engages for that star",
-                "   PgDn/PgUp plot a course to the next star or beacon (nearest first), or pick one on the galaxy map (F11): ETA, fuel, wells on the way   Del clear",
+                "   PgDn/PgUp plot a course to the next star or beacon (nearest first), or pick one on the galaxy map ([): ETA, fuel, wells on the way   Del clear",
                 "   End  FTL autopilot: flies out beyond the rim, turns onto the star, spools and engages, time compressed (Settings > FTL)   End again takes the helm back",
                 "I   cargo hold  (while piloting)   click a crate, then a cell, to move it",
                 "F2  outfitting at a shipyard (or Outfit on the market): guns, shields and drives on the hardpoints; plate, racks, scanners, a brig in the internal space",
@@ -3458,6 +3485,17 @@ namespace Unity.SpaceGod.UI
         {
             string line = app.SeatLine();
             if (line == null) return;
+            DrawSeatSight();
+            var content = new GUIContent(line);
+            float w = toast.CalcSize(content).x + 40;
+            var r = new Rect((Screen.width - w) * 0.5f, Screen.height - 96, w, 34);
+            GUI.Box(r, GUIContent.none, panel);
+            GUI.Label(new Rect(r.x + 20, r.y + 7, w, 22), content, toast);
+        }
+
+        /// <summary>A seat's sight: four ticks about the middle of the screen, which the view follows.</summary>
+        void DrawSeatSight()
+        {
             var old = GUI.color;
             GUI.color = new Color(0.6f, 0.95f, 1f, 0.9f);
             float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
@@ -3467,11 +3505,6 @@ namespace Unity.SpaceGod.UI
             GUI.DrawTexture(new Rect(cx - 1, cy - 14, 2, 9), tex);
             GUI.DrawTexture(new Rect(cx - 1, cy + 5, 2, 9), tex);
             GUI.color = old;
-            var content = new GUIContent(line);
-            float w = toast.CalcSize(content).x + 40;
-            var r = new Rect((Screen.width - w) * 0.5f, Screen.height - 96, w, 34);
-            GUI.Box(r, GUIContent.none, panel);
-            GUI.Label(new Rect(r.x + 20, r.y + 7, w, 22), content, toast);
         }
 
         void DrawToast()
