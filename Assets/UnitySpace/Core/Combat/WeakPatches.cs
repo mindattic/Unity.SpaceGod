@@ -61,7 +61,9 @@ namespace Unity.SpaceGod.Core
     /// <see cref="IncomingFireOn"/>) against which patches face each way (<see cref="Exposure(BattleUnit, IReadOnlyList{IncomingFire})"/>),
     /// and trades that against keeping its own guns bearing (<see cref="Protection"/>): it rolls about the line to its
     /// target, which keeps the target where it lies in every gun's fire cone (U.SPC-T533), or turns its hull to another
-    /// heading that brings other guns' cones onto the enemy if that shows it fresher shields for what firepower it gives up. An AI captain does this by doctrine (<see cref="AiRolls"/>); at the helm the player sees
+    /// heading that brings other guns' cones onto the enemy if that shows it fresher shields for what firepower it gives up,
+    /// and weighs too how slanted that attitude lies the hull to the fire, so hits glance off its armour (U.SPC-T534,
+    /// <see cref="ArmourAngling"/>). An AI captain does this by doctrine (<see cref="AiRolls"/>); at the helm the player sees
     /// which patches are weak and which faces the fire (<see cref="Readout"/>), and can order the helm assist to roll them away
     /// (<see cref="BroadsideCommand.RollWeakPatches"/>), steering the nose themselves. Every figure is a setting in Broadsides.
     /// </summary>
@@ -358,7 +360,9 @@ namespace Unity.SpaceGod.Core
         /// <see cref="Battle.ConeFirepower"/>) and a target along <paramref name="toTarget"/> it weighs every such heading, each
         /// rolled every way about the line to the target; with none, every roll about the bow alone. Each attitude scores the
         /// share of its guns' firepower that bears, less <see cref="Protection"/>
-        /// times the weak share of the face it shows the fire (<see cref="IncomingFireOn"/>), less a little for straying from
+        /// times the weak share of the face it shows the fire (<see cref="IncomingFireOn"/>), less
+        /// <see cref="ArmourAngling.AiWeight"/> times the share of the fire's harm its armour would let home at that slant
+        /// (<see cref="ArmourAngling.Harm(CombatSpec, DVec3)"/>, U.SPC-T534), less a little for straying from
         /// <paramref name="rest"/> (null: level). The choice is weighed every <see cref="ReconsiderSeconds"/> and changed only
         /// for a better one by <see cref="Hysteresis"/>, so the hull settles instead of hunting.
         /// </summary>
@@ -411,6 +415,8 @@ namespace Unity.SpaceGod.Core
             var samples = SamplesOf(c.Spec);
             var weak = WeaknessOf(c, PatchesOf(c, samples));
             double protect = Protection.Value;
+            // A hull slanted to the fire turns part of every hit aside on its armour (U.SPC-T534): the captain weighs that too.
+            double slant = ArmourAngling.Strength.Value > 0 ? ArmourAngling.AiWeight.Value : 0;
             double most = 0;
             if (bearings != null)
                 foreach (var kv in bearings)
@@ -433,6 +439,7 @@ namespace Unity.SpaceGod.Core
                     var right = DVec3.Cross(f, up).Normalized;
                     double score = battery;
                     if (fire.Count > 0 && protect > 0) score -= protect * Exposure(samples, weak, fire, right, up, f);
+                    if (fire.Count > 0 && slant > 0) score -= slant * ArmourAngling.Harm(c.Spec, fire, right, up, f);
                     var at = rest ?? LevelRoof(f);
                     var restUp = at - f * DVec3.Dot(at, f);
                     if (restUp.LengthSquared > 1e-18) score -= RestBias * (1 - DVec3.Dot(up, restUp.Normalized)) * 0.5;

@@ -119,13 +119,23 @@ namespace Unity.SpaceGod.Core.Tests
         [Test]
         public void AFreshHullFightsAsItAlwaysHas()
         {
-            var (b, me, ahead, _) = Scene();
-            var bearings = Battle.ConeFirepower(me, (ahead.Pos - me.Pos).Normalized);
-            var toTarget = (ahead.Pos - me.Pos).Normalized;
-            WeakPatches.Orient(b, me, DVec3.UnitX, bearings, toTarget, null, 0.1, out var forward, out var roof);
-            int best = bearings.OrderByDescending(kv => kv.Value).First().Key;
-            Assert.That((forward - Battle.BowFor(toTarget, best).Normalized).Length, Is.LessThan(1e-9), "its strongest battery turned to the target");
-            Assert.That((roof - WeakPatches.LevelRoof(forward)).Length, Is.LessThan(1e-9), "and held level");
+            // Not weighing the slant of its hull to the fire (U.SPC-T534, see ArmourAnglingTests), which may roll it.
+            double saved = ArmourAngling.AiWeight.Value;
+            try
+            {
+                ArmourAngling.AiWeight.Set(0);
+                var (b, me, ahead, _) = Scene();
+                var bearings = Battle.ConeFirepower(me, (ahead.Pos - me.Pos).Normalized);
+                var toTarget = (ahead.Pos - me.Pos).Normalized;
+                WeakPatches.Orient(b, me, DVec3.UnitX, bearings, toTarget, null, 0.1, out var forward, out var roof);
+                int best = bearings.OrderByDescending(kv => kv.Value).First().Key;
+                Assert.That((forward - Battle.BowFor(toTarget, best).Normalized).Length, Is.LessThan(1e-9), "its strongest battery turned to the target");
+                Assert.That((roof - WeakPatches.LevelRoof(forward)).Length, Is.LessThan(1e-9), "and held level");
+            }
+            finally
+            {
+                ArmourAngling.AiWeight.Set(saved);
+            }
         }
 
         [Test]

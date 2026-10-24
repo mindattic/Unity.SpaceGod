@@ -8,7 +8,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// <summary>
     /// The capital-ship broadside game (U.SPC-T425): every gun aiming within its own fire cone in 3D (U.SPC-T533), orders
     /// given to the guns that bear where the captain looks, volleys that hold for the guns bearing on the same hull and
-    /// telegraph themselves, gunners focusing a weakened shield patch, no armour angling, the brace, damage control and its
+    /// telegraph themselves, gunners focusing a weakened shield patch, the brace, damage control and its
     /// emergency repair crews, formations a flagship orders its line into, turning circles, and AI captains using the same
     /// commands and bringing the guns whose cones can take their target to bear.
     /// </summary>
@@ -171,27 +171,6 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(Broadsides.FocusesFire(me), Is.False, "ordered to spread their fire");
             Assert.That(Broadsides.ToggleSpreadFire(me), Is.False);
             Assert.That(Broadsides.FocusesFire(me), Is.True);
-        }
-
-        // ------------------------------------------------------------ armour
-
-        [Test]
-        public void ThereIsNoAnglingTheArmourTheSameHitDoesTheSameFromAnyDirection()
-        {
-            double Loss(DVec3 incoming)
-            {
-                var (b, me, _) = Helm(90);
-                me.Combat.ZeroAllShields();
-                double before = me.Combat.Hull;
-                b.ApplyDamage(me, null, 200, me.Pos, null, 1, incoming);
-                return before - me.Combat.Hull;
-            }
-            var right = new DVec3(0, -1, 0);
-            double beamOn = Loss(-right);
-            Assert.That(beamOn, Is.GreaterThan(0));
-            Assert.That(Loss((-right - DVec3.UnitX).Normalized), Is.EqualTo(beamOn).Within(1e-9), "at 45 deg");
-            Assert.That(Loss(-DVec3.UnitX), Is.EqualTo(beamOn).Within(1e-9), "on the bow");
-            Assert.That(Loss(DVec3.UnitZ), Is.EqualTo(beamOn).Within(1e-9), "from below");
         }
 
         // ------------------------------------------------------------ the brace
@@ -434,7 +413,8 @@ namespace Unity.SpaceGod.Core.Tests
                 }
             }
             double flank = OffBowDeg(true);
-            Assert.That(flank, Is.InRange(45.0, 135.0), "it turns a flank in, its sponsons' cones on the target");
+            // It may lay its flank slanted to the line of fire, so hits glance off its armour (U.SPC-T534).
+            Assert.That(flank, Is.InRange(30.0, 150.0), "it turns a flank in, its sponsons' cones on the target");
             Assert.That(OffBowDeg(false), Is.LessThan(20), "with the setting off it points its bow at the target");
         }
 
@@ -479,7 +459,7 @@ namespace Unity.SpaceGod.Core.Tests
         public void TheBroadsideSettingsAreInTheMenu()
         {
             Assert.That(Broadsides.BraceReduction.Group, Is.EqualTo(SettingGroups.Broadsides));
-            Assert.That(SettingsRegistry.Default.Find("broadside.armourAngling"), Is.Null, "there is no armour angling any more (U.SPC-T533)");
+            Assert.That(SettingsRegistry.Default.Find("broadside.armourAngling"), Is.SameAs(ArmourAngling.Strength), "armour angling on the 3D hull (U.SPC-T534)");
             Assert.That(SettingsRegistry.Default.Find("cone.turretTraverse"), Is.SameAs(FireCones.TurretTraverse));
             Assert.That(SettingsRegistry.Default.Find("cone.fixed"), Is.SameAs(FireCones.FixedCone));
             Assert.That(SettingsRegistry.Default.Find("cone.aiBearing"), Is.SameAs(FireCones.AiBringsGunsToBear));

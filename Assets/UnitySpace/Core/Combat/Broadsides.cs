@@ -10,7 +10,8 @@ namespace Unity.SpaceGod.Core
     // shields or spread their fire (shields are emitters on the hull, not arcs: U.SPC-T501, see ShieldEmitters), the crew
     // braces for a broadside and damage control teams patch mounts under fire and bring back shield emitters and gun mounts
     // shot away, and the flagship orders its line into formation. AI captains use the same commands by doctrine. There are no
-    // bow, starboard, stern and port arcs and no angling the armour to one: everything fights in full 3D. The handling itself
+    // bow, starboard, stern and port arcs: everything fights in full 3D, and armour angling is measured against the hull's
+    // own surface where each shot strikes it (U.SPC-T534, see ArmourAngling). The handling itself
     // (engine telegraph, steerage, keel, full 3D) is the capital flight model's (U.SPC-T499, docs/FLIGHT_MODELS.md); this
     // file is everything a captain does on top of it.
 

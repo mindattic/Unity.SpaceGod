@@ -1122,7 +1122,7 @@ namespace Unity.SpaceGod.Core
             if (WeakPatches.Steers(u))
             {
                 // A capital's captain rolls and turns its hull to keep its weak patches out of the heaviest fire (U.SPC-T502).
-                var bearings = broadside ? ConeFirepower(u, (u.Target.Pos - u.Pos).Normalized) : null;
+                var bearings = broadside ? ConeFirepower(u, (u.Target.Pos - u.Pos).Normalized, ArmourAngling.AiSlants(u) && FireCones.AiBringsGunsToBear.Value) : null;
                 WeakPatches.Orient(this, u, face, bearings, bearings != null ? (u.Target.Pos - u.Pos).Normalized : (DVec3?)null, null, dt,
                     out face, out var roof, u.Forward);
                 TurnToward(u, face, c.Spec.TurnRateDegS, dt);
@@ -1273,16 +1273,43 @@ namespace Unity.SpaceGod.Core
         /// Which way to point the bow so the guns whose fire cones can take the target carry the most firepower onto it
         /// (U.SPC-T533, see <see cref="ConeFirepower"/>). So a broadside warship turns a flank in, not its nose, while a hull
         /// whose guns bear best ahead, or bear as well any way (or any hull with <see cref="FireCones.AiBringsGunsToBear"/>
-        /// off), simply points its nose at the target.
+        /// off), simply points its nose at the target. An AI captain also weighs laying its hull slanted to the target's fire
+        /// so the hits glance off its armour (<see cref="ArmourAngling.AiWeight"/>, U.SPC-T534): a broadside hull keeps its
+        /// flank in but angled off the line of fire, as long as its guns still bear.
         /// </summary>
         DVec3 BroadsideFacing(BattleUnit u, DVec3 toTarget)
         {
-            var byBearing = ConeFirepower(u, toTarget);
+            // Only fire coming back from the target is worth slanting the hull to.
+            var foe = u.Target;
+            bool slant = ArmourAngling.AiSlants(u) && FireCones.AiBringsGunsToBear.Value
+                && foe != null && foe.Combat.Armed && !foe.Combat.Disabled && foe.Stunned <= 0;
+            var byBearing = ConeFirepower(u, toTarget, slant);
             if (byBearing == null) return toTarget;
             int bestBearing = 0;
             double best = -1;
+            if (!slant)
+            {
+                foreach (var kv in byBearing)
+                    if (kv.Value > best + 1e-9) { best = kv.Value; bestBearing = kv.Key; }
+                return BowFor(toTarget, bestBearing);
+            }
+            // Slanting the hull to its target's fire turns part of every hit aside on its armour (U.SPC-T534): the captain
+            // gives up a share of its guns' bearing for it, by doctrine, and keeps to the heading nearest its own.
+            double most = 0;
+            foreach (var kv in byBearing) most = Math.Max(most, kv.Value);
+            if (most <= 0) return toTarget;
+            double weight = ArmourAngling.AiWeight.Value;
+            var t = toTarget.Normalized;
+            best = double.NegativeInfinity;
             foreach (var kv in byBearing)
-                if (kv.Value > best + 1e-9) { best = kv.Value; bestBearing = kv.Key; }
+            {
+                var f = BowFor(t, kv.Key).Normalized;
+                var up = WeakPatches.LevelRoof(f);
+                var right = DVec3.Cross(f, up).Normalized;
+                var local = new DVec3(DVec3.Dot(t, right), DVec3.Dot(t, up), DVec3.Dot(t, f));
+                double score = kv.Value / most - weight * ArmourAngling.Harm(u.Combat.Spec, local) + 1e-3 * DVec3.Dot(f, u.Forward);
+                if (score > best + 1e-9) { best = score; bestBearing = kv.Key; }
+            }
             return BowFor(toTarget, bestBearing);
         }
 
@@ -1292,10 +1319,11 @@ namespace Unity.SpaceGod.Core
         /// starboard; see <see cref="BowFor"/>), the firepower (damage a second) of every ready gun (not on cooldown, with
         /// ammo, its mount not destroyed) whose fire cone would hold the target from that heading, in 3D. The candidates are
         /// the bow and each ready gun's cone axis swung round onto the target; a cone centred straight up or down off the hull
-        /// is brought to bear by no turn of the bow. Null for a hull with no ready guns; just the bow with
-        /// <see cref="FireCones.AiBringsGunsToBear"/> off.
+        /// is brought to bear by no turn of the bow. With <paramref name="slant"/> the strongest candidates are also swung
+        /// <see cref="ArmourAngling.SlantDeg"/> either way, headings that lay the hull slanted to the target's fire
+        /// (U.SPC-T534). Null for a hull with no ready guns; just the bow with <see cref="FireCones.AiBringsGunsToBear"/> off.
         /// </summary>
-        public static Dictionary<int, double> ConeFirepower(BattleUnit u, DVec3 toTarget)
+        public static Dictionary<int, double> ConeFirepower(BattleUnit u, DVec3 toTarget, bool slant = false)
         {
             if (toTarget.LengthSquared < 1e-18) return null;
             var spec = u.Combat.Spec;
@@ -1329,6 +1357,23 @@ namespace Unity.SpaceGod.Core
                 if (axis.X * axis.X + axis.Z * axis.Z < 0.01) continue;
                 int bearing = (int)Math.Round(Astro.WrapDegrees360(Math.Atan2(axis.X, axis.Z) * Astro.Rad2Deg)) % 360;
                 if (!byBearing.ContainsKey(bearing)) byBearing[bearing] = Score(bearing);
+            }
+            // With slant, the strongest headings slanted either way too, so a captain can weigh laying its strongest battery
+            // at an angle to the fire while its guns still bear (U.SPC-T534, see ArmourAngling).
+            if (slant)
+            {
+                int off = (int)Math.Round(ArmourAngling.SlantDeg);
+                double most = 0;
+                foreach (var kv in byBearing) most = Math.Max(most, kv.Value);
+                var strongest = new List<int>();
+                foreach (var kv in byBearing)
+                    if (most > 0 && kv.Value >= most - 1e-9) strongest.Add(kv.Key);
+                foreach (int bearing in strongest)
+                    for (int sign = -1; sign <= 1; sign += 2)
+                    {
+                        int b = ((bearing + sign * off) % 360 + 360) % 360;
+                        if (!byBearing.ContainsKey(b)) byBearing[b] = Score(b);
+                    }
             }
             return byBearing;
         }
@@ -2513,10 +2558,21 @@ namespace Unity.SpaceGod.Core
                 }
             }
             if (sub != null && exposed > 1) damage *= exposed;
-            // A capital ship's crew braced for the broadside shrugs off part of it (U.SPC-T425). There is no angling the
-            // armour to a facing any more (U.SPC-T533): everything fights in full 3D, and the belt is the belt.
+            // A capital ship's crew braced for the broadside shrugs off part of it (U.SPC-T425), and a shot meeting its hull
+            // obliquely, measured against the hull's own surface where the shot's line strikes it in 3D, crosses thicker plate
+            // and is partly turned aside (U.SPC-T534).
             double armour = c.Spec.Armor;
-            if (Broadsides.Commands(target)) damage *= Broadsides.BraceFactor(target);
+            if (Broadsides.Commands(target))
+            {
+                damage *= Broadsides.BraceFactor(target);
+                // A weak point struck from its open side has no armour to angle (U.SPC-T424).
+                if (incoming.HasValue && !(sub != null && exposed > 1))
+                {
+                    var (thicker, through) = ArmourAngling.Angling(target, shieldAt ?? at, incoming.Value);
+                    armour *= thicker;
+                    damage *= through;
+                }
+            }
             damage = Math.Max(damage * 0.15, damage - armour);
             Emit(FxKind.Impact, at, at, damage, target.Side, target, sub?.Index ?? -1);
             if (sub != null && !sub.Destroyed)
