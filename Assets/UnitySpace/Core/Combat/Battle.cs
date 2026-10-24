@@ -794,7 +794,7 @@ namespace Unity.SpaceGod.Core
             get
             {
                 foreach (var u in Units)
-                    if (u.Kind == UnitKind.Fighter && u.Present && !Flown.ContainsKey(u) && u.Fighter.Carrier.Present && !u.Fighter.Carrier.Captured) return true;
+                    if (u.Kind == UnitKind.Fighter && u.Present && !Flown.ContainsKey(u) && StrandedWings.CanLandOn(u.Fighter.LandsOn)) return true;
                 return false;
             }
         }

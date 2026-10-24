@@ -722,7 +722,8 @@ namespace Unity.SpaceGod.Core
             var craft = new List<Ship>();
             foreach (var e in world.Fleet.Ships)
             {
-                // An escort still fighting or left a hulk stays behind; one with no drive of its own goes only docked aboard.
+                // An escort still fighting or left a hulk stays behind; one with no drive of its own goes only docked aboard,
+                // or clamped to a carrier's hull (U.SPC-T473).
                 if (e.Leader != leader || e.Destroyed || e.Battle != null || e.Derelict) continue;
                 if (CanCruise(e)) going.Add(e);
                 else craft.Add(e);
@@ -757,8 +758,11 @@ namespace Unity.SpaceGod.Core
             foreach (var h in hired) c.Hired.Add(h);
             foreach (var kv in aboard) c.Aboard[kv.Key] = kv.Value;
             string group = ships.Count > 1 ? $" and {ships.Count - 1} more" : "";
+            // A jump strike group: its escorts clamped to the carrier's hull go with it (U.SPC-T473).
+            int clamped = FtlCarriage.CountClamped(c.Aboard.Keys);
+            string onHull = clamped > 0 ? $", {clamped} escort{(clamped == 1 ? "" : "s")} clamped to the hull" : "";
             world.Log(jd, $"{leader.Name}{group} engage{(ships.Count > 1 ? "" : "s")} {drive.Name.ToLowerInvariant()} for {c.ToName}, " +
-                          $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly through open space", WorldEventKind.Info, system.Catalog.Root.Index);
+                          $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly through open space{onHull}", WorldEventKind.Info, system.Catalog.Root.Index);
         }
 
         /// <summary>Dropped out at the edge of a system's well and in its fleet: home, or to its business there.</summary>

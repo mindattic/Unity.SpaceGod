@@ -216,7 +216,9 @@ namespace Unity.SpaceGod.Core
                 case FtlAccess.HomeSystem:
                     return "A " + cls + " carries no FTL drive and never leaves its home system";
                 default:
-                    return "A " + cls + " carries no FTL drive of its own: the jump gates and lanes are its way, or docked aboard a carrier";
+                    return FtlCarriage.RidesClamped(ship.Spec.Class)
+                        ? "A " + cls + " carries no FTL drive of its own: the jump gates and lanes are its way, or clamped to a carrier's hull"
+                        : "A " + cls + " carries no FTL drive of its own: the jump gates and lanes are its way, or docked aboard a carrier";
             }
         }
     }
@@ -302,8 +304,12 @@ namespace Unity.SpaceGod.Core
     /// What a hull with an FTL drive can take with it docked aboard (U.SPC-T419): carriers, and battleships and command cruisers
     /// with a drive fitted, have hangar berths, and fighters and small craft that cannot cross between the stars on their own ride in
     /// them, so a fleet can strike or explore off the gate network with its wings. Cruisers and destroyers have no drive
-    /// and no berths (U.SPC-T472): they cross by the gates. Data, not code: a hull's berths and a craft's size are
-    /// registered (<see cref="RegisterBerths"/>, <see cref="RegisterCraft"/>), never threaded through the cruise.
+    /// and no berths (U.SPC-T472): they cross by the gates, or clamped to a carrier's hull. A carrier, besides its hangars,
+    /// has docking clamps on the outside of its hull (U.SPC-T473) that take a few escorts too big for a berth (destroyers
+    /// and frigates, and corvettes once they are a class) through its own jump, so a jump strike group is a carrier, the
+    /// capitals with drives of their own, and the escorts clamped to it. Data, not code: a hull's berths and clamps and a
+    /// craft's size are registered (<see cref="RegisterBerths"/>, <see cref="RegisterCraft"/>, <see cref="RegisterClamps"/>,
+    /// <see cref="RegisterClampable"/>), never threaded through the cruise.
     /// </summary>
     public static class FtlCarriage
     {
@@ -324,9 +330,21 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Courier] = 2,
             [ShipClass.Breacher] = 2,
             [ShipClass.Gunship] = 2,
-            // A frigate rides clamped to a carrier's hull (U.SPC-T475): more berths than a battleship or command cruiser has,
-            // so only a carrier takes one, two at most.
-            [ShipClass.Frigate] = 5,
+        };
+
+        /// <summary>Docking clamps on the outside of each class of drive-carrying hull (U.SPC-T473): a carrier's four take
+        /// two destroyers or four frigates (or, once it is a class, corvettes).</summary>
+        static readonly Dictionary<ShipClass, int> clamps = new Dictionary<ShipClass, int>
+        {
+            [ShipClass.Carrier] = 4,
+        };
+
+        /// <summary>How many clamps an escort of each class takes up; a class not listed is never clamped to a hull.</summary>
+        static readonly Dictionary<ShipClass, int> clampSizes = new Dictionary<ShipClass, int>
+        {
+            [ShipClass.Destroyer] = 2,
+            // A frigate rides clamped to a carrier's hull (U.SPC-T475), never in a hangar.
+            [ShipClass.Frigate] = 1,
         };
 
         /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="count"/> berths (0 takes them away).</summary>
@@ -343,6 +361,22 @@ namespace Unity.SpaceGod.Core
             else sizes[cls] = size;
         }
 
+        /// <summary>Gives hulls of <paramref name="cls"/> <paramref name="count"/> docking clamps on the outside of the hull
+        /// (0 takes them away, U.SPC-T473).</summary>
+        public static void RegisterClamps(ShipClass cls, int count)
+        {
+            if (count <= 0) clamps.Remove(cls);
+            else clamps[cls] = count;
+        }
+
+        /// <summary>Lets escorts of <paramref name="cls"/> ride clamped to a hull, taking <paramref name="size"/> clamps (0 says
+        /// they cannot be): how a frigate or corvette slots in once it is a class (U.SPC-T473).</summary>
+        public static void RegisterClampable(ShipClass cls, int size)
+        {
+            if (size <= 0) clampSizes.Remove(cls);
+            else clampSizes[cls] = size;
+        }
+
         /// <summary>Berths hulls of <paramref name="cls"/> have.</summary>
         public static int BerthsOf(ShipClass cls) => berths.TryGetValue(cls, out int n) ? n : 0;
 
@@ -350,40 +384,83 @@ namespace Unity.SpaceGod.Core
         public static int BerthsOf(Ship ship) =>
             ship?.Spec == null || CruiseDrives.Of(ship) == null ? 0 : BerthsOf(ship.Spec.Class);
 
-        /// <summary>Berths a craft of <paramref name="cls"/> takes up, or 0 if it cannot be carried.</summary>
+        /// <summary>Docking clamps hulls of <paramref name="cls"/> have on the outside of the hull.</summary>
+        public static int ClampsOf(ShipClass cls) => clamps.TryGetValue(cls, out int n) ? n : 0;
+
+        /// <summary>Clamps <paramref name="ship"/> has to take escorts through FTL: none without a drive of its own.</summary>
+        public static int ClampsOf(Ship ship) =>
+            ship?.Spec == null || CruiseDrives.Of(ship) == null ? 0 : ClampsOf(ship.Spec.Class);
+
+        /// <summary>Berths a craft of <paramref name="cls"/> takes up, or 0 if it cannot be carried in a hangar.</summary>
         public static int SizeOf(ShipClass cls) => sizes.TryGetValue(cls, out int n) ? n : 0;
 
-        /// <summary>Whether <paramref name="craft"/> needs carrying (no drive of its own) and can be (it fits a berth).</summary>
+        /// <summary>Clamps an escort of <paramref name="cls"/> takes up, or 0 if it is never clamped to a hull.</summary>
+        public static int ClampSizeOf(ShipClass cls) => clampSizes.TryGetValue(cls, out int n) ? n : 0;
+
+        /// <summary>Whether a hull of <paramref name="cls"/> rides clamped to the outside of its carrier rather than in a hangar.</summary>
+        public static bool RidesClamped(ShipClass cls) => SizeOf(cls) == 0 && ClampSizeOf(cls) > 0;
+
+        /// <summary>Whether <paramref name="craft"/> rides clamped to the outside of its carrier rather than in a hangar.</summary>
+        public static bool RidesClamped(Ship craft) => craft?.Spec != null && RidesClamped(craft.Spec.Class);
+
+        /// <summary>Whether <paramref name="craft"/> needs carrying (no drive of its own) and can be (it fits a berth, or a clamp).</summary>
         public static bool Carriable(Ship craft) =>
-            craft?.Spec != null && !craft.Destroyed && !craft.Derelict && CruiseDrives.Of(craft) == null && SizeOf(craft.Spec.Class) > 0;
+            craft?.Spec != null && !craft.Destroyed && !craft.Derelict && CruiseDrives.Of(craft) == null
+            && (SizeOf(craft.Spec.Class) > 0 || ClampSizeOf(craft.Spec.Class) > 0);
 
         /// <summary>
         /// Docks as many of <paramref name="craft"/> as fit aboard <paramref name="carriers"/> (the hulls going under
-        /// their own drives), each in the first with berths to spare, in the order given: what goes aboard which. Craft
-        /// that need no carrying, cannot be carried or find no room are left out (they stay behind).
+        /// their own drives), each in the first with berths (or, for an escort too big for a hangar, clamps) to spare, in
+        /// the order given: what goes aboard which. Craft that need no carrying, cannot be carried or find no room are
+        /// left out (they stay behind).
         /// </summary>
         public static Dictionary<Ship, Ship> Stow(IEnumerable<Ship> carriers, IEnumerable<Ship> craft)
         {
-            var free = new List<(Ship hull, int left)>();
+            var free = new List<(Ship hull, int berths, int clamps)>();
             foreach (var c in carriers)
             {
-                int n = BerthsOf(c);
-                if (n > 0) free.Add((c, n));
+                int n = BerthsOf(c), k = ClampsOf(c);
+                if (n > 0 || k > 0) free.Add((c, n, k));
             }
             var aboard = new Dictionary<Ship, Ship>();
             foreach (var s in craft)
             {
                 if (!Carriable(s) || aboard.ContainsKey(s)) continue;
-                int size = SizeOf(s.Spec.Class);
+                bool clamped = RidesClamped(s);
+                int size = clamped ? ClampSizeOf(s.Spec.Class) : SizeOf(s.Spec.Class);
                 for (int i = 0; i < free.Count; i++)
                 {
-                    if (free[i].left < size || free[i].hull == s) continue;
-                    aboard[s] = free[i].hull;
-                    free[i] = (free[i].hull, free[i].left - size);
+                    var f = free[i];
+                    if (f.hull == s || (clamped ? f.clamps : f.berths) < size) continue;
+                    aboard[s] = f.hull;
+                    free[i] = clamped ? (f.hull, f.berths, f.clamps - size) : (f.hull, f.berths - size, f.clamps);
                     break;
                 }
             }
             return aboard;
+        }
+
+        /// <summary>How many of <paramref name="aboard"/> (craft to the hull carrying them) ride clamped to the hull rather than
+        /// docked in a hangar.</summary>
+        public static int CountClamped(IEnumerable<Ship> aboard)
+        {
+            int n = 0;
+            foreach (var s in aboard)
+                if (RidesClamped(s)) n++;
+            return n;
+        }
+
+        /// <summary>How a group going through FTL is made up, for the log: ", 2 escorts alongside, 6 craft docked aboard and 1
+        /// escort clamped to the hull", or empty for a hull going alone.</summary>
+        public static string Describe(int alongside, int docked, int clamped)
+        {
+            var parts = new List<string>();
+            if (alongside > 0) parts.Add(alongside + " escort" + (alongside == 1 ? "" : "s") + " alongside");
+            if (docked > 0) parts.Add(docked + " craft docked aboard");
+            if (clamped > 0) parts.Add(clamped + " escort" + (clamped == 1 ? "" : "s") + " clamped to the hull");
+            if (parts.Count == 0) return "";
+            if (parts.Count == 1) return ", " + parts[0];
+            return ", " + string.Join(", ", parts.GetRange(0, parts.Count - 1)) + " and " + parts[parts.Count - 1];
         }
     }
 }

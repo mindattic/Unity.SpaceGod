@@ -1709,9 +1709,7 @@ namespace Unity.SpaceGod.Core
                     if (rng.NextDouble() < TrailChance) TrailHome(u.Ship, victor, jd);
                 }
             lastBattleEndJd[b.Body] = jd;
-            foreach (var u in b.Units)
-                if (u.Kind == UnitKind.Fighter && u.Fighter?.Carrier?.Combat != null && u.Present)
-                    u.Fighter.Carrier.Combat.RestoreFighters(1);
+            RecoverWings(b, jd);
 
             string winner = b.Winner >= 0 ? Describe(b, b.Winner) + " hold the field" : "both sides break off";
             string text = $"{b.Name} ends: {winner}. Losses {Short(b, 0)} {lost[0]}, {Short(b, 1)} {lost[1]}";
@@ -1722,6 +1720,59 @@ namespace Unity.SpaceGod.Core
                 lootClan.Treasury += lootValue * 0.3;
                 Plundered?.Invoke(lootClan, lootValue, jd);
             }
+        }
+
+        /// <summary>
+        /// The craft still flying when the fight ends (U.SPC-T473, see <see cref="StrandedWings"/>): each is taken back aboard
+        /// the carrier it lands on, if that is still on the field; one whose carrier was lost or gone lands on another
+        /// friendly carrier with room, or a station on the field, or puts in at a friendly port at the world the fight was
+        /// over; failing all of those it is lost, its pilot ejecting into the pods.
+        /// </summary>
+        void RecoverWings(Battle b, double jd)
+        {
+            int lost = 0;
+            var putIn = new Dictionary<string, int>();
+            void PutIn(string at) => putIn[at] = (putIn.TryGetValue(at, out int n) ? n : 0) + 1;
+            foreach (var u in b.Units)
+            {
+                if (u.Kind != UnitKind.Fighter || u.Fighter == null) continue;
+                // Already landed on the carrier or station it found when its own was lost.
+                if (u.Docked && u.Fighter.Home != null)
+                {
+                    PutIn(u.Fighter.Home.Name);
+                    continue;
+                }
+                if (!u.Present) continue;
+                var home = u.Fighter.LandsOn;
+                if (!StrandedWings.CanLandOn(home))
+                {
+                    home = StrandedWings.Haven(b, u);
+                    if (home != null) u.Fighter.Home = home;
+                }
+                if (home != null)
+                {
+                    home.Combat?.RestoreFighters(1);
+                    u.Docked = true;
+                    if (u.Fighter.Home != null) PutIn(home.Name);
+                    continue;
+                }
+                var port = StrandedWings.Port(b, u.Faction, Economy, Diplomacy);
+                if (port != null)
+                {
+                    u.Fled = true;
+                    PutIn(port.Name);
+                    continue;
+                }
+                // Nowhere to land: the craft is lost and its pilot ejects.
+                u.Dead = true;
+                lost++;
+                AbandonShip(b, u, jd);
+            }
+            if (putIn.Count == 0 && lost == 0) return;
+            var parts = new List<string>();
+            foreach (var kv in putIn) parts.Add($"{kv.Value} put in at {kv.Key}");
+            if (lost > 0) parts.Add($"{lost} lost with nowhere to land, their pilots ejecting");
+            world.Log(jd, $"{b.Name}: craft stranded by the loss of their carriers: " + string.Join(", ", parts), WorldEventKind.Battle, Shown(b));
         }
 
         /// <summary>

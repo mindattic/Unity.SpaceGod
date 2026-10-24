@@ -22,7 +22,8 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Which of <see cref="Ships"/> ride docked aboard another of them, and aboard which (U.SPC-T419, see
         /// <see cref="FtlCarriage"/>): fighters and small craft with no drive of their own, carried in a capital ship's
-        /// hangars. They come out with the group where it drops out, and are lost with the hull carrying them.</summary>
+        /// hangars, and escorts clamped to a carrier's hull (U.SPC-T473). They come out with the group where it drops out,
+        /// and are lost with the hull carrying them.</summary>
         public readonly Dictionary<Ship, Ship> Aboard = new Dictionary<Ship, Ship>();
 
         /// <summary>The craft docked aboard <paramref name="carrier"/>.</summary>

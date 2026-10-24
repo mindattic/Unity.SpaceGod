@@ -17,7 +17,22 @@ namespace Unity.SpaceGod.Core
     /// <summary>A fighter's pilot and squadron: who leads, where it flies in the formation, how it flies.</summary>
     public sealed class FighterState
     {
+        /// <summary>The carrier that launched it: its squadron is this carrier's.</summary>
         public BattleUnit Carrier;
+
+        /// <summary>Where it lands instead, once its own carrier was lost or gone and it found another friendly carrier or a
+        /// station to put in at (U.SPC-T473, see <see cref="StrandedWings"/>); null while it still lands on its own.</summary>
+        public BattleUnit Home;
+
+        /// <summary>Where it lands: its own carrier, or the one or station it found when that was lost.</summary>
+        public BattleUnit LandsOn => Home ?? Carrier;
+
+        /// <summary>Stranded (U.SPC-T473): its carrier was lost or gone and nowhere friendly on the field could take it, so far.</summary>
+        public bool Stranded;
+
+        /// <summary>Seconds until a stranded craft looks again for somewhere to land.</summary>
+        public double HavenCheckIn;
+
         public BattleUnit Lead;
         public int Squadron;
         public int Slot;
@@ -131,7 +146,9 @@ namespace Unity.SpaceGod.Core
                 return;
             }
             f.PhaseTime += dt;
-            var carrier = f.Carrier;
+            // Its carrier lost or gone (U.SPC-T473): it looks for another friendly carrier or a station to land on.
+            StrandedWings.Step(b, u, dt);
+            var carrier = f.LandsOn;
             // Recalled: the shooting is over, or the carrier is pulling out.
             if (carrier.Present && !carrier.Captured && (b.Mopping || carrier.Fleeing))
             {
@@ -220,7 +237,7 @@ namespace Unity.SpaceGod.Core
                 case FighterPhase.Approach:
                     if (t == null)
                     {
-                        goal = (f.Carrier.Present ? f.Carrier.Pos : DVec3.Zero) + new DVec3(Math.Cos(b.Seconds * 0.1 + f.Seed), Math.Sin(b.Seconds * 0.1 + f.Seed), 0.2) * 3;
+                        goal = (f.LandsOn.Present ? f.LandsOn.Pos : DVec3.Zero) + new DVec3(Math.Cos(b.Seconds * 0.1 + f.Seed), Math.Sin(b.Seconds * 0.1 + f.Seed), 0.2) * 3;
                         speed *= 0.6;
                         break;
                     }
@@ -504,10 +521,11 @@ namespace Unity.SpaceGod.Core
             return best;
         }
 
-        /// <summary>Back to the carrier's hangar and aboard; each landing puts a craft back in its hangar.</summary>
+        /// <summary>Back to the carrier's hangar and aboard; each landing puts a craft back in its hangar. A stranded craft
+        /// lands on the carrier or station it found instead (U.SPC-T473): a station has no hangar of a carrier's to count it in.</summary>
         static void Land(Battle b, BattleUnit u, double dt)
         {
-            var carrier = u.Fighter.Carrier;
+            var carrier = u.Fighter.LandsOn;
             Subsystem bay = null;
             foreach (var s in carrier.Combat.Subsystems)
                 if (s.Kind == SubsystemKind.Hangar && !s.Destroyed) bay = s;

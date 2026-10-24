@@ -314,8 +314,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>
         /// The helm's escorts that go with <paramref name="ship"/> through FTL (U.SPC-T419): those with drives of their own,
-        /// then the fighters and small craft that fit docked aboard it or them (<paramref name="aboard"/>: craft to carrier).
-        /// An escort still fighting or left a hulk stays behind, as does a craft with no berth to ride in.
+        /// then the fighters and small craft that fit docked aboard it or them, and the escorts that fit clamped to a carrier's
+        /// hull (U.SPC-T473) (<paramref name="aboard"/>: craft to carrier). An escort still fighting or left a hulk stays
+        /// behind, as does one with no berth or clamp to ride on.
         /// </summary>
         public static List<Ship> Wing(World world, Ship ship, out Dictionary<Ship, Ship> aboard)
         {
@@ -385,9 +386,10 @@ namespace Unity.SpaceGod.Core
                 if (ships.Contains(h)) c.Hired.Add(h);
             foreach (var kv in aboard)
                 if (ships.Contains(kv.Key)) c.Aboard[kv.Key] = kv.Value;
-            int docked = c.Aboard.Count;
-            string with = wing == 0 ? "" : docked == 0 ? $", {wing} escort{(wing == 1 ? "" : "s")} alongside"
-                : docked == wing ? $", {docked} craft docked aboard" : $", {wing - docked} escort{(wing - docked == 1 ? "" : "s")} alongside and {docked} craft docked aboard";
+            // Craft in its hangars, and escorts clamped to its hull (U.SPC-T473).
+            int clamped = FtlCarriage.CountClamped(c.Aboard.Keys);
+            int docked = c.Aboard.Count - clamped;
+            string with = FtlCarriage.Describe(wing - c.Aboard.Count, docked, clamped);
             world.Log(jd, $"{ship.Name} of {ship.Faction.Name} engages its {Drive.Name.ToLowerInvariant()} beyond the rim for {to.Name}, " +
                           $"{c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture)} ly under its own power{with}", WorldEventKind.Info, here.Catalog.Root.Index);
             Reset();

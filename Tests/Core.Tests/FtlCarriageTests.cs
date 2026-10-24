@@ -152,7 +152,7 @@ namespace Unity.SpaceGod.Core.Tests
 
             var aboard = FtlCarriage.Stow(new[] { explorer, destroyer, battleship }, fighters.Concat(new[] { breacher, freighter, destroyer }));
             // The battleship fills its berths, in order; the explorer and the destroyer have none; the freighter and the
-            // destroyer are never carried in a berth (a carrier clamping escorts to its hull is U.SPC-T473).
+            // destroyer are never carried in a berth (only a carrier clamps a destroyer to its hull, U.SPC-T473).
             Assert.That(aboard.Count, Is.EqualTo(room));
             Assert.That(aboard.Keys, Is.EqualTo(fighters.Take(room)));
             Assert.That(aboard.Values.All(v => v == battleship), Is.True);
@@ -247,7 +247,7 @@ namespace Unity.SpaceGod.Core.Tests
             var fleet = sol.World.Fleet;
             var gnat = fleet.SpawnAt("TNS Gnat", ShipClass.Fighter, ship.Faction, body, ship.Orbit.OffsetAt(jd), DVec3.UnitX, jd);
             var hauler = fleet.SpawnAt("TNS Tender", ShipClass.Freighter, ship.Faction, body, ship.Orbit.OffsetAt(jd), DVec3.UnitX, jd);
-            // A destroyer has no FTL of its own (U.SPC-T472): it cannot follow through open space.
+            // A destroyer has no FTL of its own (U.SPC-T472): it follows through open space only clamped to a carrier (U.SPC-T473).
             var screen = fleet.SpawnAt("TNS Screen", ShipClass.Destroyer, ship.Faction, body, ship.Orbit.OffsetAt(jd), DVec3.UnitX, jd);
             foreach (var e in new[] { gnat, hauler, screen })
             {
@@ -269,8 +269,23 @@ namespace Unity.SpaceGod.Core.Tests
             }
             Assert.That(cruise.Ships, Does.Not.Contain(hauler), "a freighter cannot dock and has no drive");
             Assert.That(fleet.Ships.Contains(hauler), Is.True);
-            Assert.That(cruise.Ships, Does.Not.Contain(screen), "a destroyer has no drive and no berth to ride in");
-            if (!screen.Destroyed) Assert.That(fleet.Ships.Contains(screen), Is.True);
+            if (ship.Spec.Class == ShipClass.Carrier)
+            {
+                // A carrier takes it clamped to its hull (U.SPC-T473): a jump strike group.
+                int used = cruise.Aboard.Where(kv => kv.Value == ship && FtlCarriage.RidesClamped(kv.Key)).Sum(kv => FtlCarriage.ClampSizeOf(kv.Key.Spec.Class));
+                if (!screen.Destroyed && screen.Battle == null) Assert.That(used, Is.GreaterThan(0), "the carrier took no escort clamped to its hull");
+                bool full = FtlCarriage.ClampsOf(ShipClass.Carrier) - used < FtlCarriage.ClampSizeOf(ShipClass.Destroyer);
+                if (!screen.Destroyed && screen.Battle == null && !full)
+                {
+                    Assert.That(cruise.Aboard.TryGetValue(screen, out var hull) ? hull : null, Is.SameAs(ship), "the destroyer is not clamped to the carrier");
+                    Assert.That(fleet.Ships.Contains(screen), Is.False);
+                }
+            }
+            else
+            {
+                Assert.That(cruise.Ships, Does.Not.Contain(screen), "a destroyer has no drive, and a battleship no clamps to take it on");
+                if (!screen.Destroyed) Assert.That(fleet.Ships.Contains(screen), Is.True);
+            }
         }
 
         [Test]

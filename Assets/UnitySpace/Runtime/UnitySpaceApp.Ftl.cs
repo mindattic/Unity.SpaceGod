@@ -233,10 +233,13 @@ namespace Unity.SpaceGod
             Interstellar.Visible = true;
             GateFlash = 1;
             fovKick = GateFovKick;
+            // Craft in the hangars, and escorts clamped to the hull (U.SPC-T473).
+            int clamped = FtlCarriage.CountClamped(c.Aboard.Keys);
+            int docked = c.Aboard.Count - clamped;
+            string carried = docked > 0 && clamped > 0 ? " (" + docked + " docked aboard, " + clamped + " clamped to the hull)"
+                : docked > 0 ? " (" + docked + " docked aboard)" : clamped > 0 ? " (" + clamped + " clamped to the hull)" : "";
             ShowToast("FTL ENGAGED for " + c.ToName.ToUpperInvariant() + ", " + c.Profile.Ly.ToString("0.00", CultureInfo.InvariantCulture) +
-                      " ly through open space" + (wing == 0 ? "" : c.Aboard.Count > 0
-                          ? ", " + wing + " of your wing with you (" + c.Aboard.Count + " docked aboard)"
-                          : ", " + wing + " of your wing with you"));
+                      " ly through open space" + (wing == 0 ? "" : ", " + wing + " of your wing with you" + carried));
             return true;
         }
 

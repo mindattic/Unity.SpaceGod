@@ -115,11 +115,12 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(InterstellarTraffic.CanCruise(frigate), Is.False);
             Assert.That(FtlRoster.NoDriveReason(frigate), Does.Contain("gates").And.Contain("carrier"));
 
-            // A carrier takes it on its hull; a battleship or command cruiser has not the berths.
+            // A carrier takes it clamped to its hull (U.SPC-T473); a battleship or command cruiser has no clamps.
             Assert.That(FtlCarriage.Carriable(frigate), Is.True);
-            Assert.That(FtlCarriage.SizeOf(ShipClass.Frigate), Is.LessThanOrEqualTo(FtlCarriage.BerthsOf(ShipClass.Carrier)));
-            Assert.That(FtlCarriage.SizeOf(ShipClass.Frigate), Is.GreaterThan(FtlCarriage.BerthsOf(ShipClass.Battleship)));
-            Assert.That(FtlCarriage.SizeOf(ShipClass.Frigate), Is.GreaterThan(FtlCarriage.BerthsOf(ShipClass.CommandCruiser)));
+            Assert.That(FtlCarriage.RidesClamped(ShipClass.Frigate), Is.True, "a frigate never rides in a hangar");
+            Assert.That(FtlCarriage.ClampSizeOf(ShipClass.Frigate), Is.LessThanOrEqualTo(FtlCarriage.ClampsOf(ShipClass.Carrier)));
+            Assert.That(FtlCarriage.ClampsOf(ShipClass.Battleship), Is.EqualTo(0));
+            Assert.That(FtlCarriage.ClampsOf(ShipClass.CommandCruiser), Is.EqualTo(0));
             var carrier = new Ship { Name = "Deck", Spec = ShipClassSpec.Of(ShipClass.Carrier), Faction = navy };
             var battleship = new Ship { Name = "Wall", Spec = ShipClassSpec.Of(ShipClass.Battleship), Faction = navy };
             Assert.That(FtlCarriage.Stow(new[] { carrier }, new[] { frigate })[frigate], Is.SameAs(carrier));
