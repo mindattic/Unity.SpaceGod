@@ -275,21 +275,295 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>
+    /// A capital ship's engine telegraph (U.SPC-T499): the stepped speeds its engines are rung to, which hold
+    /// until rung again. Flank is the boost, and drains the boost charge.
+    /// </summary>
+    public enum EngineTelegraph
+    {
+        FullAstern,
+        Stop,
+        Slow,
+        Half,
+        Full,
+        Flank,
+    }
+
+    /// <summary>
+    /// A capital ship's handling numbers (U.SPC-T499, docs/FLIGHT_MODELS.md, Capital ships): data, not code, with a
+    /// <see cref="Default"/> and per-class overrides (<see cref="Of"/>). The turn itself is not a number here: it is fitted
+    /// to <see cref="ComeAboutS"/> (<see cref="CapitalFlightModel.PeakTurnRateDegS"/>), so the come-about is what the
+    /// numbers promise.
+    /// </summary>
+    public readonly struct CapitalHandling
+    {
+        /// <summary>The telegraph's speeds as fractions of <see cref="PilotTuning.MaxSpeed"/> (Full is 1, Flank the boost
+        /// on top of it, Stop 0): Full Astern (astern, so the hull backs at this share), Slow and Half.</summary>
+        public readonly double FullAsternFraction, SlowFraction, HalfFraction;
+
+        /// <summary>How the engines answer a new step: the time constant, s, with which the hull eases toward the step's
+        /// speed, as fast as its drive and retros allow.</summary>
+        public readonly double SpoolS;
+
+        /// <summary>Steerage, as fractions of the peak turn rate (which is at Half): a slow thruster pivot at Stop, what is
+        /// left at Full, and at Flank speed and beyond. Between them it runs linearly with the hull's speed.</summary>
+        public readonly double PivotFactor, FullFactor, FlankFactor;
+
+        /// <summary>The keel: with flight assist on, the most the hull pushes across its nose to kill slip, as a fraction
+        /// of top speed times the peak turn rate. Enough to trace a turning circle at Half and Full; a little slip shows at
+        /// Flank.</summary>
+        public readonly double Keel;
+
+        /// <summary>The pitch rate as a fraction of the yaw rate (a turn between them blends the two); 1 swings the nose
+        /// equally readily every way, as nothing holds a capital to a plane.</summary>
+        public readonly double PitchFactor;
+
+        /// <summary>Flight assist's roll rate as a fraction of the peak turn rate.</summary>
+        public readonly double RollFactor;
+
+        /// <summary>The come-about: seconds for a 180 deg turn at Half, from a steady heading to a steady heading.</summary>
+        public readonly double ComeAboutS;
+
+        public CapitalHandling(double fullAsternFraction, double slowFraction, double halfFraction, double spoolS, double pivotFactor,
+            double fullFactor, double flankFactor, double keel, double pitchFactor, double rollFactor, double comeAboutS)
+        {
+            FullAsternFraction = fullAsternFraction;
+            SlowFraction = slowFraction;
+            HalfFraction = halfFraction;
+            SpoolS = spoolS;
+            PivotFactor = pivotFactor;
+            FullFactor = fullFactor;
+            FlankFactor = flankFactor;
+            Keel = keel;
+            PitchFactor = pitchFactor;
+            RollFactor = rollFactor;
+            ComeAboutS = comeAboutS;
+        }
+
+        /// <summary>These numbers with the ones given changed.</summary>
+        public CapitalHandling With(double? halfFraction = null, double? spoolS = null, double? pivotFactor = null, double? fullFactor = null,
+            double? flankFactor = null, double? comeAboutS = null) =>
+            new CapitalHandling(FullAsternFraction, SlowFraction, halfFraction ?? HalfFraction, spoolS ?? SpoolS, pivotFactor ?? PivotFactor,
+                fullFactor ?? FullFactor, flankFactor ?? FlankFactor, Keel, PitchFactor, RollFactor, comeAboutS ?? ComeAboutS);
+
+        /// <summary>The first-pass numbers, for the owner's review (docs/FLIGHT_MODELS.md), with a cruiser's come-about.</summary>
+        public static readonly CapitalHandling Default = new CapitalHandling(
+            fullAsternFraction: 0.4, slowFraction: 0.25, halfFraction: 0.5, spoolS: 4, pivotFactor: 0.25,
+            fullFactor: 0.7, flankFactor: 0.6, keel: 0.75, pitchFactor: 1, rollFactor: 1, comeAboutS: 10);
+
+        static readonly Dictionary<ShipClass, CapitalHandling> ByClass = new Dictionary<ShipClass, CapitalHandling>
+        {
+            [ShipClass.Carrier] = Default.With(comeAboutS: 18, spoolS: 6),
+            [ShipClass.Battleship] = Default.With(comeAboutS: 14, spoolS: 5),
+            [ShipClass.Cruiser] = Default.With(comeAboutS: 10, spoolS: 4),
+            // The skirmisher (as in Battle.BroadsideFacing): fights slower for its pace, so its circle is the tightest of the
+            // line, and keeps more of its turn at Full and Flank to cut across a battleship's bow.
+            [ShipClass.Destroyer] = Default.With(comeAboutS: 6, spoolS: 2.5, halfFraction: 0.35, pivotFactor: 0.35, fullFactor: 0.85, flankFactor: 0.7),
+            // A destroyer's hull with the projector's mass amidships: a beat slower to come about, without its edge at speed.
+            [ShipClass.Interdictor] = Default.With(comeAboutS: 7, spoolS: 3),
+            // The battlecruiser, between the cruiser and the battleship.
+            [ShipClass.CommandCruiser] = Default.With(comeAboutS: 12, spoolS: 4.5),
+            // The frigate: the fastest warship hull, quick to flip end for end.
+            [ShipClass.Frigate] = Default.With(comeAboutS: 5, spoolS: 2.5, fullFactor: 0.8),
+        };
+
+        /// <summary>The handling of a capital of class <paramref name="c"/>; <see cref="Default"/> for one with none of its own.</summary>
+        public static CapitalHandling Of(ShipClass c) => ByClass.TryGetValue(c, out var h) ? h : Default;
+
+        /// <summary>The classes with handling of their own.</summary>
+        public static IEnumerable<ShipClass> Classes => ByClass.Keys;
+    }
+
+    /// <summary>
+    /// Capital ships (U.SPC-T499, docs/FLIGHT_MODELS.md): Black Flag's handling, in full 3D. With flight assist on,
+    /// (1) the engine telegraph sets the speed: it is rung a step at a time (<see cref="PilotInput.TelegraphStep"/>) and
+    /// holds, and the hull eases toward each step's speed (<see cref="CapitalHandling.SpoolS"/>); Flank is the boost, and
+    /// rings itself down to Full once the charge is spent; (2) steerage: the nose swings fastest at Half, less at Full and
+    /// Flank, and only pivots slowly at Stop; (3) the keel kills slip across the hull, so a turn traces a turning circle;
+    /// and (4) nothing holds the hull to a plane or levels it: pitch, yaw and roll are all free, slow and heavy, so a
+    /// capital climbs, dives and rolls to bring a broadside to bear above or below. The turn is fitted to the class's
+    /// come-about (<see cref="CapitalHandling.ComeAboutS"/>). With flight assist off the hull is the Newtonian one, unchanged.
+    /// </summary>
+    public sealed class CapitalFlightModel : IFlightModel
+    {
+        public CapitalHandling Handling { get; }
+
+        public CapitalFlightModel() : this(CapitalHandling.Default) { }
+
+        public CapitalFlightModel(CapitalHandling handling) => Handling = handling;
+
+        public string Name => "Capital";
+
+        /// <summary>The telegraph rung <paramref name="steps"/> steps ahead (negative: astern), held between Full Astern and Flank.</summary>
+        public static EngineTelegraph Ring(EngineTelegraph t, int steps) =>
+            (EngineTelegraph)Math.Max((int)EngineTelegraph.FullAstern, Math.Min((int)EngineTelegraph.Flank, (int)t + steps));
+
+        /// <summary>The speed a telegraph step asks for along the nose, km/s (negative astern); Flank's is Full's times the
+        /// boost, while the charge lasts.</summary>
+        public double SpeedOf(EngineTelegraph t, in PilotTuning tuning)
+        {
+            switch (t)
+            {
+                case EngineTelegraph.FullAstern: return -Handling.FullAsternFraction * tuning.MaxSpeed;
+                case EngineTelegraph.Stop: return 0;
+                case EngineTelegraph.Slow: return Handling.SlowFraction * tuning.MaxSpeed;
+                case EngineTelegraph.Half: return Handling.HalfFraction * tuning.MaxSpeed;
+                case EngineTelegraph.Full: return tuning.MaxSpeed;
+                default: return tuning.MaxSpeed * Math.Max(1, tuning.BoostSpeedMultiplier);
+            }
+        }
+
+        /// <summary>The step (Full Astern to Full) nearest a hull making <paramref name="forwardSpeedKmS"/> along its nose:
+        /// what the telegraph stands at when a hull already under way is first taken in hand.</summary>
+        public EngineTelegraph NearestStep(double forwardSpeedKmS, in PilotTuning tuning)
+        {
+            var best = EngineTelegraph.Stop;
+            double bestOff = double.MaxValue;
+            for (var t = EngineTelegraph.FullAstern; t <= EngineTelegraph.Full; t++)
+            {
+                double off = Math.Abs(SpeedOf(t, tuning) - forwardSpeedKmS);
+                if (off < bestOff)
+                {
+                    bestOff = off;
+                    best = t;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>The angular acceleration the nose swings with, rad/s²: the hull's own, or where its attitude thrusters
+        /// could not make the come-about at all, the least the helm needs to (with a quarter to spare).</summary>
+        public double TurnAlpha(in HullDynamics hull)
+        {
+            double t = Math.Max(1e-3, Handling.ComeAboutS);
+            return Math.Max(hull.PitchYawAngularAccel, 1.25 * 4 * Math.PI / (t * t));
+        }
+
+        /// <summary>The nose's top swing at Half, deg/s: fitted so a 180 deg turn from a steady heading to a steady heading
+        /// (spin up at <see cref="TurnAlpha"/>, swing, brake) takes the come-about. With swing rate r and spin-up α the turn
+        /// takes π/r + r/α, so r is the smaller root of r² - αTr + απ = 0.</summary>
+        public double PeakTurnRateDegS(in HullDynamics hull)
+        {
+            double a = TurnAlpha(hull), t = Math.Max(1e-3, Handling.ComeAboutS);
+            double disc = a * a * t * t - 4 * a * Math.PI;
+            double r = (a * t - Math.Sqrt(Math.Max(0, disc))) / 2;
+            return r * Astro.Rad2Deg;
+        }
+
+        /// <summary>Steerage at <paramref name="speedKmS"/> (either way), as a fraction of the peak turn rate: from the
+        /// pivot at Stop up to 1 at Half, down to <see cref="CapitalHandling.FullFactor"/> at Full and
+        /// <see cref="CapitalHandling.FlankFactor"/> at Flank speed and beyond.</summary>
+        public double SteerageFactor(double speedKmS, in PilotTuning tuning)
+        {
+            var h = Handling;
+            double v = Math.Abs(speedKmS);
+            double half = SpeedOf(EngineTelegraph.Half, tuning), full = SpeedOf(EngineTelegraph.Full, tuning), flank = SpeedOf(EngineTelegraph.Flank, tuning);
+            if (v <= half) return half > 0 ? h.PivotFactor + (1 - h.PivotFactor) * v / half : 1;
+            if (v <= full) return full > half ? 1 + (h.FullFactor - 1) * (v - half) / (full - half) : h.FullFactor;
+            if (v < flank) return h.FullFactor + (h.FlankFactor - h.FullFactor) * (v - full) / (flank - full);
+            return h.FlankFactor;
+        }
+
+        /// <summary>The fastest the nose may swing (yawing) at <paramref name="speedKmS"/>, deg/s.</summary>
+        public double TurnRateAt(double speedKmS, in HullDynamics hull, in PilotTuning tuning) =>
+            PeakTurnRateDegS(hull) * SteerageFactor(speedKmS, tuning);
+
+        /// <summary>How long a 180 deg turn takes holding <paramref name="speedKmS"/>, s: spin up, swing at the steerage's
+        /// rate, brake. At Half it is the come-about (<see cref="CapitalHandling.ComeAboutS"/>).</summary>
+        public double ComeAboutSecondsAt(double speedKmS, in HullDynamics hull, in PilotTuning tuning)
+        {
+            double r = TurnRateAt(speedKmS, hull, tuning) * Astro.Deg2Rad;
+            return r <= 0 ? double.PositiveInfinity : Math.PI / r + r / TurnAlpha(hull);
+        }
+
+        /// <summary>The most the keel pushes across the nose with assist on, km/s² (see <see cref="CapitalHandling.Keel"/>).</summary>
+        public double KeelAccel(in HullDynamics hull, in PilotTuning tuning) =>
+            Handling.Keel * tuning.MaxSpeed * PeakTurnRateDegS(hull) * Astro.Deg2Rad;
+
+        /// <summary>How far the helm's heading may run ahead of the nose, radians (as <see cref="PilotFlight.AimLeadRad"/>,
+        /// for this model's own swing): enough for the nose to reach its peak rate while a turn key is held.</summary>
+        public double AimLeadRad(in HullDynamics hull)
+        {
+            double rate = PeakTurnRateDegS(hull) * Astro.Deg2Rad;
+            double brake = rate * rate / (2 * TurnAlpha(hull));
+            return Math.Min(Math.PI, Math.Max(PilotFlight.MinAimLeadDeg * Astro.Deg2Rad, brake));
+        }
+
+        public void Step(ref PilotState s, ShipCombat combat, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, DVec3 gravityKmS2, double dt)
+        {
+            var telegraph = Ring(s.Telegraph ?? NearestStep(DVec3.Dot(s.Vel, s.Forward), tuning), input.TelegraphStep);
+            s.Telegraph = telegraph;
+            if (input.FlightAssistOff)
+            {
+                PilotFlight.Step(ref s, combat, hull, tuning, input, gravityKmS2, dt);
+                return;
+            }
+            if (dt <= 0) return;
+
+            // Steerage, and a pitch that may be slower than the yaw: a turn between them blends the two.
+            double rate = TurnRateAt(s.Vel.Length, hull, tuning);
+            if (input.DesiredForward.LengthSquared > 1e-12 && Handling.PitchFactor > 0 && Handling.PitchFactor != 1)
+            {
+                var axis = DVec3.Cross(s.Forward, input.DesiredForward.Normalized);
+                if (axis.LengthSquared > 1e-18)
+                {
+                    axis = axis.Normalized;
+                    double yaw = DVec3.Dot(axis, s.Up), pitch = DVec3.Dot(axis, s.Right) / Handling.PitchFactor;
+                    rate /= Math.Max(1, Math.Sqrt(yaw * yaw + pitch * pitch));
+                }
+            }
+            var turning = new HullDynamics(hull.MassKt, hull.MainAccel, hull.RetroAccel, hull.LateralAccel, hull.VerticalAccel,
+                TurnAlpha(hull), hull.RollAngularAccel);
+            var forwardBeforeTurn = s.Forward;
+            PilotFlight.Rotate(ref s, turning, rate, PeakTurnRateDegS(hull) * Handling.RollFactor, input, dt);
+
+            // The engines: Flank (or the boost held) is the boost, and Full lets the cruise drive spool.
+            bool flank = telegraph == EngineTelegraph.Flank || input.Boost;
+            var drive = input;
+            drive.Boost = flank;
+            drive.Throttle = flank || telegraph == EngineTelegraph.Full ? 1 : 0;
+            double driveMult = PilotFlight.DriveMultiplier(ref s, combat, tuning, drive, forwardBeforeTurn, dt);
+            if (telegraph == EngineTelegraph.Flank && combat.BoostFraction <= 0) s.Telegraph = EngineTelegraph.Full;
+            double target = (flank ? tuning.MaxSpeed : SpeedOf(telegraph, tuning)) * driveMult;
+
+            var f = s.Forward;
+            var r = s.Right;
+            var u = s.Up;
+            double along = DVec3.Dot(s.Vel, f);
+            double ease = (target - along) / Math.Max(dt, Handling.SpoolS) - DVec3.Dot(gravityKmS2, f);
+            double fwd = Math.Max(-hull.RetroAccel, Math.Min(hull.MainAccel * driveMult, ease));
+
+            // The keel: slip across the hull (and gravity across it) is killed as hard as it can push.
+            var across = (-(s.Vel - f * along)) / dt - (gravityKmS2 - f * DVec3.Dot(gravityKmS2, f));
+            double keel = KeelAccel(hull, tuning);
+            var thrust = f * fwd
+                + r * Limit(DVec3.Dot(across, r), Math.Max(hull.LateralAccel, keel))
+                + u * Limit(DVec3.Dot(across, u), Math.Max(hull.VerticalAccel, keel));
+            PilotFlight.Integrate(ref s, thrust, gravityKmS2, dt);
+        }
+
+        static double Limit(double x, double max) => Math.Max(-max, Math.Min(max, x));
+    }
+
+    /// <summary>
     /// Which family each <see cref="ShipClass"/> flies as, and which model flies each family (U.SPC-T17):
     /// the one extension point for per-class handling. Both tables are data: a new class is assigned a
     /// family, and a new way of flying is a model registered for its family, without touching the code
-    /// that flies the others. <see cref="Default"/> is the game's; tests build their own.
+    /// that flies the others. A class may also fly a model of its own within its family
+    /// (<see cref="Register(ShipClass, IFlightModel)"/>): the same rules on its own numbers, as each capital class
+    /// flies the capital model on its own <see cref="CapitalHandling"/> (U.SPC-T499). <see cref="Default"/> is the
+    /// game's; tests build their own.
     /// </summary>
     public sealed class FlightModelRegistry
     {
         readonly Dictionary<ShipClass, FlightFamily> families = new Dictionary<ShipClass, FlightFamily>();
         readonly Dictionary<FlightFamily, IFlightModel> models = new Dictionary<FlightFamily, IFlightModel>();
+        readonly Dictionary<ShipClass, IFlightModel> classModels = new Dictionary<ShipClass, IFlightModel>();
 
         /// <summary>The model a family with none registered flies: the shared Newtonian one.</summary>
         public IFlightModel Fallback { get; set; } = NewtonianFlightModel.Instance;
 
         /// <summary>The game's registry: every class in its family, and the light fighters, interceptors,
-        /// bombers and fired rounds on models of their own; the other families fly the Newtonian model until theirs land (docs/FLIGHT_MODELS.md).</summary>
+        /// bombers, fired rounds and capital ships on models of their own; the other families fly the Newtonian model until theirs land (docs/FLIGHT_MODELS.md).</summary>
         public static FlightModelRegistry Default { get; } = CreateDefault();
 
         public static FlightModelRegistry CreateDefault()
@@ -321,15 +595,28 @@ namespace Unity.SpaceGod.Core
             r.Register(FlightFamily.Interceptor, new LightFighterFlightModel(LightFighterHandling.Interceptor, "Interceptor"));
             r.Register(FlightFamily.Bomber, new BomberFlightModel());
             r.Register(FlightFamily.Ballistic, new BallisticFlightModel());
+            // Capital ships (U.SPC-T499): one model, each class on its own handling.
+            r.Register(FlightFamily.Capital, new CapitalFlightModel());
+            foreach (var c in CapitalHandling.Classes) r.Register(c, new CapitalFlightModel(CapitalHandling.Of(c)));
             return r;
         }
 
-        /// <summary>Puts <paramref name="c"/> in <paramref name="family"/>.</summary>
-        public void Assign(ShipClass c, FlightFamily family) => families[c] = family;
+        /// <summary>Puts <paramref name="c"/> in <paramref name="family"/>, flying that family's model (any model of its own
+        /// it flew in another family is dropped).</summary>
+        public void Assign(ShipClass c, FlightFamily family)
+        {
+            if (families.TryGetValue(c, out var was) && was != family) classModels.Remove(c);
+            families[c] = family;
+        }
 
-        /// <summary>Flies every hull of <paramref name="family"/> with <paramref name="model"/>.</summary>
+        /// <summary>Flies every hull of <paramref name="family"/> with <paramref name="model"/>, but for a class flying a
+        /// model of its own.</summary>
         public void Register(FlightFamily family, IFlightModel model) =>
             models[family] = model ?? throw new ArgumentNullException(nameof(model));
+
+        /// <summary>Flies every hull of class <paramref name="c"/> with <paramref name="model"/>, over its family's.</summary>
+        public void Register(ShipClass c, IFlightModel model) =>
+            classModels[c] = model ?? throw new ArgumentNullException(nameof(model));
 
         /// <summary>The family <paramref name="c"/> flies as; a class never assigned flies as a capital ship.</summary>
         public FlightFamily FamilyOf(ShipClass c) => families.TryGetValue(c, out var f) ? f : FlightFamily.Capital;
@@ -338,6 +625,6 @@ namespace Unity.SpaceGod.Core
         public IFlightModel ModelOf(FlightFamily family) => models.TryGetValue(family, out var m) ? m : Fallback;
 
         /// <summary>The model flying a hull of class <paramref name="c"/>.</summary>
-        public IFlightModel For(ShipClass c) => ModelOf(FamilyOf(c));
+        public IFlightModel For(ShipClass c) => classModels.TryGetValue(c, out var m) ? m : ModelOf(FamilyOf(c));
     }
 }

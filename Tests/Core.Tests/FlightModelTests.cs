@@ -58,7 +58,8 @@ namespace Unity.SpaceGod.Core.Tests
 
             Assert.That(reg.For(ShipClass.Fighter), Is.InstanceOf<LightFighterFlightModel>());
             Assert.That(reg.For(ShipClass.Gunship), Is.SameAs(NewtonianFlightModel.Instance), "heavy fighters keep the shared model until theirs lands");
-            Assert.That(reg.For(ShipClass.Carrier), Is.SameAs(NewtonianFlightModel.Instance));
+            Assert.That(reg.For(ShipClass.Freighter), Is.SameAs(NewtonianFlightModel.Instance));
+            Assert.That(reg.For(ShipClass.Carrier), Is.InstanceOf<CapitalFlightModel>(), "capitals fly their own model (U.SPC-T499)");
         }
 
         sealed class StubModel : IFlightModel
@@ -73,14 +74,23 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var reg = FlightModelRegistry.CreateDefault();
             var stub = new StubModel();
-            reg.Register(FlightFamily.Capital, stub);
-            Assert.That(reg.For(ShipClass.Battleship), Is.SameAs(stub));
+            reg.Register(FlightFamily.Hauler, stub);
+            Assert.That(reg.For(ShipClass.Freighter), Is.SameAs(stub));
             Assert.That(reg.For(ShipClass.Gunship), Is.SameAs(NewtonianFlightModel.Instance), "another family was touched");
             Assert.That(reg.For(ShipClass.Fighter), Is.InstanceOf<LightFighterFlightModel>(), "another family was touched");
+            Assert.That(reg.For(ShipClass.Battleship), Is.InstanceOf<CapitalFlightModel>(), "another family was touched");
 
-            reg.Assign(ShipClass.Courier, FlightFamily.Capital);
+            reg.Assign(ShipClass.Courier, FlightFamily.Hauler);
             Assert.That(reg.For(ShipClass.Courier), Is.SameAs(stub));
-            Assert.That(FlightModelRegistry.Default.For(ShipClass.Battleship), Is.Not.SameAs(stub), "a test's registry leaked into the game's");
+            Assert.That(FlightModelRegistry.Default.For(ShipClass.Freighter), Is.Not.SameAs(stub), "a test's registry leaked into the game's");
+
+            // A class may fly a model of its own within its family, and leaves it behind when it changes family.
+            var own = new StubModel();
+            reg.Register(ShipClass.Miner, own);
+            Assert.That(reg.For(ShipClass.Miner), Is.SameAs(own));
+            Assert.That(reg.For(ShipClass.Freighter), Is.SameAs(stub), "a class's own model is its alone");
+            reg.Assign(ShipClass.Miner, FlightFamily.Bomber);
+            Assert.That(reg.For(ShipClass.Miner), Is.InstanceOf<BomberFlightModel>());
         }
 
         [Test]
@@ -88,7 +98,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var reg = FlightModelRegistry.CreateDefault();
             var input = new PilotInput { DesiredForward = new DVec3(0.3, 1, 0.2).Normalized, Throttle = 1, StrafeRight = 0.5, Roll = 0.4, Boost = true };
-            foreach (var c in new[] { ShipClass.Gunship, ShipClass.Freighter, ShipClass.Cruiser })
+            foreach (var c in new[] { ShipClass.Gunship, ShipClass.Freighter, ShipClass.Miner })
             {
                 var a = new Rig(c, reg.For(c), new DVec3(0.01, 0.02, 0));
                 var b = new Rig(c, NewtonianFlightModel.Instance, new DVec3(0.01, 0.02, 0));

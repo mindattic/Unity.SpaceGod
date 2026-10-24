@@ -25,6 +25,9 @@ namespace Unity.SpaceGod.Input
         /// travel. See <see cref="Unity.SpaceGod.Core.PilotCruiseState"/>.</summary>
         public bool Cruise;
 
+        /// <summary>While piloting a capital ship (U.SPC-T499): W rings its engine telegraph one step ahead, S one step astern (0: neither).</summary>
+        public int ThrottleStep;
+
         /// <summary>While piloting: roll, -1 (Z, anticlockwise) .. 1 (X, clockwise), seen from behind.</summary>
         public float Roll;
 
@@ -167,6 +170,7 @@ namespace Unity.SpaceGod.Input
             Boost = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
             Slow = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
             Cruise = kb.jKey.isPressed;
+            ThrottleStep = kb.wKey.wasPressedThisFrame ? 1 : kb.sKey.wasPressedThisFrame ? -1 : 0;
             Roll = Axis(kb.xKey, kb.zKey);
 
             MousePosition = mouse.position.ReadValue();
@@ -289,6 +293,7 @@ namespace Unity.SpaceGod.Input
             ToggleFtlAutopilot = ClearFtlCourse = false;
             CycleFtlTarget = 0;
             CycleSeat = 0;
+            ThrottleStep = 0;
             ManGun = false;
             TunePhasers = false;
             ToggleBoarding = false;

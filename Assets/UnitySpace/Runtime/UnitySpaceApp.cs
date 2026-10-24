@@ -79,6 +79,10 @@ namespace Unity.SpaceGod
         public bool PilotFlightAssist => !pilotFlightAssistOff;
         bool pilotFlightAssistOff;
 
+        /// <summary>Where a piloted capital ship's engine telegraph stands (U.SPC-T499, <see cref="CapitalFlightModel"/>);
+        /// null for any other hull.</summary>
+        public EngineTelegraph? PilotTelegraph { get; private set; }
+
         int pilotFrameBody;
 
         /// <summary>The piloted hull's whole motion (position, velocity, attitude, spin, cruise ramp),
@@ -1290,7 +1294,10 @@ namespace Unity.SpaceGod
             var tuning = PilotTuning.Of(ship.Spec.Class);
             var hull = HullDynamics.Of(ship.Combat.Spec);
             var control = PilotControlMode = PilotTuning.ControlOf(ship.Spec.Class);
-            double leadRad = PilotFlight.AimLeadRad(hull, tuning);
+            var model = FlightModelRegistry.Default.For(ship.Spec.Class);
+            var capital = model as CapitalFlightModel;
+            // A capital's helm leads the nose by what its own swing needs (U.SPC-T499).
+            double leadRad = capital != null ? capital.AimLeadRad(hull) : PilotFlight.AimLeadRad(hull, tuning);
             var look = ClickPanelOpen ? Vector2.zero : Input.MouseDelta;
             look.y = SpaceCamera.LookY(look.y);
             double lookRight = look.x * PilotLookSensitivity * Mathf.Deg2Rad, lookUp = look.y * PilotLookSensitivity * Mathf.Deg2Rad;
@@ -1344,6 +1351,8 @@ namespace Unity.SpaceGod
                 Cruise = Input.Cruise,
                 InCombat = ship.Battle != null,
                 FlightAssistOff = pilotFlightAssistOff,
+                // W and S ring a capital's engine telegraph a step at a time (U.SPC-T499).
+                TelegraphStep = Input.ThrottleStep,
             };
             // An interdiction pulse has knocked the drives out (U.SPC-T42): no thrust, no turning, no boost or cruise
             // until they come back; the hull drifts on what way it had, and the stick waits for them.
@@ -1353,15 +1362,18 @@ namespace Unity.SpaceGod
                 input.Throttle = input.StrafeRight = input.StrafeUp = input.Roll = 0;
                 input.Boost = input.Cruise = false;
                 input.FlightAssistOff = true;
+                input.TelegraphStep = 0;
             }
             // Mirrors PilotFlight.Step's own "boosting" condition, read before Step drains the
-            // charge further this frame, purely to drive the camera's FOV kick below.
-            pilotBoosting = input.Boost && tuning.BoostDurationS > 0 && ship.Combat.BoostFraction > 0;
+            // charge further this frame, purely to drive the camera's FOV kick below (a capital rung to Flank boosts too).
+            bool flank = capital != null && !input.FlightAssistOff && pilot.Telegraph == EngineTelegraph.Flank;
+            pilotBoosting = (input.Boost || flank) && tuning.BoostDurationS > 0 && ship.Combat.BoostFraction > 0;
             var gravity = PilotGravity();
             var posBefore = pilot.Pos;
             var velBefore = pilot.Vel;
             // Each family of craft flies by its own rules (U.SPC-T17, docs/FLIGHT_MODELS.md).
-            FlightModelRegistry.Default.For(ship.Spec.Class).Step(ref pilot, ship.Combat, hull, tuning, input, gravity, dt);
+            model.Step(ref pilot, ship.Combat, hull, tuning, input, gravity, dt);
+            PilotTelegraph = capital != null ? pilot.Telegraph : null;
             SpaceCamera.PilotView = PilotViewRotation(control);
             // The drive runs on the ship's own tanks: every change of velocity its thrusters make (not gravity's
             // pull, which is free) is paid for in reaction mass by the rocket equation, and a dry hull only coasts.
@@ -1660,6 +1672,8 @@ namespace Unity.SpaceGod
             unit.Pos = pilotOffsetKm - ship.Battle.Anchor;
             unit.Vel = pilotVelKmS;
             unit.Forward = pilotForward;
+            // Rolled at the helm, its arcs roll with it (U.SPC-T499).
+            unit.Up = pilot.Up;
             // No firing while cruising -- the cruise drive is a travel tier, not a combat one.
             // Nor while a pulse has the hull's systems down.
             bool armed = !pilotCruise.Active && !ClickPanelOpen && unit.Stunned <= 0;

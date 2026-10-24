@@ -36,6 +36,10 @@ namespace Unity.SpaceGod.Core
         /// thrust, nothing counter-thrusts, and the hull drifts on its momentum -- for slides past a
         /// target and turn-and-burns. See <see cref="PilotFlight.Step"/>.</summary>
         public bool FlightAssistOff;
+
+        /// <summary>Rings the engine telegraph this frame (U.SPC-T499, <see cref="CapitalFlightModel"/>): +1 one step
+        /// ahead, -1 one step astern, 0 leaves it where it stands. Only the capital model reads it.</summary>
+        public int TelegraphStep;
     }
 
     /// <summary>
@@ -131,6 +135,10 @@ namespace Unity.SpaceGod.Core
         public DVec3 AngularVelocity;
 
         public PilotCruiseState Cruise;
+
+        /// <summary>Where a capital ship's engine telegraph stands (U.SPC-T499, <see cref="CapitalFlightModel"/>); null until
+        /// the capital model first flies the hull, which then rings the step nearest the way it has on.</summary>
+        public EngineTelegraph? Telegraph;
 
         /// <summary>The hull's starboard side: with ecliptic +Z up and the nose on +X, this is -Y.</summary>
         public DVec3 Right => DVec3.Cross(Forward, Up).Normalized;
@@ -371,7 +379,13 @@ namespace Unity.SpaceGod.Core
         /// started, keeps going until countered. With assist off and no stick input at all, nothing
         /// touches the spin: angular momentum is conserved.
         /// </summary>
-        public static void Rotate(ref PilotState s, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, double dt)
+        public static void Rotate(ref PilotState s, in HullDynamics hull, in PilotTuning tuning, in PilotInput input, double dt) =>
+            Rotate(ref s, hull, tuning.TurnRateDegS, tuning.RollRateDegS, input, dt);
+
+        /// <summary>As <see cref="Rotate(ref PilotState, in HullDynamics, in PilotTuning, in PilotInput, double)"/>, with the
+        /// nose's top swing and flight assist's roll rate given outright, deg/s, for a model that sets them by rules of its own
+        /// (the capital model's steerage, U.SPC-T499).</summary>
+        public static void Rotate(ref PilotState s, in HullDynamics hull, double turnRateDegS, double rollRateDegS, in PilotInput input, double dt)
         {
             var f = s.Forward;
             var w = s.AngularVelocity;
@@ -396,7 +410,7 @@ namespace Unity.SpaceGod.Core
                     if (axis.LengthSquared > 0)
                     {
                         // Fast enough to get there, slow enough to stop on it: v² = 2·α·θ.
-                        double rate = Math.Min(tuning.TurnRateDegS * Astro.Deg2Rad, Math.Sqrt(2 * alpha * angle));
+                        double rate = Math.Min(turnRateDegS * Astro.Deg2Rad, Math.Sqrt(2 * alpha * angle));
                         target = axis.Normalized * rate;
                     }
                 }
@@ -414,7 +428,7 @@ namespace Unity.SpaceGod.Core
             }
             else
             {
-                double targetRoll = rollIn * tuning.RollRateDegS * Astro.Deg2Rad;
+                double targetRoll = rollIn * rollRateDegS * Astro.Deg2Rad;
                 wRoll += Limit(targetRoll - wRoll, rollAlpha * dt);
             }
 

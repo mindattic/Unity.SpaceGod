@@ -205,9 +205,25 @@ namespace Unity.SpaceGod.Core
         /// Null for anything smaller (see <see cref="Broadsides.Of"/>).</summary>
         public BroadsideCommand Broadside;
 
-        /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north).</summary>
+        /// <summary>The roof of a hull flown at the helm, rolled however its captain has rolled it (U.SPC-T499: capitals fight
+        /// in full 3D, rolling a broadside onto a ship above or below); read only while <see cref="PlayerControlled"/>.
+        /// Zero, or any hull flown by the battle, is held level, roof toward ecliptic north.</summary>
+        public DVec3 Up;
+
+        /// <summary>Right and up axes of the hull (nose along <see cref="Forward"/>, up toward ecliptic north, or the helm's
+        /// own roof, <see cref="Up"/>): the frame its arcs, bearings and hardpoints are reckoned in.</summary>
         public void Basis(out DVec3 right, out DVec3 up)
         {
+            if (PlayerControlled && Up.LengthSquared > 1e-12)
+            {
+                var r = DVec3.Cross(Forward, Up);
+                if (r.LengthSquared > 1e-12)
+                {
+                    right = r.Normalized;
+                    up = DVec3.Cross(right, Forward);
+                    return;
+                }
+            }
             var upRef = Math.Abs(Forward.Z) > 0.98 ? DVec3.UnitX : DVec3.UnitZ;
             right = DVec3.Cross(Forward, upRef).Normalized;
             up = DVec3.Cross(right, Forward);

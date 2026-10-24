@@ -792,7 +792,10 @@ namespace Unity.SpaceGod.UI
             }
 
             bool assist = app.PilotFlightAssist;
-            string readout = (assist ? "FLIGHT ASSIST ON" : "FLIGHT ASSIST OFF") + "   " + SpeedText(speed) +
+            // A capital's engine telegraph (U.SPC-T499): the step its engines are rung to, held until rung again.
+            var telegraph = app.PilotTelegraph;
+            string readout = (assist ? "FLIGHT ASSIST ON" : "FLIGHT ASSIST OFF") +
+                             (telegraph.HasValue ? "   ENGINES " + TelegraphText(telegraph.Value) + " (W/S)" : "") + "   " + SpeedText(speed) +
                              (speed > 1e-6 ? "   track " + driftDeg.ToString("0", CultureInfo.InvariantCulture) + "° off the nose" : "") + "   (F)";
             var content = new GUIContent(readout);
             var size = small.CalcSize(content);
@@ -971,9 +974,18 @@ namespace Unity.SpaceGod.UI
                 + (EnergyWeapons.HasPhasers(me.Combat) ? "    INS PHASERS " + EnergyWeapons.Label(me.Combat.PhaserTuning) : "");
             DrawLabel(orders, new Vector2(x, y - 62), cmd.Braced ? LockColor : Dim, true);
             double turn = me.Ship != null ? PilotTuning.Of(me.Ship.Spec.Class).TurnRateDegS : me.Combat.Spec.TurnRateDegS;
+            double about = Broadsides.ComeAboutSeconds(turn);
+            // At the helm a capital turns by its own model's steerage at the speed it is making (U.SPC-T499).
+            if (me.Ship != null && FlightModelRegistry.Default.For(me.Ship.Spec.Class) is CapitalFlightModel capital)
+            {
+                var hull = HullDynamics.Of(me.Combat.Spec);
+                var tuning = PilotTuning.Of(me.Ship.Spec.Class);
+                turn = capital.TurnRateAt(me.Vel.Length, hull, tuning);
+                about = capital.ComeAboutSecondsAt(me.Vel.Length, hull, tuning);
+            }
             double radius = Broadsides.TurningRadiusKm(me.Vel.Length, turn);
             string line = "5-9 LINE " + Broadsides.Label(cmd.Formation) + "  ·  0 all at will"
-                + "    TURN CIRCLE " + (double.IsInfinity(radius) ? "-" : RangeText(radius)) + "  ·  about in " + Mathf.RoundToInt((float)Broadsides.ComeAboutSeconds(turn)) + "s";
+                + "    TURN CIRCLE " + (double.IsInfinity(radius) ? "-" : RangeText(radius)) + "  ·  about in " + (double.IsInfinity(about) ? "-" : Mathf.RoundToInt((float)about) + "s");
             DrawLabel(line, new Vector2(x, y - 44), Dim, true);
 
             // The enemy's broadside building on us: the Black Flag tell.
@@ -1269,10 +1281,19 @@ namespace Unity.SpaceGod.UI
             return p.x >= 0 && p.y >= 0 && p.x <= Screen.width && p.y <= Screen.height;
         }
 
+        /// <summary>An engine telegraph step as the helm calls it (U.SPC-T499).</summary>
+        static string TelegraphText(EngineTelegraph t) =>
+            t == EngineTelegraph.FullAstern ? "FULL ASTERN"
+            : t == EngineTelegraph.Stop ? "STOP"
+            : t == EngineTelegraph.Slow ? "SLOW AHEAD"
+            : t == EngineTelegraph.Half ? "HALF AHEAD"
+            : t == EngineTelegraph.Full ? "FULL AHEAD"
+            : "FLANK";
+
         /// <summary>The flight keys for the way the flown hull is steered (U.SPC-T269).</summary>
         static string ControlHint(PilotControl control) =>
             control == PilotControl.FreeAim ? "WASD throttle/strafe, mouse aims, the hull turns after it"
-            : control == PilotControl.Helm ? "W/S throttle, A/D Q/E turn the hull, mouse looks around, 1-9 0 captain's orders"
+            : control == PilotControl.Helm ? "W/S ring the engine telegraph, A/D Q/E turn the hull, Z/X roll, mouse looks around, 1-9 0 captain's orders"
             : "WASD throttle/strafe, mouse steers the nose";
 
         /// <summary>
