@@ -2808,6 +2808,7 @@ namespace Unity.SpaceGod.Core
                 var interior = u.Combat.Interior;
                 if (interior.Boarder == null) continue;
                 var boarder = interior.Boarder;
+                if (interior.Commanded) KeepOrdersCommanded(u, interior);
                 if (u.SurrenderOpenToBoarding) Capture(u, boarder);
                 else if (interior.Step(dt, Seconds, rng)) Capture(u, boarder);
             }
@@ -2822,6 +2823,21 @@ namespace Unity.SpaceGod.Core
                     u.Vel += (u.Pos - t.Pos).Normalized * 0.01;
                 }
             }
+        }
+
+        /// <summary>
+        /// A player's boarding orders (U.SPC-T468) stand only while a player is there to command that side: the hull's
+        /// own helm for its defenders, a hull of the boarding faction for the boarders. Once the player has gone (handed
+        /// the helm back, left the fight) that side is the resolver's again: the auto-resolve.
+        /// </summary>
+        void KeepOrdersCommanded(BattleUnit u, Interior interior)
+        {
+            if (interior.DefenderOrder != BoardingOrder.Auto && !(u.PlayerControlled && u.Present))
+                interior.AutoResolve(BoardingRole.Defenders);
+            if (interior.BoarderOrder == BoardingOrder.Auto) return;
+            foreach (var o in Units)
+                if (o.PlayerControlled && o.Present && !o.Captured && o.Faction == interior.Boarder) return;
+            interior.AutoResolve(BoardingRole.Boarders);
         }
 
         void Capture(BattleUnit u, Faction captor)

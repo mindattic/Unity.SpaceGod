@@ -1683,6 +1683,8 @@ namespace Unity.SpaceGod
             if (lockUnit != unit.PlayerLockTarget) unit.LockProgress = 0;
             unit.PlayerLockTarget = lockUnit;
             UpdateSurrenderPrompts(ship.Battle, unit);
+            // A fight aboard, this hull's own or one its marines are in (U.SPC-T468).
+            UpdateBoardingCommand(ship.Battle, unit);
             // A capital ship's captain's orders: batteries, shields, brace, damage control, the line (U.SPC-T425).
             UpdateHelmCommand(ship.Battle, unit);
             // The phaser arrays' tuning, on any hull that carries them (U.SPC-T488).

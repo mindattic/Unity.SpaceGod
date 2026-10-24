@@ -8,7 +8,7 @@ namespace Unity.SpaceGod
     /// the player is looking toward where it takes one: 1 that arc's battery to its next order (at will, hold fire,
     /// volley), 2 the shields angled to that arc (again to spread them evenly), 3 brace, 4 damage control's next focus,
     /// 5-8 the line into line ahead, line abreast, echelon or a screen, 9 engage at will, 0 every battery back to fire at will.
-    /// The number keys answer a hail first, while one is open.
+    /// The number keys answer a hail first, while one is open, then the boarding panel (B), while that is open.
     /// </summary>
     public sealed partial class UnitySpaceApp
     {
@@ -16,6 +16,8 @@ namespace Unity.SpaceGod
         {
             if (PilotControlMode != PilotControl.Helm || !Broadsides.Commands(unit)) return;
             if (unit.CargoDemandedBy != null || battle.AwaitingTermsFrom(unit.Side) != null) return;
+            // The boarding panel, while open, has the number keys (U.SPC-T468).
+            if (BoardingPanelOpen) return;
             int key = Input.NumberKey;
             if (key < 0) return;
             var look = PilotLookDirection;

@@ -107,7 +107,9 @@ namespace Unity.SpaceGod.Core
                 L("5  6  7", "line ahead, line abreast, echelon"),
                 L("8  9", "screen, engage at will"),
                 L("0", "all batteries at will"),
-                More("angle the hull to the enemy's line to make shots glance")),
+                More("angle the hull to the enemy's line to make shots glance"),
+                L("B", "boarding (a fight aboard your hull, or one your marines are in): the panel of compartments and orders"),
+                L("1  2  3  0", "with it open: pick a compartment, push for it / muster on it, hold, auto-resolve")),
 
             new HelpSection("TRADE",
                 L("M", "market: Buy / Sell and Refuel appear while piloting near the shown settlement's body"),

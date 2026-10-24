@@ -172,6 +172,7 @@ namespace Unity.SpaceGod.UI
             DrawSelection();
             DrawStatus();
             DrawSalvage();
+            DrawBoarding();
             DrawHail();
             DrawLaneRide();
             DrawFtl();
@@ -3423,6 +3424,39 @@ namespace Unity.SpaceGod.UI
                 GUI.Label(new Rect(r.x + 12, r.y + 30 + i * rowH, w - 24, rowH), rows[i], small);
             GUI.contentColor = Accent;
             GUI.Label(new Rect(r.x + 12, r.yMax - 26, w - 24, 20), app.SalvageChoices(), text);
+            GUI.contentColor = Color.white;
+        }
+
+        /// <summary>
+        /// The boarding panel (B at the controls, U.SPC-T468): the fight aboard the hull the player commands one side of, compartment
+        /// by compartment (who holds it, the fighting, breaches), the compartment picked, the side's standing order and
+        /// the number-key choices. The fight itself is the resolver's; the orders say only where people go.
+        /// </summary>
+        void DrawBoarding()
+        {
+            if (!app.BoardingPanelOpen) return;
+            var (hull, role) = app.BoardingFight.Value;
+            var inside = hull.Combat.Interior;
+            var (order, objective) = BoardingCommand.OrdersOf(inside, role);
+            const float rowH = 16;
+            float w = 560, h = 82 + inside.Compartments.Count * rowH;
+            var r = Panel(new Rect((Screen.width - w) * 0.5f, Screen.height - h - 48, w, h));
+            GUI.Label(new Rect(r.x + 12, r.y + 6, w - 24, 20), "BOARDING  ·  " + hull.Name.ToUpperInvariant() + "  ·  " +
+                (role == BoardingRole.Boarders ? "OUR MARINES ABOARD" : "REPELLING " + inside.Boarder.Name.ToUpperInvariant()), title);
+            for (int i = 0; i < inside.Compartments.Count; i++)
+            {
+                var c = inside.Compartments[i];
+                string mark = (i == app.BoardingPick ? "> " : "   ") + (order == BoardingOrder.Push && i == objective ? "[objective] " : "");
+                GUI.contentColor = c.Contested ? new Color(1f, 0.55f, 0.45f) : c.Taken ? new Color(1f, 0.85f, 0.4f) : Color.white;
+                GUI.Label(new Rect(r.x + 12, r.y + 30 + i * rowH, w - 24, rowH), mark + c.Name + ":  " + SpaceText(c), small);
+            }
+            GUI.contentColor = Color.white;
+            float y = r.y + 34 + inside.Compartments.Count * rowH;
+            GUI.Label(new Rect(r.x + 12, y, w - 24, rowH), "Orders:  " + BoardingCommand.Label(inside, role) +
+                (inside.Log.Count > 0 ? "   ·   " + inside.Log[inside.Log.Count - 1].Text : ""), small);
+            GUI.contentColor = Accent;
+            GUI.Label(new Rect(r.x + 12, r.yMax - 26, w - 24, 20),
+                "1 pick   2 " + (role == BoardingRole.Boarders ? "push for it" : "muster on it") + "   3 hold   0 auto-resolve   B close", text);
             GUI.contentColor = Color.white;
         }
 

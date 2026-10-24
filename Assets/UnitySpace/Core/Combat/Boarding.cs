@@ -102,6 +102,12 @@ namespace Unity.SpaceGod.Core
 
         double reactIn;
 
+        /// <summary>The player's standing orders to the boarders and to the defenders (U.SPC-T468, see
+        /// <see cref="BoardingCommand"/>): <see cref="BoardingOrder.Auto"/>, the resolver's own choice, unless a player
+        /// commanding that side has said otherwise. Each order names its objective compartment, or -1.</summary>
+        public BoardingOrder BoarderOrder, DefenderOrder;
+        public int BoarderObjective = -1, DefenderObjective = -1;
+
         /// <summary>Casualties per second per unit of effective strength.</summary>
         const double Lethality = 0.012;
 
@@ -316,6 +322,44 @@ namespace Unity.SpaceGod.Core
             Training = Math.Min(1, Training + days / Math.Max(1e-9, MarineHabitats.DrillDays.Value));
         }
 
+        // ---------------------------------------------------------------- orders (U.SPC-T468)
+
+        /// <summary>
+        /// Gives one side of the fight a standing order. <see cref="BoardingOrder.Push"/> needs an objective
+        /// compartment; without a valid one the order is refused (false). Orders change only where people move:
+        /// the fighting in each compartment is the resolver's as ever.
+        /// </summary>
+        public bool Command(BoardingRole role, BoardingOrder order, int objective = -1)
+        {
+            if (Boarder == null || Captured) return false;
+            if (order == BoardingOrder.Push && (objective < 0 || objective >= Compartments.Count)) return false;
+            if (order != BoardingOrder.Push) objective = -1;
+            if (role == BoardingRole.Boarders)
+            {
+                BoarderOrder = order;
+                BoarderObjective = objective;
+            }
+            else
+            {
+                DefenderOrder = order;
+                DefenderObjective = objective;
+            }
+            return true;
+        }
+
+        /// <summary>Hands one side back to the resolver: the auto-resolve.</summary>
+        public void AutoResolve(BoardingRole role) => Command(role, BoardingOrder.Auto);
+
+        /// <summary>Whether either side is under orders other than the resolver's.</summary>
+        public bool Commanded => BoarderOrder != BoardingOrder.Auto || DefenderOrder != BoardingOrder.Auto;
+
+        /// <summary>Every order back to the resolver's (a fight over, or nobody left to command it).</summary>
+        public void ClearOrders()
+        {
+            BoarderOrder = DefenderOrder = BoardingOrder.Auto;
+            BoarderObjective = DefenderObjective = -1;
+        }
+
         // ---------------------------------------------------------------- the fight
 
         /// <summary>Marines come aboard at a compartment (a pod, a Breacher round's drill, or an airlock after docking).</summary>
@@ -338,7 +382,11 @@ namespace Unity.SpaceGod.Core
                 at.SealIn = 4 + rng.NextDouble() * 10;
             }
             double react = 15 + rng.NextDouble() * 30;
-            if (fresh) reactIn = react;
+            if (fresh)
+            {
+                reactIn = react;
+                ClearOrders();
+            }
             Note(seconds, at.Index, $"{marines:0} {boarder.Name} marines board at {at.Name}" + (breach ? ", hull breached" : ""));
             return true;
         }
@@ -361,7 +409,7 @@ namespace Unity.SpaceGod.Core
 
             // Defending marines move toward the fighting once they have been roused.
             reactIn -= dt;
-            if (reactIn <= 0 && Boarders > 0.01) Reinforce(dt);
+            if (reactIn <= 0 && Boarders > 0.01 && DefenderOrder != BoardingOrder.Hold) Reinforce(dt);
 
             foreach (var c in Compartments)
             {
@@ -403,8 +451,15 @@ namespace Unity.SpaceGod.Core
                 BoardersLost += boarderLosses;
             }
 
-            // Boarders who hold a space push on toward the bridge and engineering.
-            Advance(dt);
+            // Boarders who hold a space push on toward the bridge and engineering (or the objective they were given).
+            if (BoarderOrder != BoardingOrder.Hold) Advance(dt);
+            // An objective the boarders were sent for is theirs: they press on as the resolver would.
+            if (BoarderOrder == BoardingOrder.Push && Compartments[BoarderObjective].Taken)
+            {
+                Note(seconds, BoarderObjective, $"{Compartments[BoarderObjective].Name} taken as ordered; the boarders press on");
+                BoarderOrder = BoardingOrder.Auto;
+                BoarderObjective = -1;
+            }
 
             var bridge = Of(CompartmentKind.Bridge);
             var engineering = Of(CompartmentKind.Engineering);
@@ -423,6 +478,7 @@ namespace Unity.SpaceGod.Core
                     if (c.Taken && c.Crew + c.Marines <= 0.01) c.Taken = false;
                 }
                 Boarder = null;
+                ClearOrders();
                 SealBreaches();
             }
             return false;
@@ -431,8 +487,11 @@ namespace Unity.SpaceGod.Core
         void Reinforce(double dt)
         {
             Compartment target = null;
-            foreach (var c in Compartments)
-                if (c.Boarders > 0.01 && (target == null || c.Kind == CompartmentKind.Bridge || c.Kind == CompartmentKind.Engineering)) target = c;
+            // Ordered to muster somewhere: to hold it before the boarders reach it, or to retake it.
+            if (DefenderOrder == BoardingOrder.Push) target = Compartments[DefenderObjective];
+            else
+                foreach (var c in Compartments)
+                    if (c.Boarders > 0.01 && (target == null || c.Kind == CompartmentKind.Bridge || c.Kind == CompartmentKind.Engineering)) target = c;
             if (target == null) return;
             foreach (var c in Compartments)
             {
@@ -457,7 +516,7 @@ namespace Unity.SpaceGod.Core
             foreach (var c in Compartments)
             {
                 if (!c.Taken || c.Boarders <= (front ? 1 : 0.01)) continue;
-                int next = NextToward(c.Index);
+                int next = NextToward(c.Index, BoarderOrder == BoardingOrder.Push ? BoarderObjective : -1);
                 if (next < 0) continue;
                 // Most of the party moves on; a rear guard holds what was taken.
                 double move = c.Boarders * Math.Min(1, 0.08 * dt);
@@ -471,8 +530,9 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>The neighbour on the shortest way from a compartment to the nearest objective not yet held.</summary>
-        int NextToward(int from)
+        /// <summary>The neighbour on the shortest way from a compartment to <paramref name="objective"/>, or (-1) to the
+        /// nearest of the bridge and engineering not yet held; -1 when there is no way, or the party is already there.</summary>
+        int NextToward(int from, int objective)
         {
             var prev = new int[Compartments.Count];
             for (int k = 0; k < prev.Length; k++) prev[k] = -2;
@@ -483,7 +543,7 @@ namespace Unity.SpaceGod.Core
             {
                 int here = queue.Dequeue();
                 var c = Compartments[here];
-                if (here != from && !c.Taken && (c.Kind == CompartmentKind.Bridge || c.Kind == CompartmentKind.Engineering))
+                if (here != from && (objective >= 0 ? here == objective : !c.Taken && (c.Kind == CompartmentKind.Bridge || c.Kind == CompartmentKind.Engineering)))
                 {
                     int step = here;
                     while (prev[step] != from) step = prev[step];
@@ -508,6 +568,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>After a fight, survivors regroup: boarders aboard a taken ship become its prize crew.</summary>
         public void Settle()
         {
+            ClearOrders();
             foreach (var c in Compartments)
             {
                 c.Vented = false;
@@ -529,6 +590,7 @@ namespace Unity.SpaceGod.Core
                 c.Taken = false;
             }
             Boarder = null;
+            ClearOrders();
             SealBreaches();
         }
 
@@ -553,6 +615,7 @@ namespace Unity.SpaceGod.Core
             }
             Boarder = null;
             Captured = false;
+            ClearOrders();
             // The ship's own marines are gone; the boarders now aboard never drilled in its habitats.
             Training = 0;
         }
@@ -574,6 +637,7 @@ namespace Unity.SpaceGod.Core
             }
             Boarder = null;
             Captured = false;
+            ClearOrders();
             DefenderQuality = lurkerQuality;
             Training = 0;
             if (survivors > 0) (Of(CompartmentKind.Engineering) ?? Compartments[Compartments.Count - 1]).Survivors = survivors;
@@ -595,6 +659,7 @@ namespace Unity.SpaceGod.Core
             }
             Boarder = null;
             Captured = false;
+            ClearOrders();
             return n;
         }
 
@@ -641,6 +706,7 @@ namespace Unity.SpaceGod.Core
             }
             Boarder = null;
             Captured = false;
+            ClearOrders();
         }
     }
 }
