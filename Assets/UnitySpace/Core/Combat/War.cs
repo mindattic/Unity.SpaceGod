@@ -3302,7 +3302,7 @@ namespace Unity.SpaceGod.Core
                 }
                 // A sound, rearmed hull of a flush owner takes an upgrade now and then (U.SPC-T65); the player fits their own.
                 if (s != world.PilotedShip && s.Combat.Damage <= 0.001 && missing == 0 && rng.NextDouble() < AiOutfitChance)
-                    Outfitting.AiRefit(Economy, s, yard);
+                    Outfitting.AiRefit(Economy, s, yard, world.Polities?.Command?.BuildPlanOf(s.Faction));
             }
         }
 
@@ -3429,6 +3429,9 @@ namespace Unity.SpaceGod.Core
                 return names[n % names.Length] + (n >= names.Length ? " " + (n / names.Length + 1) : "");
             }
             var leader = Fleet.AddShip(Name(), raidersRaised % 3 == 0 ? ShipClass.Cruiser : ShipClass.Destroyer, pirates, ShipRole.Patrol);
+            // Raiders fit phaser arrays as their taste and their plunder allow, from their haven's slips (U.SPC-T505).
+            var slips = LiveHavenOf(pirates);
+            FleetPatterns.Commission(leader, slips, null);
             leader.Route = new[] { body };
             // Every raider band takes its prizes with Breacher rounds fired from its leader's assault bay (U.SPC-T466), a
             // destroyer fitting a second habitat to supply the teams.
@@ -3437,6 +3440,7 @@ namespace Unity.SpaceGod.Core
             for (int i = 0; i < escorts; i++)
             {
                 var e = Fleet.AddShip(Name(), ShipClass.Destroyer, pirates, ShipRole.Escort);
+                FleetPatterns.Commission(e, slips, null);
                 Fleet.AddEscort(leader, e, Fleet.SlotFor(i));
             }
             // Every raider band keeps a lane interdictor to pull its marks out of the hyperlanes (U.SPC-T479): no pulse without one.
@@ -3620,15 +3624,19 @@ namespace Unity.SpaceGod.Core
                 if (led != null) group = led;
             }
             Ship ship;
+            // The new hull is built to its navy's patterns, by its doctrine, its wealth and what this yard can build (U.SPC-T505).
+            var plan = world.Polities?.Command?.BuildPlanOf(yard.Owner);
             if (group != null)
             {
                 ship = Fleet.AddShip(name, cls, yard.Owner, ShipRole.Escort);
+                FleetPatterns.Commission(ship, yard, plan);
                 Fleet.AddEscort(group, ship, Fleet.SlotFor(FreeSlot(group)));
                 if (command && !GroupHasCommandShip(group, ship)) TakeCommand(group, ship);
             }
             else
             {
                 ship = Fleet.AddShip(name, cls, yard.Owner, ShipRole.Patrol);
+                FleetPatterns.Commission(ship, yard, plan);
                 var own = new List<int>();
                 foreach (var s in Economy.Settlements)
                     if (s.Owner == yard.Owner && !own.Contains(s.Body)) own.Add(s.Body);

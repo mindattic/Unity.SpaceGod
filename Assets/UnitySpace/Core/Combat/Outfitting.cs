@@ -983,14 +983,17 @@ namespace Unity.SpaceGod.Core
         /// flush (<see cref="AiFlush"/> times its price, and two new hulls' worth besides) and the yard has the
         /// materials to spare (<see cref="AiStockMargin"/>): the facilities it wants first, as far as its free space goes
         /// (<see cref="NavyFacilities"/>: plate, a scanner and a brig; <see cref="RaiderFacilities"/>: plate, a brig and
-        /// racks for plunder), then hardened shields, heavier guns on a big hull, then torch drives. Returns what was
+        /// racks for plunder), then hardened shields, the role weapons its doctrine favours (U.SPC-T505,
+        /// <see cref="FleetPatterns.Wishes"/>: phaser arrays, plasma cannons), heavier guns on a big hull, a tachyon lance
+        /// for a capital of a navy that favours one, then torch drives, and the lance last of all for any other navy.
+        /// <paramref name="plan"/> is the owner's build plan, its doctrine (null: the balanced fleet's). Returns what was
         /// fitted (a <see cref="ModuleSpec"/> or a <see cref="FacilityKind"/>), or null.
         /// </summary>
-        public static IPartSpec AiRefit(Economy economy, Ship ship, Settlement yard)
+        public static IPartSpec AiRefit(Economy economy, Ship ship, Settlement yard, BuildPlan plan = null)
         {
             var l = LoadoutOf(ship);
             if (l == null) return null;
-            foreach (var (slot, module, facility) in AiWishes(ship, l))
+            foreach (var (slot, module, facility) in AiWishes(ship, l, plan))
             {
                 IPartSpec part = facility != null ? (IPartSpec)facility : l.PartAt(slot, module);
                 var q = facility != null ? QuoteFacility(ship, yard, facility) : Quote(ship, yard, slot, module);
@@ -1029,7 +1032,7 @@ namespace Unity.SpaceGod.Core
             return true;
         }
 
-        static IEnumerable<(int slot, ModuleKind module, FacilityKind facility)> AiWishes(Ship ship, Loadout l)
+        static IEnumerable<(int slot, ModuleKind module, FacilityKind facility)> AiWishes(Ship ship, Loadout l, BuildPlan plan)
         {
             // The facilities it wants that it has not got yet, in order, so far as each still fits.
             var have = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -1050,31 +1053,32 @@ namespace Unity.SpaceGod.Core
             // enough for it, never on a point-defence mount.
             for (int i = 0; i < l.Slots.Count; i++)
                 if (l.Fitted[i] == ModuleKind.ShieldGenerator && CanFit(l, i, ModuleKind.HardenedShield)) yield return (i, ModuleKind.HardenedShield, null);
+            // The role weapons its owner's doctrine favours, where its class's patterns put them (U.SPC-T505).
+            foreach (var (slot, module) in FleetPatterns.Wishes(ship, l, plan)) yield return (slot, module, null);
             if (big)
                 for (int i = 0; i < l.Slots.Count; i++)
                     if (l.Fitted[i] == ModuleKind.LaserTurret && CanFit(l, i, ModuleKind.HeavyLaser)) yield return (i, ModuleKind.HeavyLaser, null);
+            // A navy whose doctrine leans to the lance wants one before better drives (U.SPC-T505); any other last of all.
+            bool lanceFirst = FleetPatterns.FavoursLance(ship.Faction, plan);
+            if (lanceFirst && LanceWish(l) is int early) yield return (early, ModuleKind.TachyonLance, null);
             for (int i = 0; i < l.Slots.Count; i++)
                 if (l.Fitted[i] == ModuleKind.Engine && CanFit(l, i, ModuleKind.TorchEngine)) yield return (i, ModuleKind.TorchEngine, null);
-            // Last of all, once everything else is fitted: one tachyon lance for a capital hull, in place of a bow heavy
-            // laser, where the yard can build one and the navy is flush enough for it (U.SPC-T487).
-            if (TachyonLances.CanCarry(l.Class) && l.Count(ModuleKind.TachyonLance) == 0)
-            {
-                // A hull built around spinal mounts takes it in place of its coilgun (U.SPC-T490).
-                int spinal = -1;
-                for (int i = 0; i < l.Slots.Count && spinal < 0; i++)
-                    if (l.Slots[i].Type == MountType.Spinal && l.Fitted[i] == ModuleKind.Coilgun && CanFit(l, i, ModuleKind.TachyonLance)) spinal = i;
-                if (spinal >= 0)
-                {
-                    yield return (spinal, ModuleKind.TachyonLance, null);
-                    yield break;
-                }
-                for (int i = 0; i < l.Slots.Count; i++)
-                    if (l.Fitted[i] == ModuleKind.HeavyLaser && CanFit(l, i, ModuleKind.TachyonLance))
-                    {
-                        yield return (i, ModuleKind.TachyonLance, null);
-                        break;
-                    }
-            }
+            if (!lanceFirst && LanceWish(l) is int late) yield return (late, ModuleKind.TachyonLance, null);
+        }
+
+        /// <summary>
+        /// Where a capital hull without one would take a tachyon lance, or null: in place of its spinal coilgun on a hull
+        /// built around spinal mounts (U.SPC-T490), else of a bow heavy laser (U.SPC-T487). The yard must still be able to
+        /// build one, and the navy be flush enough for it.
+        /// </summary>
+        static int? LanceWish(Loadout l)
+        {
+            if (!TachyonLances.CanCarry(l.Class) || l.Count(ModuleKind.TachyonLance) > 0) return null;
+            for (int i = 0; i < l.Slots.Count; i++)
+                if (l.Slots[i].Type == MountType.Spinal && l.Fitted[i] == ModuleKind.Coilgun && CanFit(l, i, ModuleKind.TachyonLance)) return i;
+            for (int i = 0; i < l.Slots.Count; i++)
+                if (l.Fitted[i] == ModuleKind.HeavyLaser && CanFit(l, i, ModuleKind.TachyonLance)) return i;
+            return null;
         }
 
         // ---------------------------------------------------------------- prisoners
