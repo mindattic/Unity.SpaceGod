@@ -29,6 +29,40 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ABuyReportsWhyItStoppedShort()
+        {
+            double unit = CargoFootprint.Of(Good.Electronics).Tonnes;
+
+            // Stock for 4 of 10.
+            var (e1, f1, s1) = CreateMarket(stock: unit * 4.5, demand: 0);
+            var ship1 = CreateShip(f1);
+            e1.BuyIntoHold(ship1, s1, Good.Electronics, 10, out int b1, out var why1);
+            Assert.That(b1, Is.EqualTo(4));
+            Assert.That(why1, Is.EqualTo(Economy.TradeOutcome.NoStock));
+
+            // Credits for only a few.
+            var (e2, f2, s2) = CreateMarket();
+            f2.Treasury = s2.PurchaseCost(Good.Electronics, unit) * 2.5;
+            var ship2 = CreateShip(f2);
+            e2.BuyIntoHold(ship2, s2, Good.Electronics, 10, out int b2, out var why2);
+            Assert.That(b2, Is.GreaterThan(0).And.LessThan(10));
+            Assert.That(why2, Is.EqualTo(Economy.TradeOutcome.CantAfford));
+
+            // Hold fills.
+            var (e3, f3, s3) = CreateMarket();
+            var ship3 = CreateShip(f3, ShipClass.Courier);
+            e3.BuyIntoHold(ship3, s3, Good.Electronics, 100, out int b3, out var why3);
+            Assert.That(b3, Is.GreaterThan(0).And.LessThan(100));
+            Assert.That(why3, Is.EqualTo(Economy.TradeOutcome.NoRoom));
+
+            // All bought.
+            var (e4, f4, s4) = CreateMarket();
+            e4.BuyIntoHold(CreateShip(f4), s4, Good.Electronics, 2, out int b4, out var why4);
+            Assert.That(b4, Is.EqualTo(2));
+            Assert.That(why4, Is.EqualTo(Economy.TradeOutcome.Ok));
+        }
+
+        [Test]
         public void CargoLabelDropsTheRefusingPortWhenNobodyBuys()
         {
             var (economy, faction, settlement) = CreateMarket(demand: 0);

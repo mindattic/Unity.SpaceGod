@@ -2820,10 +2820,16 @@ namespace Unity.SpaceGod.UI
         void ClickBuy(Settlement market, Good good)
         {
             var ship = app.World.PilotedShip;
-            var outcome = app.Economy.BuyIntoHold(ship, market, good, tradeCrates, out int bought);
+            var outcome = app.Economy.BuyIntoHold(ship, market, good, tradeCrates, out int bought, out var stoppedBy);
             if (bought > 0)
                 app.ShowToast("Bought " + bought + " crate" + (bought == 1 ? "" : "s") + " of " + GoodInfo.Of(good).Name +
-                    (bought < tradeCrates ? "  (cargo hold is full)" : ""));
+                    (bought < tradeCrates ? stoppedBy switch
+                    {
+                        Economy.TradeOutcome.NoStock => "  (" + market.Name + " ran out of stock)",
+                        Economy.TradeOutcome.CantAfford => "  (out of credits)",
+                        Economy.TradeOutcome.NoRoom => "  (cargo hold is full)",
+                        _ => "",
+                    } : ""));
             else
                 app.ShowToast(outcome switch
                 {

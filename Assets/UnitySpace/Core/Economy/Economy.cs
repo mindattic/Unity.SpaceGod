@@ -1079,9 +1079,19 @@ namespace Unity.SpaceGod.Core
         /// how many actually went through in <paramref name="bought"/>.
         /// </summary>
         public TradeOutcome BuyIntoHold(Ship ship, Settlement s, Good good, int crates, out int bought)
+            => BuyIntoHold(ship, s, good, crates, out bought, out _);
+
+        /// <summary>
+        /// As <see cref="BuyIntoHold(Ship, Settlement, Good, int, out int)"/>, and also reports why the run of crates
+        /// ended in <paramref name="stoppedBy"/>: <see cref="TradeOutcome.Ok"/> when all asked for were bought, else the
+        /// limit hit (<see cref="TradeOutcome.NoStock"/>, <see cref="TradeOutcome.CantAfford"/>, <see cref="TradeOutcome.NoRoom"/>),
+        /// even when some crates went through first.
+        /// </summary>
+        public TradeOutcome BuyIntoHold(Ship ship, Settlement s, Good good, int crates, out int bought, out TradeOutcome stoppedBy)
         {
             bought = 0;
-            if (!CanTrade(ship, s)) return LawRefuses(ship, s) ? TradeOutcome.Refused : TradeOutcome.CannotDock;
+            stoppedBy = TradeOutcome.Ok;
+            if (!CanTrade(ship, s)) return stoppedBy = LawRefuses(ship, s) ? TradeOutcome.Refused : TradeOutcome.CannotDock;
             double unitTonnes = CargoFootprint.Of(good).Tonnes;
             double factor = PriceFactorOf(ship, s);
             var stopped = TradeOutcome.Ok;
@@ -1104,6 +1114,7 @@ namespace Unity.SpaceGod.Core
             }
             // Prices follow the stock that changed, however the run of crates ended.
             if (bought > 0) s.RefreshPrices();
+            stoppedBy = stopped;
             return bought > 0 ? TradeOutcome.Ok : stopped;
         }
 
