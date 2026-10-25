@@ -326,7 +326,8 @@ namespace Unity.SpaceGod.Core
         {
             if (forward.LengthSquared < 1e-18) return DVec3.UnitZ;
             var f = forward.Normalized;
-            var upRef = Math.Abs(f.Z) > 0.98 ? DVec3.UnitX : DVec3.UnitZ;
+            // Continuous up to the pole (U.SPC-T562); X only when the nose is exactly along it.
+            var upRef = DVec3.Cross(f, DVec3.UnitZ).LengthSquared > 1e-12 ? DVec3.UnitZ : DVec3.UnitX;
             var right = DVec3.Cross(f, upRef).Normalized;
             return DVec3.Cross(right, f);
         }

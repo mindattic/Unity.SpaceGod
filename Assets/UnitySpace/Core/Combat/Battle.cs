@@ -237,7 +237,9 @@ namespace Unity.SpaceGod.Core
                     return;
                 }
             }
-            var upRef = Math.Abs(Forward.Z) > 0.98 ? DVec3.UnitX : DVec3.UnitZ;
+            // Level: roof is north projected off the nose. Continuous right up to the pole (U.SPC-T562); only a nose
+            // exactly along the pole has no north to project, and falls back to X.
+            var upRef = DVec3.Cross(Forward, DVec3.UnitZ).LengthSquared > 1e-12 ? DVec3.UnitZ : DVec3.UnitX;
             right = DVec3.Cross(Forward, upRef).Normalized;
             up = DVec3.Cross(right, Forward);
         }

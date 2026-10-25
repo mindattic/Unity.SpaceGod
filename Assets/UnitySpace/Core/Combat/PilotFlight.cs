@@ -160,7 +160,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>The roof direction for a level hull flying along <paramref name="forward"/>.</summary>
         public static DVec3 LevelUp(DVec3 forward)
         {
-            var reference = Math.Abs(DVec3.Dot(forward, DVec3.UnitZ)) > 0.98 ? DVec3.UnitX : DVec3.UnitZ;
+            var reference = DVec3.Cross(forward, DVec3.UnitZ).LengthSquared > 1e-12 ? DVec3.UnitZ : DVec3.UnitX;
             return (reference - forward * DVec3.Dot(reference, forward)).Normalized;
         }
     }
