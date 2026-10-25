@@ -688,6 +688,8 @@ namespace Unity.SpaceGod.Core
             var o = Of(rec);
             if (o == null || o.Ship != u.Ship || !o.AtLarge) return ClaimByHunter(b, u, rec, jd);
             if (u.Captured) return Seize(b, u, o, jd) || ClaimByHunter(b, u, rec, jd);
+            // A captain ashore is not aboard the hull that died: nothing of theirs is lost with it (U.SPC-T579).
+            if (o.Ashore) return u.Dead;
             if (!u.Dead) return false;
             if (o.Pod != null) return true;
             if (ClaimByHunter(b, u, rec, jd)) return true;
@@ -737,6 +739,7 @@ namespace Unity.SpaceGod.Core
             if (o == null || ship == null || ship.Destroyed || Outfitting.BrigRoom(ship) < 1) return false;
             if (o.Fate != OutlawFate.AtLarge && o.Fate != OutlawFate.Held) return false;
             Release(o);
+            Unbind(o);
             o.Fate = OutlawFate.Held;
             o.FateJd = jd;
             o.FateBy = "the " + ship.Name;
@@ -759,6 +762,16 @@ namespace Unity.SpaceGod.Core
             return names.Count == 0 ? "anyone" : string.Join(" or ", names);
         }
 
+        /// <summary>The captain no longer commands their old flagship (taken, or left behind): the hull's books entries go, so its
+        /// later loss under another's colours is not read as the captain's death (U.SPC-T579).</summary>
+        void Unbind(Outlaw o)
+        {
+            var old = o.Ship;
+            if (old == null) return;
+            if (byShip.TryGetValue(old, out var was) && was == o) byShip.Remove(old);
+            if (Law.Captains.TryGetValue(old, out var r) && r == o.Record) Law.Captains.Remove(old);
+        }
+
         /// <summary>Lets go of a held captain's berth.</summary>
         static void Release(Outlaw o)
         {
@@ -770,6 +783,7 @@ namespace Unity.SpaceGod.Core
         void Free(Outlaw o, double jd, string how)
         {
             Release(o);
+            Unbind(o);
             o.Fate = OutlawFate.AtLarge;
             o.Pod = null;
             o.Ashore = true;

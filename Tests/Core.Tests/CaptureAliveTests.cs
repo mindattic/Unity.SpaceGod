@@ -143,6 +143,33 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ARansomedCaptainIsNotKilledWhenTheirOldPrizeHullIsDestroyed()
+        {
+            var w = CreateWorld();
+            int earth = Body(w, "Earth");
+            var o = WantedRaider(w, earth);
+            var prize = o.Ship;
+            var ship = Pilot(w);
+            Assert.That(Outfitting.Install(ship, ModuleKind.Brig), Is.True);
+            Assert.That(w.Outlaws.Hold(o, ship, StartJd, "taken alive"), Is.True);
+            Assert.That(w.Law.Captains.ContainsKey(prize), Is.False, "the prize no longer carries their record");
+            var haven = w.Economy.Settlements.First(s => s.Owner == w.Pirates && s.Kind == SettlementKind.Haven && !s.Fallen);
+            w.Pirates.Treasury = 1e8;
+            Assert.That(w.Outlaws.Ransom(o, haven, StartJd), Is.GreaterThan(0));
+            double bounty = o.Record.TotalBounty;
+
+            var b = new Battle(0, earth, "Battle of Earth", new DVec3(20000, 0, 0), StartJd, 1);
+            b.AddShip(ship, 0, new DVec3(4, 0, 0), -DVec3.UnitX);
+            var wreck = b.AddShip(prize, 1, new DVec3(-4, 0, 0), DVec3.UnitX);
+            wreck.Dead = true;
+            End(w, b);
+
+            Assert.That(o.Fate, Is.EqualTo(OutlawFate.AtLarge));
+            Assert.That(o.Record.Wanted, Is.True);
+            Assert.That(o.Record.TotalBounty, Is.EqualTo(bounty).Within(1));
+        }
+
+        [Test]
         public void ABreachedBrigLetsTheCaptainGo()
         {
             var w = CreateWorld();
