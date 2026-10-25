@@ -191,6 +191,25 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void EachHeadingIsWeighedInItsOwnFrameNotTheOneTheHullLiesOn()
+        {
+            // A cruiser with its starboard emitters shot away, the enemy dead ahead, may lay either side to it: the heading
+            // that shows the holes must lose even though the hull is still lying along neither (U.SPC-T561).
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 1);
+            var me = b.AddShip(Hull(ShipClass.Cruiser, Blue, 0), 0, DVec3.Zero, DVec3.UnitX);
+            b.AddShip(Hull(ShipClass.Cruiser, Red, 1), 1, new DVec3(10, 0, 0), -DVec3.UnitX);
+            foreach (var s in me.Combat.Subsystems)
+                if (s.Kind == SubsystemKind.ShieldGenerator && s.Def.X > 0.01)
+                {
+                    s.Hp = 0;
+                    s.Shield = 0;
+                }
+            var bearings = new System.Collections.Generic.Dictionary<int, double> { [90] = 100, [270] = 100 };
+            WeakPatches.Orient(b, me, DVec3.UnitX, bearings, DVec3.UnitX, null, 1, out _, out _, me.Forward);
+            Assert.That(me.Broadside.RollBearing, Is.EqualTo(270), "it does not turn its holed side to the enemy");
+        }
+
+        [Test]
         public void InBattleAnAiCaptainRollsItsHolesOutOfTheFireAtItsOwnTurnRate()
         {
             var (b, me, _, _) = Scene();

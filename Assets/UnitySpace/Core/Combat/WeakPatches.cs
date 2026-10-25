@@ -413,6 +413,15 @@ namespace Unity.SpaceGod.Core
             forward = a;
         }
 
+        static double Cost(ShipCombat c, Sample[] samples, double[] weak, IReadOnlyList<IncomingFire> fire, double protect, double slant, DVec3 f, DVec3 up)
+        {
+            var right = DVec3.Cross(f, up).Normalized;
+            double cost = 0;
+            if (protect > 0) cost += protect * Exposure(samples, weak, fire, right, up, f);
+            if (slant > 0) cost += slant * ArmourAngling.Harm(c.Spec, fire, right, up, f);
+            return cost;
+        }
+
         static void Choose(Battle b, BattleUnit u, BroadsideCommand cmd, DVec3 face, IReadOnlyDictionary<int, double> bearings, DVec3? toTarget, DVec3? rest, DVec3? actual)
         {
             var c = u.Combat;
@@ -436,25 +445,43 @@ namespace Unity.SpaceGod.Core
             foreach (int bearing in keys)
             {
                 double battery = bearings == null ? 1 : most > 0 ? bearings[bearing] / most : 1;
+                // The heading is judged in its own frame (U.SPC-T561), by the best roll it allows there; the roll itself is
+                // then ordered for the heading the hull lies on, which a hull still turning has not yet left (U.SPC-T535).
+                double ownBest = double.NegativeInfinity, rollBest = double.NegativeInfinity;
+                double rollDeg = 0;
                 for (int k = 0; k < RollSteps; k++)
                 {
                     double deg = k * step;
                     Frame(face, toTarget, bearing, deg, out var f, out var up);
-                    Transport(actual, ref f, ref up);
-                    var right = DVec3.Cross(f, up).Normalized;
-                    double score = battery;
-                    if (fire.Count > 0 && protect > 0) score -= protect * Exposure(samples, weak, fire, right, up, f);
-                    if (fire.Count > 0 && slant > 0) score -= slant * ArmourAngling.Harm(c.Spec, fire, right, up, f);
+                    double own = battery;
+                    if (fire.Count > 0) own -= Cost(c, samples, weak, fire, protect, slant, f, up);
+                    double at0 = 0;
                     var at = rest ?? LevelRoof(f);
                     var restUp = at - f * DVec3.Dot(at, f);
-                    if (restUp.LengthSquared > 1e-18) score -= RestBias * (1 - DVec3.Dot(up, restUp.Normalized)) * 0.5;
-                    if (cmd.RollChosen && bearing == cmd.RollBearing && Math.Abs(Astro.WrapDegrees360(deg - cmd.RollDeg + 180) - 180) < step * 0.5) score += Hysteresis;
-                    if (score > best + 1e-12)
+                    if (restUp.LengthSquared > 1e-18) at0 = RestBias * (1 - DVec3.Dot(up, restUp.Normalized)) * 0.5;
+                    double bonus = cmd.RollChosen && bearing == cmd.RollBearing && Math.Abs(Astro.WrapDegrees360(deg - cmd.RollDeg + 180) - 180) < step * 0.5 ? Hysteresis : 0;
+                    double carried = own;
+                    if (actual != null && fire.Count > 0)
                     {
-                        best = score;
-                        bestBearing = bearing;
-                        bestDeg = deg;
+                        var f2 = f;
+                        var up2 = up;
+                        Transport(actual, ref f2, ref up2);
+                        carried = battery - Cost(c, samples, weak, fire, protect, slant, f2, up2);
                     }
+                    own += bonus - at0;
+                    carried += bonus - at0;
+                    if (own > ownBest) ownBest = own;
+                    if (carried > rollBest + 1e-12)
+                    {
+                        rollBest = carried;
+                        rollDeg = deg;
+                    }
+                }
+                if (ownBest > best + 1e-12)
+                {
+                    best = ownBest;
+                    bestBearing = bearing;
+                    bestDeg = rollDeg;
                 }
             }
             cmd.RollBearing = bestBearing;
