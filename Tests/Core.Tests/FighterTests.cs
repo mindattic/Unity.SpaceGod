@@ -57,6 +57,34 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void AttackRunsPressHomeBeforeBreakingOff()
+        {
+            // U.SPC-T558: a run used to abort its first step (moving outward at its entry counted as 'past').
+            var b = CarrierAction(5);
+            var leads = b.Units.Where(u => u.Kind == UnitKind.Fighter && u.Fighter.Lead == null && u.Fighter.Role != FighterRole.Recon).ToList();
+            var prev = leads.ToDictionary(l => l, l => l.Fighter.Phase);
+            var closest = leads.ToDictionary(l => l, l => double.MaxValue);
+            int runsEnded = 0;
+            for (int i = 0; i < 900 && !b.Over; i++)
+            {
+                b.Advance(1);
+                foreach (var l in leads.Where(l => l.Present))
+                {
+                    var f = l.Fighter;
+                    if (f.Phase == FighterPhase.AttackRun && l.Target != null) closest[l] = Math.Min(closest[l], (l.Target.Pos - l.Pos).Length - l.Target.Radius);
+                    if (prev[l] == FighterPhase.AttackRun && f.Phase == FighterPhase.BreakOff && l.Target != null && l.Target.Kind != UnitKind.Fighter)
+                    {
+                        runsEnded++;
+                        Assert.That(closest[l], Is.LessThan(1.5), "a run broke off without closing on its target");
+                    }
+                    if (f.Phase != FighterPhase.AttackRun) closest[l] = double.MaxValue;
+                    prev[l] = f.Phase;
+                }
+            }
+            Assert.That(runsEnded, Is.GreaterThan(0));
+        }
+
+        [Test]
         public void FightersRecalledToACarrierAdriftFarOutStillLand()
         {
             var b = CarrierAction(5);

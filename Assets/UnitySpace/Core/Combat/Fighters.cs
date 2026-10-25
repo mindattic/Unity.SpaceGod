@@ -49,6 +49,8 @@ namespace Unity.SpaceGod.Core
         public WingOrder Order;
         public FighterPhase Phase;
         public double PhaseTime;
+        /// <summary>Closest the run has come to its target; a run only counts as past once it has actually closed.</summary>
+        public double RunClosest = double.MaxValue;
 
         /// <summary>The pilot: how good a shot, how quick to react (seconds of lag), how tidy in formation (0..1).</summary>
         public double Skill, Reaction, Discipline;
@@ -294,7 +296,9 @@ namespace Unity.SpaceGod.Core
                     var side = DVec3.Cross(to, DVec3.UnitZ);
                     if (side.LengthSquared < 1e-9) side = DVec3.UnitX;
                     goal = t.Pos + side.Normalized * (t.Radius + 0.35) * Math.Sign(Math.Sin(f.Seed)) + t.Vel * (dist / speed);
-                    bool past = DVec3.Dot(u.Vel, to) < 0;
+                    if (dist < f.RunClosest) f.RunClosest = dist;
+                    // Flying away only means 'past' once the run has closed; at its entry 5-7 km out it is also moving outward.
+                    bool past = f.RunClosest < t.Radius + 0.8 && DVec3.Dot(u.Vel, to) < 0;
                     if ((past && dist > t.Radius + 0.8) || f.PhaseTime > 45)
                     {
                         var away = (u.Pos - t.Pos).Normalized;
@@ -446,6 +450,7 @@ namespace Unity.SpaceGod.Core
         {
             f.Phase = p;
             f.PhaseTime = 0;
+            f.RunClosest = double.MaxValue;
         }
 
         static void Torpedo(Battle b, BattleUnit u)
