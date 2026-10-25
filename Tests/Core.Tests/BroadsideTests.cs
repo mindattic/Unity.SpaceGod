@@ -320,6 +320,21 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void StationsStayLevelWhenTheFlagshipRollsForAWeakPatch()
+        {
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 9);
+            var flag = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, DVec3.Zero, DVec3.UnitX);
+            var u = b.AddShip(Hull(ShipClass.Cruiser, Blue, 1), 0, DVec3.Zero, DVec3.UnitX);
+            u.Leader = flag;
+            u.Slot = new DVec3(4, 0, 0);
+            var level = b.StationOf(u) - flag.Pos;
+            flag.Roof = new DVec3(0, 0, -1);
+            var rolled = b.StationOf(u) - flag.Pos;
+            Assert.That((rolled - level).Length, Is.LessThan(1.0), "a roll does not move a line-abreast station");
+            Assert.That(Math.Abs(rolled.Z), Is.LessThan(1.0), "still beside the flagship, not above or below");
+        }
+
+        [Test]
         public void OnlyTheFlagshipsOwnWarshipsJoinItsLine()
         {
             var b = new Battle(0, 3, "Test", DVec3.Zero, StartJd, 9);

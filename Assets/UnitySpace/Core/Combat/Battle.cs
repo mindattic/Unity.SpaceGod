@@ -1403,7 +1403,9 @@ namespace Unity.SpaceGod.Core
         public DVec3 StationOf(BattleUnit u)
         {
             var l = u.Leader;
-            l.Basis(out var right, out var up);
+            // Level frame (U.SPC-T565): a weak-patch roll of the leader must not swing line-abreast slots round it.
+            var up = WeakPatches.LevelRoof(l.Forward);
+            var right = DVec3.Cross(l.Forward, up).Normalized;
             double t = Seconds * 0.05 + u.Wander;
             var wander = new DVec3(Math.Sin(t * 1.3), Math.Sin(t * 0.9 + 1.7), Math.Sin(t * 0.7 + 4.1)) * 0.35;
             var s = u.Slot + wander;
