@@ -2039,7 +2039,8 @@ namespace Unity.SpaceGod.UI
                 else if (c.Phase == ShipPhase.Landed)
                 {
                     lines.Add(("Status", "Landed at " + c.Ring.City + ", " + app.Catalog[c.Ring.Body].Name));
-                    lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + ", by the " + c.Ring.Name));
+                    if (c.WaitingForPropellant && c.DestinationBody == c.Ring.Body) lines[lines.Count - 1] = ("Status", "Landed at " + c.Ring.City + ", waiting for propellant");
+                    else lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + ", by the " + c.Ring.Name));
                 }
                 else if (c.Phase == ShipPhase.Transit)
                 {
@@ -2058,7 +2059,7 @@ namespace Unity.SpaceGod.UI
                 {
                     var body = app.Catalog[c.Orbit.Body];
                     lines.Add(("Status", ship.Battle != null ? "Fighting in the " + ship.Battle.Name
-                        : c.WaitingForPropellant ? "Waiting at " + body.Name + " for propellant"
+                        : c.WaitingForPropellant && c.DestinationBody == c.Orbit.Body ? "Waiting at " + body.Name + " for propellant"
                         : c.OutOfPropellant ? "Drifting off " + body.Name + " with dry tanks; a tanker is " + Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + " out"
                         : (c.Orbit.Fixed ? "Holding position at " : "Holding orbit at ") + body.Name));
                     // From where it actually is: a held position (a released or spawned hull) is a fixed point
@@ -2066,7 +2067,7 @@ namespace Unity.SpaceGod.UI
                     lines.Add(("Altitude", Km(c.Orbit.OffsetAt(app.Clock.Jd).Length - body.RadiusKm)));
                     lines.Add(("Orbital speed", c.Orbit.SpeedKmS.ToString("0.00", CultureInfo.InvariantCulture) + " km/s"));
                     // A freshly spawned or not-yet-scheduled ship has no destination yet (-1).
-                    if (c.DestinationBody >= 0 && !c.WaitingForPropellant)
+                    if (c.DestinationBody >= 0 && !(c.WaitingForPropellant && c.DestinationBody == c.Orbit.Body))
                         lines.Add(("Next", app.Catalog[c.DestinationBody].Name + " in " + Duration(Fleet.RemainingDays(c, app.Clock.Jd))));
                 }
                 var giving = app.Fleet.EvadingFrom(ship);
