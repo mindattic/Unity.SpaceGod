@@ -1142,11 +1142,13 @@ namespace Unity.SpaceGod.Core
                 // Stolen goods sold at a lawless station go to its black market, not its open board.
                 bool black = item.Stolen && !haven;
                 double value = (black ? BlackMarket.SaleValue(s, good, tonnes) : s.SaleValue(good, tonnes)) / factor;
-                double tax = value * PortTax;
+                // A black sale is paid out of the station owner's treasury (as BlackMarket.Sell does) and is untaxed.
+                double tax = black ? 0 : value * PortTax;
                 hold.Remove(item);
                 if (black) s.BlackStock[(int)good] += tonnes;
                 else s.Stock[(int)good] += tonnes;
-                s.Owner.Treasury += tax;
+                if (black) s.Owner.Treasury -= value;
+                else s.Owner.Treasury += tax;
                 s.TradeVolumeCredits += value;
                 ship.Faction.Treasury += value - tax;
                 sold++;

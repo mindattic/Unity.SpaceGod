@@ -496,6 +496,22 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(Law.ContrabandIn(lawful, w.Belt).Count, Is.EqualTo(1));
         }
 
+        [Test]
+        public void StolenGoodsSoldOnABlackMarketAreUntaxedAndPaidFromTheOwnersTreasury()
+        {
+            var w = CreateWorld();
+            var ship = Pilot(w, ShipClass.Freighter);
+            var port = w.Economy.Settlements.First(s => s.Name == "Earth Orbital");
+            port.Lawless = true;
+            ship.PersonalHold.AddFirstFit(Good.Food).Stolen = true;
+            double owner = port.Owner.Treasury, mine = ship.Faction.Treasury;
+            Assert.That(w.Economy.SellFromHold(ship, port, Good.Food, 1, out int sold), Is.EqualTo(Economy.TradeOutcome.Ok));
+            Assert.That(sold, Is.EqualTo(1));
+            double paid = ship.Faction.Treasury - mine;
+            Assert.That(paid, Is.GreaterThan(0));
+            Assert.That(port.Owner.Treasury, Is.EqualTo(owner - paid).Within(1e-6), "the owner pays the full value; no port tax");
+        }
+
         // ---------------------------------------------------------------- patrols
 
         [Test]
