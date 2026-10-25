@@ -1036,7 +1036,9 @@ namespace Unity.SpaceGod.Core
             if (stops[idx] != here)
             {
                 // Not where it was bound: if it is at another stop, go on from there; if off the route, make for the stop it was bound for.
-                int at = Array.IndexOf(stops, here);
+                // A repeated stop: take the occurrence of here just before the stop it was bound for, not the first, so [A,B,A,C] bound for C does not jump back to B.
+                int at = -1;
+                for (int k = 1; k <= n && at < 0; k++) { int c = ((idx - k) % n + n) % n; if (stops[c] == here) at = c; }
                 if (at < 0)
                 {
                     if (!ship.HasCargo) ship.Cargo = "Empty, joining its route at " + world.Catalog[stops[idx]].Name;

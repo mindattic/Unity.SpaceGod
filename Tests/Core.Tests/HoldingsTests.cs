@@ -137,6 +137,26 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ARouteWithARepeatedStopKeepsItsPlaceWhenReplannedAtTheRepeat()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            int earth = Body(w, "Earth"), mars = Body(w, "Mars"), ceres = Body(w, "Ceres");
+            var owned = h.Buy(Port(w, "Earth Orbital"), ShipClass.Freighter, "Route Runner", StartJd);
+            h.Hire(owned, StartJd, 1);
+            Assert.That(h.Order(owned, StandingOrder.TradeRoute(earth, mars, earth, ceres)), Is.True);
+            var ship = owned.Ship;
+            Assert.That(h.ChooseNext(ship, earth, StartJd), Is.EqualTo(mars));
+            ship.HasCargo = false;
+            Assert.That(h.ChooseNext(ship, mars, StartJd), Is.EqualTo(earth));
+            ship.HasCargo = false;
+            Assert.That(h.ChooseNext(ship, earth, StartJd), Is.EqualTo(ceres));
+            // Re-planned at Earth while bound for Ceres: it goes on to Ceres, not back to Mars.
+            ship.HasCargo = false;
+            Assert.That(h.ChooseNext(ship, earth, StartJd), Is.EqualTo(ceres));
+        }
+
+        [Test]
         public void ATradeRouteCaptainWorksTheStopsInOrderBuyingAtEachForTheNext()
         {
             var w = CreateWorld();
