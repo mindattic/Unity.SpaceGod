@@ -972,6 +972,20 @@ namespace Unity.SpaceGod.Core
             int next = (idx + 1) % n;
             orders.StopIndex = next;
             int to = stops[next];
+            if (ship.HasCargo)
+            {
+                // Cargo nobody here bought (an enlisted hold, free-trading leftovers, a market that lost its demand): sell it at the best reachable market, else dump it, then the route resumes.
+                int sell = Economy.PlanTrade(ship, here, jd);
+                if (sell >= 0) return sell;
+                Economy.Release(ship);
+                BookBalance -= ship.CargoCost;
+                ship.HasCargo = false;
+                ship.CargoTonnes = 0;
+                ship.CargoCost = 0;
+                ship.CargoBonus = 0;
+                ship.CargoDestination = null;
+                ship.Cargo = null;
+            }
             if (!ship.HasCargo) Economy.LoadFor(ship, here, to, jd);
             if (!ship.HasCargo) ship.Cargo = "Empty, on its route to " + world.Catalog[to].Name;
             return to;
