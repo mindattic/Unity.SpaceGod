@@ -545,6 +545,20 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(h.House.Treasury, Is.EqualTo(treasury));
         }
 
+        [Test]
+        public void NoWarehouseOrShareIsSoldAtARuin()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            var port = Port(w, "Earth Orbital");
+            port.Fallen = true;
+            double treasury = h.House.Treasury, owner = port.Owner.Treasury;
+            Assert.That(h.BuyWarehouse(port, StartJd), Is.Null);
+            Assert.That(h.BuyShare(port, 0.1, StartJd), Is.Null);
+            Assert.That(h.House.Treasury, Is.EqualTo(treasury));
+            Assert.That(port.Owner.Treasury, Is.EqualTo(owner));
+        }
+
         // ---------------------------------------------------------------- the live system
 
         [Test]

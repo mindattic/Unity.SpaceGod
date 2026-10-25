@@ -590,7 +590,7 @@ namespace Unity.SpaceGod.Core
         /// <summary>Buys a warehouse at <paramref name="port"/> (one per port), paid to its owner.</summary>
         public Property BuyWarehouse(Settlement port, double jd)
         {
-            if (port == null || port.Owner == null || port.Owner.IsPirate || !world.Diplomacy.CanDockAt(House, port)) return null;
+            if (port == null || port.Fallen || port.Owner == null || port.Owner.IsPirate || !world.Diplomacy.CanDockAt(House, port)) return null;
             foreach (var p in OfKind(PropertyKind.Warehouse))
                 if (p.Settlement == port) return null;
             if (House.Treasury < WarehousePrice) return null;
@@ -611,11 +611,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// Buys <paramref name="share"/> (up to half) of a station or colony from its owner: from then on the house is
         /// paid that share of the port taxes the settlement's trade pays its owner, daily. Null if it will not sell
-        /// (a pirate's, a haven, more than half in other hands) or the account cannot pay.
+        /// (a pirate's, a ruin, a haven, more than half in other hands) or the account cannot pay.
         /// </summary>
         public Property BuyShare(Settlement s, double share, double jd)
         {
-            if (s == null || s.Owner == null || s.Owner.IsPirate || s.Kind == SettlementKind.Haven || share <= 0) return null;
+            if (s == null || s.Fallen || s.Owner == null || s.Owner.IsPirate || s.Kind == SettlementKind.Haven || share <= 0) return null;
             Property held = null;
             foreach (var p in OfKind(PropertyKind.StationShare))
                 if (p.Settlement == s) held = p;
