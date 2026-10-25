@@ -696,6 +696,7 @@ namespace Unity.SpaceGod.Core
             Log(jd, $"{ship.Name} of {ship.Faction.Name} is destroyed in open space {how}", where);
             if (c.Ships.Count == 0)
             {
+                ship.Voyage?.LostWithAllHands();
                 cruises.Remove(c);
                 return;
             }

@@ -1901,6 +1901,8 @@ namespace Unity.SpaceGod.Core
                 }
             if (heir == null)
             {
+                // A hunt group wiped out abroad: nobody comes home to inherit the row (U.SPC-T588).
+                if (dead.Destroyed) dead.Voyage?.LostWithAllHands();
                 Orders.Remove(dead);
                 PriorOrders.Remove(dead);
                 return;

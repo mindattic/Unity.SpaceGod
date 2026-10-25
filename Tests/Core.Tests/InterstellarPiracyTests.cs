@@ -515,5 +515,40 @@ namespace Unity.SpaceGod.Core.Tests
             RunUntil(g, jd, 3, _ => false);
             Assert.That(sol.World.Outlaws.Hunters.Any(h => h.Ship == origin && !h.Retired), Is.True, "the row of a hunter lost abroad was dropped before its heir got home");
         }
+
+        [Test]
+        public void ABountyHunterGroupWipedOutAbroadHasItsRowPruned()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var drift = g.Find("Barnard's Star").World.Pirates;
+            sol.World.Outlaws.Commission(Named(sol.World, "Earth Orbital"), StartJd);
+            g.Traffic.Clans.Pledge(sol.World.Sol, drift, 1e8);
+
+            Ship Hunt() => g.Systems.SelectMany(s => s.World.Fleet.Ships).Concat(g.Traffic.InTransit())
+                .FirstOrDefault(s => !s.Destroyed && s.Voyage?.Purpose == VoyagePurpose.Hunt && s.Voyage.Quarry == drift);
+            var jd = RunUntil(g, StartJd, 40, j =>
+            {
+                if (Hunt() != null) return true;
+                foreach (var h in sol.World.Outlaws.Hunters) h.Contract = null;
+                g.Traffic.Clans.Pursue(drift, j);
+                return Hunt() != null;
+            });
+            var hunt = Hunt();
+            Assert.That(hunt, Is.Not.Null, "no bounty hunter went after the Drift");
+            var origin = hunt.Voyage.Origin;
+
+            StarSystem abroad = null;
+            jd = RunUntil(g, jd, 400, _ => (abroad = g.Systems.FirstOrDefault(s => s != sol && s.World.Fleet.IsPresent(origin))) != null);
+            Assert.That(abroad, Is.Not.Null, "the hunter never reached another system");
+            Assert.That(sol.World.Outlaws.Hunters.Any(h => h.Ship == origin && h.Away), Is.True, "the hunter was not marked away");
+
+            foreach (var e in abroad.World.Fleet.Ships.Where(s => s.Leader == origin)) e.Destroyed = true;
+            origin.Destroyed = true; // the whole group is lost abroad, no escort left to take it on
+            abroad.World.War.HandOverCommand(origin);
+            Assert.That(sol.World.Outlaws.Hunters.Any(h => h.Ship == origin && h.Away), Is.False, "a group wiped out abroad stayed Away");
+            RunUntil(g, jd, 3, _ => false);
+            Assert.That(sol.World.Outlaws.Hunters.Any(h => h.Ship == origin), Is.False, "the row of a group wiped out abroad was never pruned");
+        }
     }
 }

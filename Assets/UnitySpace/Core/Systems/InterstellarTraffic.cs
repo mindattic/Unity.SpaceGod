@@ -101,6 +101,13 @@ namespace Unity.SpaceGod.Core
         /// <summary>The hull that set out (a bounty hunter's), whose place at home the ship takes up again when it is back.</summary>
         public Ship Origin;
 
+        /// <summary>A hunt voyage that ends with no hull left to come home (U.SPC-T588): the hunter's row stops being kept
+        /// for an heir that will never arrive, so it can be pruned. Does nothing for any other voyage.</summary>
+        public void LostWithAllHands()
+        {
+            if (Purpose == VoyagePurpose.Hunt && Origin != null) Home?.World.Outlaws?.SetAway(Origin, false);
+        }
+
         /// <summary>Light-years along the outbound route (what tolls and fees scale with).</summary>
         public double Ly;
 
