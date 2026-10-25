@@ -103,7 +103,7 @@ namespace Unity.SpaceGod.Core
             var works = Mining.AddOperation("Ceres Belt Works", Belt, Catalog["Ceres"].Index, depot);
             works.OreTugs = 2;
             works.TugIceShare = 1;
-            works.IceDepot = depot;
+            works.IceDepot = Mining.AddWarehouse("Valhalla Ice Depot", Belt, Catalog["Callisto"].Index);
             RaiseTugs(works, jd);
             Mining.Begin(MegastructureSpec.SpaceElevator, Belt, Catalog["Ganymede"].Index, "Ganymede Elevator", jd);
             Mining.Begin(MegastructureSpec.DysonRing, Belt, 0, "Helios Swarm", jd);

@@ -948,6 +948,8 @@ namespace Unity.SpaceGod.Core
         TugHaul NewHaul(MiningOperation op, double jd, ref int inbound)
         {
             bool ice = op.TugIceShare > 0 && rng.NextDouble() < op.TugIceShare;
+            // Melted ice is never drawn down by a build that needs none: a full ice depot sends the tug for ore instead of idling it.
+            if (ice && op.IceDepot != null && op.IceDepot.StoredTonnes >= op.IceDepot.CapacityTonnes) ice = false;
             var kind = ice ? AsteroidClass.CometIce : AsteroidClass.Pick(rng);
             var depot = ice ? op.IceDepot : null;
             if (depot == null)

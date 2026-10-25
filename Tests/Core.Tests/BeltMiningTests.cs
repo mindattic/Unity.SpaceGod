@@ -214,7 +214,7 @@ namespace Unity.SpaceGod.Core.Tests
             var m = w.Mining;
             Assert.That(m, Is.Not.Null);
             Assert.That(m.Operations.Single().Owner, Is.SameAs(w.Belt));
-            Assert.That(m.Warehouses.Single().Body, Is.EqualTo(w.Catalog["Callisto"].Index), "Sol's depot is out on a remote moon");
+            Assert.That(m.Warehouses[0].Body, Is.EqualTo(w.Catalog["Callisto"].Index), "Sol's depot is out on a remote moon");
             Assert.That(m.Projects.Select(p => p.Spec), Is.EquivalentTo(new[] { MegastructureSpec.SpaceElevator, MegastructureSpec.DysonRing }));
 
             for (int d = 1; d <= 150; d++)

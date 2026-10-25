@@ -248,7 +248,8 @@ namespace Unity.SpaceGod.Core.Tests
             var m = w.Mining;
             var op = m.Operations.Single();
             Assert.That(op.OreTugs, Is.EqualTo(2));
-            Assert.That(op.IceDepot, Is.SameAs(m.Warehouses.Single()));
+            Assert.That(op.IceDepot, Is.Not.SameAs(op.Destination), "melted ice has its own depot, apart from the ore's (U.SPC-T574)");
+            Assert.That(op.IceDepot.Body, Is.EqualTo(op.Destination.Body));
 
             for (int d = 1; d <= 5; d++)
             {
@@ -470,6 +471,18 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That((w.Fleet.StateOf(tug, w.Jd).HelioKm - start).Length, Is.LessThan(1e4), "taken where it was");
             var havens = w.Economy.Settlements.Where(s => s.Owner == w.Pirates && s.Kind == SettlementKind.Haven && !s.Fallen).Select(s => s.Body).ToList();
             Assert.That(tug.Ports.All(havens.Contains), Is.True, "bound for the raiders' holds");
+        }
+
+        [Test]
+        public void AFullIceDepotSendsTheTugForOreInsteadOfIdlingIt()
+        {
+            var w = Sol(out var eph);
+            var op = w.Mining.Operations.Single();
+            var before = w.Mining.Hauls.ToList();
+            op.IceDepot.Stock[(int)Good.Water] = op.IceDepot.CapacityTonnes;
+            Step(w, eph, 5);
+            Assert.That(w.Mining.Hauls.Count, Is.GreaterThan(0), "the tugs still haul");
+            Assert.That(w.Mining.Hauls.Where(h => !before.Contains(h)).All(h => h.ToDepot == null), Is.True, "none for the full ice depot");
         }
     }
 }
