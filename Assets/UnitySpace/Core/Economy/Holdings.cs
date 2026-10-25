@@ -1130,6 +1130,7 @@ namespace Unity.SpaceGod.Core
             foreach (var st in Economy.Settlements)
             {
                 if (!CanBuyAt(st)) continue;
+                if (st.Body != here && world.BurnsPropellant(ship) && !Economy.CanReach(ship, here, st.Body, jd)) continue;
                 double days = world.Fleet.EstimateTravelDays(ship, here, st.Body, jd);
                 if (days < bestDays)
                 {

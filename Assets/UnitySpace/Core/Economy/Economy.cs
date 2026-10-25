@@ -476,6 +476,10 @@ namespace Unity.SpaceGod.Core
             };
         }
 
+        /// <summary>Whether <paramref name="ship"/>'s tanks, as they stand, cover a run from <paramref name="from"/> to <paramref name="to"/> (always true when trips are not priced).</summary>
+        public bool CanReach(Ship ship, int from, int to, double jd) =>
+            PriceRun(ship, from, to, jd, ship.HasCargo ? ship.CargoTonnes : 0, ship.Propellant, 0).Reachable;
+
         // A fallen haven makes and trades nothing until it is rebuilt.
         public bool CanTrade(Ship ship, Settlement s) => !s.Fallen && Diplomacy.CanDockAt(ship.Faction, s) && (DockAllowed == null || DockAllowed(ship, s));
 
