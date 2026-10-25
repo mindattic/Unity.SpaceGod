@@ -287,7 +287,7 @@ namespace Unity.SpaceGod.Core
         {
             this.world = world;
             rng = new Random(seed);
-            House = new Faction("Your fleet", "", new Rgb(0.45f, 0.95f, 0.55f));
+            House = new Faction("Your fleet", "", new Rgb(0.45f, 0.95f, 0.55f)) { IsHouse = true };
             // No trained reserve of its own: crews sign on in port.
             House.Manpower = double.PositiveInfinity;
         }

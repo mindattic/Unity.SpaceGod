@@ -238,6 +238,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>Credits from port taxes and its own ships' trade, spent on hulls, repairs and munitions.</summary>
         public double Treasury;
 
+        /// <summary>The player's house account: its ships never spend more than it holds (U.SPC-T539).</summary>
+        public bool IsHouse { get; set; }
+
         /// <summary>Goods its law bans: a patrol scan that finds them in a hold confiscates them as contraband
         /// (stolen goods always are; see <see cref="Law.ContrabandIn"/>).</summary>
         public readonly HashSet<Good> Contraband = new HashSet<Good>();

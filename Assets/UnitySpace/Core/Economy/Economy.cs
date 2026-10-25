@@ -709,6 +709,17 @@ namespace Unity.SpaceGod.Core
                     var run = PriceRun(ship, fromBody, to.Body, jd, tonnes, tanks, fuelPrice);
                     if (!run.Reachable) continue;
                     double cost = from.PurchaseCost(good, tonnes);
+                    if (ship.Faction.IsHouse && cost * (1 + PortTax) > ship.Faction.Treasury)
+                    {
+                        // The house cannot overdraw its account: take only the lot it can pay for (U.SPC-T539).
+                        double afford = Math.Max(0, ship.Faction.Treasury) / (cost * (1 + PortTax)) * 0.95;
+                        tonnes *= afford;
+                        if (tonnes < Math.Min(minimum, MinLoadTonnes)) continue;
+                        cost = from.PurchaseCost(good, tonnes);
+                        if (cost * (1 + PortTax) > ship.Faction.Treasury) continue;
+                        run = PriceRun(ship, fromBody, to.Body, jd, tonnes, tanks, fuelPrice);
+                        if (!run.Reachable) continue;
+                    }
                     double days = run.Days + extraDays;
                     double bonus = ContractBonus(to, good, tonnes);
                     double value = (SaleEstimate(to, good, tonnes) + bonus) * (1 - DangerAt(to.Body));
@@ -937,7 +948,7 @@ namespace Unity.SpaceGod.Core
             {
                 double room = ship.PropellantCapacity - ship.Propellant;
                 if (room < 1) break;
-                taken += BuyPropellant(ship, s, room, mustAfford: false, out _);
+                taken += BuyPropellant(ship, s, room, mustAfford: ship.Faction.IsHouse, out _);
             }
             return taken;
         }

@@ -39,6 +39,21 @@ namespace Unity.SpaceGod.Core.Tests
         // ---------------------------------------------------------------- ships
 
         [Test]
+        public void AnOwnedShipNeverBuysMorePropellantThanTheHouseAccountHolds()
+        {
+            var w = CreateWorld();
+            var h = Funded(w, 5e8);
+            var yard = Port(w, "Earth Orbital");
+            var owned = h.Buy(yard, ShipClass.Freighter, "Thrifty", StartJd);
+            Assert.That(owned, Is.Not.Null);
+            var ship = owned.Ship;
+            ship.Propellant = 0;
+            h.House.Treasury = 50;
+            w.Economy.Refuel(ship, yard.Body, StartJd);
+            Assert.That(h.House.Treasury, Is.GreaterThanOrEqualTo(0));
+        }
+
+        [Test]
         public void BuyingAHullPaysTheYardAndPutsItInSpaceUnderTheHouseFlagLaidUpUntilACaptainIsHired()
         {
             var w = CreateWorld();
