@@ -86,6 +86,9 @@ namespace Unity.SpaceGod.Core
             var unit = Unit;
             if (unit != null)
             {
+                // Keep the hull's roll: the helm's roof starts where the captain's (or level) roof was.
+                unit.Basis(out _, out var rolled);
+                unit.Up = rolled;
                 unit.PlayerControlled = true;
                 unit.PlayerFireHeld = false;
                 unit.PlayerLockTarget = null;
@@ -117,6 +120,8 @@ namespace Unity.SpaceGod.Core
             var unit = Unit;
             if (unit != null)
             {
+                // Keep the hull's roll: the captain's roof picks up from the helm's.
+                if (unit.PlayerControlled) unit.Roof = unit.Up;
                 unit.PlayerControlled = false;
                 unit.PlayerFireHeld = false;
                 unit.PlayerLockTarget = null;

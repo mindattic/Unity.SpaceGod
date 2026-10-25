@@ -1031,6 +1031,8 @@ namespace Unity.SpaceGod
             }
             pilotFrameBody = frame;
             SeedPilot(offsetKm, velocity, facing);
+            // Mid-fight the hull keeps its roll: the pilot's roof is the unit's (TakeCharge stored it in Up), not the camera's.
+            if (ship.Battle?.UnitOf(ship) is { } rolledUnit && rolledUnit.Up.LengthSquared > 1e-12) pilot.Up = rolledUnit.Up.Normalized;
             // A tanker called for some earlier hull (one taken from the player, say) is not this one's.
             TankerDueS = -1;
             propellantWarning = 0;

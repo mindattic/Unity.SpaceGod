@@ -218,6 +218,24 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void TakingAndHandingBackTheHelmKeepsTheHullsRoll()
+        {
+            var (w, ship) = WorldWarship();
+            var (b, _, _, _) = CarrierFight(duel: false);
+            var unit = b.AddShip(ship, 0, new DVec3(14, 3, 0), -DVec3.UnitX);
+            unit.Roof = new DVec3(0, 1, 1).Normalized;
+            unit.Basis(out _, out var before);
+            Assert.That(before.Z, Is.LessThan(0.9), "the roll is real");
+            var helm = Embodiables.HelmOf(w, ship);
+            helm.TakeCharge();
+            unit.Basis(out _, out var taken);
+            Assert.That(AngleDeg(taken, before), Is.LessThan(1e-6), "taking the helm does not snap the roll");
+            helm.HandBack();
+            unit.Basis(out _, out var back);
+            Assert.That(AngleDeg(back, taken), Is.LessThan(1e-6), "handing back does not snap it either");
+        }
+
+        [Test]
         public void SeatsAreTakenOneAfterAnotherMidBattleEachHandedBackAndTheFightNeverStops()
         {
             var (w, ship) = WorldWarship();
