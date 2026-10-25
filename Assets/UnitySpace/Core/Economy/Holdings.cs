@@ -684,12 +684,16 @@ namespace Unity.SpaceGod.Core
             if (double.IsNaN(nextTickJd)) nextTickJd = jd + TickDays;
         }
 
+        /// <summary>Whether the house may trade at <paramref name="port"/>: it stands, and no blockade, embargo or war shuts it to the house.</summary>
+        bool CanTradeAt(Settlement port) => port != null && port.Owner != null && !port.Fallen && world.Diplomacy.CanDockAt(House, port);
+
         /// <summary>Buys <paramref name="tonnes"/> of <paramref name="good"/> from the warehouse's port into it, at the market's price
         /// with tax. Returns the tonnes bought (fewer if the market, the warehouse or the account runs short).</summary>
         public double StoreFromMarket(Property warehouse, Good good, double tonnes, double jd)
         {
             if (warehouse == null || warehouse.Lost || warehouse.Kind != PropertyKind.Warehouse || tonnes <= 0) return 0;
             var s = warehouse.Settlement;
+            if (!CanTradeAt(s)) return 0;
             tonnes = Math.Min(tonnes, Math.Min(s.Available(good), warehouse.CapacityTonnes - warehouse.StoredTonnes));
             if (tonnes < 0.01) return 0;
             double price = s.PurchaseCost(good, tonnes);
@@ -716,6 +720,7 @@ namespace Unity.SpaceGod.Core
             if (warehouse == null || warehouse.Lost || warehouse.Kind != PropertyKind.Warehouse) return 0;
             tonnes = Math.Min(tonnes, warehouse.Stock[(int)good]);
             var s = warehouse.Settlement;
+            if (!CanTradeAt(s)) return 0;
             if (tonnes < 0.01 || s.Demand[(int)good] <= 0) return 0;
             double value = s.SaleValue(good, tonnes);
             double tax = value * Economy.PortTax;

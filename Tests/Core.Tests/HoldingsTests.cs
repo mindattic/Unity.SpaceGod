@@ -527,6 +527,24 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(h.BookBalance, Is.EqualTo(h.Balance).Within(1));
         }
 
+        [Test]
+        public void AWarehouseCannotStoreOrSellAtAPortClosedToTheHouse()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            var port = Port(w, "Earth Orbital");
+            var wh = h.BuyWarehouse(port, StartJd);
+            var good = Enumerable.Range(0, GoodInfo.Count).Select(g => (Good)g).First(g => port.Available(g) > 100 && port.Demand[(int)g] > 0);
+            Assert.That(h.StoreFromMarket(wh, good, 100, StartJd), Is.GreaterThan(0));
+            w.Diplomacy.DeclareEmbargo(port.Owner, h.House, StartJd, double.MaxValue, "test");
+            Assert.That(w.Diplomacy.CanDockAt(h.House, port), Is.False);
+            double stock = port.Stock[(int)good], treasury = h.House.Treasury;
+            Assert.That(h.StoreFromMarket(wh, good, 100, StartJd), Is.EqualTo(0));
+            Assert.That(h.SellFromStore(wh, good, 100, StartJd), Is.EqualTo(0));
+            Assert.That(port.Stock[(int)good], Is.EqualTo(stock));
+            Assert.That(h.House.Treasury, Is.EqualTo(treasury));
+        }
+
         // ---------------------------------------------------------------- the live system
 
         [Test]
