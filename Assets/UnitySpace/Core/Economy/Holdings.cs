@@ -469,13 +469,46 @@ namespace Unity.SpaceGod.Core
         /// <summary>Gives standing orders even to a ship out on charter (the charter's own: free trading, then its old orders back).</summary>
         internal bool SetOrders(OwnedShip owned, StandingOrder orders)
         {
+            LastRefusal = null;
             if (owned == null || owned.Lost || orders == null || !CanFollow(owned.Ship, orders)) return false;
+            if (orders.Kind == StandingOrderKind.TradeRoute)
+            {
+                string why = UnreachableLeg(owned.Ship, orders.Stops, Economy.Jd, out _);
+                if (why != null) { LastRefusal = why; return false; }
+            }
             owned.Orders = orders;
             orders.StopIndex = 0;
             owned.MiningDays = 0;
             owned.Ship.Role = RoleFor(orders.Kind, owned.Ship.Spec.Class);
             if (orders.Kind == StandingOrderKind.Patrol) owned.Ship.Route = orders.Stops;
             return true;
+        }
+
+        /// <summary>Why the last order given was refused for want of reach (a trade-route leg its full tanks cannot cover), else null.</summary>
+        public string LastRefusal { get; private set; }
+
+        /// <summary>The first leg of the cyclic <paramref name="stops"/> an empty ship on full tanks cannot fly (ignoring
+        /// legs it could never fly anyway for want of a drive), described; null if every leg is within reach.</summary>
+        string UnreachableLeg(Ship ship, int[] stops, double jd, out int badFrom)
+        {
+            badFrom = -1;
+            if (stops == null || !world.BurnsPropellant(ship)) return null;
+            for (int i = 0; i < stops.Length; i++)
+            {
+                int a = stops[i], b = stops[(i + 1) % stops.Length];
+                string why = LegProblem(ship, a, b, jd);
+                if (why != null) { badFrom = i; return why; }
+            }
+            return null;
+        }
+
+        string LegProblem(Ship ship, int a, int b, double jd)
+        {
+            if (a == b) return null;
+            double dv = world.Fleet.EstimateTrip(ship, a, b, jd).DeltaVKmS;
+            double need = Propulsion.PropellantFor(ship, dv, 0, ship.PropellantCapacity);
+            if (need <= ship.PropellantCapacity) return null;
+            return $"{world.Catalog[a].Name} to {world.Catalog[b].Name} needs {need:N0} t of propellant, more than the {ship.PropellantCapacity:N0} t its tanks hold";
         }
 
         public static bool CanFollow(Ship ship, StandingOrder o)
@@ -969,7 +1002,23 @@ namespace Unity.SpaceGod.Core
                 }
                 idx = at;
             }
-            int next = (idx + 1) % n;
+            // Skip a leg the full tanks can never cover (a lane gone down since the order was given): on to the next
+            // stop that can be reached from here, else wait here and say why.
+            int next = -1;
+            string unreachable = null;
+            for (int k = 1; k <= n; k++)
+            {
+                int cand = (idx + k) % n;
+                if (stops[cand] == here) continue;
+                string why = world.BurnsPropellant(ship) ? LegProblem(ship, here, stops[cand], jd) : null;
+                if (why == null) { next = cand; break; }
+                unreachable = unreachable ?? why;
+            }
+            if (next < 0)
+            {
+                ship.Cargo = "Route unreachable: " + (unreachable ?? "no other stop");
+                return here;
+            }
             orders.StopIndex = next;
             int to = stops[next];
             if (ship.HasCargo)

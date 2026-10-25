@@ -132,6 +132,43 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ARouteWithALegTheFullTanksCannotCoverIsRefusedAndSaysWhy()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            var owned = h.Buy(Port(w, "Earth Orbital"), ShipClass.Freighter, "Overreach", StartJd);
+            h.Hire(owned, StartJd, 1);
+            var weak = CombatSpec.Of(ShipClass.Freighter).Clone();
+            weak.ExhaustVelocityKmS = 5;
+            owned.Ship.Combat = new ShipCombat(weak, ShipClass.Freighter);
+            int earth = Body(w, "Earth"), far = Body(w, "Neptune");
+            Assert.That(h.Order(owned, StandingOrder.TradeRoute(earth, far)), Is.False, "Neptune is beyond tanks this weak a drive empties");
+            Assert.That(h.LastRefusal, Does.Contain("propellant"));
+            owned.Ship.Combat = new ShipCombat(CombatSpec.Of(ShipClass.Freighter), ShipClass.Freighter);
+            Assert.That(h.Order(owned, StandingOrder.TradeRoute(earth, Body(w, "Mars"))), Is.True);
+            Assert.That(h.LastRefusal, Is.Null);
+        }
+
+        [Test]
+        public void ARouteLegThatBecameUnreachableIsSkippedOrWaitedOutWithAReason()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            int earth = Body(w, "Earth"), mars = Body(w, "Mars");
+            var owned = h.Buy(Port(w, "Earth Orbital"), ShipClass.Freighter, "Stuck", StartJd);
+            h.Hire(owned, StartJd, 1);
+            Assert.That(h.Order(owned, StandingOrder.TradeRoute(earth, mars)), Is.True);
+            var ship = owned.Ship;
+            ship.HasCargo = false;
+            // The drive fails after the order was given (a lane gone down does the same): Mars is now out of reach.
+            var weak = CombatSpec.Of(ShipClass.Freighter).Clone();
+            weak.ExhaustVelocityKmS = 5;
+            ship.Combat = new ShipCombat(weak, ShipClass.Freighter);
+            Assert.That(h.ChooseNext(ship, earth, StartJd), Is.EqualTo(earth), "waits where it is");
+            Assert.That(ship.Cargo, Does.StartWith("Route unreachable"));
+        }
+
+        [Test]
         public void ARouteNeedsTwoStopsAndAHold()
         {
             var w = CreateWorld();
