@@ -83,7 +83,15 @@ namespace Unity.SpaceGod
         bool TrySendFollowedShip(StarSystem to)
         {
             if (SpaceCamera.Mode != Cameras.SpaceCamera.CameraMode.Focus || !SpaceCamera.FocusTarget.IsShip) return false;
-            return StartCrewCourse(SpaceCamera.FocusTarget.Ship, to, true);
+            var ship = SpaceCamera.FocusTarget.Ship;
+            // A house ship is the player's own money: sent through the gates by a stray click on the map it could be lost
+            // and written off (U.SPC-T553), so the click only moves the view; the ship is sent from its helm or its orders.
+            if (ship.Faction != null && ship.Faction.IsHouse)
+            {
+                ShowToast("The " + ship.Name + " is yours: give it orders, or take the helm, to send it. The view goes alone");
+                return false;
+            }
+            return StartCrewCourse(ship, to, true);
         }
 
         void FollowCourseShip(Ship ship)
