@@ -1068,18 +1068,24 @@ namespace Unity.SpaceGod.Core
                 // Cargo nobody here bought (an enlisted hold, free-trading leftovers, a market that lost its demand): sell it at the best reachable market, else dump it, then the route resumes.
                 int sell = Economy.PlanTrade(ship, here, jd);
                 if (sell >= 0) return sell;
-                Economy.Release(ship);
-                BookBalance -= ship.CargoCost;
-                ship.HasCargo = false;
-                ship.CargoTonnes = 0;
-                ship.CargoCost = 0;
-                ship.CargoBonus = 0;
-                ship.CargoDestination = null;
-                ship.Cargo = null;
+                DumpCargo(ship);
             }
             if (!ship.HasCargo) Economy.LoadFor(ship, here, to, jd);
             if (!ship.HasCargo) ship.Cargo = "Empty, on its route to " + world.Catalog[to].Name;
             return to;
+        }
+
+        /// <summary>Throws the hold's cargo away, booking its cost as a loss.</summary>
+        void DumpCargo(Ship ship)
+        {
+            Economy.Release(ship);
+            BookBalance -= ship.CargoCost;
+            ship.HasCargo = false;
+            ship.CargoTonnes = 0;
+            ship.CargoCost = 0;
+            ship.CargoBonus = 0;
+            ship.CargoDestination = null;
+            ship.Cargo = null;
         }
 
         /// <summary>A free trader's next port: the run that earns most a day from here, as any merchant captain picks it
@@ -1118,7 +1124,9 @@ namespace Unity.SpaceGod.Core
             {
                 // Ore aboard nobody here bought: on to where it sells.
                 int sell = Economy.PlanTrade(ship, here, jd);
-                return sell >= 0 ? sell : here;
+                if (sell >= 0) return sell;
+                // No reachable market takes it: dump it (booking the loss) so the miner mines again rather than sit forever.
+                DumpCargo(ship);
             }
             if (here != claim.Body)
             {

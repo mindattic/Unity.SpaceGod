@@ -271,6 +271,26 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void AMinerHoldingOreNoReachableMarketTakesDumpsItAndMinesAgain()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            int phobos = Body(w, "Phobos");
+            var claim = h.StakeClaim(phobos, Good.NickelIron, StartJd);
+            var owned = h.Buy(Port(w, "Ares Prime"), ShipClass.Miner, "Stuck Seam", StartJd);
+            h.Hire(owned, StartJd);
+            Assert.That(h.Order(owned, StandingOrder.Mining(claim)), Is.True);
+            var ship = owned.Ship;
+            h.ChooseNext(ship, phobos, StartJd);
+            Assert.That(ship.HasCargo, Is.True);
+            // Dry tanks: no market is reachable, so the ore cannot be sold; it is dumped and the miner cuts afresh.
+            ship.Propellant = 0;
+            h.ChooseNext(ship, phobos, StartJd);
+            Assert.That(owned.Ship.CargoCost, Is.EqualTo(0));
+            Assert.That(owned.TonnesMined, Is.GreaterThanOrEqualTo(ship.CapacityTonnes));
+        }
+
+        [Test]
         public void ABadlyHurtMerchantLandedAtARingedYardWorldIsMendedThere()
         {
             var w = CreateWorld();
