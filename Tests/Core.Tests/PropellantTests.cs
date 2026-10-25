@@ -208,7 +208,7 @@ namespace Unity.SpaceGod.Core.Tests
         {
             var r = Shuttle(propellant: 100, canRefuel: (s, body) => true);
             var ship = r.Ship;
-            StepUntil(r, () => ship.Cargo == "Waiting for propellant", 5);
+            StepUntil(r, () => ship.WaitingForPropellant, 5);
             Assert.That(ship.Phase, Is.EqualTo(ShipPhase.Parked));
             Assert.That(ship.DestinationBody, Is.EqualTo(r.Earth));
             ship.Propellant = ship.PropellantCapacity;

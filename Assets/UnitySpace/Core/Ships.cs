@@ -404,6 +404,9 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A one-line description of what is in the hold, for the HUD.</summary>
         public string Cargo;
+
+        /// <summary>Sitting in port for propellant to be had before it can set out, whatever it carries (U.SPC-T538).</summary>
+        public bool WaitingForPropellant;
         public int TripsCompleted;
 
         /// <summary>

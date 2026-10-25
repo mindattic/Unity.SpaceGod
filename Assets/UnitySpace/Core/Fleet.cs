@@ -1571,6 +1571,7 @@ namespace Unity.SpaceGod.Core
                 return;
             }
             int here = ship.Orbit.Body;
+            ship.WaitingForPropellant = false;
             int chosen = ChooseNext != null ? ChooseNext(ship, here, nowJd) : -1;
             double dwell = Dwell != null ? Dwell(ship, DwellDays(ship)) : DwellDays(ship);
             // A point with no size (a binary's barycentre) has no space round it to wander out into.
@@ -1618,7 +1619,7 @@ namespace Unity.SpaceGod.Core
                 if (CanRefuelAt != null && CanRefuelAt(ship, here))
                 {
                     ship.DestinationBody = here;
-                    if (!ship.HasCargo) ship.Cargo = "Waiting for propellant";
+                    ship.WaitingForPropellant = true;
                     ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.5);
                     return;
                 }
