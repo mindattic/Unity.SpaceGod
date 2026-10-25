@@ -898,10 +898,12 @@ namespace Unity.SpaceGod.Core
         void RepairInPort(OwnedShip o, double jd)
         {
             var s = o.Ship;
-            if (s.Combat == null || s.Combat.Damage <= 0.001 || s.Battle != null || s == world.PilotedShip || (s.Phase != ShipPhase.Parked && s.Phase != ShipPhase.Landed)) return;
+            if (s.Combat == null || Math.Max(s.Combat.Damage, s.Combat.HullDamage) <= 0.001 || s.Battle != null || s == world.PilotedShip || (s.Phase != ShipPhase.Parked && s.Phase != ShipPhase.Landed)) return;
             var yard = YardAt(s.Orbit.Body);
             if (yard == null) return;
-            double share = Math.Min(RepairPerDay, s.Combat.Damage);
+            // Sized by the hull's damage (the figure the ship waits on), not the part-diluted Damage (U.SPC-T549).
+            double owed = Math.Max(s.Combat.Damage, s.Combat.HullDamage);
+            double share = Math.Min(RepairPerDay, owed);
             double unit = Economy.HullPrice(s.Spec.Class) * RepairRate;
             // Mend what the house can pay for rather than nothing at all.
             if (unit > 0 && House.Treasury < unit * share) share = Math.Max(0, House.Treasury) / unit;

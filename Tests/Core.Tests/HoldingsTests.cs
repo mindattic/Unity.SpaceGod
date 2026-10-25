@@ -297,6 +297,21 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void YardRepairIsPacedByHullDamageNotThePartDilutedFigure()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            var owned = h.Buy(Port(w, "Earth Orbital"), ShipClass.Destroyer, "Patched", StartJd);
+            h.Hire(owned, StartJd, 1);
+            var ship = owned.Ship;
+            ship.Combat.Hull = ship.Combat.Spec.Hull * 0.9;
+            Assert.That(ship.Combat.HullDamage, Is.EqualTo(0.1).Within(1e-9));
+            Assert.That(ship.Combat.Damage, Is.LessThan(ship.Combat.HullDamage), "the diluted figure understates the hull");
+            w.Holdings.Update(StartJd + Holdings.TickDays);
+            Assert.That(ship.Combat.HullDamage, Is.LessThan(1e-6), "one day's mending covers a hull only 10% hurt");
+        }
+
+        [Test]
         public void AnEscortShadowsItsChargeAndStandsDownWhenItIsLost()
         {
             var w = CreateWorld();
