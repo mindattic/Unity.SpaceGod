@@ -484,6 +484,7 @@ namespace Unity.SpaceGod
 
             viewFaction = new Faction[0];
             lastBattleScene = new DVec3[0];
+            lastDrawnValid = new bool[0];
             battleTimeFor = null;
             Selected = Target.None;
             Hovered = Target.None;
@@ -2384,7 +2385,11 @@ namespace Unity.SpaceGod
         void PlaceInBattles(float dt)
         {
             var ships = Fleet.Ships;
-            if (lastBattleScene.Length != ships.Count) Array.Resize(ref lastBattleScene, ships.Count);
+            if (lastBattleScene.Length != ships.Count)
+            {
+                Array.Resize(ref lastBattleScene, ships.Count);
+                Array.Resize(ref lastDrawnValid, ships.Count);
+            }
             for (int i = 0; i < ships.Count; i++)
             {
                 var ship = ships[i];
@@ -2393,7 +2398,7 @@ namespace Unity.SpaceGod
                 int body = battle != null ? battle.Body : ship.Controller.Orbit.Body;
                 if (battle != shipLastBattle[i])
                 {
-                    var current = shipBlendT[i] < 1 || shipLastBattle[i] != null ? DrawnScene(i) : shipScene[i];
+                    var current = DrawnScene(i);
                     shipBlendFrom[i] = current - bodyScene[body];
                     shipBlendT[i] = 0;
                     shipLastBattle[i] = battle;
@@ -2414,7 +2419,6 @@ namespace Unity.SpaceGod
                             u.Basis(out _, out var unitUp);
                             shipRotation[i] = ToRotation(u.Forward, unitUp);
                         }
-                        lastBattleScene[i] = shipScene[i];
                     }
                 }
                 if (shipBlendT[i] < 1)
@@ -2423,12 +2427,18 @@ namespace Unity.SpaceGod
                     float e = shipBlendT[i] * shipBlendT[i] * (3 - 2 * shipBlendT[i]);
                     shipScene[i] = DVec3.Lerp(bodyScene[body] + shipBlendFrom[i], shipScene[i], e);
                 }
+                lastBattleScene[i] = shipScene[i];
+                lastDrawnValid[i] = true;
             }
         }
 
         DVec3[] lastBattleScene = new DVec3[0];
 
-        DVec3 DrawnScene(int i) => lastBattleScene.Length > i && shipLastBattle[i] != null ? lastBattleScene[i] : shipScene[i];
+        bool[] lastDrawnValid = new bool[0];
+
+        // Where the ship was last drawn (after any blend), so a blend interrupted or restarted mid-way starts from what
+        // the player saw rather than the raw schedule or battle position (U.SPC-T568).
+        DVec3 DrawnScene(int i) => lastDrawnValid.Length > i && lastDrawnValid[i] ? lastBattleScene[i] : shipScene[i];
 
         /// <summary>Scene position of a transiting ship at a fraction of its path (see <see cref="ScaleModel.TransitScene"/>).</summary>
         public DVec3 TransitScene(Ship ship, double progress, out DVec3 travelDirection) =>
