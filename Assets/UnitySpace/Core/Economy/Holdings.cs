@@ -1112,9 +1112,27 @@ namespace Unity.SpaceGod.Core
             // On the claim: cut a holdful (as much as the tanks can still haul away) and sell it wherever it fetches most.
             double tonnes = ship.CapacityTonnes;
             if (tonnes <= 0) return here;
-            int dest = Economy.LoadOwn(ship, claim.Ore, tonnes, here, jd);
+            // Size the load to what the tanks can haul to a market: halve it until some market is reachable with it aboard.
+            int dest = -1;
+            for (int tries = 0; tries < 5 && dest < 0; tries++)
+            {
+                dest = Economy.LoadOwn(ship, claim.Ore, tonnes, here, jd);
+                if (dest >= 0) break;
+                ship.HasCargo = false;
+                ship.CargoTonnes = 0;
+                ship.Cargo = null;
+                if (tries < 4) tonnes /= 2;
+            }
             if (dest < 0)
             {
+                // No market it can haul to: the claim's own body may buy it where it lies.
+                tonnes = ship.CapacityTonnes;
+                if (Economy.SellOwn(ship, claim.Ore, tonnes, here, jd))
+                {
+                    o.TonnesMined += tonnes;
+                    o.MiningDays = tonnes / Math.Max(1, claim.YieldPerDay);
+                    return here;
+                }
                 // Nowhere it can reach that takes it: leave it in the ground for now.
                 ship.HasCargo = false;
                 ship.CargoTonnes = 0;

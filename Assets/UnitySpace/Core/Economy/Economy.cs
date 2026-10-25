@@ -686,6 +686,29 @@ namespace Unity.SpaceGod.Core
             return PlanTrade(ship, here, jd);
         }
 
+        /// <summary>Sells <paramref name="tonnes"/> of an own-mined <paramref name="good"/> straight to a market on <paramref name="here"/>
+        /// that wants it (the claim body's own port); false, hold untouched, when none does.</summary>
+        public bool SellOwn(Ship ship, Good good, double tonnes, int here, double jd)
+        {
+            if (ship.HasCargo || tonnes <= 0) return false;
+            bool wanted = false;
+            foreach (var s in At(here))
+                if (CanTrade(ship, s) && s.Demand[(int)good] > 0) { wanted = true; break; }
+            if (!wanted) return false;
+            ship.HasCargo = true;
+            ship.CargoGood = good;
+            ship.CargoTonnes = tonnes;
+            ship.CargoCost = 0;
+            ship.CargoBonus = 0;
+            ship.CargoDestination = null;
+            OnArrive(ship, here, jd);
+            if (!ship.HasCargo) return true;
+            ship.HasCargo = false;
+            ship.CargoTonnes = 0;
+            ship.Cargo = null;
+            return false;
+        }
+
         /// <summary>
         /// The loads a ship could take from <paramref name="from"/> and where to: each priced by its run
         /// (<see cref="PriceRun"/>) plus <paramref name="extraDays"/> and <paramref name="extraCost"/> already

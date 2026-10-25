@@ -440,6 +440,31 @@ namespace Unity.SpaceGod.Core.Tests
         // ---------------------------------------------------------------- the live system
 
         [Test]
+        public void AMinerOnAClaimAtAPortBodyWithTanksTooDryToHaulSellsItsOreToThatPortAtOnce()
+        {
+            // U.SPC-T547: it looped 'Idle ...: no market for its ore' because the claim body's own market was never a buyer.
+            var w = CreateWorld();
+            var h = Funded(w);
+            var port = Port(w, "Ares Prime");
+            var good = Enumerable.Range(0, GoodInfo.Count).Select(g => (Good)g)
+                .First(g => Economy.Carries(ShipClass.Miner, g) && GoodInfo.Of(g).Category != GoodCategory.Essential && port.Demand[(int)g] > 0 && Holdings.YieldOf(g) > 0);
+            var claim = h.StakeClaim(port.Body, good, StartJd);
+            Assert.That(claim, Is.Not.Null);
+            var owned = h.Buy(port, ShipClass.Miner, "Dry Hauler", StartJd);
+            h.Hire(owned, StartJd);
+            Assert.That(h.Order(owned, StandingOrder.Mining(claim)), Is.True);
+            var ship = owned.Ship;
+            ship.Propellant = 0;
+            double stock = port.Stock[(int)good];
+            int next = h.ChooseNext(ship, port.Body, StartJd);
+            Assert.That(next, Is.EqualTo(port.Body));
+            Assert.That(ship.HasCargo, Is.False, "sold on the spot");
+            Assert.That(owned.TonnesMined, Is.GreaterThan(0));
+            Assert.That(port.Stock[(int)good], Is.GreaterThan(stock));
+            Assert.That(ship.Cargo, Is.Null.Or.Not.Contain("no market"));
+        }
+
+        [Test]
         public void InTheLiveSystemOwnedShipsUnderOrdersEarnTheirKeepAndTheBooksBalance()
         {
             var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
