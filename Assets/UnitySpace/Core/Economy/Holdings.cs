@@ -1168,6 +1168,9 @@ namespace Unity.SpaceGod.Core
             return dest;
         }
 
+        /// <summary>The body whose frame the piloted ship is flown in, set each pilot frame by the app; -1 when nobody is at the helm (U.SPC-T552).</summary>
+        public int PilotFrameBody = -1;
+
         int NextForEscort(OwnedShip o, int here)
         {
             var charge = o.Orders.Charge;
@@ -1184,6 +1187,8 @@ namespace Unity.SpaceGod.Core
         /// <summary>Where a ship is or is going: the fight it is in, the body it holds at, or its trip's end.</summary>
         int WhereBound(Ship c)
         {
+            // The ship the player is flying keeps its simulated orbit until the helm is released: follow the body whose frame it is flown in.
+            if (c == world.PilotedShip && PilotFrameBody >= 0) return PilotFrameBody;
             if (c.Battle != null) return c.Battle.Body;
             if (c.Phase == ShipPhase.Transit || c.Phase == ShipPhase.Lane || c.Phase == ShipPhase.Lurk || c.Phase == ShipPhase.Adrift)
                 return c.FinalBody >= 0 && c.Journey != null ? c.FinalBody : c.DestinationBody;

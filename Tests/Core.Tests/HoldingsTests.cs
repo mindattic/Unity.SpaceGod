@@ -360,6 +360,22 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void AnEscortFollowsAChargeFlownFromTheHelmToItsCurrentFrameBody()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            int earth = Body(w, "Earth"), moon = Body(w, "Moon");
+            var trader = h.Buy(Port(w, "Earth Orbital"), ShipClass.Freighter, "Flown", StartJd);
+            var guard = h.Buy(Port(w, "Earth Orbital"), ShipClass.Destroyer, "Tail", StartJd);
+            h.Hire(guard, StartJd);
+            Assert.That(h.Order(guard, StandingOrder.Escort(trader.Ship)), Is.True);
+            // The player flies the charge to the Moon; its simulated orbit is still Earth's until the helm is released.
+            w.PilotedShip = trader.Ship;
+            h.PilotFrameBody = moon;
+            Assert.That(h.ChooseNext(guard.Ship, earth, StartJd), Is.EqualTo(moon));
+        }
+
+        [Test]
         public void AShipTakenByRaidersIsALoss()
         {
             var w = CreateWorld();

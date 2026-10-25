@@ -1410,6 +1410,7 @@ namespace Unity.SpaceGod
             bool burning = dt > 0 && (vel - (velBefore + gravity * dt)).Length / dt > PilotBurnKmS2;
             World.Sensors?.UpdatePilot(ship, Ephemeris.HelioAt(pilotFrameBody, Clock.Jd) + pilotOffsetKm, burning, Clock.Jd);
             // The law around the ship: trespass, and patrols that scan it or, if it is wanted, hail it to pay up.
+            World.Holdings.PilotFrameBody = pilotFrameBody;
             World.Law.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
             // Bounty hunters with a contract on the ship close in once they find it (U.SPC-T62).
             World.Outlaws.UpdatePilot(ship, pilotFrameBody, pilotOffsetKm, pilotForward, Clock.Jd);
