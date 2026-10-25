@@ -243,6 +243,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>At the departure point, turning the nose onto the target.</summary>
         Aligning,
 
+        /// <summary>Aligned, but the drive is still cooling from its last jump: held, the nose on the target, until it has cooled.</summary>
+        Cooling,
+
         /// <summary>The drive charging (the helm's own <see cref="HelmFtl"/>), the nose held on the target.</summary>
         Spooling,
     }
@@ -387,6 +390,12 @@ namespace Unity.SpaceGod.Core
             var want = Course.Bearing(fromKm, out _);
             forward = TurnToward(forward, want, maxDeg * Astro.Deg2Rad);
             return HelmFtl.OffNoseDeg(Course.Target, Course.From, fromKm, forward) <= HelmFtl.AlignDeg * 0.5 ? FtlAutopilotEvent.Aligned : FtlAutopilotEvent.None;
+        }
+
+        /// <summary>The drive is still cooling: hold here, nose on the target, until <see cref="FtlRules.CoolUntil"/>.</summary>
+        public void Cooling()
+        {
+            if (Active) Stage = FtlAutopilotStage.Cooling;
         }
 
         /// <summary>The drive is spooling for the course: the helm's charge has it from here.</summary>

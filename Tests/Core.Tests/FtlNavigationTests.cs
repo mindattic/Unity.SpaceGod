@@ -187,6 +187,30 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void AnAlignedAutopilotHoldsCoolingUntilTheDriveHasCooled()
+        {
+            var (g, a, b) = Relays(4);
+            var from = new DVec3(5e7, 0, 0);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, from, DVec3.UnitX);
+            var course = FtlCourse.Plot(g, a, ship, from, FtlTarget.OfStar(b), StartJd);
+            var pilot = new FtlAutopilot();
+            Assert.That(pilot.Engage(course, from, false, StartJd), Is.True);
+            ship.FtlCoolUntilJd = pilot.RunEndJd + 0.5;
+            var at = course.DepartureKm;
+            var forward = course.Bearing(at, out _);
+            var ftl = new HelmFtl();
+            Assert.That(ftl.Spool(ship, a, course.Target, at, forward, false, pilot.RunEndJd, g), Is.False, "the drive is still cooling");
+            Assert.That(ftl.AbortReason, Does.Contain("cooling"));
+            pilot.Step(false, pilot.RunEndJd);
+            pilot.Cooling();
+            Assert.That(pilot.Stage, Is.EqualTo(FtlAutopilotStage.Cooling));
+            Assert.That(pilot.Active, Is.True);
+            Assert.That(pilot.Step(false, pilot.RunEndJd + 0.25), Is.EqualTo(FtlAutopilotEvent.None));
+            Assert.That(pilot.Stage, Is.EqualTo(FtlAutopilotStage.Cooling));
+            Assert.That(ftl.Spool(ship, a, course.Target, at, forward, false, FtlRules.CoolUntil(ship), g), Is.True, ftl.AbortReason);
+        }
+
+        [Test]
         public void AFightLetsGoOfTheAutopilot()
         {
             var (g, a, b) = Relays(4);

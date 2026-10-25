@@ -80,6 +80,7 @@ namespace Unity.SpaceGod
                 double jd = Clock.Jd, end;
                 if (InFtlCruise) end = FtlCruise.ArriveJd;
                 else if (Ftl.Stage == FtlStage.Spooling) end = Ftl.ChargedJd;
+                else if (FtlAutopilot.Stage == FtlAutopilotStage.Cooling) end = FtlRules.CoolUntil(Piloted.Ship);
                 else if (FtlAutopilot.Stage == FtlAutopilotStage.OutRun) end = FtlAutopilot.RunEndJd;
                 else return 0;
                 if (double.IsInfinity(end) || double.IsNaN(end)) return 0;
@@ -467,6 +468,33 @@ namespace Unity.SpaceGod
             return true;
         }
 
+        /// <summary>Aligned: waits for a drive still cooling, else starts the charge. False if the autopilot let go.</summary>
+        bool BeginFtlAutopilotSpool(Ship ship, FtlAutopilot ap, double jd)
+        {
+            double coolUntil = FtlRules.CoolUntil(ship);
+            if (coolUntil > jd)
+            {
+                if (ap.Stage != FtlAutopilotStage.Cooling)
+                {
+                    ap.Cooling();
+                    if (ftlWarpBefore < 0) ftlWarpBefore = Clock.WarpIndex;
+                    ShowToast("FTL drive still cooling: the autopilot holds the nose on " + ap.Course.Target.Name.ToUpperInvariant() + " and spools when it has cooled");
+                }
+                Clock.SetWarp(SimClock.WarpToCover((coolUntil - jd) * Astro.SecondsPerDay, FtlSpoolRealSeconds, Math.Max(0, ftlWarpBefore)));
+                return true;
+            }
+            if (!Ftl.Spool(ship, ActiveSystem, ap.Course.Target, PilotRootKm, pilot.Forward, false, jd, Galaxy))
+            {
+                DisengageFtlAutopilot("FTL autopilot off: " + Ftl.AbortReason);
+                return false;
+            }
+            ap.Spooling();
+            if (ftlWarpBefore < 0) ftlWarpBefore = Clock.WarpIndex;
+            Clock.SetWarp(SimClock.WarpToCover((Ftl.ChargedJd - jd) * Astro.SecondsPerDay, FtlSpoolRealSeconds, Math.Max(0, ftlWarpBefore)));
+            ShowToast("FTL DRIVE SPOOLING for " + ap.Course.Target.Name.ToUpperInvariant() + ", " + Distance(ap.Course.Target) + "  (the autopilot holds the nose on it; End lets go)");
+            return true;
+        }
+
         /// <summary>The autopilot lets go of the helm where the hull is, moving as it was (<paramref name="why"/> said in a
         /// toast, unless null), and a charge it had started is called off.</summary>
         void DisengageFtlAutopilot(string why)
@@ -569,15 +597,15 @@ namespace Unity.SpaceGod
                     var turned = ap.Turn(ref forward, PilotRootKm, FtlAutopilot.TurnDegPerSecond * dt);
                     SetPilotFacing(forward);
                     if (turned != FtlAutopilotEvent.Aligned) break;
-                    if (!Ftl.Spool(ship, ActiveSystem, ap.Course.Target, PilotRootKm, pilot.Forward, false, jd, Galaxy))
-                    {
-                        DisengageFtlAutopilot("FTL autopilot off: " + Ftl.AbortReason);
-                        return false;
-                    }
-                    ap.Spooling();
-                    if (ftlWarpBefore < 0) ftlWarpBefore = Clock.WarpIndex;
-                    Clock.SetWarp(SimClock.WarpToCover((Ftl.ChargedJd - jd) * Astro.SecondsPerDay, FtlSpoolRealSeconds, Math.Max(0, ftlWarpBefore)));
-                    ShowToast("FTL DRIVE SPOOLING for " + ap.Course.Target.Name.ToUpperInvariant() + ", " + Distance(ap.Course.Target) + "  (the autopilot holds the nose on it; End lets go)");
+                    if (!BeginFtlAutopilotSpool(ship, ap, jd)) return false;
+                    break;
+                }
+                case FtlAutopilotStage.Cooling:
+                {
+                    // Held, nose on the star, until the drive has cooled; then it spools.
+                    pilot.Vel = DVec3.Zero;
+                    if (jd < FtlRules.CoolUntil(ship)) break;
+                    if (!BeginFtlAutopilotSpool(ship, ap, jd)) return false;
                     break;
                 }
                 default:

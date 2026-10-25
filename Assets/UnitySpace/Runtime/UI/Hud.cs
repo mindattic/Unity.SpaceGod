@@ -361,6 +361,9 @@ namespace Unity.SpaceGod.UI
                     case FtlAutopilotStage.Aligning:
                         head = "FTL AUTOPILOT  ·  " + name + "  ·  TURNING ONTO IT";
                         break;
+                    case FtlAutopilotStage.Cooling:
+                        head = "FTL AUTOPILOT  ·  " + name + "  ·  DRIVE COOLING  ·  spools in " + Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
+                        break;
                     default:
                         head = "FTL AUTOPILOT  ·  " + name + "  ·  SPOOLING  ·  " + Percent(ftl.SpoolFraction(jd)) + "  ·  engages in " +
                                Mathf.CeilToInt((float)app.FtlSecondsLeft) + " s";
