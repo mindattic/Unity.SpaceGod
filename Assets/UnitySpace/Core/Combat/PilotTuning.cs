@@ -125,6 +125,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Miner:
                 case ShipClass.OreTug:
                 case ShipClass.LaneTender:
+                case ShipClass.Explorer:
                     return PilotControl.Hauler;
                 default:
                     return PilotControl.Helm;
