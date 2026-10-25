@@ -28,6 +28,9 @@ namespace Unity.SpaceGod.Core
         public DVec3 Pos, Vel;
         public DVec3 Forward = DVec3.UnitX;
 
+        /// <summary>How fast the AI is swinging the nose, rad/s about a world axis across it (U.SPC-T557, <see cref="Battle.TurnToward"/>).</summary>
+        public DVec3 TurnSpin;
+
         /// <summary>True while a human is flying this unit's <see cref="Ship"/> directly: <see cref="Battle.Move"/>
         /// skips its own AI steering/position-integration for it (the Runtime pilot loop drives <see cref="Pos"/>,
         /// <see cref="Vel"/> and <see cref="Forward"/> instead every frame) and <see cref="Battle.Fire"/> routes its
@@ -1427,20 +1430,48 @@ namespace Unity.SpaceGod.Core
             return l.Pos + right * s.X + up * s.Y + l.Forward * s.Z;
         }
 
-        static void TurnToward(BattleUnit u, DVec3 dir, double degPerSec, double dt)
+        /// <summary>Swings an AI hull's nose toward <paramref name="dir"/> the way the helm does (U.SPC-T557,
+        /// <see cref="PilotFlight.Rotate(ref PilotState, in HullDynamics, double, double, in PilotInput, double)"/>): the nose spins up
+        /// and brakes at the hull's angular acceleration, to a top swing of <paramref name="degPerSec"/>, so a wanted facing that flips
+        /// cannot reverse the swing in one frame. A hull with no attitude thrusters of its own spins up in about a second and a half.</summary>
+        public static void TurnToward(BattleUnit u, DVec3 dir, double degPerSec, double dt)
         {
             if (dir.LengthSquared < 1e-12) return;
             var want = dir.Normalized;
-            double cos = Math.Max(-1, Math.Min(1, DVec3.Dot(u.Forward, want)));
-            double angle = Math.Acos(cos);
-            double max = degPerSec * Astro.Deg2Rad * dt;
-            if (angle <= max || angle < 1e-6)
+            var f = u.Forward;
+            double rate = degPerSec * Astro.Deg2Rad;
+            if (rate <= 0 || dt <= 0) return;
+            double alpha = u.Combat != null ? HullDynamics.Of(u.Combat.Spec).PitchYawAngularAccel : 0;
+            alpha = Math.Max(alpha, rate / 1.5);
+            double maxDw = alpha * dt;
+
+            var axis = DVec3.Cross(f, want);
+            double sin = axis.Length, cos = DVec3.Dot(f, want);
+            double angle = Math.Atan2(sin, cos);
+            if (sin < 1e-9) axis = cos > 0 ? DVec3.Zero : DVec3.Cross(f, Math.Abs(f.Z) < 0.9 ? DVec3.UnitZ : DVec3.UnitX);
+            var target = axis.LengthSquared > 0 ? axis.Normalized * Math.Min(rate, Math.Sqrt(2 * alpha * angle)) : DVec3.Zero;
+
+            var w = u.TurnSpin;
+            w -= f * DVec3.Dot(w, f);
+            var dw = target - w;
+            if (dw.Length > maxDw) dw = dw.Normalized * maxDw;
+            w += dw;
+
+            double spin = w.Length;
+            // Arriving this frame with little swing left to kill: settle on the heading rather than hunt about it.
+            if (angle <= spin * dt + 1e-12 && spin <= 3 * maxDw + 1e-12)
             {
                 u.Forward = want;
+                u.TurnSpin = DVec3.Zero;
                 return;
             }
-            double t = max / angle;
-            u.Forward = DVec3.TurnStep(u.Forward, want, t);
+            if (spin > 0)
+            {
+                var nf = PilotFlight.RotateAbout(f, w / spin, spin * dt).Normalized;
+                u.Forward = nf;
+                w -= nf * DVec3.Dot(w, nf);
+            }
+            u.TurnSpin = w;
         }
 
         static double PreferredRange(BattleUnit u)

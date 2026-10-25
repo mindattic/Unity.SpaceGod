@@ -816,10 +816,7 @@ namespace Unity.SpaceGod.Core
             if (!homing && u.Pos.Length > Battle.EscapeKm * 0.8) to = -u.Pos;
             double toLength = to.Length;
             var desiredDir = toLength > 1e-6 ? to / toLength : u.Forward;
-            double turn = spec.TurnRateDegS * Astro.Deg2Rad * dt;
-            double cos = Math.Max(-1, Math.Min(1, DVec3.Dot(u.Forward, desiredDir)));
-            double angle = Math.Acos(cos);
-            u.Forward = angle <= turn ? desiredDir : DVec3.TurnStep(u.Forward, desiredDir, turn / angle);
+            Battle.TurnToward(u, desiredDir, spec.TurnRateDegS, dt);
             // Throttle back when closing on a slot so wingmen do not overshoot.
             double want = speed;
             // Given a velocity to match (a carrier's, a lead's), even a standing one: an unmoving carrier is still closed on gently.

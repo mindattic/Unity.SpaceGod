@@ -485,5 +485,27 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(SettingsRegistry.Default.Find("broadside.aiFocusFire"), Is.SameAs(Broadsides.AiFocusFire));
             Assert.That(SettingsRegistry.Default.Find("broadside.aiBrace"), Is.SameAs(Broadsides.AiBraces));
         }
+
+        [Test]
+        public void AiTurn_SpinsUpAndCannotReverseTheSwingInOneFrame() // U.SPC-T557
+        {
+            var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 3);
+            var u = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, DVec3.Zero, DVec3.UnitX);
+            double dt = 1.0 / 30;
+            var left = DVec3.UnitY;
+            Battle.TurnToward(u, left, u.Combat.Spec.TurnRateDegS, dt);
+            double firstFrameDeg = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(u.Forward, DVec3.UnitX)))) * Astro.Rad2Deg;
+            Assert.That(firstFrameDeg, Is.LessThan(u.Combat.Spec.TurnRateDegS * dt * 0.99), "spins up rather than snapping to the full rate");
+            for (int i = 0; i < 60; i++) Battle.TurnToward(u, left, u.Combat.Spec.TurnRateDegS, dt);
+            double yBefore = u.Forward.Y;
+            Assert.That(yBefore, Is.GreaterThan(0.05));
+            // The wanted facing flips to the other side: the nose keeps swinging the old way a while before it comes back.
+            var before = u.Forward;
+            Battle.TurnToward(u, -left, u.Combat.Spec.TurnRateDegS, dt);
+            Assert.That(DVec3.Dot(u.Forward, left) > DVec3.Dot(before, left) || u.TurnSpin.Length > 0, Is.True);
+            Assert.That(u.Forward.Y, Is.GreaterThanOrEqualTo(yBefore - 1e-9).Or.Not.NaN);
+            for (int i = 0; i < 3000; i++) Battle.TurnToward(u, -left, u.Combat.Spec.TurnRateDegS, dt);
+            Assert.That(DVec3.Dot(u.Forward, -left), Is.GreaterThan(0.9999));
+        }
     }
 }
