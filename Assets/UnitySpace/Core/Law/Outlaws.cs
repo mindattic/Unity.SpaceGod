@@ -416,7 +416,7 @@ namespace Unity.SpaceGod.Core
             {
                 double sig = world.Sensors != null && world.Sensors.PilotSignature > 0 ? world.Sensors.PilotSignature : Signatures.Battle;
                 string witness = Law.FindWitness(pilotHelio, jd, null, sig);
-                if (witness != null) Sight(p, (pilotBody, "near " + BodyName(pilotBody)), jd, witness);
+                if (witness != null) Sight(p, Hide(pilotBody, "near " + BodyName(pilotBody)), jd, witness);
             }
         }
 
