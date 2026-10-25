@@ -950,6 +950,9 @@ namespace Unity.SpaceGod.Core
             return theirs > 0 && mine < theirs * 0.22;
         }
 
+        /// <summary>Score multiplier for the hull already being fought; beats the +/-15% jitter so a tie doesn't flip-flop.</summary>
+        public const double TargetStickiness = 0.7;
+
         public BattleUnit PickTarget(BattleUnit u)
         {
             BattleUnit best = null;
@@ -986,6 +989,8 @@ namespace Unity.SpaceGod.Core
                 if (flagship != null && flagship != u && flagship.Target == o) score -= 6;
                 if (focus != null && focus == o) score -= FleetCoordination.Focus.Value;
                 score *= 0.85 + rng.NextDouble() * 0.3;
+                // Stickiness (U.SPC-T560): the current mark keeps the gun unless a rival is clearly better, so heading settles.
+                if (o == u.Target) score *= TargetStickiness;
                 if (score < bestScore)
                 {
                     bestScore = score;
