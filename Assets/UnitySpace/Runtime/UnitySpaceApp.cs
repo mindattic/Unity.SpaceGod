@@ -1212,11 +1212,14 @@ namespace Unity.SpaceGod
         /// <summary>Shows what the law has to tell the player (their crimes seen, hails, scans, bounties collected) as toasts.</summary>
         void ShowLawNotices()
         {
+            // One toast slot: join the law's and the trade desk's lines so neither overwrites the other.
+            var all = new System.Collections.Generic.List<string>();
             var notices = World.Law?.TakeNotices();
-            if (notices != null && notices.Count > 0) ShowToast(string.Join("   ·   ", notices));
+            if (notices != null) all.AddRange(notices);
             // The trade desk's news for the player: charters ending, claims paid, customs, a rank risen (U.SPC-T426).
             var trade = World.Trade?.TakeNotices();
-            if (trade != null && trade.Count > 0) ShowToast(string.Join("   ·   ", trade));
+            if (trade != null) all.AddRange(trade);
+            if (all.Count > 0) ShowToast(string.Join("   ·   ", all));
         }
 
         /// <summary>
