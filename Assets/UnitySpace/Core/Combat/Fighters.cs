@@ -791,10 +791,13 @@ namespace Unity.SpaceGod.Core
             var gap = station - u.Pos;
             var want = lead.Vel + gap * 1.2;
             double maxSpeed = u.Combat.Spec.MaxSpeed * 1.3;
+            // Steer scales the requested speed by engine power; undo that here so the feed-forward stays the lead's own speed.
+            double engines = Math.Max(1e-6, PowerDistribution.FactorOf(u, PowerSystem.Engines));
+            double speed = Math.Min(maxSpeed, want.Length / engines);
             if (gap.Length < StationDeadBandKm || want.Length < 1e-6)
-                Steer(b, u, u.Pos + lead.Forward, Math.Min(maxSpeed, Math.Max(want.Length, 0)), dt);
+                Steer(b, u, u.Pos + lead.Forward, speed, dt);
             else
-                Steer(b, u, u.Pos + want, Math.Min(maxSpeed, want.Length), dt);
+                Steer(b, u, u.Pos + want, speed, dt);
             Torpedo(b, u);
         }
 

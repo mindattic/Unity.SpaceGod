@@ -234,20 +234,25 @@ namespace Unity.SpaceGod.Core.Tests
             var wings = b.Units.Where(u => u.Kind == UnitKind.Fighter && u.Fighter.Lead != null && u.Fighter.Role != FighterRole.Recon).ToList();
             var fwd = new List<double>();
             var noseAngles = new List<double>();
+            var steps = new List<double>();
+            var prev = new Dictionary<BattleUnit, DVec3>();
             for (int i = 0; i < 60 * 40; i++)
             {
                 b.Advance(1 / 60.0);
                 if (i < 60 * 8) continue;
-                foreach (var w in wings.Where(w => w.Present && w.Fighter.Lead != null && w.Fighter.Lead.Present && w.Fighter.Slot >= 1 && w.Fighter.Lead.Fighter.Phase == FighterPhase.Approach))
+                foreach (var w in wings.Where(w => w.Present && w.Fighter.Lead != null && w.Fighter.Lead.Present && w.Fighter.Slot >= 1 && w.Fighter.Lead.Fighter.Phase != FighterPhase.Launch))
                 {
                     var l = w.Fighter.Lead;
+                    if (prev.TryGetValue(w, out var pf)) steps.Add(Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(w.Forward, pf)))) * 180 / Math.PI);
+                    prev[w] = w.Forward;
                     fwd.Add(DVec3.Dot(w.Pos - l.Pos, l.Forward));
                     noseAngles.Add(Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(w.Forward, l.Forward)))) * 180 / Math.PI);
                 }
             }
             Assert.That(fwd.Count, Is.GreaterThan(50), "no formation flying was sampled");
             TestContext.Out.WriteLine($"mean fwd offset {fwd.Average():F3} km, max {fwd.Max():F3}; nose-to-lead mean {noseAngles.Average():F1} deg, max {noseAngles.Max():F1}");
-            Assert.That(fwd.Average(), Is.LessThan(0.0), "wingmen should sit behind the lead on average");
+            Assert.That(fwd.Average(), Is.LessThan(-0.05), "wingmen should sit behind the lead on average");
+            Assert.That(steps.Max(), Is.LessThan(5), "a wingman nose must not jump between steps");
             Assert.That(noseAngles.Average(), Is.LessThan(20), "wingmen noses should follow the lead's heading");
         }
 
