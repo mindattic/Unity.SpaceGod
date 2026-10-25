@@ -139,6 +139,21 @@ namespace Unity.SpaceGod.Core
         /// <summary>Where it is fixed to the latched hull (ship lengths in that hull's frame), and the countdown to opening the airlock.</summary>
         public DVec3 LatchLocal;
         public double LatchTimer;
+        /// <summary>Which flank of its boarding target this unit docks on (+1 starboard, -1 port), fixed when the approach starts (U.SPC-T567).</summary>
+        public double DockSide;
+        BattleUnit dockSideFor;
+
+        /// <summary>The dock point off <paramref name="t"/>'s flank facing this unit when it began closing, kept thereafter so it never flies through the hull.</summary>
+        public DVec3 DockPoint(BattleUnit t, double standOffKm)
+        {
+            t.Basis(out var right, out _);
+            if (dockSideFor != t || DockSide == 0)
+            {
+                dockSideFor = t;
+                DockSide = DVec3.Dot(Pos - t.Pos, right) >= 0 ? 1 : -1;
+            }
+            return t.Pos + right * (DockSide * (t.Radius * 0.35 + Radius + standOffKm));
+        }
 
         /// <summary>Seconds until its assault bays can fire the next Breacher round (U.SPC-T466, <see cref="AssaultBays.IntervalSeconds"/>).</summary>
         public double AssaultBayReload;
@@ -3006,8 +3021,7 @@ namespace Unity.SpaceGod.Core
             var t = u.BoardTarget;
             var c = u.Combat;
             double maxSpeed = c.Spec.MaxSpeed * (0.25 + 0.75 * c.EngineFactor);
-            t.Basis(out var right, out _);
-            var dock = t.Pos + right * (t.Radius * 0.35 + u.Radius + 0.06);
+            var dock = u.DockPoint(t, 0.06);
             var to = dock - u.Pos;
             double dist = to.Length;
             // Arrive matched: slow down as it closes, holding the target's own drift.

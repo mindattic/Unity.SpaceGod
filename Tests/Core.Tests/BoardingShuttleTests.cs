@@ -77,6 +77,22 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(carrier.Shuttles, Is.EqualTo(2), "the hangars hold no more than their berths");
         }
 
+        [Test]
+        public void ADockPointIsOnTheFlankFacingTheBoarderAndStaysThereSoItNeverCrossesTheHull()
+        {
+            var b = NewBattle(7);
+            var prize = b.AddShip(Hull(ShipClass.Cruiser, Red, 1), 1, new DVec3(0, 0, 0), new DVec3(0, 0, 1));
+            var boarder = b.AddShip(Hull(ShipClass.Cruiser, Blue, 2), 0, new DVec3(0, 0, 0), new DVec3(0, 0, 1));
+            prize.Basis(out var right, out _);
+            boarder.Pos = prize.Pos - right * 20;
+            var port = boarder.DockPoint(prize, 0.06);
+            Assert.That(DVec3.Dot(port - prize.Pos, right), Is.LessThan(0), "port side, facing the boarder");
+            boarder.Pos = prize.Pos + right * 0.01;
+            Assert.That(boarder.DockPoint(prize, 0.06).X, Is.EqualTo(port.X).Within(1e-9), "kept once chosen");
+            Assert.That(boarder.DockPoint(prize, 0.06).Y, Is.EqualTo(port.Y).Within(1e-9));
+            Assert.That(boarder.DockPoint(prize, 0.06).Z, Is.EqualTo(port.Z).Within(1e-9));
+        }
+
         // ---------------------------------------------------------------- in battle
 
         [Test]

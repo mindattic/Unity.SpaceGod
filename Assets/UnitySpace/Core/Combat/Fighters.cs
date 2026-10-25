@@ -700,8 +700,7 @@ namespace Unity.SpaceGod.Core
         {
             var spec = u.Combat.Spec;
             double engines = PowerDistribution.FactorOf(u, PowerSystem.Engines);
-            t.Basis(out var right, out _);
-            var dock = t.Pos + right * (t.Radius * 0.35 + u.Radius + BoardingShuttles.StandOffKm);
+            var dock = u.DockPoint(t, BoardingShuttles.StandOffKm);
             var to = dock - u.Pos;
             double dist = to.Length;
             // Arrive matched: the closer, the slower, on top of the hull's own drift.
