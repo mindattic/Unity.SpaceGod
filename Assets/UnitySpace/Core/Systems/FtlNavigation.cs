@@ -371,7 +371,7 @@ namespace Unity.SpaceGod.Core
         public FtlAutopilotEvent Step(bool inCombat, double jd)
         {
             if (!Active) return FtlAutopilotEvent.None;
-            if (inCombat) return Disengage("Autopilot off: a fight");
+            if (inCombat) return Disengage("Autopilot off: a fight", jd);
             if (Stage == FtlAutopilotStage.OutRun && jd >= RunEndJd)
             {
                 Stage = FtlAutopilotStage.Aligning;
@@ -419,12 +419,25 @@ namespace Unity.SpaceGod.Core
             return PilotFlight.RotateAbout(a, axis.Normalized, maxRad).Normalized;
         }
 
-        /// <summary>Lets go of the helm, saying why.</summary>
-        public FtlAutopilotEvent Disengage(string why)
+        /// <summary>Lets go of the helm, saying why, giving back the reaction mass of the part of the run out not flown by <paramref name="jd"/>.</summary>
+        public FtlAutopilotEvent Disengage(string why, double jd)
         {
             Reason = why;
-            Reset();
+            Abandon(jd);
             return FtlAutopilotEvent.Disengaged;
+        }
+
+        /// <summary>Off, the course forgotten, the unflown share of the run out's reaction mass refunded as of <paramref name="jd"/>.</summary>
+        public void Abandon(double jd)
+        {
+            if (Stage == FtlAutopilotStage.OutRun && Course != null && Course.OutRunFuelTonnes > 0)
+            {
+                double total = RunEndJd - RunStartJd;
+                // Flip and burn: the delta-v, so the propellant, is spent evenly across the run.
+                double unflown = total > 0 ? 1 - Math.Max(0, Math.Min(1, (jd - RunStartJd) / total)) : 0;
+                Course.Ship.Propellant += Course.OutRunFuelTonnes * unflown;
+            }
+            Reset();
         }
 
         /// <summary>Off, the course forgotten.</summary>

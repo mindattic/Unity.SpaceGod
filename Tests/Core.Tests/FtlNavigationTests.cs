@@ -226,6 +226,29 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ADisengagedRunRefundsTheUnflownOutRunFuel()
+        {
+            var (g, a, b) = Relays(4);
+            var from = new DVec3(5e7, 0, 0);
+            var ship = Spawn(a, "TNS Meridian", ShipClass.Battleship, from, DVec3.UnitX);
+            var course = FtlCourse.Plot(g, a, ship, from, FtlTarget.OfStar(b), StartJd);
+            Assert.That(course.NeedsOutRun && course.OutRunFuelTonnes > 0, Is.True);
+            double before = ship.Propellant;
+            var pilot = new FtlAutopilot();
+            Assert.That(pilot.Engage(course, from, false, StartJd), Is.True);
+            Assert.That(ship.Propellant, Is.EqualTo(before - course.OutRunFuelTonnes).Within(1e-6));
+            double half = StartJd + (pilot.RunEndJd - StartJd) / 2;
+            pilot.Disengage("test", half);
+            Assert.That(ship.Propellant, Is.EqualTo(before - course.OutRunFuelTonnes / 2).Within(1e-6), "half the run flown, half refunded");
+
+            pilot = new FtlAutopilot();
+            ship.Propellant = before;
+            pilot.Engage(course, from, false, StartJd);
+            pilot.Disengage("test", StartJd);
+            Assert.That(ship.Propellant, Is.EqualTo(before).Within(1e-6), "broken at once, nothing lost");
+        }
+
+        [Test]
         public void ALongTripIsCompressedToTheMenusRealSecondsOnTheSimClock()
         {
             // Four days in about 45 real seconds wants at least 7,680 sim seconds a second: six hours a second.

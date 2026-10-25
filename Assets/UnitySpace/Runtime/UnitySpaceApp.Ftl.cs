@@ -339,7 +339,7 @@ namespace Unity.SpaceGod
         void StopFtl()
         {
             bool flying = FtlAutopilot.Active;
-            FtlAutopilot.Reset();
+            FtlAutopilot.Abandon(Clock.Jd);
             PlottedCourse = null;
             if (Ftl.Stage == FtlStage.Idle && !flying) return;
             Ftl.Reset();
@@ -508,7 +508,7 @@ namespace Unity.SpaceGod
                 pilot.Vel = ap.VelocityKmS(jd);
             }
             if (ap.Stage == FtlAutopilotStage.Spooling && Ftl.Stage == FtlStage.Spooling) Ftl.Abort("Charge called off with the autopilot");
-            ap.Disengage(why);
+            ap.Disengage(why, jd);
             EndFtlWarp();
             // A fight or a chase is flown at the pace it is fought, not the pace the clock had before the trip.
             if (Piloted.Ship?.Battle != null || (World.Pursuit != null && World.Pursuit.Active)) Clock.SetWarp(0);
@@ -630,7 +630,7 @@ namespace Unity.SpaceGod
             {
                 // The charge was lost or called off (Enter): the autopilot goes with it.
                 string why = Ftl.AbortReason;
-                ap.Disengage(why);
+                ap.Disengage(why, jd);
                 EndFtlWarp();
                 ResetPilotAim();
                 ShowToast("FTL autopilot off: " + (why ?? "the charge was lost"));
