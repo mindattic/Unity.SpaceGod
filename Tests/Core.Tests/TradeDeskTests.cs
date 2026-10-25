@@ -495,8 +495,10 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(owned.Orders.Describe(w.Catalog), Is.EqualTo("free trading"));
             int here = owned.Ship.Orbit.Body;
             int next = h.ChooseNext(owned.Ship, here, StartJd);
-            Assert.That(next == here ? owned.Ship.Cargo : "", Does.Contain("looking for a cargo").Or.Empty);
-            if (next != here) Assert.That(owned.Ship.HasCargo, Is.True);
+            // With nothing worth carrying it answers -1 (the fleet moves it on like any merchant), never "stay here".
+            Assert.That(next, Is.Not.EqualTo(here));
+            if (next < 0) Assert.That(owned.Ship.Cargo, Does.Contain("looking for a cargo"));
+            else Assert.That(owned.Ship.HasCargo, Is.True);
         }
     }
 }

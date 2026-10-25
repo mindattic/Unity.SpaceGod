@@ -927,8 +927,8 @@ namespace Unity.SpaceGod.Core
         // ---------------------------------------------------------------- the captains' choices
 
         /// <summary>
-        /// Fleet hook: where an owned ship goes next under its captain's standing orders (always a body; its own to
-        /// stay), or -1 if it is not the house's. With no captain it lies where it is.
+        /// Fleet hook: where an owned ship goes next under its captain's standing orders (a body; its own to stay), or -1
+        /// to leave the move to the fleet's own choice as any merchant's (a free trader with an empty hold and no run). With no captain it lies where it is.
         /// </summary>
         public int ChooseNext(Ship ship, int here, double jd)
         {
@@ -1041,15 +1041,14 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>A free trader's next port: the run that earns most a day from here, as any merchant captain picks it
-        /// (<see cref="Economy.PlanTrade"/>; with a load aboard nobody here took, where it sells best), else it waits for
-        /// work where it is.</summary>
+        /// (<see cref="Economy.PlanTrade"/>; with a load aboard nobody here took, where it sells best), else -1, the fleet's own move to another port as any merchant's.</summary>
         int NextFreeTrade(OwnedShip o, int here, double jd)
         {
             var ship = o.Ship;
             int to = Economy.PlanTrade(ship, here, jd);
             if (to >= 0) return to;
             if (!ship.HasCargo) ship.Cargo = o.OnCharter ? "On charter to " + o.Charter.Charterer.Name + ", looking for a cargo" : "Free trading, looking for a cargo";
-            return here;
+            return ship.HasCargo ? here : -1;
         }
 
         int NextWaypoint(OwnedShip o, int here)
