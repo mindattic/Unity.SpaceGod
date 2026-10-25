@@ -28,6 +28,23 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(price, Is.EqualTo(settlement.Price[(int)Good.Electronics]), "the market showed the price from before the purchase");
         }
 
+        [Test]
+        public void CargoLabelDropsTheRefusingPortWhenNobodyBuys()
+        {
+            var (economy, faction, settlement) = CreateMarket(demand: 0);
+            var ship = CreateShip(faction);
+            ship.HasCargo = true;
+            ship.CargoGood = Good.Electronics;
+            ship.CargoTonnes = 100;
+            ship.CargoDestination = settlement;
+            ship.Cargo = Economy.CargoText(ship);
+            Assert.That(ship.Cargo, Does.Contain("for Port"));
+            economy.OnArrive(ship, 1, 0);
+            Assert.That(ship.HasCargo, Is.True, "nobody bought it");
+            Assert.That(ship.CargoDestination, Is.Null);
+            Assert.That(ship.Cargo, Does.Not.Contain("Port"));
+        }
+
         // The player's faction and the port's owner are deliberately different factions (not just
         // different Faction instances with the same name) -- otherwise a port tax paid to the owner
         // and the same amount drawn from the buyer would land back in the one treasury and net to

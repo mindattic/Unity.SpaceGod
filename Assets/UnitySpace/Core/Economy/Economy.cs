@@ -514,6 +514,7 @@ namespace Unity.SpaceGod.Core
             if (best == null)
             {
                 ship.CargoDestination = null;
+                ship.Cargo = CargoText(ship); // the label must not keep naming the port that refused it
                 return; // Nobody here will buy; the trader carries it on.
             }
             Sell(ship, best, bestValue);
