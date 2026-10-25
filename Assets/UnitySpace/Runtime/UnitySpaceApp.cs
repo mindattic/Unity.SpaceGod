@@ -639,6 +639,15 @@ namespace Unity.SpaceGod
                 return;
             }
 
+            // The hull flies in real seconds while the battle it is in steps in sim seconds (U.SPC-T555): under warp the
+            // AI units would outrun it and the swept collision test (which assumes real-dt motion) would miss them, so
+            // time is held at real speed for as long as the piloted hull is in a battle ('.' is refused at the helm).
+            if (IsPiloting && Piloted.Ship?.Battle != null && Clock.WarpIndex > 0)
+            {
+                Clock.SetWarp(0);
+                ShowToast("Time warp is held at real time while the helm is in a battle");
+            }
+
             Clock.Advance(dt);
             Galaxy.Update(Clock.Jd);
             RefreshCharts();
