@@ -471,12 +471,12 @@ namespace Unity.SpaceGod.Core
         {
             LastRefusal = null;
             if (owned == null || owned.Lost || orders == null || !CanFollow(owned.Ship, orders)) return false;
-            if (orders.Kind == StandingOrderKind.TradeRoute && !HasMarketAtEveryStop(orders)) return false;
             if (orders.Kind == StandingOrderKind.TradeRoute)
             {
                 string why = UnreachableLeg(owned.Ship, orders.Stops, Economy.Jd, out _);
                 if (why != null) { LastRefusal = why; return false; }
             }
+            if (orders.Kind == StandingOrderKind.TradeRoute && !HasMarketAtEveryStop(orders)) return false;
             owned.Orders = orders;
             orders.StopIndex = 0;
             owned.MiningDays = 0;
