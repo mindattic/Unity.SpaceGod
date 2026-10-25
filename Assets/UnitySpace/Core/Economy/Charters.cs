@@ -38,6 +38,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>Hire the house has been paid, and the trade result the charterer has had of the hull (its gain or loss).</summary>
         public double HirePaid, TradeResult;
 
+        /// <summary>Hire is paid for the time served only: this is the moment it has been paid up to.</summary>
+        public double PaidThroughJd;
+
         public bool Active = true;
 
         /// <summary>How it ended ("term served", "recalled", "the hull was lost", "the charterer defaulted"), when, and
@@ -209,7 +212,7 @@ namespace Unity.SpaceGod.Core
             if (!Holdings.SetOrders(ship, StandingOrder.FreeTrade())) return null;
             var c = new Charter
             {
-                Ship = ship, Charterer = offer.Charterer, RatePerDay = offer.RatePerDay, StartJd = jd, EndJd = jd + offer.Days, PreviousOrders = previous,
+                Ship = ship, Charterer = offer.Charterer, RatePerDay = offer.RatePerDay, StartJd = jd, PaidThroughJd = jd, EndJd = jd + offer.Days, PreviousOrders = previous,
             };
             ship.Charter = c;
             All.Add(c);
@@ -251,15 +254,18 @@ namespace Unity.SpaceGod.Core
                     End(c, jd, c.Charterer.Name + " has gone under", false);
                     continue;
                 }
-                if (c.Charterer.Cash < c.RatePerDay)
+                // Hire is for the days served, so the last tick pays only the part of a day left in the term.
+                double owed = c.RatePerDay * Math.Max(0, Math.Min(jd, c.EndJd) - c.PaidThroughJd);
+                if (c.Charterer.Cash < owed)
                 {
                     End(c, jd, c.Charterer.Name + " defaulted on the hire", false);
                     continue;
                 }
-                c.Charterer.Cash -= c.RatePerDay;
-                c.HirePaid += c.RatePerDay;
-                desk.HireEarned += c.RatePerDay;
-                Holdings.Transact(c.RatePerDay, $"Charter hire for the {c.Ship.Name} from {c.Charterer.Name}", jd);
+                c.PaidThroughJd = Math.Min(jd, c.EndJd);
+                c.Charterer.Cash -= owed;
+                c.HirePaid += owed;
+                desk.HireEarned += owed;
+                if (owed > 0) Holdings.Transact(owed, $"Charter hire for the {c.Ship.Name} from {c.Charterer.Name}", jd);
                 if (jd >= c.EndJd) End(c, jd, "term served", true);
             }
             if (double.IsNaN(nextPostJd) || jd >= nextPostJd) Post(jd);

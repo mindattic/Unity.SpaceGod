@@ -248,6 +248,23 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ACharterTakenBetweenTicksPaysHireForItsTermAndNoMore()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            var owned = Freighter(w, h);
+            var company = w.Companies.Live.First();
+            company.Cash = 1e9;
+            var charters = w.Trade.Charters;
+            var c = charters.Take(Offer(w, company, ShipClass.Freighter, 3), owned, StartJd + 0.4);
+            Assert.That(c, Is.Not.Null);
+            for (int d = 1; d <= 4 && c.Active; d++) charters.Daily(StartJd + d);
+            Assert.That(c.Active, Is.False);
+            Assert.That(c.Served, Is.True);
+            Assert.That(c.HirePaid, Is.EqualTo(3 * c.RatePerDay).Within(1e-6));
+        }
+
+        [Test]
         public void AHullOnCharterHandsItsTradeResultToTheCharterer()
         {
             var w = CreateWorld();
