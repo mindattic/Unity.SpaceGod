@@ -163,6 +163,28 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void RunsAreSizedToTheFreeCratesOfTheHoldThePlayerFlies()
+        {
+            var w = CreateWorld();
+            var intel = w.Trade.Intel;
+            var a = intel.Observe(Port(w, "Earth Orbital"), StartJd, "test");
+            var b = intel.Observe(Port(w, "Ceres Hub"), StartJd, "test");
+            int g = (int)Good.Food;
+            for (int i = 0; i < GoodInfo.Count; i++) { a.Available[i] = b.Available[i] = 0; a.Buys[i] = b.Buys[i] = false; }
+            a.Price[g] = 100; a.Available[g] = 50000;
+            b.Price[g] = 400; b.Buys[g] = true; b.Wants[g] = 50000;
+
+            var hold = new CargoHold(6, 8);
+            var lead = intel.Leads(20000, StartJd, 12, null, hold)[0];
+            Assert.That(lead.Tonnes, Is.EqualTo(12 * 20), "12 food crates of 2x2 fit a 6x8 hold, not the freighter's 20,000 t");
+
+            hold.AddFirstFit(Good.Food);
+            lead = intel.Leads(20000, StartJd, 12, null, hold)[0];
+            Assert.That(lead.Tonnes, Is.EqualTo(11 * 20), "a crate already aboard takes its cells");
+            Assert.That(hold.Items, Has.Count.EqualTo(1), "sizing leaves the hold untouched");
+        }
+
+        [Test]
         public void ABrokerSellsAPriceSheetOfEveryKnownMarket()
         {
             var w = CreateWorld();

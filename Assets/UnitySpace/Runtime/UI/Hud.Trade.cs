@@ -102,12 +102,14 @@ namespace Unity.SpaceGod.UI
         {
             var intel = desk.Intel;
             var flown = app.World.PilotedShip;
-            double hold = flown != null && flown.CapacityTonnes > 0 ? flown.CapacityTonnes : Economy.CapacityOf(ShipClass.Freighter);
-            var leads = intel.Leads(hold, jd, 14, flown?.Faction);
+            var crates = flown?.PersonalHold;
+            double hold = crates != null ? 0 : Economy.CapacityOf(ShipClass.Freighter);
+            var leads = intel.Leads(hold, jd, 14, flown?.Faction, crates);
+            if (crates != null) foreach (var lead in leads) hold = Math.Max(hold, lead.Tonnes);
 
             float x = view.x + 4, y = view.y;
             GUI.contentColor = Dim;
-            GUI.Label(new Rect(x, y, 520, rowH), "Prices held for " + intel.Count + " markets  ·  runs for a hold of " + Tonnes(hold) + " (prices half-trusted after " +
+            GUI.Label(new Rect(x, y, 520, rowH), "Prices held for " + intel.Count + " markets  ·  " + (crates != null ? "runs for your free hold (up to " + Tonnes(hold) + ")" : "runs for a hold of " + Tonnes(hold)) + " (prices half-trusted after " +
                 TradeRules.IntelHalfLife.Value.ToString("0", CultureInfo.InvariantCulture) + " d)", small);
             if (port != null && intel.HasBroker(port))
             {

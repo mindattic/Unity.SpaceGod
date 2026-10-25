@@ -174,6 +174,19 @@ namespace Unity.SpaceGod.Core
 
         public bool Remove(CargoItem item) => items.Remove(item);
 
+        /// <summary>How many more crates of this good the free cells take, packed first-fit as AddFirstFit would.</summary>
+        public int CrateRoom(Good good)
+        {
+            var trial = new CargoHold(Width, Height);
+            foreach (var item in items) trial.items.Add(new CargoItem(item.Good, item.X, item.Y, item.Rotated));
+            int n = 0;
+            while (trial.AddFirstFit(good) != null) n++;
+            return n;
+        }
+
+        /// <summary>The tonnes of this good the free cells carry: free crates x the crate's tonnes.</summary>
+        public double RoomTonnes(Good good) => CrateRoom(good) * CargoFootprint.Of(good).Tonnes;
+
         /// <summary>Scans the grid row-major, unrotated then rotated, for the first cell a new crate of
         /// this good fits in, and places it there. Null if the hold has no room left for it.</summary>
         public CargoItem AddFirstFit(Good good)

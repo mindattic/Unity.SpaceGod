@@ -175,9 +175,17 @@ namespace Unity.SpaceGod.Core
         /// would take and the hold carries. Each is scored by its profit, trusted less the older its prices and the riskier
         /// the far end. Runs from a pirate haven (its goods are stolen) are the back door's business, not the desk's.
         /// </summary>
-        public List<TradeLead> Leads(double holdTonnes, double jd, int max = 12, Faction flag = null)
+        public List<TradeLead> Leads(double holdTonnes, double jd, int max = 12, Faction flag = null, CargoHold crateHold = null)
         {
             var leads = new List<TradeLead>();
+            // A player flying the crate hold carries only what its free cells take, good by good.
+            double[] room = null;
+            if (crateHold != null)
+            {
+                room = new double[GoodInfo.Count];
+                holdTonnes = 0;
+                for (int g = 0; g < room.Length; g++) { room[g] = crateHold.RoomTonnes((Good)g); holdTonnes = Math.Max(holdTonnes, room[g]); }
+            }
             if (holdTonnes <= 0) return leads;
             var known = new List<PriceSheet>(sheets.Values);
             foreach (var a in known)
@@ -199,7 +207,7 @@ namespace Unity.SpaceGod.Core
                         double buy = a.Price[g], sell = b.Price[g];
                         double margin = sell * 0.97 * (1 - Economy.PortTax) - buy * 1.03 * (1 + Economy.PortTax);
                         if (margin <= 0) continue;
-                        double tonnes = Math.Min(holdTonnes, Math.Min(a.Available[g], b.Wants[g]));
+                        double tonnes = Math.Min(room != null ? room[g] : holdTonnes, Math.Min(a.Available[g], b.Wants[g]));
                         if (tonnes < 1) continue;
                         double profit = margin * tonnes;
                         double risk = Math.Max(toRisk.Total, fromRisk.Total);
