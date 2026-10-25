@@ -386,7 +386,11 @@ namespace Unity.SpaceGod.Core
                 Choose(b, u, cmd, face, aiming ? bearings : null, aiming ? toTarget : null, rest, actual);
             }
             Frame(face, aiming ? toTarget : null, aiming ? cmd.RollBearing : NoBearing, cmd.RollDeg, out forward, out roof);
+            // The roof is carried over to the heading the hull actually lies on, to roll it there; the bow is still turned
+            // toward the heading it wants, or a hull still coming round would never get there (U.SPC-T534).
+            var wanted = forward;
             Transport(actual, ref forward, ref roof);
+            forward = wanted;
         }
 
         /// <summary>A hull still turning toward the heading it wants lies along <paramref name="actual"/>, not along

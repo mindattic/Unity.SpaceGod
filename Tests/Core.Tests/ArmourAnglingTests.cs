@@ -178,18 +178,30 @@ namespace Unity.SpaceGod.Core.Tests
         {
             double result = 0;
             bool any = false;
-            With(ArmourAngling.AiWeight, weight, () =>
+            // Its weak patches left out of it (they would turn it too as its shields go down; the rolling weighs the slant on
+            // its own, below): only the captain's choice of heading for its guns.
+            bool rolls = WeakPatches.AiRolls.Value;
+            WeakPatches.AiRolls.Set(false);
+            try
             {
-                var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
-                var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
-                // The enemy fights back: there is fire to slant the hull to.
-                var red = b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
-                BeamGunsOnly(blue);
-                for (double t = 0; t < 60 && !b.Over; t += 0.5) b.Advance(0.5);
-                var to = (red.Pos - blue.Pos).Normalized;
-                result = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(blue.Forward, to)))) * Astro.Rad2Deg;
-                any = blue.Combat.Subsystems.Any(s => Broadsides.IsBatteryGun(s) && !s.Destroyed && !s.Def.BearsEverywhere && blue.Bears(s.Def, red.Pos));
-            });
+                With(ArmourAngling.AiWeight, weight, () =>
+                {
+                    var b = new Battle(0, 3, "Test", new DVec3(50000, 0, 0), StartJd, 4);
+                    var blue = b.AddShip(Hull(ShipClass.Battleship, Blue, 0), 0, new DVec3(-8, 0, 0), DVec3.UnitX);
+                    // The enemy fights back: there is fire to slant the hull to.
+                    var red = b.AddShip(Hull(ShipClass.Battleship, Red, 1), 1, new DVec3(8, 0, 0), -DVec3.UnitX);
+                    BeamGunsOnly(blue);
+                    for (double t = 0; t < 60 && !b.Over; t += 0.5) b.Advance(0.5);
+                    var to = (red.Pos - blue.Pos).Normalized;
+                    result = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(blue.Forward, to)))) * Astro.Rad2Deg;
+                    // Whether a beam gun's cone holds the target (the fight may have shot the gun itself away by now).
+                    any = blue.Combat.Subsystems.Any(s => s.Def.IsWeapon && !s.Def.Spinal && !s.Def.Weapon.AntiSmall && !s.Def.Covers(blue.Combat.Spec, FireCones.Bow) && !s.Def.Covers(blue.Combat.Spec, FireCones.Stern) && !s.Def.BearsEverywhere && blue.Bears(s.Def, red.Pos));
+                });
+            }
+            finally
+            {
+                WeakPatches.AiRolls.Set(rolls);
+            }
             bears = any;
             return result;
         }
