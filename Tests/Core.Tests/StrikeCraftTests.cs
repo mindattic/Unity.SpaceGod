@@ -11,7 +11,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// crew, cost and flight model; carriers launch them as squadrons of those hulls; and a bomber's torpedoes do their
     /// work on a capital whose shields are down.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class StrikeCraftTests
     {
         const double StartJd = 2461324.0;

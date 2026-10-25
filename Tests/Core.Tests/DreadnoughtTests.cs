@@ -10,7 +10,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// spinal power plants inside the hull, and it holds the rear and snipes from the extreme reach of those guns instead of
     /// closing.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class DreadnoughtTests
     {
         static readonly Faction Navy = new Faction("Navy", "NS", new Rgb(0, 0, 1)) { IsMilitary = true };

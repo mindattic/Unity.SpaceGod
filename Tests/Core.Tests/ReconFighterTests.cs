@@ -11,7 +11,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// accurately and paints a capital for its bombers, whose torpedoes then home on it harder and ignore its decoys; berthed
     /// aboard, it stretches its carrier's sensor reach.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class ReconFighterTests
     {
         const double StartJd = 2461324.0;

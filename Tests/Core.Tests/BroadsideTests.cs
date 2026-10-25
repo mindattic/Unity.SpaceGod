@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// emergency repair crews, formations a flagship orders its line into, turning circles, and AI captains using the same
     /// commands and bringing the guns whose cones can take their target to bear.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class BroadsideTests
     {
         const double StartJd = 2461324.0;

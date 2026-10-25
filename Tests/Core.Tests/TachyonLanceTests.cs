@@ -8,7 +8,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// greatest yards and dear; its shot lands the instant it is fired at the longest reach of any gun, with no round in
     /// flight and no lead; it recharges slowly and starves the shields while it charges; and its figures are settings.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class TachyonLanceTests
     {
         static readonly Faction Navy = new Faction("Navy", "NS", new Rgb(0, 0, 1)) { IsMilitary = true };

@@ -10,7 +10,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// resupply, plus <see cref="FireCones"/> (U.SPC-T533) and the <see cref="CombatSpec"/> lookup
     /// fallbacks.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class CombatStateTests
     {
         static ShipCombat Make(ShipClass c) => new ShipCombat(CombatSpec.Of(c), c);

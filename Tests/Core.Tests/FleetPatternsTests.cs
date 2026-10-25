@@ -11,7 +11,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// destroyers and cruisers, plasma cannons on battleships, the tachyon lance on a rare capital, antimatter torpedoes on
     /// frigates and capitals, flak and interceptors on destroyers, each by its owner's doctrine, wealth and yards.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class FleetPatternsTests
     {
         const double StartJd = 2461324.0;

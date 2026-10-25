@@ -10,7 +10,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// models, weapon groups, lock-on missiles, countermeasures, power shared between weapons, shields and engines, orders
     /// to wingmen, and attack runs on capital-ship weak points that let a lone small craft bring down a battleship.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class DogfightGameTests
     {
         const double StartJd = 2461324.0;

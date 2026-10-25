@@ -9,7 +9,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// it in battle between a narrow lance for hulls and a wide sweep for fighters and missiles; a plasma cannon is fitted only
     /// to the brawlers and its bolt bleeds off over distance; every figure is a setting.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class EnergyWeaponsTests
     {
         const double StartJd = 2461324.0;

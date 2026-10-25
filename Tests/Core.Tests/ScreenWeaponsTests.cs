@@ -10,7 +10,7 @@ namespace Unity.SpaceGod.Core.Tests
     /// destroyer's rotary flak and interceptor missiles beside its point defence, the umbrella that stops missile swarms and
     /// fighters short of the capitals it escorts.
     /// </summary>
-    [TestFixture]
+    [TestFixture, NonParallelizable]
     public class ScreenWeaponsTests
     {
         const double StartJd = 2461324.0;
