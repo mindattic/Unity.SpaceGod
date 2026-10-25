@@ -759,6 +759,9 @@ namespace Unity.SpaceGod.Core
         /// <summary>Whether a wingman is holding the vee on its lead (rather than fighting on its own, as ordered).</summary>
         static bool FlysInFormation(Battle b, BattleUnit u) => u.Fighter.Lead != null && !Independent(b, u, out _);
 
+        /// <summary>Gap to its station inside which a wingman holds the lead's heading (km).</summary>
+        const double StationDeadBandKm = 0.03;
+
         static void Wingman(Battle b, BattleUnit u, double dt)
         {
             var f = u.Fighter;
@@ -783,8 +786,15 @@ namespace Unity.SpaceGod.Core
             var station = lead.Pos + right * (slot.X + wander.X) + up * (slot.Y + wander.Y) + lead.Forward * (slot.Z + wander.Z);
             // Reaction lag: they fly to where the lead was heading a moment ago, not where it is now.
             station -= lead.Vel * f.Reaction * 0.08;
-            var goal = station + lead.Vel * 0.6;
-            Steer(b, u, goal, u.Combat.Spec.MaxSpeed * 1.3, dt, lead.Vel);
+            // Close on the station itself, the lead's velocity as feed-forward; inside a small dead-band hold the lead's heading
+            // rather than pointing the nose at a near-zero gap vector (U.SPC-T559).
+            var gap = station - u.Pos;
+            var want = lead.Vel + gap * 1.2;
+            double maxSpeed = u.Combat.Spec.MaxSpeed * 1.3;
+            if (gap.Length < StationDeadBandKm || want.Length < 1e-6)
+                Steer(b, u, u.Pos + lead.Forward, Math.Min(maxSpeed, Math.Max(want.Length, 0)), dt);
+            else
+                Steer(b, u, u.Pos + want, Math.Min(maxSpeed, want.Length), dt);
             Torpedo(b, u);
         }
 

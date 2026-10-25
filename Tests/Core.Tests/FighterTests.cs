@@ -227,6 +227,31 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void WingmenSitBehindTheirLeadWithTheirNosesSteady()
+        {
+            // U.SPC-T559: they used to sit ahead of the slot (aiming at slot + lead velocity) with the nose jittering on a near-zero gap.
+            var b = CarrierAction(5);
+            var wings = b.Units.Where(u => u.Kind == UnitKind.Fighter && u.Fighter.Lead != null && u.Fighter.Role != FighterRole.Recon).ToList();
+            var fwd = new List<double>();
+            var noseAngles = new List<double>();
+            for (int i = 0; i < 60 * 40; i++)
+            {
+                b.Advance(1 / 60.0);
+                if (i < 60 * 8) continue;
+                foreach (var w in wings.Where(w => w.Present && w.Fighter.Lead != null && w.Fighter.Lead.Present && w.Fighter.Slot >= 1 && w.Fighter.Lead.Fighter.Phase == FighterPhase.Approach))
+                {
+                    var l = w.Fighter.Lead;
+                    fwd.Add(DVec3.Dot(w.Pos - l.Pos, l.Forward));
+                    noseAngles.Add(Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(w.Forward, l.Forward)))) * 180 / Math.PI);
+                }
+            }
+            Assert.That(fwd.Count, Is.GreaterThan(50), "no formation flying was sampled");
+            TestContext.Out.WriteLine($"mean fwd offset {fwd.Average():F3} km, max {fwd.Max():F3}; nose-to-lead mean {noseAngles.Average():F1} deg, max {noseAngles.Max():F1}");
+            Assert.That(fwd.Average(), Is.LessThan(0.0), "wingmen should sit behind the lead on average");
+            Assert.That(noseAngles.Average(), Is.LessThan(20), "wingmen noses should follow the lead's heading");
+        }
+
+        [Test]
         public void WhenTheLeadDiesTheSeniorWingmanTakesOver()
         {
             var b = CarrierAction(2);
