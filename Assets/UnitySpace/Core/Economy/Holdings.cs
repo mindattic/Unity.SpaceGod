@@ -480,7 +480,21 @@ namespace Unity.SpaceGod.Core
             owned.Orders = orders;
             orders.StopIndex = 0;
             owned.MiningDays = 0;
-            owned.Ship.Role = RoleFor(orders.Kind, owned.Ship.Spec.Class);
+            var role = RoleFor(orders.Kind, owned.Ship.Spec.Class);
+            // A warship never sells on arrival, so a load left in its hold (and booked inbound at a market) would be stranded: release the booking and dump it, booking the loss.
+            if ((role == ShipRole.Patrol || role == ShipRole.Escort) && owned.Ship.HasCargo)
+            {
+                var ship = owned.Ship;
+                Economy.Release(ship);
+                BookBalance -= ship.CargoCost;
+                ship.HasCargo = false;
+                ship.CargoTonnes = 0;
+                ship.CargoCost = 0;
+                ship.CargoBonus = 0;
+                ship.CargoDestination = null;
+                ship.Cargo = null;
+            }
+            owned.Ship.Role = role;
             if (orders.Kind == StandingOrderKind.Patrol) owned.Ship.Route = orders.Stops;
             return true;
         }

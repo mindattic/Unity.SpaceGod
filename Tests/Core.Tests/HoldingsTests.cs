@@ -118,6 +118,25 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void SwitchingALoadedTraderToPatrolReleasesItsBookingAndClearsTheHold()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            int earth = Body(w, "Earth"), mars = Body(w, "Mars");
+            var owned = h.Buy(Port(w, "Earth Orbital"), ShipClass.Freighter, "Turncoat", StartJd);
+            var ship = owned.Ship;
+            var dest = w.Economy.Settlements.First(s => s.Body == mars);
+            int g = (int)Good.Food;
+            ship.HasCargo = true; ship.CargoGood = Good.Food; ship.CargoTonnes = 10; ship.CargoCost = 100; ship.CargoDestination = dest;
+            dest.Inbound[g] += 10;
+            double before = dest.Inbound[g];
+            Assert.That(h.Order(owned, StandingOrder.Patrol(earth, mars)), Is.True);
+            Assert.That(ship.HasCargo, Is.False);
+            Assert.That(ship.CargoDestination, Is.Null);
+            Assert.That(dest.Inbound[g], Is.EqualTo(before - 10).Within(1e-9), "the booked tonnage is released");
+        }
+
+        [Test]
         public void ATradeRouteCaptainWorksTheStopsInOrderBuyingAtEachForTheNext()
         {
             var w = CreateWorld();
