@@ -106,6 +106,18 @@ namespace Unity.SpaceGod.Core.Tests
         // ---------------------------------------------------------------- standing orders
 
         [Test]
+        public void ATradeRouteNeedsAMarketAtEveryStopAndAPlanetStandsInItsPortMoon()
+        {
+            var w = CreateWorld();
+            var h = Funded(w);
+            int earth = Body(w, "Earth"), saturn = Body(w, "Saturn");
+            var owned = h.Buy(Port(w, "Earth Orbital"), ShipClass.Freighter, "Route Runner", StartJd);
+            Assert.That(h.Order(owned, StandingOrder.TradeRoute(earth, saturn)), Is.False, "Saturn has no port of its own");
+            Assert.That(w.Catalog[h.MarketBodyFor(saturn)].ParentIndex, Is.EqualTo(saturn), "a Saturn moon with a port");
+            Assert.That(h.Order(owned, StandingOrder.TradeRoute(earth, h.MarketBodyFor(saturn))), Is.True);
+        }
+
+        [Test]
         public void ATradeRouteCaptainWorksTheStopsInOrderBuyingAtEachForTheNext()
         {
             var w = CreateWorld();

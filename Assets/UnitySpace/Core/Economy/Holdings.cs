@@ -471,6 +471,7 @@ namespace Unity.SpaceGod.Core
         {
             LastRefusal = null;
             if (owned == null || owned.Lost || orders == null || !CanFollow(owned.Ship, orders)) return false;
+            if (orders.Kind == StandingOrderKind.TradeRoute && !HasMarketAtEveryStop(orders)) return false;
             if (orders.Kind == StandingOrderKind.TradeRoute)
             {
                 string why = UnreachableLeg(owned.Ship, orders.Stops, Economy.Jd, out _);
@@ -509,6 +510,31 @@ namespace Unity.SpaceGod.Core
             double need = Propulsion.PropellantFor(ship, dv, 0, ship.PropellantCapacity);
             if (need <= ship.PropellantCapacity) return null;
             return $"{world.Catalog[a].Name} to {world.Catalog[b].Name} needs {need:N0} t of propellant, more than the {ship.PropellantCapacity:N0} t its tanks hold";
+        }
+
+        /// <summary>True when every stop of a trade route is a body with a discovered market to trade at (a planet with
+        /// only a port moon has none itself, so a route to it would shuttle empty forever).</summary>
+        public bool HasMarketAtEveryStop(StandingOrder o)
+        {
+            if (o.Stops == null) return false;
+            foreach (var stop in o.Stops)
+            {
+                bool found = false;
+                foreach (var s in Economy.At(stop)) if (s.Discovered) { found = true; break; }
+                if (!found) return false;
+            }
+            return true;
+        }
+
+        /// <summary>The body to trade at for <paramref name="body"/>: itself if it has a market, else the first of its
+        /// moons that does, else -1.</summary>
+        public int MarketBodyFor(int body)
+        {
+            foreach (var s in Economy.At(body)) if (s.Discovered) return body;
+            foreach (var b in world.Catalog.Bodies)
+                if (b.ParentIndex == body)
+                    foreach (var s in Economy.At(b.Index)) if (s.Discovered) return b.Index;
+            return -1;
         }
 
         public static bool CanFollow(Ship ship, StandingOrder o)

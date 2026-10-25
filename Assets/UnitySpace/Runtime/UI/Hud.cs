@@ -2660,6 +2660,7 @@ namespace Unity.SpaceGod.UI
             var h = app.World.Holdings;
             int here = o.Ship.Orbit?.Body ?? -1;
             int there = sel.IsBody ? sel.Body : -1;
+            int tradeThere = there >= 0 ? h.MarketBodyFor(there) : -1; // a planet's port moon stands in for it
             Property claim = null;
             foreach (var p in h.OfKind(PropertyKind.MiningClaim))
                 if (Economy.Carries(o.Ship.Spec.Class, p.Ore)) { claim = p; break; }
@@ -2667,7 +2668,7 @@ namespace Unity.SpaceGod.UI
             var choices = new List<StandingOrder>
             {
                 StandingOrder.Hold(),
-                here >= 0 && there >= 0 && here != there ? StandingOrder.TradeRoute(here, there) : null,
+                here >= 0 && tradeThere >= 0 && here != tradeThere ? StandingOrder.TradeRoute(here, tradeThere) : null,
                 claim != null ? StandingOrder.Mining(claim) : null,
                 charge != null && charge != o.Ship ? StandingOrder.Escort(charge) : null,
                 there >= 0 ? (here >= 0 && here != there ? StandingOrder.Patrol(here, there) : StandingOrder.Patrol(there)) : null,
