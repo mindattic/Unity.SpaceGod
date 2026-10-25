@@ -556,6 +556,7 @@ namespace Unity.SpaceGod.Core
             u.Vel = state.Vel;
             u.Forward = state.Forward;
             stick.Up = state.Up;
+            u.Up = state.Up;
             stick.AngularVelocity = state.AngularVelocity;
             if (stick.Secondary && stick.SecondaryGroup == WeaponGroup.Torpedoes && TorpedoTarget(b, u) is BattleUnit target) LaunchTorpedoes(b, u, target);
         }

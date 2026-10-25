@@ -203,6 +203,21 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ARolledMannedFighterKeepsItsRollOnTheUnitSoItIsDrawnAsFlown()
+        {
+            var (b, _, _, _) = CarrierFight(duel: false);
+            var u = b.Units.First(x => x.Kind == UnitKind.Fighter && x.Present);
+            var stick = new FighterControl { Throttle = 0.5, Roll = 1 };
+            b.Flown[u] = stick;
+            u.PlayerControlled = true;
+            for (int i = 0; i < 20; i++) b.Advance(0.1);
+            Assert.That(u.Up.LengthSquared, Is.GreaterThan(0.5), "FlyManned wrote the roof");
+            Assert.That((u.Up - stick.Up).Length, Is.LessThan(1e-6));
+            u.Basis(out _, out var up);
+            Assert.That(DVec3.Dot(up, stick.Up), Is.GreaterThan(0.999));
+        }
+
+        [Test]
         public void SeatsAreTakenOneAfterAnotherMidBattleEachHandedBackAndTheFightNeverStops()
         {
             var (w, ship) = WorldWarship();

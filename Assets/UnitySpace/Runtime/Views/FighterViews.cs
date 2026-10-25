@@ -75,7 +75,13 @@ namespace Unity.SpaceGod.Views
                     var f = u.Forward.SwapYZ;
                     var fwd = new Vector3((float)f.X, (float)f.Y, (float)f.Z);
                     v.Hull.transform.localPosition = rel;
-                    if (fwd.sqrMagnitude > 1e-12f) v.Hull.transform.localRotation = Quaternion.LookRotation(fwd, Mathf.Abs(fwd.normalized.y) > 0.98f ? Vector3.right : Vector3.up);
+                    if (fwd.sqrMagnitude > 1e-12f)
+                    {
+                        // The unit's own roof (a manned fighter's roll), not world up (U.SPC-T563).
+                        u.Basis(out _, out var roof);
+                        var up = roof.SwapYZ;
+                        v.Hull.transform.localRotation = Quaternion.LookRotation(fwd, new Vector3((float)up.X, (float)up.Y, (float)up.Z));
+                    }
                     v.Hull.transform.localScale = Vector3.one * (float)app.Scale.ShipLength(u.LengthKm);
 
                     float px = 5f * Mathf.Max(rel.magnitude, 1e-6f) / (float)ppu;
