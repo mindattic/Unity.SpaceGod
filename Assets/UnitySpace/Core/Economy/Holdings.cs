@@ -829,8 +829,11 @@ namespace Unity.SpaceGod.Core
             var yard = YardAt(s.Orbit.Body);
             if (yard == null) return;
             double share = Math.Min(RepairPerDay, s.Combat.Damage);
-            double bill = Economy.HullPrice(s.Spec.Class) * share * RepairRate;
-            if (House.Treasury < bill) return;
+            double unit = Economy.HullPrice(s.Spec.Class) * RepairRate;
+            // Mend what the house can pay for rather than nothing at all.
+            if (unit > 0 && House.Treasury < unit * share) share = Math.Max(0, House.Treasury) / unit;
+            if (share <= 1e-6) return;
+            double bill = unit * share;
             s.Combat.Repair(share);
             House.Treasury -= bill;
             yard.Owner.Treasury += bill;
@@ -912,7 +915,8 @@ namespace Unity.SpaceGod.Core
             // Badly hurt: to a yard, and wait there to be mended.
             if (ship.Combat != null && ship.Combat.HullDamage > RepairDamage)
             {
-                if (YardAt(here) != null) return here;
+                // Wait at the yard only while the house can pay for the mending; otherwise trade on rather than sit unmended for good.
+                if (YardAt(here) != null && House.Treasury > Economy.HullPrice(ship.Spec.Class) * RepairRate * 0.001) return here;
                 int yard = NearestYard(ship, here, jd);
                 if (yard >= 0) return yard;
             }
