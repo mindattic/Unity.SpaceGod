@@ -147,6 +147,10 @@ namespace Unity.SpaceGod.Core
         /// <summary>Handed on to another flagship (its own lost, or taken over by the player).</summary>
         public bool Retired;
 
+        /// <summary>Away on a hunt voyage beyond the gates (U.SPC-T585): its row is kept even if the hull is lost abroad,
+        /// until the heir comes home and <see cref="Outlaws.OnSuccession"/> hands the row on.</summary>
+        public bool Away;
+
         /// <summary>
         /// Still hunting: not handed on, lost, cast adrift or taken (flying other colours). A flagship through a
         /// gate or under its own cruise drive is the same live hull abroad (U.SPC-T453), never <see cref="Ship.Destroyed"/>
@@ -1210,6 +1214,13 @@ namespace Unity.SpaceGod.Core
             return h;
         }
 
+        /// <summary>A hunter group leaves (or comes home from) a hunt beyond the gates: while away, its row survives the
+        /// flagship being lost abroad (U.SPC-T585).</summary>
+        public void SetAway(Ship flagship, bool away)
+        {
+            if (flagship != null && byHunter.TryGetValue(flagship, out var h)) h.Away = away;
+        }
+
         /// <summary>A hunter flagship lost: its escort carries on as the group (see <see cref="War"/>'s succession).</summary>
         public void OnSuccession(Ship dead, Ship heir)
         {
@@ -1244,7 +1255,7 @@ namespace Unity.SpaceGod.Core
             for (int i = Hunters.Count - 1; i >= 0; i--)
             {
                 var h = Hunters[i];
-                if (!h.Retired && (!h.Ship.Destroyed || h.Ship.GateDeparted)) continue;
+                if (!h.Retired && (!h.Ship.Destroyed || h.Ship.GateDeparted || h.Away)) continue;
                 Hunters.RemoveAt(i);
                 if (byHunter.TryGetValue(h.Ship, out var cur) && cur == h) byHunter.Remove(h.Ship);
             }

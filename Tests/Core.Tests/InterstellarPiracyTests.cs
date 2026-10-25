@@ -486,5 +486,34 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(hunter, Is.Not.Null);
             Assert.That(g.Traffic.Clans.Hunts, Is.EqualTo(1));
         }
+
+        [Test]
+        public void ABountyHunterLostAbroadKeepsItsRowUntilItsHeirIsHome()
+        {
+            var g = Galaxy.CreateDefault(StartJd);
+            var sol = g.Find("Sol System");
+            var drift = g.Find("Barnard's Star").World.Pirates;
+            sol.World.Outlaws.Commission(Named(sol.World, "Earth Orbital"), StartJd);
+            g.Traffic.Clans.Pledge(sol.World.Sol, drift, 1e8);
+
+            Ship Hunt() => g.Systems.SelectMany(s => s.World.Fleet.Ships).Concat(g.Traffic.InTransit())
+                .FirstOrDefault(s => !s.Destroyed && s.Voyage?.Purpose == VoyagePurpose.Hunt && s.Voyage.Quarry == drift);
+            var jd = RunUntil(g, StartJd, 40, j =>
+            {
+                if (Hunt() != null) return true;
+                foreach (var h in sol.World.Outlaws.Hunters) h.Contract = null;
+                g.Traffic.Clans.Pursue(drift, j);
+                return Hunt() != null;
+            });
+            var hunt = Hunt();
+            Assert.That(hunt, Is.Not.Null, "no bounty hunter went after the Drift");
+            var origin = hunt.Voyage.Origin;
+
+            jd = RunUntil(g, jd, 150, _ => !sol.World.Fleet.IsPresent(origin));
+            Assert.That(sol.World.Fleet.IsPresent(origin), Is.False, "the hunter never left the system");
+            origin.Destroyed = true; // lost abroad: destroyed, but not through a gate
+            RunUntil(g, jd, 3, _ => false);
+            Assert.That(sol.World.Outlaws.Hunters.Any(h => h.Ship == origin && !h.Retired), Is.True, "the row of a hunter lost abroad was dropped before its heir got home");
+        }
     }
 }

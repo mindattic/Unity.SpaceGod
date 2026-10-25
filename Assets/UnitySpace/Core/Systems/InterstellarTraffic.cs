@@ -557,6 +557,7 @@ namespace Unity.SpaceGod.Core
             leader.Destroyed = true;
             world.War?.HandOverCommand(leader, keepHunter: v.Purpose == VoyagePurpose.Hunt);
             leader.Destroyed = false;
+            if (v.Purpose == VoyagePurpose.Hunt) world.Outlaws?.SetAway(leader, true);
             world.Fleet.LetGo(leader);
             leader.Voyage = v;
         }
@@ -909,7 +910,11 @@ namespace Unity.SpaceGod.Core
             // A bounty hunter takes up its old place on the home boards (U.SPC-T94). The hull that set out is the one
             // coming home now (U.SPC-T453: the same object the whole trip) unless it was lost abroad and an escort
             // took the hunt on as heir, so this only rebinds the hunter's row when that actually happened.
-            if (v.Purpose == VoyagePurpose.Hunt && v.Origin != null && v.Origin != ship) system.World.Outlaws?.OnSuccession(v.Origin, ship);
+            if (v.Purpose == VoyagePurpose.Hunt && v.Origin != null)
+            {
+                if (v.Origin != ship) system.World.Outlaws?.OnSuccession(v.Origin, ship);
+                else system.World.Outlaws?.SetAway(ship, false);
+            }
             // A smuggler back with goods it could not sell puts them back in the haven's stores.
             if (ship.Runner && ship.Plunder != null && system.World.War.LiveHavenOf(ship.Faction) is Settlement haven)
             {
