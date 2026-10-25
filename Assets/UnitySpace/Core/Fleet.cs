@@ -268,24 +268,26 @@ namespace Unity.SpaceGod.Core
                     evasion.Remove(s);
                     continue;
                 }
-                double step = Math.Min(dt, 0.002);
                 var off = e.offset;
                 var v = e.velocity;
-                for (double done = 0; done < dt - 1e-12; done += step)
+                if (omega * dt > 1)
                 {
-                    double d = Math.Min(step, dt - done);
-                    if (omega * d > 1)
+                    // A long frame (high time warp): settle part way in one go, without overshoot, rather than integrating thousands of tiny steps.
+                    off = DVec3.Lerp(off, target[i], Math.Min(1, omega * dt * 0.5));
+                    v = DVec3.Zero;
+                }
+                else
+                {
+                    double step = Math.Min(dt, 0.002);
+                    for (double done = 0; done < dt - 1e-12; done += step)
                     {
-                        // A long frame (high time warp): just settle part way, without overshoot.
-                        off = DVec3.Lerp(off, target[i], Math.Min(1, omega * d * 0.5));
-                        v = DVec3.Zero;
-                        continue;
+                        double d = Math.Min(step, dt - done);
+                        var acc = (target[i] - off) * (omega * omega) - v * (2 * omega);
+                        double maxAcc = s.AccelG * Astro.GravityKmPerDay2;
+                        if (acc.Length > maxAcc) acc = acc.Normalized * maxAcc;
+                        v += acc * d;
+                        off += v * d;
                     }
-                    var acc = (target[i] - off) * (omega * omega) - v * (2 * omega);
-                    double maxAcc = s.AccelG * Astro.GravityKmPerDay2;
-                    if (acc.Length > maxAcc) acc = acc.Normalized * maxAcc;
-                    v += acc * d;
-                    off += v * d;
                 }
                 evasion[s] = (off, v);
             }

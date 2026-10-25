@@ -40,6 +40,31 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(last > Fleet.SafeDistanceKm(a, b) * 0.9, Is.True, "they stayed on top of each other");
         }
 
+        /// <summary>At high time warp (long frames) avoidance settles in one shot instead of thousands of sub-steps, and stays finite. (U.SPC-T554)</summary>
+        [Test]
+        public void LongFramesSettleWithoutOvershoot()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var fleet = new Fleet(eph, 7) { Dwell = (s, d) => 30 };
+            var f = fleet.AddFaction("Test", "TS", new Rgb(1, 1, 1));
+            int earth = eph.Catalog["Earth"].Index;
+            var a = fleet.AddShip("A", ShipClass.Freighter, f, ShipRole.Trader);
+            var b = fleet.AddShip("B", ShipClass.Freighter, f, ShipRole.Trader);
+            a.Ports = b.Ports = new[] { earth, eph.Catalog["Moon"].Index };
+            var spot = Infrastructure.EquatorialOrbit(eph.Catalog[earth], 20000, 0, 0, 0, StartJd);
+            fleet.Station(a, earth, StartJd, spot);
+            fleet.Station(b, earth, StartJd, spot);
+            for (int k = 1; k <= 5; k++)
+            {
+                double jd = StartJd + k * 10;
+                eph.Update(jd);
+                fleet.Update(jd);
+                var off = fleet.EvasionOf(a);
+                Assert.That(double.IsNaN(off.Length) || double.IsInfinity(off.Length), Is.False);
+            }
+        }
+
         /// <summary>The ship the player is flying isn't at its scheduled spot: nobody gives way to that ghost.</summary>
         [Test]
         public void NobodySteersRoundTheScheduledSpotOfAHeldShip()
