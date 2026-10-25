@@ -1413,7 +1413,12 @@ namespace Unity.SpaceGod.Core
         {
             double rad = angleDeg * Astro.Deg2Rad;
             double cos = Math.Cos(rad), sin = Math.Sin(rad);
+            // Turn about the vertical axis made square to v (in v's vertical plane), so the result lies exactly
+            // angleDeg off v even when v is above or below the horizon; level v gives the plain vertical axis.
             var axis = DVec3.UnitZ;
+            var vn = v.LengthSquared > 1e-18 ? v.Normalized : v;
+            var square = axis - vn * DVec3.Dot(axis, vn);
+            if (square.LengthSquared > 1e-12) axis = square.Normalized;
             return v * cos + DVec3.Cross(axis, v) * sin + axis * DVec3.Dot(axis, v) * (1 - cos);
         }
 

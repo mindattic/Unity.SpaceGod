@@ -471,6 +471,19 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void TheBowForATargetAboveTheHullPutsItExactlyAtTheAskedBearing()
+        {
+            double el = 30 * Math.PI / 180;
+            var toTarget = new DVec3(Math.Cos(el), 0, Math.Sin(el));
+            foreach (int bearing in new[] { 0, 45, 90, 180, 270 })
+            {
+                var bow = Battle.BowFor(toTarget, bearing).Normalized;
+                double off = Math.Acos(Math.Max(-1, Math.Min(1, DVec3.Dot(bow, toTarget.Normalized)))) * 180 / Math.PI;
+                Assert.That(off, Is.EqualTo(Math.Min(bearing, 360 - bearing)).Within(1e-6), "bearing " + bearing);
+            }
+        }
+
+        [Test]
         public void TheBroadsideSettingsAreInTheMenu()
         {
             Assert.That(Broadsides.BraceReduction.Group, Is.EqualTo(SettingGroups.Broadsides));
