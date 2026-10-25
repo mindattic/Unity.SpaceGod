@@ -1162,7 +1162,9 @@ namespace Unity.SpaceGod.Core
         {
             if (Guild == null || world.HunterCap <= 0) return;
             int alive = 0;
-            foreach (var h in Hunters) if (h.Alive) alive++;
+            // Every hunter still under its faction counts, wherever it is: one away on a hunt abroad (through a gate
+            // or under cruise) is still a group, so the guild does not buy a second to stand beside it (U.SPC-T586).
+            foreach (var h in Hunters) if (!h.Retired && !h.Ship.Destroyed && !h.Ship.Derelict && h.Ship.Faction == h.Faction) alive++;
             if (alive >= world.HunterCap) return;
             bool unhunted = false;
             foreach (var p in Postings())

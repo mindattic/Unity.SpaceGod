@@ -53,6 +53,47 @@ namespace Unity.SpaceGod.Core.Tests
             return ship;
         }
 
+        [Test]
+        public void AHunterAwayOnAHuntAbroadStillCountsTowardTheCap()
+        {
+            var w = CreateWorld();
+            w.HunterCap = 1;
+            var hunter = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
+            // Away abroad: the same live hull, no longer in this fleet (U.SPC-T453).
+            w.Fleet.LetGo(hunter.Ship);
+            Assert.That(hunter.Alive, Is.False, "away from this fleet");
+            var raider = Raider(w, Body(w, "Deimos"));
+            var rec = w.Law.RecordOf(raider.Ship);
+            rec.Bounty[w.Sol] = 4e6;
+            rec.BountyUntil[w.Sol] = StartJd + 1000;
+            for (int d = 0; d < 400; d++)
+            {
+                w.Independents.Treasury = 1e12;
+                w.Outlaws.Update(StartJd + d);
+            }
+            Assert.That(w.Outlaws.Hunters.Count(h => !h.Retired), Is.EqualTo(1), "a second group was bought with the first abroad");
+        }
+
+        [Test]
+        public void AHunterGoneThroughAGateStillCountsTowardTheCap()
+        {
+            var w = CreateWorld();
+            w.HunterCap = 1;
+            var hunter = w.Outlaws.Commission(Port(w, "Earth Orbital"), StartJd);
+            hunter.Ship.Destroyed = true;
+            hunter.Ship.GateDeparted = true;
+            var raider = Raider(w, Body(w, "Deimos"));
+            var rec = w.Law.RecordOf(raider.Ship);
+            rec.Bounty[w.Sol] = 4e6;
+            rec.BountyUntil[w.Sol] = StartJd + 1000;
+            for (int d = 0; d < 400; d++)
+            {
+                w.Independents.Treasury = 1e12;
+                w.Outlaws.Update(StartJd + d);
+            }
+            Assert.That(w.Outlaws.Hunters.Count(h => !h.Retired), Is.EqualTo(1), "a second group was bought with the first through a gate");
+        }
+
         // ---------------------------------------------------------------- on the books
 
         [Test]
