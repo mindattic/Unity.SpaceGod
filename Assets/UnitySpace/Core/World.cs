@@ -478,6 +478,7 @@ namespace Unity.SpaceGod.Core
             // (Navies' own supply -- tankers and depots -- is a war-logistics matter, left to their stores for now.)
             fleet.BurnsPropellant = BurnsPropellant;
             fleet.CanRefuelAt = economy.HasPropellantAt;
+            fleet.ForceTopUp = (ship, body, jd) => economy.Refuel(ship, body, jd, force: true);
             economy.EstimateTrip = fleet.EstimateTrip;
             fleet.RanDry = (ship, when) =>
                 Log(when, $"{ship.Name} has run its tanks dry off {Catalog[ship.Orbit.Body].Name} and calls for a tanker", WorldEventKind.Info, ship.Orbit.Body);

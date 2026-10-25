@@ -257,6 +257,28 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void AShipShortForItsTripCallsAForcedTopUpInPortAndSetsOutWithoutWaiting()
+        {
+            var r = Shuttle(propellant: 100, canRefuel: (s, body) => true);
+            var ship = r.Ship;
+            r.Fleet.ForceTopUp = (s, body, jd) => s.Propellant = s.PropellantCapacity;
+            // Re-plan from port now that the hook is set.
+            r.Fleet.Station(ship, r.Earth, StartJd);
+            StepUntil(r, () => ship.Phase == ShipPhase.Transit, 5);
+            Assert.That(ship.WaitingForPropellant, Is.False);
+        }
+
+        [Test]
+        public void AForcedRefuelFillsATankAboveTheTopUpThresholdButAnUnforcedOneDoesNot()
+        {
+            var (economy, port, owner) = Depot(water: 50000, hydrocarbons: 50000);
+            var ship = Freighter();
+            ship.Propellant = ship.PropellantCapacity * 0.98;
+            Assert.That(economy.Refuel(ship, 3, StartJd), Is.EqualTo(0));
+            Assert.That(economy.Refuel(ship, 3, StartJd, force: true), Is.GreaterThan(0));
+        }
+
+        [Test]
         public void RefuellingBuysTheCheaperReactionMassWithItsHeliumAndThePortFeelsTheDemand()
         {
             var (economy, port, owner) = Depot(water: 50000, hydrocarbons: 50000);

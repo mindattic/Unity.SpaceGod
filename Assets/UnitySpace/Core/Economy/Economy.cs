@@ -935,11 +935,12 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// Tops up a ship's tanks at <paramref name="body"/> (an AI ship in port): from the cheapest market
         /// there it may trade at, reaction mass from what it can spare beyond its own reserve, paid from the
-        /// ship's faction. Returns the tonnes taken on.
+        /// ship's faction. Returns the tonnes taken on. A tank at or above the top-up threshold is left alone unless
+        /// <paramref name="force"/> (a planned trip it cannot cover as it stands, U.SPC-T545).
         /// </summary>
-        public double Refuel(Ship ship, int body, double jd)
+        public double Refuel(Ship ship, int body, double jd, bool force = false)
         {
-            if (ship.PropellantCapacity <= 0 || ship.PropellantFraction >= Propulsion.TopUpBelow) return 0;
+            if (ship.PropellantCapacity <= 0 || (!force && ship.PropellantFraction >= Propulsion.TopUpBelow)) return 0;
             var markets = new List<Settlement>();
             foreach (var s in At(body))
                 if (HasPropellant(ship, s)) markets.Add(s);

@@ -84,6 +84,8 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Whether a ship short of propellant for its next trip can wait at a body for its tanks to be filled (a port that sells it).</summary>
         public Func<Ship, int, bool> CanRefuelAt;
+        /// <summary>Tops a ship up in port whatever its tank level, for a trip it is short of propellant for (U.SPC-T545).</summary>
+        public Action<Ship, int, double> ForceTopUp;
 
         /// <summary>Raised when a ship runs dry: it drifts where its tanks gave out and calls for a tanker.</summary>
         public Action<Ship, double> RanDry;
@@ -1612,6 +1614,8 @@ namespace Unity.SpaceGod.Core
                 ship.PhaseEndJd = nowJd + Math.Max(dwell, 0.05);
                 return;
             }
+            if (ShortOfPropellant(ship, here, next, nowJd) && ForceTopUp != null && CanRefuelAt != null && CanRefuelAt(ship, here))
+                ForceTopUp(ship, here, nowJd);
             if (ShortOfPropellant(ship, here, next, nowJd))
             {
                 // Not enough in the tanks for the trip. In port, it waits for propellant to be had; anywhere
