@@ -434,6 +434,24 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
+        public void ARaiderCaptainWhoseOwnFlagshipComesHomeIsAboardAgain()
+        {
+            var w = CreateWorld();
+            var o = Raider(w, Body(w, "Earth"), "Homebound");
+            var ship = o.Ship;
+            ship.GateDeparted = true;
+            w.Outlaws.Update(StartJd);
+            w.Outlaws.Update(StartJd + 1);
+            Assert.That(o.Ashore, Is.True, "a captain whose hull left was not put ashore");
+            ship.GateDeparted = false;
+            w.Outlaws.Update(StartJd + 2);
+            w.Outlaws.Update(StartJd + 3);
+            Assert.That(o.Ashore, Is.False, "the captain stayed ashore after their own flagship came home");
+            Assert.That(o.Aboard, Is.True);
+            Assert.That(w.Outlaws.Of(ship), Is.SameAs(o));
+        }
+
+        [Test]
         public void ARaiderCaptainWhoseBandWentThroughAGateIsAwayNotVanished()
         {
             var w = CreateWorld();

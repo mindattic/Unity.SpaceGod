@@ -61,6 +61,9 @@ namespace Unity.SpaceGod.Core
         /// waiting for a new band to command (see <see cref="Outlaws.Sync"/>).</summary>
         public bool Ashore;
 
+        /// <summary>Ashore only because the flagship is abroad (SettleFates): it clears when the hull comes home.</summary>
+        public bool FlagshipAway;
+
         /// <summary>The ship whose brig holds them, while <see cref="OutlawFate.Held"/>.</summary>
         public Ship HeldBy;
 
@@ -372,9 +375,16 @@ namespace Unity.SpaceGod.Core
         {
             foreach (var o in All)
             {
+                if (o.AtLarge && o.Ashore && o.FlagshipAway && o.Ship != null && !o.Ship.GateDeparted && !o.Ship.Destroyed && !o.Ship.Derelict
+                    && o.Ship.Faction != null && o.Ship.Faction.IsPirate && world.Fleet.IsPresent(o.Ship)
+                    && byShip.TryGetValue(o.Ship, out var back) && back == o)
+                {
+                    o.Ashore = false;
+                    o.FlagshipAway = false;
+                }
                 if (!o.Aboard) continue;
                 if (o.Ship.Faction == null || !o.Ship.Faction.IsPirate) End(o, OutlawFate.Captured, jd, o.Ship.Faction?.Name);
-                else if (o.Ship.GateDeparted || !world.Fleet.IsPresent(o.Ship)) o.Ashore = true;
+                else if (o.Ship.GateDeparted || !world.Fleet.IsPresent(o.Ship)) { o.Ashore = true; o.FlagshipAway = true; }
                 else if (o.Ship.Destroyed || o.Ship.Derelict) End(o, OutlawFate.Vanished, jd, null);
             }
         }
@@ -763,6 +773,7 @@ namespace Unity.SpaceGod.Core
             o.Fate = OutlawFate.AtLarge;
             o.Pod = null;
             o.Ashore = true;
+            o.FlagshipAway = false;
             o.FateBy = null;
             world.Log(jd, $"{Cap(o.Title)} {how}: free, and back with the raiders", WorldEventKind.Law, -1);
         }
@@ -778,6 +789,7 @@ namespace Unity.SpaceGod.Core
             o.Ship = ship;
             o.Haven = world.War.HomeHaven(ship);
             o.Ashore = false;
+            o.FlagshipAway = false;
             byShip[ship] = o;
             world.Log(jd, $"{Cap(o.Title)} is back in command, of the raider {ship.Name}", WorldEventKind.Law, -1);
         }
