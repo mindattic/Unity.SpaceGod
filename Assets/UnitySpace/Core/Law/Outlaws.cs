@@ -435,7 +435,7 @@ namespace Unity.SpaceGod.Core
                 case ShipPhase.Lurk:
                 case ShipPhase.Adrift:
                     body = s.LaneLeg.From;
-                    where = (s.Phase == ShipPhase.Lane ? "riding the " : "lurking off the ") + s.LaneLeg.Lane.Name + " lane";
+                    where = (s.Phase == ShipPhase.Lane ? "riding the " : s.Stalled ? "stalled off the " : "lurking off the ") + s.LaneLeg.Lane.Name + " lane";
                     break;
                 default:
                     body = s.Orbit?.Body ?? -1;

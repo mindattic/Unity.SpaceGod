@@ -350,7 +350,7 @@ namespace Unity.SpaceGod.Core
         /// which has left its station however its schedule still reads.
         /// </summary>
         bool Lurking(Ship lurker) =>
-            !lurker.Destroyed && !lurker.IsEscort && lurker.Phase == ShipPhase.Lurk && lurker.Battle == null &&
+            !lurker.Destroyed && !lurker.IsEscort && lurker.Ambushing && lurker.Battle == null &&
             lurker != world.PilotedShip && (world.Pursuit == null || world.Pursuit.Of(lurker) == null) &&
             LaneInterdictors.Fielded(lurker, Fleet.Ships);
 
@@ -487,7 +487,7 @@ namespace Unity.SpaceGod.Core
             LaneThreat? best = null;
             foreach (var lurker in Fleet.Ships)
             {
-                if (lurker.Phase != ShipPhase.Lurk || lurker.LaneLeg.Lane != lane || !Targets(lurker, rider) || !Lurking(lurker)) continue;
+                if (!lurker.Ambushing || lurker.LaneLeg.Lane != lane || !Targets(lurker, rider) || !Lurking(lurker)) continue;
                 if (pulseReady.TryGetValue(lurker, out double ready) && ready > jd) continue;
                 // The lurker's station and the pulse's reach, as fractions of the rider's own leg.
                 double stationA = lurker.LaneLeg.From == lane.A ? lurker.LaneHold : 1 - lurker.LaneHold;

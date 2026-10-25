@@ -57,7 +57,7 @@ namespace Unity.SpaceGod.Core
         /// Running dark: the ship's own choice (<see cref="Ship.SilentRunning"/>), or raiders lying in wait
         /// beside a lane, who always do.
         /// </summary>
-        public static bool Silent(Ship s) => s != null && (s.SilentRunning || (s.Faction != null && s.Faction.IsPirate && s.Controller.Phase == ShipPhase.Lurk));
+        public static bool Silent(Ship s) => s != null && (s.SilentRunning || (s.Faction != null && s.Faction.IsPirate && s.Controller.Ambushing));
 
         /// <summary>Squawking its identity: lawful ships do, unless running silent; pirates and hulks never.</summary>
         public static bool Transponder(Ship s) =>

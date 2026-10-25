@@ -446,6 +446,13 @@ namespace Unity.SpaceGod.Core
         public Lane LurkLane;
         public double LurkAt, LurkDays;
 
+        /// <summary>The ride was stalled by a misaligned lane (U.SPC-T572): it waits off the lane in <see cref="ShipPhase.Lurk"/>
+        /// but is no raider lying in wait. Cleared when the ride resumes or a new one starts.</summary>
+        public bool Stalled;
+
+        /// <summary>Lying in wait beside a lane on purpose (not stalled by a worn lane).</summary>
+        public bool Ambushing => Phase == ShipPhase.Lurk && !Stalled;
+
         /// <summary>Boarded and left adrift (cargo taken, crew gone): no longer flies, burns out of the list later.</summary>
         public bool Derelict;
         public double DerelictSinceJd;
@@ -783,6 +790,7 @@ namespace Unity.SpaceGod.Core
             LurkLane = null;
             LurkAt = 0;
             LurkDays = 0;
+            Stalled = false;
             // Not Destroyed or Derelict: a hull crossing never carries those into this call (a cruise drops a lost
             // or boarded hull from its group on the spot, see DeepSpace.Destroy, and Derelict is a system-combat
             // outcome a gate's passage or a cruise never produces), so clearing them here would only ever be able to

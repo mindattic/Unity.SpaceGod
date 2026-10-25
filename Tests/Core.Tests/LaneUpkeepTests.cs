@@ -138,6 +138,10 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(ship.LaneEndProgress, Is.EqualTo(0.5));
             Assert.That(ship.PhaseEndJd, Is.LessThan(fullEnd));
             Assert.That(w.Fleet.StallRide(ship, 0.5, 0.3), Is.False, "one stall a ride");
+            w.Fleet.Update(ship.PhaseEndJd + 1e-3);
+            Assert.That(ship.Phase, Is.EqualTo(ShipPhase.Lurk), "it waits off the lane");
+            Assert.That(ship.Stalled, Is.True);
+            Assert.That(ship.Ambushing, Is.False, "a stall is no ambush (U.SPC-T572)");
         }
 
         // ------------------------------------------------------------ tending

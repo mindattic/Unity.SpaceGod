@@ -131,7 +131,7 @@ namespace Unity.SpaceGod.Core
                 Opportunity op = null;
                 if (s.Faction.IsPirate)
                 {
-                    if (d <= SpawnRadiusKm && s.Phase == ShipPhase.Lurk && !s.Derelict && LaneOf(s) is Lane lurkLane && src.LaneDanger(lurkLane) >= AmbushDanger)
+                    if (d <= SpawnRadiusKm && s.Ambushing && !s.Derelict && LaneOf(s) is Lane lurkLane && src.LaneDanger(lurkLane) >= AmbushDanger)
                         op = Ambush(s, lurkLane, jd, src);
                     else if (!bountyOpen && d <= BountyRadiusKm && !s.Derelict && s.Spec.IsMilitary)
                         op = BountyOn(s, jd, src);
@@ -537,7 +537,7 @@ namespace Unity.SpaceGod.Core
                         else Fail(op, jd, "Someone else dealt with the raiders off the " + op.Lane.Name + " lane.");
                         return;
                     }
-                    if (!op.Engaged && s.Phase != ShipPhase.Lurk) { Fail(op, jd, "The raiders off the " + op.Lane.Name + " lane moved on."); return; }
+                    if (!op.Engaged && !s.Ambushing) { Fail(op, jd, "The raiders off the " + op.Lane.Name + " lane moved on."); return; }
                     break;
 
                 case OpportunityKind.ConvoyEscort:

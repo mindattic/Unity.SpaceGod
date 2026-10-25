@@ -1916,6 +1916,7 @@ namespace Unity.SpaceGod.UI
             if (ship.Battle != null) return "IN BATTLE  " + ship.Battle.Name;
             var c = ship.Controller;
             if (ship.Derelict) return "DERELICT";
+            if (c.Phase == ShipPhase.Lurk && c.Stalled) return "stalled on " + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Lurk) return (c.Faction != null && !c.Faction.IsPirate ? "lane picket on " : "lurking on ") + c.LaneLeg.Lane.Name;
             if (c.Phase == ShipPhase.Adrift) return "adrift by " + c.LaneLeg.Lane.Name;
             if (c.GateKm is DVec3 gateKm)
@@ -2012,6 +2013,11 @@ namespace Unity.SpaceGod.UI
                     lines.Add(("Status", "Under your helm near " + near.Name));
                     lines.Add(("Altitude", Km(app.PilotOffsetKm.Length - near.RadiusKm)));
                     lines.Add(("Speed", SpeedText(app.PilotSpeedKmS)));
+                }
+                else if (c.Phase == ShipPhase.Lurk && c.Stalled)
+                {
+                    lines.Add(("Status", "Stalled beside the " + c.LaneLeg.Lane.Name + " hyperlane (rings misaligned)"));
+                    lines.Add(("Until", Duration(Fleet.RemainingDays(c, app.Clock.Jd)) + " more"));
                 }
                 else if (c.Phase == ShipPhase.Lurk)
                 {

@@ -854,6 +854,7 @@ namespace Unity.SpaceGod.Core
             ship.LaneEndProgress = at;
             ship.PhaseEndJd = ship.PhaseStartJd + (ship.PhaseEndJd - ship.PhaseStartJd) * at;
             ship.LurkDays = Math.Max(0.01, days);
+            ship.Stalled = true;
             return true;
         }
 
@@ -880,6 +881,7 @@ namespace Unity.SpaceGod.Core
             ship.Conic = null;
             ship.Phase = ShipPhase.Lane;
             ship.LaneSurged = false;
+            ship.Stalled = false;
             ship.LaneStartProgress = 0;
             ship.LaneEndProgress = ship.LurkLane == hop.Lane ? ship.LurkAt : 1;
             ship.PhaseStartJd = jd;
@@ -893,6 +895,7 @@ namespace Unity.SpaceGod.Core
         {
             ship.Phase = ShipPhase.Lane;
             ship.LaneSurged = false;
+            ship.Stalled = false;
             ship.LaneStartProgress = ship.LaneHold;
             ship.LaneEndProgress = 1;
             // LaneHoldSide is kept: the ship eases back in from beside the lane over the first hours.
