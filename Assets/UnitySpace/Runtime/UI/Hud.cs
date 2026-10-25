@@ -1921,9 +1921,12 @@ namespace Unity.SpaceGod.UI
             if (c.GateKm is DVec3 gateKm)
             {
                 // Bound for a jump gate: name it, and the system beyond.
-                string gate = "a jump gate";
-                foreach (var g in app.ActiveSystem.Gates)
-                    if ((g.PositionKm - gateKm).Length < 1) gate = "the " + g.Name;
+                // A cruise voyage's GateKm is the edge of the well, not a gate (U.SPC-T576).
+                bool cruiseOut = c.Voyage != null && c.Voyage.ByCruise;
+                string gate = cruiseOut ? "the edge of the well" : "a jump gate";
+                if (!cruiseOut)
+                    foreach (var g in app.ActiveSystem.Gates)
+                        if ((g.PositionKm - gateKm).Length < 1) gate = "the " + g.Name;
                 if (c.Voyage != null && c.Voyage.AtGate) return "at " + gate;
                 if (c.Phase == ShipPhase.Transit) return "-> " + gate;
             }
@@ -2049,6 +2052,7 @@ namespace Unity.SpaceGod.UI
                 {
                     // A fixed point is a lane's ramp, unless the ship is bound for a jump gate or a raider stakeout off one (U.SPC-T435).
                     string where = c.Ring != null && c.Orbit == c.HoldPoint ? c.Ring.Name + ", " + app.Catalog[c.Orbit.Body].Name
+                        : c.Orbit.Fixed && c.GateKm != null && c.Voyage != null && c.Voyage.ByCruise ? "the edge of the well"
                         : c.Orbit.Fixed && (c.GateKm != null || c.StakeoutKm != null) ? "a jump gate's approach"
                         : c.Orbit.Fixed ? app.Catalog[c.Orbit.Body].Name + " hyperlane ramp" : app.Catalog[c.Orbit.Body].Name;
                     lines.Add(("Status", (st.Progress < 0.5 ? "Burning toward " : "Braking for ") + where));
