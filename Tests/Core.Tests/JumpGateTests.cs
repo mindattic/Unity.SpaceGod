@@ -228,5 +228,21 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(sol.World.Fleet.Ships.Count, Is.EqualTo(solBefore));
             Assert.That(ac.World.Fleet.Ships.Count, Is.EqualTo(acBefore));
         }
+
+        [Test]
+        public void ScheduleNextOnAShipInFlightRetargetsWithoutCuttingItsTransitShort()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            eph.Update(StartJd);
+            var fleet = Fleet.CreateDefault(eph, StartJd);
+            var s = fleet.Ships.First(x => !x.IsEscort && x.Phase == ShipPhase.Transit && x.PhaseEndJd - StartJd > 2 && StartJd - x.PhaseStartJd > 0.5);
+            double end = s.PhaseEndJd;
+            var before = fleet.StateOf(s, StartJd).HelioKm;
+            s.GateKm = new DVec3(40 * Astro.AuKm, 0, 0);
+            fleet.ScheduleNext(s, StartJd);
+            Assert.That(s.PhaseEndJd, Is.EqualTo(end));
+            Assert.That(s.DestinationBody, Is.EqualTo(0));
+            Assert.That((fleet.StateOf(s, StartJd).HelioKm - before).Length, Is.LessThan(1.0));
+        }
     }
 }

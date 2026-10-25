@@ -1571,7 +1571,10 @@ namespace Unity.SpaceGod.Core
                 // Bound for a gate (see InterstellarTraffic): no markets or orders to consult, just go.
                 ship.DestinationBody = catalog.Root.Index;
                 ship.Wander = false;
-                ship.PhaseEndJd = nowJd + 0.05 + rng.NextDouble() * 0.15;
+                // A ship already under way only retargets: moving its phase end would cut the transit short and
+                // teleport it (U.SPC-T570). It heads for the gate when this leg ends.
+                if (ship.Phase != ShipPhase.Transit && ship.Phase != ShipPhase.Lane)
+                    ship.PhaseEndJd = nowJd + 0.05 + rng.NextDouble() * 0.15;
                 return;
             }
             int here = ship.Orbit.Body;
