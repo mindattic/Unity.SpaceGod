@@ -28,6 +28,6 @@ namespace Unity.SpaceGod
 
         public static readonly RangeSetting MasterVolume = new RangeSetting("audio.masterVolume", SettingGroups.Audio,
             "Master volume", 100, 0, 100, 5, "How loud everything the game plays is.",
-            v => v.ToString("0", CultureInfo.InvariantCulture) + "%", "sound mute loudness").Applying(v => AudioListener.volume = (float)(v / 100));
+            v => v.ToString("0", CultureInfo.InvariantCulture) + "%", "sound mute loudness").Applying(v => AudioListener.volume = SessionAudio.ListenerVolume(v)); // 0 under the CLI mute (U.SPC-T536)
     }
 }

@@ -35,8 +35,12 @@ try {
   }
 
   if (-not (Test-Path $exe)) { Block "Not deployed yet ($exe is missing). Run /deploy first." }
-  Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe)
-  Block "Unity.SpaceGod started from C:\Apps\Unity.SpaceGod."
+  # An agent's /run launches muted (Unity.Shared's session mute, U.SPC-T536); the env var is set only around the launch.
+  $previous = $env:MINDATTIC_CLI_MUTED
+  $env:MINDATTIC_CLI_MUTED = '1'
+  try { Start-Process -FilePath $exe -ArgumentList '-muted' -WorkingDirectory (Split-Path $exe) }
+  finally { if ($null -eq $previous) { Remove-Item Env:MINDATTIC_CLI_MUTED -ErrorAction SilentlyContinue } else { $env:MINDATTIC_CLI_MUTED = $previous } }
+  Block "Unity.SpaceGod started muted from C:\Apps\Unity.SpaceGod (tools\launch.ps1 -Sound for audio)."
 } catch {
   Block "/$command failed: $($_.Exception.Message)"
 }

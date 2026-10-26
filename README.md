@@ -292,6 +292,10 @@ powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 
 `tools\launch.bat` (or `tools\launch.ps1`) always redeploys first, then offers Normal Play, Demo + Capture (`-demo -capture video screen 5`) or Quit.
 
+### Muted launches
+
+Development launches are silent. `tools\launch.ps1` (every menu choice) and the `/run` hook start the game with `-muted` and `MINDATTIC_CLI_MUTED=1`, which turn on Unity.Shared's session mute before the first scene loads; `SessionAudio` then holds `AudioListener.volume` at 0, even when the profile's master volume is applied. The mute lasts that run only and never changes the saved master volume or `settings.json`. Pass `-Sound` (`tools\launch.ps1 -Sound`) to launch with audio. The Desktop shortcut and a plain double-click on the exe play sound as usual.
+
 ## Command line
 
 | Flag | Result |
