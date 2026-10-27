@@ -26,21 +26,21 @@
 .PARAMETER Force
     Rebuild and republish even when the deployed commit already matches the player source (skips
     only the up-to-date check; it clears nothing more than a normal rebuild does). The repo-root
-    deploy.bat's "1) Deploy & Run" passes it, so that choice always republishes.
+    run.bat's "1) Deploy & Run" passes it, so that choice always republishes.
 
 .PARAMETER LauncherOnly
-    Refresh the Desktop shortcut (pointing at the repo-root deploy.bat, whose menu offers
+    Refresh the Desktop shortcut (pointing at the repo-root run.bat, whose menu offers
     1) Deploy & Run and 2) Run) and exit, without pulling, building or stopping anything.
 
 .NOTES
     This script never prompts, so agents and /deploy can run it unattended. The choice between
-    deploying and just running lives in the repo-root deploy.bat that the Desktop shortcut opens.
+    deploying and just running lives in the repo-root run.bat that the Desktop shortcut opens.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
-    powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -Launch
-    powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -Force -Launch
-    powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -LauncherOnly
+    powershell -ExecutionPolicy Bypass -File tools\run.ps1
+    powershell -ExecutionPolicy Bypass -File tools\run.ps1 -Launch
+    powershell -ExecutionPolicy Bypass -File tools\run.ps1 -Force -Launch
+    powershell -ExecutionPolicy Bypass -File tools\run.ps1 -LauncherOnly
 #>
 param([switch]$Launch, [switch]$SkipHdrp, [switch]$Force, [switch]$LauncherOnly)
 
@@ -51,16 +51,16 @@ $repoDir  = Split-Path $PSScriptRoot   # tools\ -> the repo folder (Unity.SpaceG
 $out      = 'C:\Apps\Unity.SpaceGod'
 $exeName  = 'Unity.SpaceGod.exe'
 $buildDir = Join-Path $repoDir 'Builds\Windows'
-$deployBat = Join-Path $repoDir 'deploy.bat'
+$runBat = Join-Path $repoDir 'run.bat'
 $marker    = Join-Path $out '.deploy-commit'
 
-# Points at deploy.bat (not the exe directly), whose menu asks first: 1) Deploy & Run (pull latest,
+# Points at run.bat (not the exe directly), whose menu asks first: 1) Deploy & Run (pull latest,
 # rebuild, launch) or 2) Run (start the published copy as it is).
 # GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
 function Set-Shortcut([string]$exe) {
     $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'
     $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
-    $link.TargetPath       = $deployBat
+    $link.TargetPath       = $runBat
     $link.WorkingDirectory = $repoDir
     if (Test-Path $exe) { $link.IconLocation = "$exe,0" }
     $link.Description      = 'Unity.SpaceGod: 1) Deploy & Run or 2) Run'

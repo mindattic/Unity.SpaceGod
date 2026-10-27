@@ -1,7 +1,7 @@
 <#
   UserPromptSubmit hook - answer /deploy and /run on the spot, with no model turn.
 
-  /deploy starts deploy.bat in its own console window (a clean build published to
+  /deploy starts run.bat in its own console window (a clean build published to
   C:\Apps\Unity.SpaceGod, plus the Desktop shortcut) and returns at once; /run starts the
   published copy. Both block the prompt, so no tool call is made and the orchestrator's pace
   gate never holds them. Any other prompt passes through untouched.
@@ -26,10 +26,10 @@ function Block([string]$reason) {
 
 try {
   if ($command -eq 'deploy') {
-    # --deploy skips deploy.bat's 1) Deploy & Run / 2) Run menu (that is for the Desktop shortcut);
-    # flags after /deploy (e.g. -SkipHdrp, -Force) pass through to tools\deploy.ps1.
+    # --deploy skips run.bat's 1) Deploy & Run / 2) Run menu (that is for the Desktop shortcut);
+    # flags after /deploy (e.g. -SkipHdrp, -Force) pass through to tools\run.ps1.
     $flags = ($prompt -replace '^/deploy\s*', '').Trim()
-    $bat = Join-Path $repoRoot 'deploy.bat'
+    $bat = Join-Path $repoRoot 'run.bat'
     Start-Process -FilePath $bat -ArgumentList ("--deploy $flags").Trim() -WorkingDirectory $repoRoot
     Block "Deploy started in its own window: clean build, publish to C:\Apps\Unity.SpaceGod, Desktop shortcut. /run starts it when done."
   }

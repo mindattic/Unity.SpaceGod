@@ -1,9 +1,9 @@
 @echo off
 rem Desktop shortcut target. Asks first: 1) Deploy & Run pulls latest, rebuilds even when nothing
 rem changed (-Force), publishes to C:\Apps\Unity.SpaceGod, refreshes the Desktop shortcut and launches
-rem it (tools\deploy.ps1 does the work); 2) Run starts the published copy without deploying.
-rem "deploy.bat --deploy [flags]" skips the menu and deploys without -Force (the /deploy hook);
-rem any other arguments pass through to tools\deploy.ps1 when deploying.
+rem it (tools\run.ps1 does the work); 2) Run starts the published copy without deploying.
+rem "run.bat --deploy [flags]" skips the menu and deploys without -Force (the /deploy hook);
+rem any other arguments pass through to tools\run.ps1 when deploying.
 setlocal
 set "EXE=C:\Apps\Unity.SpaceGod\Unity.SpaceGod.exe"
 set "FORCE=-Force"
@@ -28,7 +28,7 @@ choice /c 12 /n /m "  Choose 1 or 2: "
 if errorlevel 2 goto run
 
 :deploy
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\deploy.ps1" -Launch %FORCE% %ARGS%
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\run.ps1" -Launch %FORCE% %ARGS%
 if errorlevel 1 (
     echo.
     echo   Deploy failed. See Logs\deploy-build.log.
