@@ -26,11 +26,11 @@ function Block([string]$reason) {
 
 try {
   if ($command -eq 'deploy') {
-    # Flags after /deploy (e.g. -Launch) pass through to tools\deploy.ps1.
+    # --deploy skips deploy.bat's 1) Deploy & Run / 2) Run menu (that is for the Desktop shortcut);
+    # flags after /deploy (e.g. -SkipHdrp, -Force) pass through to tools\deploy.ps1.
     $flags = ($prompt -replace '^/deploy\s*', '').Trim()
     $bat = Join-Path $repoRoot 'deploy.bat'
-    if ($flags) { Start-Process -FilePath $bat -ArgumentList $flags -WorkingDirectory $repoRoot }
-    else        { Start-Process -FilePath $bat -WorkingDirectory $repoRoot }
+    Start-Process -FilePath $bat -ArgumentList ("--deploy $flags").Trim() -WorkingDirectory $repoRoot
     Block "Deploy started in its own window: clean build, publish to C:\Apps\Unity.SpaceGod, Desktop shortcut. /run starts it when done."
   }
 

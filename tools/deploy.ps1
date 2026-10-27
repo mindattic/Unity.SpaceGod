@@ -23,11 +23,26 @@
 .PARAMETER Launch
     After publishing, immediately run the deployed Unity.SpaceGod.exe.
 
+.PARAMETER Force
+    Rebuild and republish even when the deployed commit already matches the player source (skips
+    only the up-to-date check; it clears nothing more than a normal rebuild does). The repo-root
+    deploy.bat's "1) Deploy & Run" passes it, so that choice always republishes.
+
+.PARAMETER LauncherOnly
+    Refresh the Desktop shortcut (pointing at the repo-root deploy.bat, whose menu offers
+    1) Deploy & Run and 2) Run) and exit, without pulling, building or stopping anything.
+
+.NOTES
+    This script never prompts, so agents and /deploy can run it unattended. The choice between
+    deploying and just running lives in the repo-root deploy.bat that the Desktop shortcut opens.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
     powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -Launch
+    powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -Force -Launch
+    powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -LauncherOnly
 #>
-param([switch]$Launch, [switch]$SkipHdrp)
+param([switch]$Launch, [switch]$SkipHdrp, [switch]$Force, [switch]$LauncherOnly)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -38,6 +53,25 @@ $exeName  = 'Unity.SpaceGod.exe'
 $buildDir = Join-Path $repoDir 'Builds\Windows'
 $deployBat = Join-Path $repoDir 'deploy.bat'
 $marker    = Join-Path $out '.deploy-commit'
+
+# Points at deploy.bat (not the exe directly), whose menu asks first: 1) Deploy & Run (pull latest,
+# rebuild, launch) or 2) Run (start the published copy as it is).
+# GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
+function Set-Shortcut([string]$exe) {
+    $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+    $link.TargetPath       = $deployBat
+    $link.WorkingDirectory = $repoDir
+    if (Test-Path $exe) { $link.IconLocation = "$exe,0" }
+    $link.Description      = 'Unity.SpaceGod: 1) Deploy & Run or 2) Run'
+    $link.Save()
+    Write-Host "    Shortcut -> $shortcut" -ForegroundColor Gray
+}
+
+# The shortcut is refreshed on every run, so an existing install picks up a changed launcher
+# without a republish; -LauncherOnly does just that and stops.
+Set-Shortcut (Join-Path $out $exeName)
+if ($LauncherOnly) { exit 0 }
 
 # ── Pull latest, skip the rebuild entirely if nothing changed ──────────────
 # Untracked files (e.g. .prose/ session state) don't block a pull; changes to tracked files (staged
@@ -53,24 +87,10 @@ if ($dirty) {
 }
 $head = (git -C $repoDir rev-parse HEAD).Trim()
 
-# Points at deploy.bat (not the exe directly), so double-clicking it always pulls latest and
-# only rebuilds if the source actually changed, before launching.
-# GetFolderPath, not $HOME\Desktop: OneDrive may have moved the Desktop folder.
-function Set-Shortcut([string]$exe) {
-    $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'
-    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
-    $link.TargetPath       = $deployBat
-    $link.WorkingDirectory = $repoDir
-    $link.IconLocation     = "$exe,0"
-    $link.Description      = 'Pull latest, build Release if changed, and launch Unity.SpaceGod'
-    $link.Save()
-    Write-Host "    Shortcut -> $shortcut" -ForegroundColor Gray
-}
-
 # Up to date when nothing the player is built from (Assets, Packages, ProjectSettings) differs between
-# the deployed commit and HEAD: a docs- or tickets-only commit doesn't rebuild the game.
+# the deployed commit and HEAD: a docs- or tickets-only commit doesn't rebuild the game. -Force skips this.
 $upToDate = $false
-if ((Test-Path (Join-Path $out $exeName)) -and (Test-Path $marker)) {
+if (-not $Force -and (Test-Path (Join-Path $out $exeName)) -and (Test-Path $marker)) {
     $deployed = (Get-Content -LiteralPath $marker -Raw).Trim()
     git -C $repoDir diff --quiet $deployed $head -- Assets Packages ProjectSettings 2>$null
     $upToDate = $LASTEXITCODE -eq 0
@@ -78,7 +98,6 @@ if ((Test-Path (Join-Path $out $exeName)) -and (Test-Path $marker)) {
 }
 if ($upToDate) {
     Write-Host "  Already deployed at $head (no player source changed) - skipping rebuild." -ForegroundColor Green
-    if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Unity.SpaceGod.lnk'))) { Set-Shortcut (Join-Path $out $exeName) }
     if ($Launch) { Start-Process -FilePath (Join-Path $out $exeName) -WorkingDirectory $out }
     exit 0
 }
