@@ -135,5 +135,29 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(w.Mining.Convoys, Is.Not.Empty);
             Assert.That(w.Mining.Convoys.All(c => c.Freighter != null), "every convoy is carried by a real hull");
         }
+
+        [Test]
+        public void EscortsLostInAFightAreReplacedAtTheRefineryAndRaidersStillWantTheLadenFreighter()
+        {
+            var eph = new Ephemeris(BodyCatalog.CreateSolSystem());
+            double jd = StartJd;
+            eph.Update(jd);
+            var w = World.CreateDefault(eph, jd);
+            var op = w.Mining.Operations.Single();
+            var f = op.Freighters[0];
+            foreach (var e in w.Fleet.Ships.Where(s => s.Leader == f).ToArray()) e.Destroyed = true;
+            Assert.That(w.Fleet.Ships.Count(s => s.Leader == f && !s.Destroyed), Is.EqualTo(0));
+
+            Assert.That(w.ReplaceWorksEscorts(jd), Is.GreaterThan(0));
+            Assert.That(w.Fleet.Ships.Count(s => s.Leader == f && !s.Destroyed), Is.EqualTo(op.EscortsPerFreighter), "the works made good its escorts");
+            Assert.That(w.ReplaceWorksEscorts(jd), Is.EqualTo(0), "and builds no more than it lost");
+
+            // A laden works freighter is a mark like any merchant's: raiders weigh it by its hold.
+            f.HasCargo = true;
+            f.CargoGood = Good.NickelIron;
+            f.CargoTonnes = 20000;
+            Assert.That(RaidDoctrine.PreyValue(f, w.Contracts), Is.GreaterThan(0));
+            Assert.That(w.War.BestMark(new List<Ship> { f }, 0, 1e6), Is.SameAs(f));
+        }
     }
 }

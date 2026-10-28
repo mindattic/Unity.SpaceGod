@@ -171,6 +171,7 @@ namespace Unity.SpaceGod.Core
             Holdings.Update(jd);
             Trade?.Update(jd);
             Mining?.Update(jd);
+            ReplaceWorksEscorts(jd);
             if (jd >= nextRecountJd)
             {
                 Economy.RecountInbound(Fleet.Ships);

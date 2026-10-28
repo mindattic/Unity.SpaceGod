@@ -48,6 +48,39 @@ namespace Unity.SpaceGod.Core
             return made;
         }
 
+        int worksEscortsRaised;
+
+        /// <summary>
+        /// The works make good the escorts its freighters have lost (U.SPC-T592): a freighter lying idle and empty at its
+        /// refinery that flies with fewer warships than <see cref="MiningOperation.EscortsPerFreighter"/> (some lost in a
+        /// fight, left adrift or taken) is given fresh ones, in the classes the works first sent, before it loads again.
+        /// Returns how many were built.
+        /// </summary>
+        public int ReplaceWorksEscorts(double jd)
+        {
+            if (Mining == null) return 0;
+            int built = 0;
+            foreach (var op in Mining.Operations)
+            {
+                if (op.Freighters == null || op.EscortsPerFreighter <= 0) continue;
+                foreach (var f in op.Freighters)
+                {
+                    if (f.Destroyed || f.Derelict || f.HasCargo || f.Phase != ShipPhase.Parked || f.Orbit == null || f.Orbit.Body != op.RefineryBody) continue;
+                    if (!FreighterFree(f)) continue;
+                    int have = 0;
+                    foreach (var s in Fleet.Ships)
+                        if (s.Leader == f && !s.Destroyed && !s.Derelict && s.Faction == op.Owner) have++;
+                    for (; have < op.EscortsPerFreighter; have++)
+                    {
+                        var e = Fleet.AddShip($"{f.Name} escort {++worksEscortsRaised}", WorksEscortClasses[have % WorksEscortClasses.Length], op.Owner, ShipRole.Escort);
+                        Fleet.AddEscort(f, e, Fleet.SlotFor(have));
+                        built++;
+                    }
+                }
+            }
+            return built;
+        }
+
         /// <summary>Whether a works' freighter lying at its refinery may sail: not at the player's helm, not fighting, not held.</summary>
         bool FreighterFree(Ship freighter) => freighter != PilotedShip && freighter.Battle == null && (Fleet.IsHeld == null || !Fleet.IsHeld(freighter));
 
