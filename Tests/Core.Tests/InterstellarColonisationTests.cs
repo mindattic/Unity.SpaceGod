@@ -144,6 +144,11 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(ship.Site.Habitat, Is.True);
             Assert.That(ship.Colonists, Is.EqualTo(Colonisation.PartySize).Within(1e-6));
             Assert.That(fed.Treasury, Is.LessThan(treasury - Colonisation.FoundingCost));
+            // A real hull (U.SPC-T524), bound out through the gates on its colony voyage.
+            Assert.That(ship.Hull, Is.Not.Null);
+            Assert.That(ship.Hull.Role, Is.EqualTo(ShipRole.Colonist));
+            Assert.That(ship.Hull.Voyage?.Purpose, Is.EqualTo(VoyagePurpose.Colonise));
+            Assert.That(ship.Hull.Voyage.Destination, Is.SameAs(frontier));
             // Out to Sol's gate, through it, and in to the site: longer than the gates alone.
             var route = g.Network.Route(sol, frontier, fed, jd);
             Assert.That(route, Is.Not.Null);
@@ -155,9 +160,10 @@ namespace Unity.SpaceGod.Core.Tests
             var kentaurus = ac.World.Economy.Settlements.First(s => s.Name == "New Kentaurus");
             Assert.That(g.Colonisation.SitesFrom(ac, ac.World.Sol, kentaurus, jd), Is.Empty);
 
-            // Run the galaxy until it lands (at the first market review of its home system after it gets there).
+            // Run the galaxy until its hull gets there and lands them.
             double landBy = ship.ArriveJd + 11;
             MultiSystemLodTests.Run(g, jd, landBy);
+            Assert.That(ship.Hull.Scrapped, Is.True, "broken up for the settlers' first habitat");
             Assert.That(sol.World.Colonisation.Voyages, Does.Not.Contain(ship));
             Assert.That(frontier.World.Colonisation.Incoming, Is.Empty);
             var outpost = frontier.World.Economy.Settlements.Single();

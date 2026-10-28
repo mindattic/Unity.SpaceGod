@@ -28,7 +28,29 @@ namespace Unity.SpaceGod.Core
         void Wire(StarSystem home)
         {
             var c = home.World.Colonisation;
-            if (c != null) c.Abroad = (f, from, jd) => SitesFrom(home, f, from, jd);
+            if (c == null) return;
+            c.Abroad = (f, from, jd) => SitesFrom(home, f, from, jd);
+            c.SailAbroad = (v, jd) => Sail(home, v, jd);
+        }
+
+        /// <summary>
+        /// Sends a colony ship's hull (U.SPC-T524), just fitted out at its port in <paramref name="home"/>, off through the gates
+        /// to the system its site is in: it flies out to the gate, through, and in to the site, where it lands its colonists
+        /// (<see cref="VoyagePurpose.Colonise"/>). False if it cannot go.
+        /// </summary>
+        bool Sail(StarSystem home, ColonyShip v, double jd)
+        {
+            if (v?.Hull == null || v.Into == null || galaxy.Traffic == null) return false;
+            StarSystem to = null;
+            foreach (var t in galaxy.Systems)
+                if (t.World.Colonisation == v.Into) to = t;
+            if (to == null) return false;
+            var voyage = galaxy.Traffic.Send(v.Hull, home, to, VoyagePurpose.Colonise, jd);
+            if (voyage == null) return false;
+            voyage.StayUntilJd = double.PositiveInfinity;
+            voyage.TargetBody = v.Site.Body;
+            voyage.SiteName = v.Site.Name;
+            return true;
         }
 
         /// <summary>

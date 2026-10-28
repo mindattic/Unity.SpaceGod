@@ -51,6 +51,11 @@ namespace Unity.SpaceGod.Core
         /// sailing from a naval base after a war fleet on campaign, through the gates to wherever it is now; they hand over what
         /// they carry when they come up with it, and come home.</summary>
         Supply,
+
+        /// <summary>A colony ship's hull taking its colonists to a site in another system (U.SPC-T524, see <see cref="Colonisation"/>):
+        /// there until it has landed them (<see cref="Voyage.TargetBody"/>, the site), then home; home with them still aboard
+        /// if the site was taken.</summary>
+        Colonise,
     }
 
     /// <summary>
@@ -954,6 +959,7 @@ namespace Unity.SpaceGod.Core
             VoyagePurpose.Ambush => "lying in wait between the stars",
             VoyagePurpose.Directed => "its orders beyond the gates",
             VoyagePurpose.Plotted => "a plotted course beyond the gates",
+            VoyagePurpose.Colonise => "a colony voyage beyond the gates",
             VoyagePurpose.Supply => "a supply run to the war fleet",
             _ => "a run beyond the gates",
         };
@@ -1025,6 +1031,12 @@ namespace Unity.SpaceGod.Core
                     // Until it has sold (see Orders), and no longer than this.
                     ship.Ports = world.FreeShipPorts();
                     v.StayUntilJd = jd + 30;
+                    break;
+                case VoyagePurpose.Colonise:
+                    // In to the site to land its colonists (U.SPC-T524, see World.ColonyHullArrived); here until it has.
+                    ship.Route = null;
+                    ship.Ports = v.TargetBody >= 0 ? new[] { v.TargetBody } : world.FreeShipPorts();
+                    v.StayUntilJd = double.PositiveInfinity;
                     break;
                 case VoyagePurpose.Relocate:
                     Clans.Settle(system, ship, jd);

@@ -152,6 +152,14 @@ namespace Unity.SpaceGod.Core
         /// logistics, not a market, decides where it goes, and what it carries is never sold.
         /// </summary>
         Supply,
+
+        /// <summary>
+        /// A freighter fitted out as a colony ship (U.SPC-T524, see <see cref="Colonisation"/>): it carries a party of colonists
+        /// and their starter goods (<see cref="Ship.Colony"/>) from their port to the site they are to settle, or to the young
+        /// settlement they are to swell, through the gates for a site in another system, and they land only when it gets there.
+        /// Its voyage, not a market, decides where it goes; once it has landed them it goes back to trading.
+        /// </summary>
+        Colonist,
     }
 
     public enum ShipPhase
@@ -494,6 +502,12 @@ namespace Unity.SpaceGod.Core
         /// Null when it is running empty. Not in the hold: <see cref="MassTonnes"/> and the propellant reckoning leave it out.
         /// </summary>
         public CapturedRock Tow;
+
+        /// <summary>
+        /// The colony voyage this hull is fitted out for (U.SPC-T524, <see cref="ShipRole.Colonist"/>): the colonists and starter
+        /// goods aboard and where they are bound. The same record all the way, through the gates too; null for any other hull.
+        /// </summary>
+        public ColonyShip Colony;
 
         /// <summary>Tonnes latched on (<see cref="Tow"/>), or 0.</summary>
         public double TowTonnes => Tow == null ? 0 : Math.Max(0, Tow.Tonnes);

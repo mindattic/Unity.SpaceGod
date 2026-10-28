@@ -190,9 +190,43 @@ namespace Unity.SpaceGod.Core
 
         public bool Abroad => Into != null;
 
-        public int Body => Reinforcing?.Body ?? Site.Body;
+        /// <summary>
+        /// The colony ship's own hull (U.SPC-T524): a freighter fitted out for the voyage (<see cref="ShipRole.Colonist"/>), a real
+        /// ship in its system's fleet that flies from the port to the site, through the gates for a site abroad, and can be
+        /// fought, boarded or lost on the way. The colonists land only when it gets there. Null for a voyage reckoned by its
+        /// timetable alone (a <see cref="Colonisation"/> with no fleet to raise hulls in, see <see cref="Colonisation.Embark"/>).
+        /// </summary>
+        public Ship Hull;
+
+        /// <summary>The colonisation that sent it (whose <see cref="Colonisation.Voyages"/> it is in).</summary>
+        public Colonisation Of;
+
+        /// <summary>Its hull is carrying the colonists back to <see cref="From"/>: the site was taken, or the settlement lost, while they were on their way.</summary>
+        public bool Returning;
+
+        /// <summary>The body the hull is bound for now: the site (or the young settlement), or home to <see cref="From"/> when <see cref="Returning"/>.</summary>
+        public int Body => Returning && From != null ? From.Body : Reinforcing?.Body ?? Site.Body;
 
         public override string ToString() => Name;
+    }
+
+    /// <summary>What a colony ship's hull reaching a body came to (U.SPC-T524, <see cref="Colonisation.HullArrived"/>).</summary>
+    public enum ColonyLanding
+    {
+        /// <summary>Not where its voyage is bound: nothing happens.</summary>
+        None,
+
+        /// <summary>Its colonists founded a settlement on the site: the hull is broken up for the new habitat.</summary>
+        Founded,
+
+        /// <summary>Its colonists joined the young settlement it was sent to: the hull goes back to trading.</summary>
+        Reinforced,
+
+        /// <summary>The site was taken (or the settlement lost) while they were on their way: the hull carries them home.</summary>
+        TurnedBack,
+
+        /// <summary>Home again with the colonists it could not land: they rejoin their port, and the hull goes back to trading.</summary>
+        Returned,
     }
 
     /// <summary>A free site in another system that a colony ship could reach through the gates, and how long it would take (U.SPC-T293).</summary>
@@ -219,7 +253,9 @@ namespace Unity.SpaceGod.Core
     /// (<see cref="PartySize"/>) and can pay for the voyage, it sends a colony ship from its most crowded port
     /// with those colonists and starter goods: to a young settlement of its own that has room, or else to
     /// the best free site in reach (the habitable zone first, then what there is to dig), which may be in another
-    /// system newly opened to settlement, through the gates (<see cref="Abroad"/>, U.SPC-T293). On landing the
+    /// system newly opened to settlement, through the gates (<see cref="Abroad"/>, U.SPC-T293). The colony ship is a real
+    /// hull in the fleet (U.SPC-T524, <see cref="Embark"/>): it flies the voyage itself, can be fought, boarded and lost on
+    /// the way, and its colonists land only when it actually gets there (<see cref="HullArrived"/>). On landing the
     /// colonists found an <see cref="ColonyStage.Outpost"/> with farms and ice mines to feed itself and a
     /// mine on the site's best ore.
     ///
@@ -261,6 +297,30 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A colony ship has landed at a young settlement with more people (or turned back, the site taken: settlement null).</summary>
         public Action<ColonyShip, Settlement> Landed;
+
+        /// <summary>
+        /// Raises the hull for a colony ship that has just sailed (U.SPC-T524): a real ship in this system's fleet at its port,
+        /// fitted out for the voyage (<see cref="Ship.Colony"/>), or null for none (the voyage is then reckoned by its timetable).
+        /// </summary>
+        public Func<ColonyShip, double, Ship> Embark;
+
+        /// <summary>Sends a colony ship's hull bound for another system off through the gates (U.SPC-T524); false if it cannot go.</summary>
+        public Func<ColonyShip, double, bool> SailAbroad;
+
+        /// <summary>A colony ship's hull is done with its voyage (or never got away): it goes back to ordinary work where it is.</summary>
+        public Action<Ship> Refit;
+
+        /// <summary>
+        /// A colony ship has been lost on the way with its colonists (U.SPC-T524): its hull destroyed, taken by the faction given,
+        /// or (neither) never heard from again.
+        /// </summary>
+        public Action<ColonyShip, Faction> Lost;
+
+        /// <summary>A colony ship that found its site taken has brought its colonists home (U.SPC-T524).</summary>
+        public Action<ColonyShip> Returned;
+
+        /// <summary>Days past its reckoned arrival after which a colony ship's hull, wherever it is, is given up for lost.</summary>
+        public const double OverdueDays = 730;
 
         /// <summary>A new outpost has been founded.</summary>
         public Action<Settlement> Founded;
@@ -521,10 +581,102 @@ namespace Unity.SpaceGod.Core
                 spent += tonnes * from.Price[(int)g];
             }
             f.Treasury -= spent;
+            ship.Of = this;
             Voyages.Add(ship);
             ship.Into?.Incoming.Add(ship);
+            // Its own hull (U.SPC-T524): a freighter fitted out at the port, which flies the voyage itself (through the gates
+            // for a site abroad). Colonists for a settlement on the very body they sail from have no voyage to fly.
+            if (Embark != null && (ship.Abroad || from.Body != ship.Body))
+            {
+                ship.Hull = Embark(ship, jd);
+                if (ship.Hull != null && ship.Abroad && (SailAbroad == null || !SailAbroad(ship, jd)))
+                {
+                    // No way through the gates for it after all: the hull goes back to work, and the voyage is reckoned as before.
+                    var hull = ship.Hull;
+                    ship.Hull = null;
+                    hull.Colony = null;
+                    Refit?.Invoke(hull);
+                }
+            }
             Launched?.Invoke(ship);
             return ship;
+        }
+
+        /// <summary>The colonisation whose system a colony ship's hull must be in to reach <see cref="ColonyShip.Body"/>.</summary>
+        public static Colonisation Bearing(ColonyShip v) => v.Returning || !v.Abroad ? v.Of : v.Into;
+
+        /// <summary>
+        /// Where a colony ship's hull in the system of <paramref name="here"/> goes next (U.SPC-T524): the body its voyage is bound
+        /// for, -1 to hold where it is (it is not in that system), or null if it is on no voyage under way.
+        /// </summary>
+        public static int? HullDestination(Ship hull, Colonisation here)
+        {
+            var v = hull?.Colony;
+            if (v?.Of == null || !v.Of.Voyages.Contains(v)) return null;
+            return Bearing(v) == here ? v.Body : -1;
+        }
+
+        /// <summary>
+        /// A colony ship's hull has reached <paramref name="hull"/>'s body in the system of <paramref name="here"/> (its markets
+        /// <paramref name="economy"/>) (U.SPC-T524): where its voyage is bound, the colonists land, found their settlement or join
+        /// the one they were sent to (<see cref="Arrive"/>); with the site taken, they stay aboard and the hull turns for home;
+        /// home again, they rejoin their port. Says what came of it, for the hull's world to see to the hull.
+        /// </summary>
+        public ColonyLanding HullArrived(Ship hull, Colonisation here, Economy economy, double jd)
+        {
+            var v = hull?.Colony;
+            if (v == null || v.Of != this || !Voyages.Contains(v) || Bearing(v) != here || hull.Orbit == null || hull.Orbit.Body != v.Body)
+                return ColonyLanding.None;
+            Voyages.Remove(v);
+            if (v.Returning)
+            {
+                if (v.From != null && Lives(v.From))
+                {
+                    v.From.Population += v.Colonists;
+                    v.From.Overflow += v.Colonists;
+                    Unload(v, v.From);
+                }
+                hull.Colony = null;
+                Returned?.Invoke(v);
+                return ColonyLanding.Returned;
+            }
+            Arrive(economy, v, jd);
+            if (v.Returning) return ColonyLanding.TurnedBack;
+            hull.Colony = null;
+            return v.Reinforcing != null ? ColonyLanding.Reinforced : ColonyLanding.Founded;
+        }
+
+        /// <summary>Turns a colony ship for home with its colonists still aboard (U.SPC-T524): its hull carries them back to <see cref="ColonyShip.From"/>.</summary>
+        public void TurnBack(ColonyShip v)
+        {
+            if (v == null || v.Returning) return;
+            v.Returning = true;
+            v.Into?.Incoming.Remove(v);
+        }
+
+        /// <summary>
+        /// Checks on a colony ship's hull at a market review (U.SPC-T524): destroyed, or taken by another faction, it is lost with
+        /// its colonists and their goods; long overdue, it is given up. True if the voyage is over.
+        /// </summary>
+        bool HullLost(ColonyShip v, double jd)
+        {
+            var h = v.Hull;
+            Faction by = null;
+            if (h.Destroyed && !h.Scrapped) { }
+            else if (h.Faction != v.Owner) by = h.Faction;
+            else if (jd <= v.ArriveJd + OverdueDays) return false;
+            Voyages.Remove(v);
+            v.Into?.Incoming.Remove(v);
+            if (h.Colony == v) h.Colony = null;
+            Array.Clear(v.Cargo, 0, v.Cargo.Length);
+            if (!h.Destroyed)
+            {
+                // Taken: its captors do with it as they will. Given up: whatever is left of it goes back to work where it is.
+                if (by != null) { if (h.Role == ShipRole.Colonist) h.Role = ShipRole.Free; }
+                else Refit?.Invoke(h);
+            }
+            Lost?.Invoke(v, by);
+            return true;
         }
 
         ColonySite SiteAt(int body)
@@ -541,6 +693,12 @@ namespace Unity.SpaceGod.Core
             for (int i = 0; i < Voyages.Count; i++)
             {
                 var v = Voyages[i];
+                // A real hull lands its colonists when it gets there (HullArrived), not by the timetable (U.SPC-T524).
+                if (v.Hull != null)
+                {
+                    if (HullLost(v, jd)) i--;
+                    continue;
+                }
                 if (jd < v.ArriveJd) continue;
                 Voyages.RemoveAt(i--);
                 Arrive(economy, v, jd);
@@ -580,7 +738,16 @@ namespace Unity.SpaceGod.Core
                     return s;
                 }
             }
-            // The site was taken or the settlement lost while they were on their way: they go home.
+            // The site was taken or the settlement lost while they were on their way: they go home. A real hull (U.SPC-T524)
+            // carries them back itself, and they rejoin their port when it gets there (HullArrived).
+            if (v.Hull != null && !v.Hull.Destroyed && !v.Returning && v.From != null && Lives(v.From))
+            {
+                v.Returning = true;
+                v.Into?.Incoming.Remove(v);
+                if (!Voyages.Contains(v)) Voyages.Add(v);
+                Landed?.Invoke(v, null);
+                return null;
+            }
             if (v.From != null && Lives(v.From))
             {
                 v.From.Population += v.Colonists;

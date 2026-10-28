@@ -538,6 +538,8 @@ namespace Unity.SpaceGod.Core
                 // A freighter bound for a jump gate carries goods for another system's markets: it keeps them through
                 // any port it passes on the way to the gate (selling there skipped the gate's toll and the far market).
                 bool bound = ship.Voyage != null && ship.GateKm != null;
+                // A colony ship's hull lands its colonists where they are bound, and is broken up there for a new settlement (U.SPC-T524).
+                if (ship.Role == ShipRole.Colonist && ColonyHullArrived(ship, when)) return;
                 // Contract cargo and people go to the contract, not the market (U.SPC-T101).
                 // An ore tug's works latches its load on out in the field, or takes it in where it is for (U.SPC-T498).
                 if (ship.Role == ShipRole.Tug) TugArrived(ship, when);
@@ -568,6 +570,12 @@ namespace Unity.SpaceGod.Core
                 {
                     int ordered = VoyageOrders(ship, here, when);
                     if (ordered >= 0) return ordered;
+                }
+                // A colony ship's hull flies its voyage: to the site, or home with colonists it could not land (U.SPC-T524).
+                if (ship.Role == ShipRole.Colonist)
+                {
+                    int colonyNext = ColonyHullNext(ship, here, when);
+                    if (colonyNext >= 0) return colonyNext;
                 }
                 // A lane tender works its lane (U.SPC-T481).
                 if (ship.Role == ShipRole.Tender && !Holdings.Owns(ship)) return LaneUpkeep.ChooseNext(ship, here, when);
@@ -635,6 +643,7 @@ namespace Unity.SpaceGod.Core
             c.Expanded = s => Log(Economy.Jd, $"{s.Name} builds out its habitat for {s.InitialPopulation * People.MaxGrowth:N0} people", WorldEventKind.Economy, s.Body);
             c.Promoted = s => Log(Economy.Jd, $"{s.Name} has grown from an outpost into a colony of {s.Population:N0}", WorldEventKind.Economy, s.Body);
             c.Ruined = s => Log(Economy.Jd, $"{s.Name} has failed: its last settlers leave and it stands empty, a ruin", WorldEventKind.Loss, s.Body);
+            WireColonyHulls(c);
             Economy.Colonisation = c;
         }
 
