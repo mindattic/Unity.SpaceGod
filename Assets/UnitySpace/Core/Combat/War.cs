@@ -1751,6 +1751,7 @@ namespace Unity.SpaceGod.Core
                 // Already landed on the carrier or station it found when its own was lost.
                 if (u.Docked && u.Fighter.Home != null)
                 {
+                    StrandHull(u, u.Fighter.Home);
                     PutIn(u.Fighter.Home.Name);
                     continue;
                 }
@@ -1765,6 +1766,7 @@ namespace Unity.SpaceGod.Core
                 {
                     FighterAI.TakeAboard(home, u);
                     u.Docked = true;
+                    StrandHull(u, home);
                     if (u.Fighter.Home != null) PutIn(home.Name);
                     continue;
                 }
@@ -1772,6 +1774,7 @@ namespace Unity.SpaceGod.Core
                 if (port != null)
                 {
                     u.Fled = true;
+                    if (u.CraftHull != null) CarrierWings.Strand(port, u.CraftHull);
                     PutIn(port.Name);
                     continue;
                 }
@@ -1785,6 +1788,15 @@ namespace Unity.SpaceGod.Core
             foreach (var kv in putIn) parts.Add($"{kv.Value} put in at {kv.Key}");
             if (lost > 0) parts.Add($"{lost} lost with nowhere to land, their pilots ejecting");
             world.Log(jd, $"{b.Name}: craft stranded by the loss of their carriers: " + string.Join(", ", parts), WorldEventKind.Battle, Shown(b));
+        }
+
+        /// <summary>A carrier craft that landed on a station keeps its own hull there (U.SPC-T591), held until its carrier calls;
+        /// one docked in a hangar needs nothing.</summary>
+        static void StrandHull(BattleUnit u, BattleUnit home)
+        {
+            var hull = u.CraftHull;
+            if (hull == null || home.Platform == null || home.Combat?.Hangar.Contains(hull) == true) return;
+            CarrierWings.Strand(home.Platform, hull);
         }
 
         /// <summary>
@@ -3244,6 +3256,9 @@ namespace Unity.SpaceGod.Core
                     port = st;
                     if (st.HasShipyard || st.Kind == SettlementKind.Haven) yard = st;
                 }
+                // Strays that set down here with no hangar to take them rejoin their carrier now it has called (U.SPC-T591).
+                foreach (var st in Economy.At(c.Orbit.Body))
+                    if (st.Strays.Count > 0 && !st.Fallen && s.Combat.Hangar != null) CarrierWings.Rejoin(st, s);
                 // Prisoners in the brig go ashore at any port of the owner's, for their bounty or ransom (U.SPC-T65).
                 if (port != null && s.Prisoners > 0 && s != world.PilotedShip) Outfitting.HandOverPrisoners(Economy, s, port);
                 // In a port of its own a hull is in supply again: tanks, magazines and stores (U.SPC-T93).

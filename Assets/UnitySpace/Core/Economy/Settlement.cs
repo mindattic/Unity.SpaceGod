@@ -28,6 +28,9 @@ namespace Unity.SpaceGod.Core
         public readonly List<Facility> Facilities = new List<Facility>();
 
         public readonly double[] Stock = new double[GoodInfo.Count];
+
+        /// <summary>Carrier craft that put down here with no hangar to take them (U.SPC-T591): each still its own hull, waiting for its carrier.</summary>
+        public readonly List<Ship> Strays = new List<Ship>();
         public readonly double[] Price = new double[GoodInfo.Count];
 
         /// <summary>Tonnes already bought for delivery here by ships still on their way.</summary>

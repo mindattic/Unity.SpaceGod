@@ -27,6 +27,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>Its pilot, or null until it first launches.</summary>
         public CraftPilot Pilot;
+
+        /// <summary>The carrier this craft last launched from (U.SPC-T591): where a stray set down on a station or at a port
+        /// goes back to when that carrier calls there.</summary>
+        public Ship Carrier;
     }
 
     /// <summary>
@@ -147,6 +151,33 @@ namespace Unity.SpaceGod.Core
             Rearm(craft.Combat);
             Insert(c, craft);
             return true;
+        }
+
+        /// <summary>Leaves <paramref name="craft"/>, a stray with no berth to dock in, held as its own hull at <paramref name="at"/>
+        /// until its carrier (or another of its faction's, when that is lost) calls there (U.SPC-T591).</summary>
+        public static void Strand(Settlement at, Ship craft)
+        {
+            if (at == null || craft?.Craft == null || at.Strays.Contains(craft)) return;
+            at.Strays.Add(craft);
+        }
+
+        /// <summary>Takes back aboard <paramref name="carrier"/> the strays held at <paramref name="at"/> that are its own, or
+        /// (when their carrier is lost) of its faction's, as far as its hangar has room; returns how many rejoined.</summary>
+        public static int Rejoin(Settlement at, Ship carrier)
+        {
+            if (at == null || carrier?.Combat == null || at.Strays.Count == 0) return 0;
+            int n = 0;
+            for (int i = at.Strays.Count - 1; i >= 0; i--)
+            {
+                var craft = at.Strays[i];
+                var own = craft.Craft.Carrier;
+                bool mine = own == carrier || ((own == null || own.Destroyed) && craft.Faction == carrier.Faction);
+                if (!mine || !Dock(carrier.Combat, craft)) continue;
+                craft.Craft.Carrier = carrier;
+                at.Strays.RemoveAt(i);
+                n++;
+            }
+            return n;
         }
 
         /// <summary>Takes <paramref name="craft"/> out of the hangar it is docked in, to fly.</summary>

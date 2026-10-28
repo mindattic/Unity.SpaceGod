@@ -165,6 +165,7 @@ namespace Unity.SpaceGod.Core
             hull.Faction = carrier.Faction;
             var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, hull.Combat, craft.LengthKm, pos, carrier.Forward);
             u.CraftHull = hull;
+            hull.Craft.Carrier = carrier.Ship;
             u.Vel = carrier.Vel + carrier.Forward * 0.25;
             u.Power = new PowerDistribution();
             var pilot = CarrierWings.PilotOf(hull, b.Rng);
