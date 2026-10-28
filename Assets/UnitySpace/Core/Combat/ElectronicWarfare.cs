@@ -159,9 +159,8 @@ namespace Unity.SpaceGod.Core
             return best;
         }
 
-        /// <summary>Recon craft berthed aboard <paramref name="s"/>: its recon flight, as far as its hangars hold craft at all
-        /// (the recon flight launches first and lands with the rest).</summary>
-        public static int ReconAboard(Ship s) =>
-            s?.Combat == null ? 0 : Math.Max(0, Math.Min(s.Combat.Spec.ReconCraft, s.Combat.Fighters));
+        /// <summary>Recon craft docked aboard <paramref name="s"/> (U.SPC-T526): its recon flight, those of it still berthed
+        /// (the recon flight launches with the squadrons and lands with the rest).</summary>
+        public static int ReconAboard(Ship s) => s?.Combat == null ? 0 : CarrierWings.Aboard(s.Combat, FighterRole.Recon);
     }
 }

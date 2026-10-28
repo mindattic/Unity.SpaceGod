@@ -136,6 +136,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>Fighter-only state (see the fighter AI).</summary>
         public FighterState Fighter;
 
+        /// <summary>The carrier's craft this launched unit is (U.SPC-T526, see <see cref="CarrierWings"/>): the hull it flies
+        /// on (its <see cref="Combat"/> is that hull's own) and docks again as when it lands. Null for any other unit, and for a
+        /// boarding shuttle. Not <see cref="Ship"/>, which is only ever a hull in a fleet's list.</summary>
+        public Ship CraftHull;
+
         /// <summary>Boarding: the disabled enemy this ship is closing on to board, and the one it is latched to.</summary>
         public BattleUnit BoardTarget, Latched;
 
@@ -193,7 +198,7 @@ namespace Unity.SpaceGod.Core
 
         public bool Present => !Dead && !Fled && !Docked;
         public double Radius => LengthKm * 0.5;
-        public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : Fort != null ? Fort.Name + " fort" : "Fighter";
+        public string Name => Ship != null ? Ship.Name : Platform != null ? Platform.Name + " defence platform" : Fort != null ? Fort.Name + " fort" : CraftHull != null ? CraftHull.Name : "Fighter";
 
         /// <summary>While <see cref="PlayerControlled"/>: the EMP trigger held, and a mine asked for this frame (the
         /// battle clears it once it has tried, U.SPC-T271).</summary>

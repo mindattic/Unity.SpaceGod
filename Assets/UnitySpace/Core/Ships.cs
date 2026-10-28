@@ -716,6 +716,11 @@ namespace Unity.SpaceGod.Core
         /// <summary>Hull, shields and hardpoints, carried between battles.</summary>
         public ShipCombat Combat;
 
+        /// <summary>One of a carrier's craft (U.SPC-T526, see <see cref="CarrierWings"/>): its class, its berth and its pilot.
+        /// Such a hull is in no fleet's list: it lives docked in its carrier's <see cref="ShipCombat.Hangar"/> and goes where
+        /// the carrier goes, and flies only when it launches into a fight. Null for every other hull.</summary>
+        public WingCraft Craft;
+
         /// <summary>A free ship's next trip is a hop out to open space near the world it is at, not to another world.</summary>
         public bool Wander;
 

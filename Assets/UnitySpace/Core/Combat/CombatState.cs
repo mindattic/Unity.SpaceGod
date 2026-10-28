@@ -58,8 +58,24 @@ namespace Unity.SpaceGod.Core
         public readonly List<Subsystem> Subsystems = new List<Subsystem>();
         public double Hull;
 
-        /// <summary>Fighters left aboard (carriers); losses are made good at a yard.</summary>
-        public int Fighters;
+        /// <summary>
+        /// The craft docked in the hangar (carriers, U.SPC-T526, <see cref="CarrierWings"/>), in berth order: each a hull of
+        /// its own class with its own damage and pilot, launched as itself when a fight starts and docked again when it lands.
+        /// Losses are made good at a yard. Empty for a hull with no hangar.
+        /// </summary>
+        public List<Ship> Hangar = new List<Ship>();
+
+        /// <summary>How many craft are docked aboard (<see cref="Hangar"/>). Setting it builds new craft for the first empty
+        /// berths, or takes craft out from the last berths, until that many are aboard.</summary>
+        public int Fighters
+        {
+            get => Hangar.Count;
+            set
+            {
+                if (value < Hangar.Count) CarrierWings.Trim(this, value);
+                else if (value > Hangar.Count) CarrierWings.Fill(this, Math.Min(Spec.HangarCraft, value) - Hangar.Count);
+            }
+        }
 
         /// <summary>Boarding shuttles in the hangars (carriers, U.SPC-T486, <see cref="BoardingShuttles"/>); losses are made good at a yard.</summary>
         public int Shuttles;
@@ -93,7 +109,6 @@ namespace Unity.SpaceGod.Core
         {
             Spec = spec;
             Hull = spec.Hull;
-            Fighters = spec.HangarCraft;
             Shuttles = spec.Shuttles;
             for (int i = 0; i < spec.Layout.Length; i++) Subsystems.Add(new Subsystem(spec.Layout[i], i));
             double ratings = GeneratorRatings;
@@ -101,6 +116,7 @@ namespace Unity.SpaceGod.Core
                 foreach (var s in Subsystems)
                     if (s.Kind == SubsystemKind.ShieldGenerator) s.MaxShield = s.Shield = spec.Shield * s.Def.Rating / ratings;
             Interior = interior ?? (hull.HasValue ? Interior.For(hull.Value, spec.Crew, spec.Marines) : Interior.ForPlatform(spec.Crew, spec.Marines));
+            CarrierWings.Fill(this, spec.HangarCraft);
         }
 
         /// <summary>
@@ -116,12 +132,14 @@ namespace Unity.SpaceGod.Core
             var c = new ShipCombat(spec, hull, interior ?? Interior)
             {
                 Hull = spec.Hull * HullFraction,
-                Fighters = Math.Min(spec.HangarCraft, Fighters),
                 Shuttles = Math.Min(spec.Shuttles, Shuttles),
                 BoostFraction = BoostFraction,
                 Readiness = Readiness,
                 PhaserTuning = PhaserTuning,
             };
+            // The same craft stay aboard, as many as the refitted hangars hold (U.SPC-T526).
+            c.Hangar = Hangar;
+            CarrierWings.Trim(c, spec.HangarCraft);
             for (int i = 0; i < c.Subsystems.Count && i < Subsystems.Count; i++)
             {
                 if (i == changed) continue;
@@ -337,7 +355,8 @@ namespace Unity.SpaceGod.Core
             Interior.Muster(Spec.Crew, Spec.Marines);
         }
 
-        public void RestoreFighters(int count) => Fighters = Math.Min(Spec.HangarCraft, Fighters + count);
+        /// <summary>Builds new craft for up to <paramref name="count"/> of the hangar's empty berths (U.SPC-T526).</summary>
+        public void RestoreFighters(int count) => CarrierWings.Fill(this, count);
 
         /// <summary>Takes boarding shuttles back into the hangars (U.SPC-T486), as many as they hold.</summary>
         public void RestoreShuttles(int count) => Shuttles = Math.Min(Spec.Shuttles, Shuttles + count);

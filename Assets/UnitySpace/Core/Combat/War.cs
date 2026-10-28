@@ -3293,6 +3293,15 @@ namespace Unity.SpaceGod.Core
                     s.Faction.Treasury -= add * 2.5e6;
                     s.Combat.RestoreFighters(add);
                 }
+                // The craft that came back hurt are mended whole in the yard's shops (U.SPC-T526): each is its own hull.
+                int hurt = CarrierWings.Damaged(s.Combat);
+                if (hurt > 0 && yard.Stock[(int)Good.Alloys] > 10 * hurt)
+                {
+                    yard.Stock[(int)Good.Alloys] -= 10 * hurt;
+                    yard.Stock[(int)Good.Electronics] = Math.Max(0, yard.Stock[(int)Good.Electronics] - 2 * hurt);
+                    s.Faction.Treasury -= hurt * 4e5;
+                    CarrierWings.MendAboard(s.Combat);
+                }
                 // Boarding shuttles lost are built anew (U.SPC-T486).
                 int shuttles = s.Combat.Spec.Shuttles - s.Combat.Shuttles;
                 if (shuttles > 0 && yard.Stock[(int)Good.Electronics] > 30)

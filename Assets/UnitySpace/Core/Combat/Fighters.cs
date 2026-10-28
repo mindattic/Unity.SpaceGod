@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Unity.SpaceGod.Core
 {
@@ -103,9 +104,12 @@ namespace Unity.SpaceGod.Core
 
         public static readonly CombatSpec BomberSpec = FighterCraft.Bomber.Spec;
 
-        const int SquadronSize = 6;
+        const int SquadronSize = CarrierWings.SquadronSize;
 
-        /// <summary>A carrier entering battle puts every fighter it has aboard into space.</summary>
+        /// <summary>
+        /// A carrier entering battle puts every craft docked aboard that is fit to fly into space (U.SPC-T526): each launches
+        /// as itself, on its own hull and with its own pilot, in the squadron its berth is in. A crippled craft stays aboard.
+        /// </summary>
         public static void Launch(Battle b, BattleUnit carrier)
         {
             if (carrier == null || carrier.Combat.Fighters <= 0) return;
@@ -113,42 +117,58 @@ namespace Unity.SpaceGod.Core
             foreach (var s in carrier.Combat.Subsystems)
                 if (s.Kind == SubsystemKind.Hangar && !s.Destroyed) hangars++;
             if (hangars == 0) return;
-            int count = carrier.Combat.Fighters;
-            carrier.Combat.Fighters = 0;
-            // The recon flight goes first, out ahead of the strike (U.SPC-T485, see ElectronicWarfare); the squadrons follow.
-            int recon = Math.Min(Math.Max(0, carrier.Combat.Spec.ReconCraft), count);
-            count -= recon;
-            int squadrons = (count + SquadronSize - 1) / SquadronSize;
-            carrier.Basis(out var right, out var up);
-            for (int q = 0; q < squadrons; q++)
+            var spec = carrier.Combat.Spec;
+            // Squadron by squadron in berth order; the recon flight, out ahead of the strike (U.SPC-T485, see
+            // ElectronicWarfare), is launched last under the squadron number after the carrier's own, so it keeps to itself.
+            var squadrons = new SortedDictionary<int, List<Ship>>();
+            var recon = new List<Ship>();
+            foreach (var craft in carrier.Combat.Hangar)
             {
-                var craft = FighterCraft.Of(FighterCraft.RoleOfSquadron(q));
-                BattleUnit lead = null;
-                for (int k = 0; k < SquadronSize && count > 0; k++, count--)
-                    lead = LaunchCraft(b, carrier, craft, q, k, lead, right, up, FighterPhase.Launch);
+                if (!CarrierWings.Flyable(craft)) continue;
+                CarrierWings.Berth(spec, craft.Craft.Berth, out int q, out _);
+                if (craft.Craft.Role == FighterRole.Recon) recon.Add(craft);
+                else
+                {
+                    q = Math.Max(0, q);
+                    if (!squadrons.TryGetValue(q, out var list)) squadrons[q] = list = new List<Ship>();
+                    list.Add(craft);
+                }
             }
-            // Squadron numbers after the carrier's own, so the flight keeps to itself.
+            carrier.Basis(out var right, out var up);
+            int next = 0;
+            foreach (var kv in squadrons)
+            {
+                BattleUnit lead = null;
+                for (int k = 0; k < kv.Value.Count; k++)
+                    lead = LaunchCraft(b, carrier, kv.Value[k], kv.Key, k, lead, right, up, FighterPhase.Launch);
+                next = kv.Key + 1;
+            }
             BattleUnit reconLead = null;
-            for (int k = 0; k < recon; k++)
-                reconLead = LaunchCraft(b, carrier, FighterCraft.Recon, squadrons, k, reconLead, right, up, FighterPhase.Approach);
+            for (int k = 0; k < recon.Count; k++)
+                reconLead = LaunchCraft(b, carrier, recon[k], next, k, reconLead, right, up, FighterPhase.Approach);
         }
 
-        /// <summary>One craft of <paramref name="craft"/>'s class out of the bays as slot <paramref name="k"/> of squadron
-        /// <paramref name="q"/>, under <paramref name="lead"/> (none: it leads); returns the squadron's lead.</summary>
-        static BattleUnit LaunchCraft(Battle b, BattleUnit carrier, FighterCraft craft, int q, int k, BattleUnit lead, DVec3 right, DVec3 up, FighterPhase phase)
+        /// <summary>Docked craft <paramref name="hull"/> out of the bays as slot <paramref name="k"/> of squadron
+        /// <paramref name="q"/>, under <paramref name="lead"/> (none: it leads), flying on its own hull with its own pilot
+        /// (U.SPC-T526); returns the squadron's lead.</summary>
+        static BattleUnit LaunchCraft(Battle b, BattleUnit carrier, Ship hull, int q, int k, BattleUnit lead, DVec3 right, DVec3 up, FighterPhase phase)
         {
-            var rng = b.Rng;
+            var craft = FighterCraft.Of(hull.Craft.Role);
             // Out of the bow and side bays, fanning ahead of the carrier.
             var pos = carrier.PointOf(carrier.Combat.Subsystems.Find(s => s.Kind == SubsystemKind.Hangar && !s.Destroyed).Def)
                       + carrier.Forward * (0.3 + 0.15 * k) + right * ((q - 1) * 0.6 + (k % 2 == 0 ? 0.1 : -0.1) * k) + up * (0.05 * k);
-            var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, new ShipCombat(craft.Spec, craft.Class), craft.LengthKm, pos, carrier.Forward);
+            CarrierWings.Undock(carrier.Combat, hull);
+            hull.Faction = carrier.Faction;
+            var u = b.NewUnit(UnitKind.Fighter, carrier.Side, carrier.Faction, hull.Combat, craft.LengthKm, pos, carrier.Forward);
+            u.CraftHull = hull;
             u.Vel = carrier.Vel + carrier.Forward * 0.25;
             u.Power = new PowerDistribution();
+            var pilot = CarrierWings.PilotOf(hull, b.Rng);
+            pilot.Sorties++;
             u.Fighter = new FighterState
             {
                 Carrier = carrier, Lead = lead, Squadron = q, Slot = k, Bomber = craft.Role == FighterRole.Bomber, Role = craft.Role, Phase = phase,
-                Skill = 0.4 + rng.NextDouble() * 0.6, Reaction = 0.4 + rng.NextDouble() * 1.4, Discipline = 0.45 + rng.NextDouble() * 0.5,
-                Seed = rng.NextDouble() * 1000,
+                Skill = pilot.Skill, Reaction = pilot.Reaction, Discipline = pilot.Discipline, Seed = pilot.Seed,
             };
             return lead ?? u;
         }
@@ -611,14 +631,16 @@ namespace Unity.SpaceGod.Core
             }
         }
 
-        /// <summary>A craft back aboard <paramref name="home"/>: a fighter into its hangar's count; a boarding shuttle into its
-        /// shuttle berths (U.SPC-T486), and any of its team still aboard back to the barracks.</summary>
+        /// <summary>A craft back aboard <paramref name="home"/>: a fighter docked in its hangar as itself, damage and pilot and all
+        /// (U.SPC-T526; a full hangar, or a station's, has no berth for it); a boarding shuttle into its shuttle berths
+        /// (U.SPC-T486), and any of its team still aboard back to the barracks.</summary>
         public static void TakeAboard(BattleUnit home, BattleUnit craft)
         {
             if (home?.Combat == null) return;
             if (!BoardingShuttles.Is(craft))
             {
-                home.Combat.RestoreFighters(1);
+                if (craft.CraftHull != null) CarrierWings.Dock(home.Combat, craft.CraftHull);
+                else home.Combat.RestoreFighters(1);
                 return;
             }
             home.Combat.RestoreShuttles(1);
