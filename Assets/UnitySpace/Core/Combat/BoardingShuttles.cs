@@ -12,7 +12,7 @@ namespace Unity.SpaceGod.Core
     /// marine team (<see cref="TeamSize"/>) drawn from its barracks. The shuttle flies across, comes alongside, matches the
     /// prize's drift, docks and latches on (<see cref="LatchSeconds"/>) and lets its team in through the airlock into the
     /// compartment it docked against, where the compartment-by-compartment boarding fight (<see cref="Interior"/>) takes
-    /// over. It is slower and gentler than a Breacher round fired from an assault bay (U.SPC-T466): no drill, no breach,
+    /// over. It is slower and gentler than a Breacher round fired from a Breacher bay (U.SPC-T466): no drill, no breach,
     /// no damage to the hull, and it can only take what has stopped fighting. It casts off once the fight aboard is
     /// decided and flies home to land, its team's survivors aboard if the fight was lost. A carrier with shuttles sends
     /// them rather than closing to board with its own hull. On campaign, a war fleet whose group carries shuttles and the

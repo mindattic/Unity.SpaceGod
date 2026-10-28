@@ -3456,9 +3456,9 @@ namespace Unity.SpaceGod.Core
             var slips = LiveHavenOf(pirates);
             FleetPatterns.Commission(leader, slips, null);
             leader.Route = new[] { body };
-            // Every raider band takes its prizes with Breacher rounds fired from its leader's assault bay (U.SPC-T466), a
-            // destroyer fitting a second habitat to supply the teams.
-            AssaultBays.Equip(leader);
+            // Every raider band takes its prizes with Breacher rounds fired from its leader's Breacher bay (U.SPC-T466, U.SPC-T521),
+            // a destroyer fitting a second habitat to supply the teams.
+            BreacherBays.Equip(leader);
             int escorts = 1 + rng.Next(2);
             for (int i = 0; i < escorts; i++)
             {

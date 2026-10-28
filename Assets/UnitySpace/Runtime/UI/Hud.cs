@@ -2965,9 +2965,12 @@ namespace Unity.SpaceGod.UI
                 else if (i < hardpoints + facilities)
                 {
                     var f = loadout.Facilities[i - hardpoints];
-                    label = "  Facility   " + f.Name + "   " + Sections(f.Size) + (loadout.IsStockFacility(f) ? "" : "   fitted");
+                    label = "  Facility   " + f.Name + "   " + FacilityCost(f.Def, f.Size) + (loadout.IsStockFacility(f) ? "" : "   fitted");
                 }
-                else label = "  Free internal space   " + Sections(loadout.FreeSpace) + " of " + Sections(loadout.InternalSpace);
+                // The space, reactor power and hands left for fittings (U.SPC-T521).
+                else label = "  Free internal space   " + Sections(loadout.FreeSpace) + " of " + Sections(loadout.InternalSpace)
+                             + "   ·   reactor " + Megawatts(loadout.FreePowerMw) + " of " + Megawatts(loadout.ReactorMw)
+                             + "   ·   crew " + loadout.FreeCrew.ToString("0", CultureInfo.InvariantCulture) + " of " + loadout.FittingCrew.ToString("0", CultureInfo.InvariantCulture) + " spare";
                 var rr = new Rect(0, i * rowH, content.width, rowH - 1);
                 if (GUI.Button(rr, label, i == outfitSlot ? rowSelected : row))
                     outfitSlot = i == outfitSlot ? -1 : i;
@@ -2991,6 +2994,18 @@ namespace Unity.SpaceGod.UI
 
         static string Sections(double n) => n.ToString("0.#", CultureInfo.InvariantCulture) + (Math.Abs(n - 1) < 1e-9 ? " section" : " sections");
 
+        static string Megawatts(double mw) => mw.ToString("0", CultureInfo.InvariantCulture) + " MW";
+
+        /// <summary>What a facility takes (U.SPC-T521): its sections, and the reactor power and crew it needs, if any.</summary>
+        static string FacilityCost(FacilityKind k, double size)
+        {
+            string s = Sections(size);
+            if (k == null) return s;
+            if (k.PowerMw > 0) s += ", " + Megawatts(k.PowerMw);
+            if (k.Crew > 0) s += ", " + k.Crew.ToString("0", CultureInfo.InvariantCulture) + " crew";
+            return s;
+        }
+
         /// <summary>What the chosen row offers: the modules a hardpoint takes, stripping a fitted facility, or the
         /// facilities the free space has room for.</summary>
         static List<(ModuleKind? module, FacilityKind facility, string name)> OutfitOptions(Loadout loadout, int row)
@@ -3007,7 +3022,12 @@ namespace Unity.SpaceGod.UI
             }
             else
                 foreach (var k in FacilityKinds.Catalogue)
-                    if (loadout.CanAdd(k) == OutfitOutcome.Ok) list.Add((null, k, k.Name + "  (" + Sections(k.Size) + ")"));
+                {
+                    // One the hull has room for but not the reactor power or the hands (U.SPC-T521) is listed too, with why.
+                    var can = loadout.CanAdd(k);
+                    string why = can == OutfitOutcome.NoPower ? "  · not enough power" : can == OutfitOutcome.NoCrew ? "  · not enough crew" : "";
+                    if (can == OutfitOutcome.Ok || why.Length > 0) list.Add((null, k, k.Name + "  (" + FacilityCost(k, k.Size) + ")" + why));
+                }
             return list;
         }
 
@@ -3044,6 +3064,8 @@ namespace Unity.SpaceGod.UI
                 OutfitOutcome.CantAfford => "Not enough credits",
                 OutfitOutcome.NoStock => yard.Name + " is short of the materials",
                 OutfitOutcome.NoRoom => "Not enough internal space: strip something out first",
+                OutfitOutcome.NoPower => "Not enough reactor power to spare: strip something that draws on it first",
+                OutfitOutcome.NoCrew => "Not enough crew to spare to man it",
                 OutfitOutcome.HoldTooFull => "Empty the hold before taking the racks out",
                 OutfitOutcome.BrigOccupied => "Hand over the prisoners before taking the brig out",
                 OutfitOutcome.Busy => "Not while fighting or boarded",
