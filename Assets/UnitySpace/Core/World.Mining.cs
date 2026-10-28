@@ -33,6 +33,10 @@ namespace Unity.SpaceGod.Core
             m.HaulSent = TugSent;
             m.TugThreat = TugThreat;
             m.TugSeized = HandOverTug;
+            // So are the freighters its raw-material convoys sail in (U.SPC-T523): the works loads them, the fleet flies them.
+            m.FreighterFree = FreighterFree;
+            m.ConvoySailed = FreighterSailed;
+            m.ConvoyDelivered = FreighterDelivered;
             m.YardBuilt = (p, jd) =>
             {
                 foreach (var s in Economy.Settlements)
@@ -105,6 +109,10 @@ namespace Unity.SpaceGod.Core
             works.TugIceShare = 1;
             works.IceDepot = Mining.AddWarehouse("Valhalla Ice Depot", Belt, Catalog["Callisto"].Index);
             RaiseTugs(works, jd);
+            // Its convoys sail in two freighters of its own, each with a gunship riding escort (U.SPC-T523).
+            works.ConvoyFreighters = 2;
+            works.EscortShare = 0.5;
+            RaiseFreighters(works, jd);
             // Its capture tugs (U.SPC-T522) are real hulls too, bringing belt rock in to the grinders at Ceres.
             RaiseCaptureTugs(works, jd);
             Mining.Begin(MegastructureSpec.SpaceElevator, Belt, Catalog["Ganymede"].Index, "Ganymede Elevator", jd);

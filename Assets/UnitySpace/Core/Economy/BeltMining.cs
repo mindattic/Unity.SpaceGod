@@ -144,6 +144,17 @@ namespace Unity.SpaceGod.Core
         /// <summary>The raiders who took it, for a stolen convoy.</summary>
         public Faction TakenBy;
 
+        /// <summary>
+        /// The freighter's own hull that carries this load, a real ship in its world's fleet owned by the works' faction
+        /// (U.SPC-T523), or null for a pipeline run on its own, where a convoy is its cargo and timetable alone. With a hull,
+        /// the load is in its hold (<see cref="Ship.CargoTonnes"/>), the convoy ends when the hull gets in, not at
+        /// <see cref="ArriveJd"/> (only the estimate it sailed on), and only raiders who reach the hull and board it in a
+        /// fight take it; its escorts (<see cref="MiningOperation.EscortShare"/>) are real hulls flying with it.
+        /// </summary>
+        public Ship Freighter;
+
+        public override string ToString() => Name;
+
         public double Tonnes
         {
             get
@@ -293,8 +304,29 @@ namespace Unity.SpaceGod.Core
         /// <summary>A convoy sails with this many tonnes, or with whatever is waiting once it has waited <see cref="MaxHoldDays"/>.</summary>
         public double ConvoyTonnes = 40000, MaxHoldDays = 30;
 
-        /// <summary>Share of an escort's full protection its convoys sail with (0 for none, 1 for a full escort).</summary>
+        /// <summary>
+        /// Share of an escort's full protection its convoys sail with (0 for none, 1 for a full escort). In a world it is
+        /// real hulls (U.SPC-T523): each of its freighters flies with <see cref="EscortsPerFreighter"/> warships of its owner.
+        /// </summary>
         public double EscortShare;
+
+        /// <summary>The most escorts one of a works' freighters flies with, at a full <see cref="EscortShare"/>.</summary>
+        public const int MaxEscortsPerFreighter = 2;
+
+        /// <summary>Escort hulls each of its freighters flies with (U.SPC-T523): its <see cref="EscortShare"/> of a full escort.</summary>
+        public int EscortsPerFreighter => (int)Math.Round(Math.Max(0, Math.Min(1, EscortShare)) * MaxEscortsPerFreighter);
+
+        /// <summary>
+        /// Freighters (<see cref="ShipClass.Freighter"/>) the works runs its convoys in when it runs in a world (U.SPC-T523,
+        /// see <see cref="World.RaiseFreighters"/>): each a real hull in its fleet, owned by <see cref="Owner"/>, that lies at
+        /// the refinery between runs and carries one hold of separated elements to <see cref="Destination"/> at a time.
+        /// </summary>
+        public int ConvoyFreighters;
+
+        /// <summary>Its freighters' own hulls in a world (U.SPC-T523), or null for a works run on its own, whose convoys are cargo and a timetable.</summary>
+        public List<Ship> Freighters;
+
+        public int FreightersLost;
 
         /// <summary>
         /// Ore tugs (<see cref="ShipClass.OreTug"/>) at work (U.SPC-T483): each latches onto a far bigger load than a capture
@@ -909,18 +941,33 @@ namespace Unity.SpaceGod.Core
 
         void Ship(MiningOperation op, double jd)
         {
+            if (op.Freighters != null)
+            {
+                SailFreighters(op, jd);
+                return;
+            }
+            NewConvoy(op, jd, op.ConvoyTonnes);
+        }
+
+        /// <summary>
+        /// Loads one convoy of up to <paramref name="most"/> tonnes of <paramref name="op"/>'s separated elements for its
+        /// warehouse, once a full load is waiting or the oldest has waited <see cref="MiningOperation.MaxHoldDays"/>; null
+        /// when none sails.
+        /// </summary>
+        MaterialConvoy NewConvoy(MiningOperation op, double jd, double most)
+        {
             var to = op.Destination;
-            if (to == null) return;
+            if (to == null) return null;
             if (double.IsNaN(op.LastConvoyJd)) op.LastConvoyJd = jd;
             double waiting = op.WaitingTonnes;
-            if (waiting <= 0) return;
-            if (waiting < op.ConvoyTonnes && jd - op.LastConvoyJd < op.MaxHoldDays) return;
+            if (waiting <= 0) return null;
+            if (waiting < most && jd - op.LastConvoyJd < op.MaxHoldDays) return null;
             // Nothing sails for a warehouse with no room, nor more than it can still take (counting what is already on the way to it).
             double room = to.CapacityTonnes - to.StoredTonnes;
             foreach (var c in Convoys)
                 if (c.State == ConvoyState.EnRoute && c.To == to) room -= c.Tonnes;
-            double load = Math.Min(Math.Min(waiting, op.ConvoyTonnes), room);
-            if (load <= 0) return;
+            double load = Math.Min(Math.Min(waiting, most), room);
+            if (load <= 0) return null;
 
             var convoy = new MaterialConvoy { Name = $"{op.Name} convoy {++convoySerial}", From = op, To = to, DepartJd = jd };
             double share = load / waiting;
@@ -934,6 +981,42 @@ namespace Unity.SpaceGod.Core
             Convoys.Add(convoy);
             op.ConvoysSent++;
             op.LastConvoyJd = jd;
+            return convoy;
+        }
+
+        /// <summary>
+        /// Sails every one of <paramref name="op"/>'s freighters (U.SPC-T523) lying idle at its refinery with a hold of
+        /// separated elements, once those its world has lost (left adrift, taken, destroyed) when on no run have left the works.
+        /// </summary>
+        void SailFreighters(MiningOperation op, double jd)
+        {
+            for (int i = op.Freighters.Count - 1; i >= 0; i--)
+            {
+                var f = op.Freighters[i];
+                if (!Gone(op, f) || ConvoyOf(f) != null) continue;
+                op.Freighters.RemoveAt(i);
+                op.FreightersLost++;
+            }
+            op.ConvoyFreighters = op.Freighters.Count;
+            foreach (var f in op.Freighters.ToArray())
+            {
+                if (f.HasCargo || f.Phase != ShipPhase.Parked || f.Orbit == null || f.Orbit.Body != op.RefineryBody) continue;
+                if (ConvoyOf(f) != null || (FreighterFree != null && !FreighterFree(f))) continue;
+                var convoy = NewConvoy(op, jd, f.CapacityTonnes > 0 ? f.CapacityTonnes : op.ConvoyTonnes);
+                if (convoy == null) return;
+                convoy.Freighter = f;
+                // The load goes in its hold: its heaviest element names it, the whole tonnage weighs it down (and draws raiders).
+                int main = 0;
+                for (int g = 1; g < GoodInfo.Count; g++)
+                    if (convoy.Cargo[g] > convoy.Cargo[main]) main = g;
+                f.HasCargo = true;
+                f.CargoGood = (Good)main;
+                f.CargoTonnes = convoy.Tonnes;
+                f.CargoCost = 0;
+                f.CargoDestination = null;
+                // Its hull, not a timetable, says when it is in.
+                ConvoySailed?.Invoke(convoy, jd);
+            }
         }
 
         /// <summary>Days a convoy takes from <paramref name="from"/> to <paramref name="to"/> sailing on <paramref name="jd"/>.</summary>
@@ -946,9 +1029,16 @@ namespace Unity.SpaceGod.Core
 
         void MoveConvoys(double jd, double pressure)
         {
-            foreach (var c in Convoys)
+            // A list, not a foreach: a freighter lost here may set its world planning afresh.
+            for (int k = 0; k < Convoys.Count; k++)
             {
+                var c = Convoys[k];
                 if (c.State != ConvoyState.EnRoute) continue;
+                if (c.Freighter != null)
+                {
+                    MoveFreighter(c, jd);
+                    continue;
+                }
                 double risk = ConvoyTheftPerDay * pressure * (1 - EscortCut * Clamp01(c.From?.EscortShare ?? 0));
                 if (risk > 0 && rng.NextDouble() < risk)
                 {
@@ -975,6 +1065,105 @@ namespace Unity.SpaceGod.Core
                 Convoys.RemoveAt(i--);
                 finished--;
             }
+        }
+
+        // ---------------------------------------------------------------- the convoys' own freighters (U.SPC-T523)
+
+        /// <summary>Whether a freighter lying at its refinery is free to sail (not at the player's helm, not fighting). Null: any is.</summary>
+        public Func<Ship, bool> FreighterFree;
+
+        /// <summary>A freighter has sailed with a convoy's load in its hold: its world flies it to the convoy's warehouse.</summary>
+        public Action<MaterialConvoy, double> ConvoySailed;
+
+        /// <summary>A freighter has brought its convoy's load in to the warehouse: its world sends it home to the refinery.</summary>
+        public Action<MaterialConvoy, double> ConvoyDelivered;
+
+        /// <summary>Convoys lost with their freighters, blown apart on the way with nobody the richer.</summary>
+        public int ConvoysLost;
+
+        public event Action<MaterialConvoy> ConvoyLost;
+
+        /// <summary>The convoy <paramref name="freighter"/>'s hull is carrying, or null.</summary>
+        public MaterialConvoy ConvoyOf(Ship freighter)
+        {
+            if (freighter == null) return null;
+            foreach (var c in Convoys)
+                if (c.Freighter == freighter && c.State == ConvoyState.EnRoute) return c;
+            return null;
+        }
+
+        /// <summary>The works <paramref name="freighter"/>'s hull belongs to, or null.</summary>
+        public MiningOperation WorksOf(Ship freighter)
+        {
+            if (freighter == null) return null;
+            foreach (var op in Operations)
+                if (op.Freighters != null && op.Freighters.Contains(freighter)) return op;
+            return null;
+        }
+
+        /// <summary>
+        /// Where a works' freighter goes next (its world's fleet asks): with a convoy's load in its hold, to the warehouse it
+        /// is for; with none, home to its refinery. -1 for a hull that is no freighter of any works.
+        /// </summary>
+        public int FreighterNext(Ship freighter, int here)
+        {
+            var c = ConvoyOf(freighter);
+            if (c != null) return c.To.Body;
+            var op = WorksOf(freighter);
+            return op != null ? op.RefineryBody : -1;
+        }
+
+        /// <summary>
+        /// A works' freighter has arrived somewhere (its world's fleet tells): at its convoy's warehouse, its hold is emptied
+        /// into the warehouse's stock and the convoy is delivered. True if it was.
+        /// </summary>
+        public bool FreighterArrived(Ship freighter, double jd)
+        {
+            var c = ConvoyOf(freighter);
+            if (c == null || freighter.Orbit == null || freighter.Orbit.Body != c.To.Body) return false;
+            c.State = ConvoyState.Delivered;
+            c.ArriveJd = jd;
+            for (int g = 0; g < GoodInfo.Count; g++) c.To.Stock[g] += c.Cargo[g];
+            ConvoysDelivered++;
+            freighter.HasCargo = false;
+            freighter.CargoTonnes = 0;
+            freighter.CargoDestination = null;
+            ConvoyDelivered?.Invoke(c, jd);
+            return true;
+        }
+
+        /// <summary>
+        /// A day of a convoy carried by a real freighter (U.SPC-T523): there is no dice roll on the raiders about. It is taken
+        /// only by raiders who reach the hull and board it in a fight (the war's boarding rules: left adrift, taken as a prize,
+        /// or its hold looted before it goes to the breakers), and lost with it if it is blown apart with its load still aboard.
+        /// Its arrival is the hull's own (<see cref="FreighterArrived"/>), not the timetable's.
+        /// </summary>
+        void MoveFreighter(MaterialConvoy c, double jd)
+        {
+            var op = c.From;
+            var f = c.Freighter;
+            if (!Gone(op, f)) return;
+            if (op?.Freighters != null && op.Freighters.Remove(f))
+            {
+                op.FreightersLost++;
+                op.ConvoyFreighters = op.Freighters.Count;
+            }
+            bool boarded = f.Derelict || (op != null && f.Faction != op.Owner) || !f.HasCargo;
+            if (!boarded)
+            {
+                // Blown apart with the load still aboard: nobody the richer.
+                c.State = ConvoyState.Lost;
+                ConvoysLost++;
+                Log?.Invoke(jd, $"The freighter {f.Name} of the {op?.Name} is lost with the {c.Name}'s {c.Tonnes:N0} t of raw materials", c.To.Body);
+                ConvoyLost?.Invoke(c);
+                return;
+            }
+            c.State = ConvoyState.Stolen;
+            c.TakenBy = f.Derelict ? f.DerelictBy ?? Raiders?.Invoke() : op != null && f.Faction != op.Owner ? f.Faction : Raiders?.Invoke();
+            for (int g = 0; g < GoodInfo.Count; g++) Plundered[g] += c.Cargo[g];
+            ConvoysStolen++;
+            Log?.Invoke(jd, $"Raiders{By(c.TakenBy)} boarded the freighter {f.Name} and took the {c.Name} on its way to the {c.To.Name}: {c.Tonnes:N0} t of raw materials gone", f.Orbit?.Body ?? c.To.Body);
+            ConvoyStolen?.Invoke(c);
         }
 
         // ---------------------------------------------------------------- ore tugs (U.SPC-T483)

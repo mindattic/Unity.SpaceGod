@@ -136,6 +136,14 @@ namespace Unity.SpaceGod.Core
         /// pushes it in to the refinery or the depot it is for, and comes home empty. Its operation, not a market, decides where it goes.
         /// </summary>
         Tug,
+
+        /// <summary>
+        /// A belt works' raw-material freighter (U.SPC-T523, see <see cref="MiningOperation.Freighters"/>): it lies at its
+        /// refinery, sails with a hold of separated elements when its works loads one (a <see cref="MaterialConvoy"/>), flies
+        /// it to the works' warehouse with its escorts in formation, and comes home empty. Its works, not a market, decides
+        /// where it goes, and its load is never sold.
+        /// </summary>
+        Hauler,
     }
 
     public enum ShipPhase

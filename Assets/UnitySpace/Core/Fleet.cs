@@ -1701,6 +1701,8 @@ namespace Unity.SpaceGod.Core
                 case ShipRole.Miner:
                 // An ore tug with no belt works to send it (U.SPC-T498) shuttles the same way: out from its field and home.
                 case ShipRole.Tug:
+                // So does a works' freighter with no works to load it (U.SPC-T523): out to its depot and home.
+                case ShipRole.Hauler:
                     if (here != ship.Ports[0]) return ship.Ports[0];
                     return ship.Ports.Length > 1 ? ship.Ports[1 + rng.Next(ship.Ports.Length - 1)] : here;
 
@@ -1785,6 +1787,8 @@ namespace Unity.SpaceGod.Core
                 case ShipRole.Miner: return 1.0 + rng.NextDouble() * 2.0;
                 // An ore tug with a load latched on sets straight out; running empty it lies at the field a while.
                 case ShipRole.Tug: return ship.Tow != null ? 0.05 + rng.NextDouble() * 0.1 : 0.5 + rng.NextDouble() * 1.0;
+                // A works' freighter with a convoy's load aboard sails at once; empty it lies at its refinery a while.
+                case ShipRole.Hauler: return ship.HasCargo ? 0.05 + rng.NextDouble() * 0.1 : 0.5 + rng.NextDouble() * 1.0;
                 default: return 0.5 + rng.NextDouble() * 1.5;
             }
         }
@@ -2348,7 +2352,7 @@ namespace Unity.SpaceGod.Core
         public static DriveKind DriveOf(Ship ship) => ship.Spec.AccelG >= TorchAccelG ? DriveKind.Torch : DriveKind.LowThrust;
 
         // An ore tug works to its operation's timetable, laden or not (U.SPC-T498): it never waits on a launch window.
-        bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust && ship.Role != ShipRole.Tug;
+        bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust && ship.Role != ShipRole.Tug && ship.Role != ShipRole.Hauler;
 
         /// <summary>
         /// What a day of the hull's time is worth to its owner (credits) when it trades time for propellant:
