@@ -75,7 +75,8 @@ namespace Unity.SpaceGod.UI
                 case ShipClass.Cruiser: return triangle ??= Draw(p => Triangle(p, 0.8f));
                 case ShipClass.Destroyer: return chevron ??= Draw(Chevron);
                 case ShipClass.Miner:
-                case ShipClass.OreTug: return hexagon ??= Draw(Hexagon);
+                case ShipClass.OreTug:
+                case ShipClass.CaptureTug: return hexagon ??= Draw(Hexagon);
                 case ShipClass.Courier: return dot ??= Draw(p => Ring(p, 0.42f, 0.16f));
                 // A gate picket (U.SPC-T480): the contact blip, a lookout's mark.
                 case ShipClass.GatePicket: return Blip;

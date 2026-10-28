@@ -488,6 +488,12 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.Bow, "Claw gantry", 0.35), new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.15, 0.05),
                 new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
             },
+            // A capture tug (U.SPC-T522): an ore tug's plan on a shorter frame.
+            [ShipClass.CaptureTug] = new[]
+            {
+                new FacilitySite(FacilityKinds.Bow, "Claw gantry", 0.35), new FacilitySite(FacilityKinds.Bridge, "Cockpit", 0.15, 0.05),
+                new FacilitySite(FacilityKinds.Engineering, "Engineering", -0.3),
+            },
             // A work boat (U.SPC-T481): the bridge forward, the workshop that services a lane's rings, a big engine room.
             [ShipClass.LaneTender] = new[]
             {
@@ -620,6 +626,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Gunship:
                 case ShipClass.Courier:
                 case ShipClass.OreTug:
+                case ShipClass.CaptureTug:
                 case ShipClass.GatePicket:
                 // Its magazines and engine rooms fill a frigate (U.SPC-T475).
                 case ShipClass.Frigate:

@@ -583,6 +583,7 @@ namespace Unity.SpaceGod.Core
             r.Assign(ShipClass.Miner, FlightFamily.Hauler);
             r.Assign(ShipClass.Explorer, FlightFamily.Hauler);
             r.Assign(ShipClass.OreTug, FlightFamily.Hauler);
+            r.Assign(ShipClass.CaptureTug, FlightFamily.Hauler);
             r.Assign(ShipClass.LaneTender, FlightFamily.Hauler);
             r.Assign(ShipClass.GatePicket, FlightFamily.HeavyFighter);
             r.Assign(ShipClass.Carrier, FlightFamily.Capital);

@@ -373,6 +373,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Courier: return 1500;
                 case ShipClass.Explorer: return 5000;
                 case ShipClass.OreTug: return 6000;
+                // Half an ore tug's frame and one drive fewer (U.SPC-T522).
+                case ShipClass.CaptureTug: return 2800;
                 case ShipClass.Interceptor: return 2200;
                 case ShipClass.Bomber: return 4500;
                 // An interceptor's airframe round a sensor and jamming suite: the electronics are the price (U.SPC-T485).

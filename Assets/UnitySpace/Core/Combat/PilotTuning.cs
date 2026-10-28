@@ -79,6 +79,8 @@ namespace Unity.SpaceGod.Core
             [ShipClass.Explorer] = new PilotTuning(0.22, 60, 1.6, 26, 8, 3.0),
             // The ore tug (U.SPC-T483): flown like a hauler, a touch heavier on the stick.
             [ShipClass.OreTug] = new PilotTuning(0.14, 60, 1.5, 40, 8, 3.2),
+            // The capture tug (U.SPC-T522): an ore tug's controls on a lighter frame, handier for matching a tumbling rock.
+            [ShipClass.CaptureTug] = new PilotTuning(0.18, 65, 1.5, 34, 8, 3.0),
             // The lane tender (U.SPC-T481): a work boat, steadier than an explorer and slower to spool.
             [ShipClass.LaneTender] = new PilotTuning(0.18, 55, 1.5, 30, 7, 3.5),
             // The gate picket (U.SPC-T480): a small hull, flown nose-first like a heavy fighter but no dogfighter.
@@ -124,6 +126,7 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.Freighter:
                 case ShipClass.Miner:
                 case ShipClass.OreTug:
+                case ShipClass.CaptureTug:
                 case ShipClass.LaneTender:
                 case ShipClass.Explorer:
                     return PilotControl.Hauler;

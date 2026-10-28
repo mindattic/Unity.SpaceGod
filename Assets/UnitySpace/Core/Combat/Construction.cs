@@ -250,7 +250,8 @@ namespace Unity.SpaceGod.Core
                 case ShipClass.GatePicket: return HullCategory.SmallCraft;
                 case ShipClass.Freighter:
                 case ShipClass.Miner:
-                case ShipClass.OreTug: return HullCategory.Freighter;
+                case ShipClass.OreTug:
+                case ShipClass.CaptureTug: return HullCategory.Freighter;
                 case ShipClass.Battleship:
                 // A siege capital, as heavy as a battleship (U.SPC-T478).
                 case ShipClass.GateBreaker: return HullCategory.Battleship;

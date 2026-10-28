@@ -1084,6 +1084,27 @@ namespace Unity.SpaceGod.Core
                     new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
                 },
             } },
+            [ShipClass.CaptureTug] = new[] { new CombatSpec
+            {
+                // The capture tug (U.SPC-T522): an ore tug's claws on a frame half its length, two drives instead of three. It
+                // chases down and matches a tumbling belt rock of 40-140 m and pushes it in to its refinery; latched onto a
+                // few million tonnes it creeps too (see Ship.AccelG). No hold, no guns: a small crew and shields for the grit.
+                DesignName = "Capture tug", LengthKm = 0.12,
+                MassKt = 80, MainThrustMN = 5600, RetroThrustMN = 2800, LateralThrustMN = 1400, VerticalThrustMN = 1400, PitchYawTorqueMNKm = 900, RollTorqueMNKm = 240,
+                Hull = 2600, Shield = 220, ShieldRegen = 4, Armor = 4, MaxSpeed = 0.07, Accel = 0.0024, Decel = 0.0018,
+                BoostSpeedMultiplier = 1.2, BoostDurationS = 30, TurnRateDegS = 6,
+                Crew = 8,
+                DryMassTonnes = 1200, PropellantTonnes = 1000, ExhaustVelocityKmS = 3000,
+                Layout = new[]
+                {
+                    new SubsystemDef(SubsystemKind.Bridge, 0, 0.07, 0.18),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.06, 0.22),
+                    new SubsystemDef(SubsystemKind.ShieldGenerator, 0, 0.06, -0.3),
+                    new SubsystemDef(SubsystemKind.Engine, -0.06, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Engine, 0.06, 0, -0.46),
+                    new SubsystemDef(SubsystemKind.Reactor, 0, 0, -0.25),
+                },
+            } },
         };
 
         /// <summary>Every class's marines are what its design's habitats quarter (U.SPC-T465, <see cref="MarineHabitats"/>), not

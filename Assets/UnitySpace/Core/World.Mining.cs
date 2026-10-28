@@ -105,6 +105,8 @@ namespace Unity.SpaceGod.Core
             works.TugIceShare = 1;
             works.IceDepot = Mining.AddWarehouse("Valhalla Ice Depot", Belt, Catalog["Callisto"].Index);
             RaiseTugs(works, jd);
+            // Its capture tugs (U.SPC-T522) are real hulls too, bringing belt rock in to the grinders at Ceres.
+            RaiseCaptureTugs(works, jd);
             Mining.Begin(MegastructureSpec.SpaceElevator, Belt, Catalog["Ganymede"].Index, "Ganymede Elevator", jd);
             Mining.Begin(MegastructureSpec.DysonRing, Belt, 0, "Helios Swarm", jd);
         }
@@ -146,6 +148,39 @@ namespace Unity.SpaceGod.Core
             return made;
         }
 
+        // ---------------------------------------------------------------- the capture tugs' hulls (U.SPC-T522)
+
+        /// <summary>Names the belt works give their capture tugs, in turn.</summary>
+        static readonly string[] CaptureTugNames = { "Lasso", "Grapple", "Gaff", "Tongs", "Snare", "Bola", "Butterfly Net", "Catch-As-Catch-Can" };
+
+        int captureTugsNamed;
+
+        /// <summary>
+        /// Gives <paramref name="op"/> a real hull for each of its capture tugs (U.SPC-T522): every one a ship
+        /// (<see cref="ShipClass.CaptureTug"/>) in this world's fleet, lying at its refinery until the works sends it out into
+        /// the field round it for a rock. Flown, threatened, seized and helmed as an ore tug's hull is. Returns them.
+        /// </summary>
+        public System.Collections.Generic.List<Ship> RaiseCaptureTugs(MiningOperation op, double jd)
+        {
+            op.CaptureHulls ??= new System.Collections.Generic.List<Ship>();
+            var made = new System.Collections.Generic.List<Ship>();
+            int home = op.RefineryBody;
+            while (op.CaptureHulls.Count < op.CaptureTugs)
+            {
+                string name = CaptureTugNames[captureTugsNamed % CaptureTugNames.Length]
+                    + (captureTugsNamed >= CaptureTugNames.Length ? " " + (captureTugsNamed / CaptureTugNames.Length + 1) : "");
+                captureTugsNamed++;
+                var ship = Fleet.AddShip(name, ShipClass.CaptureTug, op.Owner, ShipRole.Tug);
+                ship.Ports = new[] { home };
+                ship.Cargo = "Claws open, waiting to go out for a rock";
+                Fleet.Station(ship, home, jd);
+                op.CaptureHulls.Add(ship);
+                made.Add(ship);
+            }
+            op.CaptureTugs = op.CaptureHulls.Count;
+            return made;
+        }
+
         /// <summary>Whether a tug's hull lying at its field may be sent out: not at the player's helm, not fighting, not held.</summary>
         bool TugFree(Ship tug) => tug != PilotedShip && tug.Battle == null && (Fleet.IsHeld == null || !Fleet.IsHeld(tug));
 
@@ -179,8 +214,8 @@ namespace Unity.SpaceGod.Core
             if (tug.Tow != null) tug.Cargo = $"Pushing {h.Load.Designation}, {h.Load.Tonnes:N0} t, in to {Catalog[h.ToBody].Name}";
             else
             {
-                tug.Cargo = "Running empty, back to the field";
-                Log(jd, $"The ore tug {tug.Name} brings {h.Load.Designation} in to {(h.ToDepot != null ? "the " + h.ToDepot.Name : Catalog[h.ToBody].Name)}: {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()}",
+                tug.Cargo = h.Capture ? "Claws open, back at the refinery" : "Running empty, back to the field";
+                Log(jd, $"The {h.TugKind} {tug.Name} brings {h.Load.Designation} in to {(h.ToDepot != null ? "the " + h.ToDepot.Name : Catalog[h.ToBody].Name)}: {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()}",
                     WorldEventKind.Economy, h.ToBody);
             }
         }

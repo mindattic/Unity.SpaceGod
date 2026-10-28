@@ -213,6 +213,16 @@ namespace Unity.SpaceGod.Core
         /// </summary>
         public bool Latched;
 
+        /// <summary>
+        /// A capture tug's catch (U.SPC-T522, <see cref="MiningOperation.CaptureHulls"/>), not an ore tug's haul: a belt rock of
+        /// <see cref="MiningOperation.MinRockM"/> to <see cref="MiningOperation.MaxRockM"/> its hull flies out into the field
+        /// round the refinery for, matches, latches onto and pushes in for the grinders (see <see cref="BeltMining.Captures"/>).
+        /// </summary>
+        public bool Capture;
+
+        /// <summary>What flies it, for the news: a capture tug or an ore tug.</summary>
+        public string TugKind => Capture ? "capture tug" : "ore tug";
+
         public override string ToString() => Name;
     }
 
@@ -249,9 +259,24 @@ namespace Unity.SpaceGod.Core
         /// <summary>Where its convoys take what it separates.</summary>
         public MaterialWarehouse Destination;
 
-        /// <summary>Capture tugs at work, and the days each takes to find, match orbits with and bring in one rock.</summary>
+        /// <summary>
+        /// Capture tugs at work, and the days each takes to find, match orbits with and bring in one rock (for a works run
+        /// on its own; with hulls, see <see cref="CaptureHulls"/>, each flies its own catches and takes what it takes).
+        /// </summary>
         public int CaptureTugs = 2;
         public double CaptureDays = 24;
+
+        /// <summary>
+        /// Its capture tugs' own hulls when the works runs in a world (U.SPC-T522, see <see cref="World.RaiseCaptureTugs"/>):
+        /// real ships (<see cref="ShipClass.CaptureTug"/>) in its fleet, one for each of <see cref="CaptureTugs"/>, which lie at
+        /// the refinery between catches and fly every one themselves, out into the field round it and back in with a rock
+        /// latched on (<see cref="Ship.Tow"/>, <see cref="Ship.Homing"/>). Null for a works run on its own, whose capture
+        /// tugs are a count and a timer.
+        /// </summary>
+        public List<Ship> CaptureHulls;
+
+        /// <summary>Capture tugs' hulls the works has lost (taken, left adrift, destroyed).</summary>
+        public int CaptureTugsLost;
 
         /// <summary>Smallest and largest rock a tug can move, metres across.</summary>
         public double MinRockM = 40, MaxRockM = 140;
@@ -462,7 +487,8 @@ namespace Unity.SpaceGod.Core
     ///
     /// The pipeline runs in whole days off its own random stream, and reaches the world it sits in only through the
     /// hooks below, so it runs the same on its own (the tests) as wired into a <see cref="World"/>. In a world every ore tug
-    /// is a real hull (U.SPC-T498, <see cref="MiningOperation.Tugs"/>): the pipeline sends it, its world's fleet flies it with
+    /// is a real hull (U.SPC-T498, <see cref="MiningOperation.Tugs"/>), and so is every capture tug (U.SPC-T522,
+    /// <see cref="MiningOperation.CaptureHulls"/>, flying its catches in <see cref="Captures"/>): the pipeline sends it, its world's fleet flies it with
     /// its load latched on (<see cref="Ship.Tow"/>), the haul ends when the hull gets in (<see cref="TugArrived"/>), and the
     /// raiders who can take it are those about it where it actually is (<see cref="TugThreat"/>) or the fight that boards it.
     /// </summary>
@@ -562,28 +588,43 @@ namespace Unity.SpaceGod.Core
         /// <summary>The ore tugs' hauls lost with their hulls, blown apart on the way with nobody the richer.</summary>
         public int TugsDestroyed;
 
-        /// <summary>The haul <paramref name="tug"/>'s hull is flying, or null.</summary>
+        // ---------------------------------------------------------------- the capture tugs' own hulls (U.SPC-T522)
+
+        /// <summary>
+        /// Every capture tug's catch flown by a real hull (<see cref="MiningOperation.CaptureHulls"/>), under way or done
+        /// (trimmed to the latest few hundred finished ones). Kept apart from the ore tugs' <see cref="Hauls"/>; both fly the
+        /// same way, by the same hull machinery.
+        /// </summary>
+        public List<TugHaul> Captures = new List<TugHaul>();
+
+        /// <summary>Capture tugs' catches lost with their hulls: taken by raiders, or blown apart.</summary>
+        public int CaptureTugsTaken, CaptureTugsDestroyed;
+
+        /// <summary>The haul (or capture tug's catch) <paramref name="tug"/>'s hull is flying, or null.</summary>
         public TugHaul HaulOf(Ship tug)
         {
             if (tug == null) return null;
             foreach (var h in Hauls)
                 if (h.Tug == tug && h.State == ConvoyState.EnRoute) return h;
+            if (Captures != null)
+                foreach (var h in Captures)
+                    if (h.Tug == tug && h.State == ConvoyState.EnRoute) return h;
             return null;
         }
 
-        /// <summary>The works <paramref name="tug"/>'s hull belongs to, or null.</summary>
+        /// <summary>The works <paramref name="tug"/>'s hull (an ore tug's or a capture tug's) belongs to, or null.</summary>
         public MiningOperation OperationOf(Ship tug)
         {
             if (tug == null) return null;
             foreach (var op in Operations)
-                if (op.Tugs != null && op.Tugs.Contains(tug)) return op;
+                if ((op.Tugs != null && op.Tugs.Contains(tug)) || (op.CaptureHulls != null && op.CaptureHulls.Contains(tug))) return op;
             return null;
         }
 
         /// <summary>
         /// Where a tug's hull goes next (its world's fleet asks): on a haul with its load latched on, to where the load is
         /// for; on a haul still to latch on, out into the field round where it lies (<see cref="Ship.Wander"/>, so the
-        /// body it is at); with no haul, home to its field. -1 for a hull that is no tug of any works.
+        /// body it is at); with no haul, home to its field (a capture tug's is its refinery). -1 for a hull that is no tug of any works.
         /// </summary>
         public int TugNext(Ship tug, int here)
         {
@@ -595,7 +636,8 @@ namespace Unity.SpaceGod.Core
                 return here;
             }
             var op = OperationOf(tug);
-            return op != null ? op.TugHome : -1;
+            if (op == null) return -1;
+            return op.CaptureHulls != null && op.CaptureHulls.Contains(tug) ? op.RefineryBody : op.TugHome;
         }
 
         /// <summary>
@@ -651,6 +693,34 @@ namespace Unity.SpaceGod.Core
         {
             if (km <= 0) return 0;
             return 2 * Math.Sqrt(km * 1000 / TugAccel(loadTonnes)) / Astro.SecondsPerDay;
+        }
+
+        /// <summary>A capture tug's own mass, tonnes (U.SPC-T522): its stock design, dry, with full tanks.</summary>
+        public static double CaptureTugMassTonnes
+        {
+            get
+            {
+                var spec = CombatSpec.Of(ShipClass.CaptureTug);
+                return spec.DryMassTonnes + spec.PropellantTonnes;
+            }
+        }
+
+        /// <summary>A capture tug's acceleration pushing <paramref name="loadTonnes"/>, m/s², as <see cref="TugAccel"/> is an ore tug's.</summary>
+        public static double CaptureTugAccel(double loadTonnes)
+        {
+            double tug = CaptureTugMassTonnes;
+            return ShipClassSpec.Of(ShipClass.CaptureTug).AccelG * 9.80665 * tug / (tug + Math.Max(0, loadTonnes));
+        }
+
+        /// <summary>
+        /// Days a capture tug's catch of <paramref name="loadTonnes"/> takes (U.SPC-T522), the estimate it sets out on: out
+        /// into the field empty, then the rock pushed back in, each <see cref="TugLocalHaulKm"/> flipped and burned.
+        /// </summary>
+        public static double CaptureDaysFor(double loadTonnes)
+        {
+            double m = TugLocalHaulKm * 1000;
+            double outS = 2 * Math.Sqrt(m / CaptureTugAccel(0)), inS = 2 * Math.Sqrt(m / CaptureTugAccel(loadTonnes));
+            return (outS + inS) / Astro.SecondsPerDay;
         }
 
         /// <summary>Metres across of a sphere of <paramref name="tonnes"/> at <paramref name="density"/>.</summary>
@@ -721,6 +791,11 @@ namespace Unity.SpaceGod.Core
 
         void Capture(MiningOperation op, double jd)
         {
+            if (op.CaptureHulls != null)
+            {
+                SendCaptureHulls(op, jd);
+                return;
+            }
             if (op.TugReadyJd == null || op.TugReadyJd.Length != op.CaptureTugs)
             {
                 op.TugReadyJd = new double[op.CaptureTugs];
@@ -740,6 +815,55 @@ namespace Unity.SpaceGod.Core
                 op.RocksCaptured++;
                 op.TonnesCaptured += t;
                 op.TugReadyJd[i] = jd + op.CaptureDays * (0.6 + 0.8 * rng.NextDouble());
+            }
+        }
+
+        /// <summary>
+        /// Sends every one of <paramref name="op"/>'s capture tug hulls (U.SPC-T522) lying idle at its refinery out for a rock
+        /// of its own, once those its world has lost (left adrift, taken, destroyed) when on no catch have left the works. Each
+        /// flies out empty into the field round the refinery, matches its rock there and latches on (<see cref="TugArrived"/>),
+        /// and pushes it in (<see cref="Ship.Homing"/>), where it joins the grinders' backlog. The tugs stand down while the
+        /// grinders' yard is full, counting what every tug of the works is bringing in.
+        /// </summary>
+        void SendCaptureHulls(MiningOperation op, double jd)
+        {
+            Captures ??= new List<TugHaul>();
+            for (int i = op.CaptureHulls.Count - 1; i >= 0; i--)
+            {
+                var tug = op.CaptureHulls[i];
+                if (!Gone(op, tug) || HaulOf(tug) != null) continue;
+                op.CaptureHulls.RemoveAt(i);
+                op.CaptureTugsLost++;
+            }
+            op.CaptureTugs = op.CaptureHulls.Count;
+            int inbound = 0;
+            foreach (var h in Hauls)
+                if (h.Operation == op && h.State == ConvoyState.EnRoute && h.ToDepot == null) inbound++;
+            foreach (var h in Captures)
+                if (h.Operation == op && h.State == ConvoyState.EnRoute) inbound++;
+            foreach (var tug in op.CaptureHulls.ToArray())
+            {
+                if (op.Backlog.Count + inbound >= op.MaxBacklog) return;
+                if (tug.Tow != null || tug.Phase != ShipPhase.Parked || tug.Orbit == null || tug.Orbit.Body != op.RefineryBody) continue;
+                if (HaulOf(tug) != null || (TugFree != null && !TugFree(tug))) continue;
+                var kind = AsteroidClass.Pick(rng);
+                double d = op.MinRockM + (op.MaxRockM - op.MinRockM) * rng.NextDouble();
+                double t = RockTonnes(d, kind.Density);
+                var haul = new TugHaul
+                {
+                    Name = $"{op.Name} capture {++haulSerial}", Operation = op, FromBody = op.RefineryBody, ToBody = op.RefineryBody,
+                    Capture = true, Tug = tug, AccelMs2 = CaptureTugAccel(t), DepartJd = jd, ArriveJd = jd + Math.Max(1, CaptureDaysFor(t)),
+                    // Its hull, not a timetable, says when it is free again.
+                    FreeJd = double.PositiveInfinity,
+                    Load = new CapturedRock
+                    {
+                        Designation = $"{op.Name} rock {++rockSerial}", Class = kind, DiameterM = d, Tonnes = t, Remaining = t,
+                    },
+                };
+                Captures.Add(haul);
+                inbound++;
+                // The rock lies out in the field round the refinery: the tug flies out to it with its claws open first.
+                HaulSent?.Invoke(haul, jd);
             }
         }
 
@@ -927,6 +1051,10 @@ namespace Unity.SpaceGod.Core
             int inbound = 0;
             foreach (var h in Hauls)
                 if (h.Operation == op && h.State == ConvoyState.EnRoute && h.ToDepot == null) inbound++;
+            // The capture tugs' rocks on the way in fill the same grinders' yard (U.SPC-T522).
+            if (Captures != null)
+                foreach (var h in Captures)
+                    if (h.Operation == op && h.State == ConvoyState.EnRoute) inbound++;
             foreach (var tug in op.Tugs.ToArray())
             {
                 if (tug.Tow != null || tug.Phase != ShipPhase.Parked || tug.Orbit == null || tug.Orbit.Body != op.TugHome) continue;
@@ -1022,6 +1150,30 @@ namespace Unity.SpaceGod.Core
                 Hauls.RemoveAt(i--);
                 finished--;
             }
+            MoveCaptures(jd);
+        }
+
+        /// <summary>
+        /// A day of every capture tug's catch (U.SPC-T522): each flown by its hull, so lost with it or seized where it is, as
+        /// an ore tug's haul is (<see cref="MoveHull"/>); its arrival is the hull's own (<see cref="TugArrived"/>).
+        /// </summary>
+        void MoveCaptures(double jd)
+        {
+            if (Captures == null) return;
+            for (int k = 0; k < Captures.Count; k++)
+            {
+                var h = Captures[k];
+                if (h.State == ConvoyState.EnRoute) MoveHull(h, jd);
+            }
+            int finished = 0;
+            foreach (var h in Captures)
+                if (Finished(h, jd)) finished++;
+            for (int i = 0; i < Captures.Count && finished > 300; i++)
+            {
+                if (!Finished(Captures[i], jd)) continue;
+                Captures.RemoveAt(i--);
+                finished--;
+            }
         }
 
         static bool Finished(TugHaul h, double jd) =>
@@ -1043,8 +1195,9 @@ namespace Unity.SpaceGod.Core
                     // Blown apart with its load: nobody the richer.
                     h.State = ConvoyState.Lost;
                     LoseHull(h);
-                    TugsDestroyed++;
-                    Log?.Invoke(jd, $"The ore tug {tug.Name} of the {op?.Name} is lost with the {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()} it was pushing", h.ToBody);
+                    if (h.Capture) CaptureTugsDestroyed++;
+                    else TugsDestroyed++;
+                    Log?.Invoke(jd, $"The {h.TugKind} {tug.Name} of the {op?.Name} is lost with the {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()} it was pushing", h.ToBody);
                     return;
                 }
                 // Boarded in a fight: left adrift by its captors or flying their colours, its load is theirs.
@@ -1062,6 +1215,20 @@ namespace Unity.SpaceGod.Core
         void LoseHull(TugHaul h)
         {
             var op = h.Operation;
+            if (h.Capture)
+            {
+                // A capture tug's hull (U.SPC-T522): gone from its works' capture tugs.
+                if (h.Tug != null)
+                {
+                    h.Tug.Tow = null;
+                    h.Tug.Homing = false;
+                    op?.CaptureHulls?.Remove(h.Tug);
+                }
+                if (op == null) return;
+                op.CaptureTugs = op.CaptureHulls != null ? op.CaptureHulls.Count : Math.Max(0, op.CaptureTugs - 1);
+                op.CaptureTugsLost++;
+                return;
+            }
             if (h.Tug != null)
             {
                 h.Tug.Tow = null;
@@ -1085,8 +1252,9 @@ namespace Unity.SpaceGod.Core
             h.FreeJd = jd;
             foreach (var (g, f) in h.Load.Class.Yield) Plundered[(int)g] += h.Load.Tonnes * f;
             LoseHull(h);
-            TugsTaken++;
-            string tug = h.Tug != null ? "the ore tug " + h.Tug.Name : "an ore tug";
+            if (h.Capture) CaptureTugsTaken++;
+            else TugsTaken++;
+            string tug = h.Tug != null ? $"the {h.TugKind} {h.Tug.Name}" : h.Capture ? "a capture tug" : "an ore tug";
             Log?.Invoke(jd, $"Raiders{By(h.TakenBy)} seized {tug} of the {op?.Name} and the {h.Load.Tonnes:N0} t of {h.Load.Class.Name.ToLowerInvariant()} it was pushing", body);
             if (handOver && h.Tug != null) TugSeized?.Invoke(h, jd);
             TugTaken?.Invoke(h);
@@ -1097,6 +1265,16 @@ namespace Unity.SpaceGod.Core
         {
             var op = h.Operation;
             h.State = ConvoyState.Delivered;
+            if (h.Capture)
+            {
+                // A capture tug's catch (U.SPC-T522): the rock is parked at the refinery for the grinders.
+                if (op == null) return;
+                h.Load.CapturedJd = jd;
+                op.Backlog.Add(h.Load);
+                op.RocksCaptured++;
+                op.TonnesCaptured += h.Load.Tonnes;
+                return;
+            }
             TugHaulsDelivered++;
             if (op == null) return;
             op.TugHaulsDelivered++;

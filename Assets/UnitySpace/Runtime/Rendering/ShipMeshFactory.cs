@@ -77,6 +77,7 @@ namespace Unity.SpaceGod.Rendering
                 case ShipClass.Recon: BuildRecon(b); break;
                 case ShipClass.AssaultShuttle: BuildShuttle(b); break;
                 case ShipClass.GateBreaker: BuildGateBreaker(b); break;
+                case ShipClass.CaptureTug: BuildCaptureTug(b); break;
                 default: BuildFreighter(b); break;
             }
             mesh = b.ToMesh(shipClass + "_" + faction.Prefix + "_" + section);
@@ -935,6 +936,29 @@ namespace Unity.SpaceGod.Rendering
                 b.BoxRotated(radial * 0.15f + new Vector3(0, 0, 0.24f), new Vector3(0.04f, 0.035f, 0.06f), deg, b.Accent);
                 b.BoxRotated(radial * 0.17f + new Vector3(0, 0, 0.36f), new Vector3(0.03f, 0.03f, 0.2f), deg, steel);
                 b.BoxRotated(radial * 0.13f + new Vector3(0, 0, 0.47f), new Vector3(0.09f, 0.03f, 0.04f), deg, steel);
+            }
+        }
+
+        /// <summary>
+        /// A capture tug (U.SPC-T522): an ore tug's plan on a lighter frame. A slim spine with a cab on top, a pair of nozzles
+        /// astern, a narrow push plate, and three longer, thinner claws reaching well forward to close round a tumbling rock.
+        /// </summary>
+        static void BuildCaptureTug(Builder b)
+        {
+            var steel = new Color(0.6f, 0.58f, 0.54f, 1f);
+            b.Box(new Vector3(0, 0, -0.05f), new Vector3(0.12f, 0.1f, 0.55f), b.Hull);
+            b.Box(new Vector3(0, 0, -0.34f), new Vector3(0.22f, 0.14f, 0.16f), b.Dark);
+            b.Box(new Vector3(0, 0.07f, 0.08f), new Vector3(0.07f, 0.05f, 0.12f), b.Accent);
+            b.Nozzle(new Vector3(-0.06f, 0, -0.46f), 0.04f, 0.05f);
+            b.Nozzle(new Vector3(0.06f, 0, -0.46f), 0.04f, 0.05f);
+            b.Box(new Vector3(0, 0, 0.23f), new Vector3(0.2f, 0.18f, 0.025f), b.Dark);
+            for (int k = 0; k < 3; k++)
+            {
+                float deg = 90f + 120f * k, a = deg * Mathf.Deg2Rad;
+                var radial = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0);
+                b.BoxRotated(radial * 0.11f + new Vector3(0, 0, 0.25f), new Vector3(0.03f, 0.03f, 0.05f), deg, b.Accent);
+                b.BoxRotated(radial * 0.13f + new Vector3(0, 0, 0.38f), new Vector3(0.022f, 0.022f, 0.24f), deg, steel);
+                b.BoxRotated(radial * 0.09f + new Vector3(0, 0, 0.5f), new Vector3(0.07f, 0.022f, 0.03f), deg, steel);
             }
         }
 

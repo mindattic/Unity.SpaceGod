@@ -27,12 +27,13 @@ namespace Unity.SpaceGod.Core.Tests
             // either here would also perturb this fixture's own chaotic N-body simulation used by other
             // tests, the same way it does World.CreateDefault's (see AvoidanceTests). Ore tugs are real hulls here too
             // (U.SPC-T498: no ship exists only as a number). The interceptor and bomber (U.SPC-T484) are strike craft
-            // that fly from carriers' hangars as squadrons, and the recon fighter (U.SPC-T485) in a carrier's recon flight.
+            // that fly from carriers' hangars as squadrons, and the recon fighter (U.SPC-T485) in a carrier's recon flight. Capture
+            // tugs (U.SPC-T522) are real hulls of a World's belt works (World.RaiseCaptureTugs), not of this fixture.
             foreach (ShipClass c in Enum.GetValues(typeof(ShipClass)))
                 if (c != ShipClass.Breacher && c != ShipClass.Fighter && c != ShipClass.Explorer && c != ShipClass.Gunship
                     && c != ShipClass.Interceptor && c != ShipClass.Bomber && c != ShipClass.LaneTender && c != ShipClass.GatePicket
                     && c != ShipClass.CommandCruiser && c != ShipClass.Frigate && c != ShipClass.Corvette && c != ShipClass.Recon && c != ShipClass.AssaultShuttle
-                    && c != ShipClass.GateBreaker) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
+                    && c != ShipClass.GateBreaker && c != ShipClass.CaptureTug) Assert.That((fleet.Ships).Any(s => s.Spec.Class == c), Is.True);
             Assert.That(fleet.Ships.Count >= 40, Is.True);
             Assert.That((fleet.Ships).Any(s => !s.IsEscort && s.Phase == ShipPhase.Transit), Is.True);
             Assert.That((fleet.Ships).Any(s => !s.IsEscort && s.Phase == ShipPhase.Parked), Is.True);

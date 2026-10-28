@@ -95,6 +95,12 @@ namespace Unity.SpaceGod.Core
         /// intact and repair its ring. It always carries its own FTL drive, since it attacks the gates the rest of the fleet
         /// would use (see <see cref="GateBreakers"/>).</summary>
         GateBreaker,
+
+        /// <summary>A capture tug (U.SPC-T522): a belt works' small, nimble claw boat. It flies out into the field round its
+        /// refinery, matches a rock of a few tens to a hundred-odd metres (<see cref="MiningOperation.MinRockM"/> to
+        /// <see cref="MiningOperation.MaxRockM"/>), latches on and pushes it in for the grinders (see <see cref="BeltMining"/>):
+        /// an <see cref="OreTug"/>'s machinery on a lighter frame, for far smaller loads.</summary>
+        CaptureTug,
     }
 
     public enum ShipRole
@@ -125,9 +131,9 @@ namespace Unity.SpaceGod.Core
         Tender,
 
         /// <summary>
-        /// An ore tug at work for its belt works (U.SPC-T498, see <see cref="BeltMining"/>): it lies at the field its loads
-        /// come from, latches onto one when its operation sends it out (<see cref="Ship.Tow"/>), pushes it in to the refinery
-        /// or the depot it is for, and comes home empty. Its operation, not a market, decides where it goes.
+        /// An ore tug (or a capture tug, U.SPC-T522) at work for its belt works (U.SPC-T498, see <see cref="BeltMining"/>): it
+        /// lies at the field its loads come from, latches onto one when its operation sends it out (<see cref="Ship.Tow"/>),
+        /// pushes it in to the refinery or the depot it is for, and comes home empty. Its operation, not a market, decides where it goes.
         /// </summary>
         Tug,
     }
@@ -209,6 +215,8 @@ namespace Unity.SpaceGod.Core
             new ShipClassSpec(ShipClass.AssaultShuttle, "Assault shuttle", 0.5, true),
             // The siege capital (U.SPC-T478): its plate makes it the slowest warship hull.
             new ShipClassSpec(ShipClass.GateBreaker, "Gate breaker", 0.25, true),
+            // A capture tug (U.SPC-T522): a lighter frame than an ore tug's, quicker to chase down and match a tumbling rock.
+            new ShipClassSpec(ShipClass.CaptureTug, "Capture tug", 0.15, false),
         };
 
         public static ShipClassSpec Of(ShipClass c) => Specs[(int)c];
