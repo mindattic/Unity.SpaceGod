@@ -115,6 +115,8 @@ namespace Unity.SpaceGod.Core
         public static double Threat(Missile m)
         {
             double damage = Math.Max(m.Damage, 1);
+            // A Breacher round tumbling adrift threatens nobody (U.SPC-T519): the last thing a screen spends itself on.
+            if (m.Adrift) return 1e-3;
             var t = m.Target;
             if (t == null) return damage;
             double capital = t.Kind != UnitKind.Fighter && t.LengthKm >= 1 ? 1.5 : 1;

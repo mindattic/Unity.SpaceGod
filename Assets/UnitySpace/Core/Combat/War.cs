@@ -184,7 +184,14 @@ namespace Unity.SpaceGod.Core
             Crews.Resolved += (pod, ship) =>
             {
                 string by = ship != null ? "the " + ship.Name : pod.TakenBy != null ? "the " + pod.TakenBy.Name : "nobody";
-                string text = pod.State switch
+                string text = pod.Breacher ? pod.State switch
+                {
+                    // A drifting Breacher round (U.SPC-T519).
+                    PodState.Rescued => $"{Cap(by)} tows in the {pod.Name}: {pod.People:0} {pod.Owners.Name} marines home safe",
+                    PodState.Hostage => $"{Cap(by)} salvages the {pod.Name} and holds its {pod.People:0} marines for ransom or sale",
+                    PodState.Prisoner => $"{Cap(by)} tows in the {pod.Name} and takes its {pod.People:0} marines prisoner",
+                    _ => $"The {pod.Name} falls silent: its air ran out with {pod.People:0} marines inside",
+                } : pod.State switch
                 {
                     PodState.Rescued => $"{Cap(by)} picks up the {pod.Name}'s escape pods: {pod.People:0} crew safe",
                     PodState.Hostage => $"{Cap(by)} hauls in the {pod.Name}'s escape pods and holds {pod.People:0} crew for ransom",
@@ -1618,6 +1625,11 @@ namespace Unity.SpaceGod.Core
             Ended.Add(b);
             if (Ended.Count > 30) Ended.RemoveAt(0);
             BattleEnded?.Invoke(b, jd);
+            // Breacher rounds still in space with their teams alive are left drifting, for a tow to bring in or pirates to
+            // salvage (U.SPC-T519).
+            foreach (var pod in DriftingRounds.CastAdrift(b, Crews, jd))
+                world.Log(jd, $"A {pod.Name} is left drifting after the fight at {b.Name}: {pod.People:0} {pod.Owners.Name} marines " +
+                    "alive inside, waiting on a tow", WorldEventKind.Loss, PodBody(pod));
 
             var lost = new int[2];
             var fled = new int[2];

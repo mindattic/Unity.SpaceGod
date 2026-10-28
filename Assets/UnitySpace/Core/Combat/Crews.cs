@@ -83,6 +83,14 @@ namespace Unity.SpaceGod.Core
         /// broke out of), or null: whoever tractors the pods in has them (see <see cref="Outlaws.OnPodResolved"/>).</summary>
         public Outlaw Captain;
 
+        /// <summary>Not escape pods but a Breacher round left drifting after a fight with its team alive inside (U.SPC-T519,
+        /// <see cref="DriftingRounds"/>): <see cref="People"/> are its marines, and only a tow unit can bring it in.</summary>
+        public bool Breacher;
+
+        /// <summary>For a <see cref="Breacher"/> round: the side its team was fighting, whom pirates who salvage it may
+        /// sell the marines to as slaves; or null.</summary>
+        public Faction Enemy;
+
         /// <summary>The cluster drifts this far from the hull at most, km.</summary>
         public const double MaxDriftKm = 300;
 
@@ -122,6 +130,13 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The hull they came off, for the log.</summary>
         public string From;
+
+        /// <summary>Marines salvaged from a drifting Breacher round (U.SPC-T519): their captors may sell them to
+        /// <see cref="Buyer"/> as slaves instead of ransoming them.</summary>
+        public bool Marines;
+
+        /// <summary>The side the marines were fighting, who would buy them as slaves; or null.</summary>
+        public Faction Buyer;
     }
 
     /// <summary>
@@ -268,6 +283,38 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
+        /// A Breacher round is left drifting after a fight with <paramref name="marines"/> of <paramref name="owners"/> alive
+        /// inside (U.SPC-T519, <see cref="DriftingRounds.CastAdrift"/>): at <paramref name="local"/> (battle-local km from
+        /// <paramref name="anchor"/> at <paramref name="body"/>, or beside a lane at <paramref name="site"/>), tumbling on along
+        /// <paramref name="heading"/>, with <see cref="DriftingRounds.AirDays"/> of air. <paramref name="enemy"/> is the side the
+        /// team was fighting. Returns the drifting round, or null with nobody aboard.
+        /// </summary>
+        public EscapePod Adrift(string name, Faction owners, double marines, Faction enemy, int body, DVec3 anchor, DVec3 local,
+            DVec3 heading, LaneSite site, double jd)
+        {
+            if (owners == null || marines < 0.5) return null;
+            var pod = new EscapePod
+            {
+                Id = nextId++,
+                Name = name,
+                Owners = owners,
+                People = marines,
+                Pods = 1,
+                Body = body,
+                Anchor = anchor,
+                Local = local,
+                Site = site,
+                DriftDir = heading.LengthSquared > 1e-18 ? heading.Normalized : DVec3.UnitX,
+                LaunchedJd = jd,
+                LifeSupportDays = DriftingRounds.AirDays,
+                Breacher = true,
+                Enemy = enemy,
+            };
+            Pods.Add(pod);
+            return pod;
+        }
+
+        /// <summary>
         /// <paramref name="ship"/> (of <paramref name="rescuer"/>; null for a ship that isn't named) picks up the
         /// pods. Their own side or a friend brings the crew home (paid <see cref="RescueRewardPerHead"/> by the
         /// owners when <paramref name="payRescuer"/>; the player is paid through the adventure instead); pirates
@@ -293,7 +340,13 @@ namespace Unity.SpaceGod.Core
             else if (rescuer.IsPirate)
             {
                 pod.State = PodState.Hostage;
-                Hold(pod.Owners, rescuer, pod.People, false, ship != null ? HavenOf(ship) : null, jd, pod.Name);
+                var held = Hold(pod.Owners, rescuer, pod.People, false, ship != null ? HavenOf(ship) : null, jd, pod.Name);
+                // Marines salvaged from a Breacher round may be sold to the side they were fighting (U.SPC-T519).
+                if (held != null && pod.Breacher)
+                {
+                    held.Marines = true;
+                    held.Buyer = pod.Enemy;
+                }
             }
             else
             {
@@ -325,11 +378,14 @@ namespace Unity.SpaceGod.Core
                 foreach (var s in ships)
                 {
                     if (s == null || s == piloted || s.Destroyed || s.Derelict || s.GateDeparted || s.Battle != null || s.Faction == null) continue;
+                    // A drifting Breacher round is towed in, so only a tow unit can take it (U.SPC-T519).
+                    if (pod.Breacher && !DriftingRounds.CanTow(s)) continue;
                     bool here = pod.Site == null
                         ? Fleet.IsAt(s, pod.Body)
                         : s.Phase == ShipPhase.Lane && s.LaneLeg.Lane != null && s.LaneLeg.Lane == pod.Site.Hop.Lane;
                     if (!here) continue;
-                    double rate = s.Faction.IsPirate ? PirateFindRate : s.Spec.IsMilitary ? PatrolFindRate : MerchantFindRate;
+                    double rate = pod.Breacher ? (s.Faction.IsPirate ? DriftingRounds.PirateFindRate : DriftingRounds.TowFindRate)
+                        : s.Faction.IsPirate ? PirateFindRate : s.Spec.IsMilitary ? PatrolFindRate : MerchantFindRate;
                     // On a lane a passer-by has only moments to see them.
                     if (pod.Site != null) rate *= 0.25;
                     if (rng.NextDouble() >= 1 - Math.Exp(-rate * days)) continue;
@@ -405,7 +461,16 @@ namespace Unity.SpaceGod.Core
                 {
                     if (jd < c.RansomJd) continue;
                     double ransom = c.People * RansomPerHead;
-                    if (c.Owners.Treasury >= ransom)
+                    // Marines salvaged from a Breacher round may go to the side they were fighting, as slaves (U.SPC-T519).
+                    var buyer = DriftingRounds.Buyer(c, diplomacy, out double price);
+                    if (buyer != null && (c.Owners.Treasury < ransom || rng.NextDouble() < DriftingRounds.SellChance))
+                    {
+                        buyer.Treasury -= price;
+                        c.Captors.Treasury += price;
+                        Lose(c.Owners, c.People);
+                        how = $"The {c.Captors.Name} sell {c.People:0} marines from the {c.From} to the {buyer.Name} as slaves for {price:N0} cr";
+                    }
+                    else if (c.Owners.Treasury >= ransom)
                     {
                         c.Owners.Treasury -= ransom;
                         c.Captors.Treasury += ransom;

@@ -435,6 +435,11 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>The hostile round an interceptor is hunting (U.SPC-T489), or null for one sent after a fighter.</summary>
         public Missile Prey;
+
+        /// <summary>A Breacher round that missed or glanced off raised shields (U.SPC-T519): tumbling on through space, a
+        /// derelict with its team still alive inside, drilling into nothing now. Point defence can still shoot it out of the
+        /// sky; once the fight is over it is left drifting for a tow to recover or pirates to salvage (<see cref="DriftingRounds"/>).</summary>
+        public bool Adrift;
     }
 
     /// <summary>
@@ -1592,6 +1597,7 @@ namespace Unity.SpaceGod.Core
                             if (missile.Hp <= 0)
                             {
                                 missile.Gone = true;
+                                RoundLost(missile);
                                 Emit(FxKind.MissileKill, missile.Pos, missile.Pos, 0.08, missile.Side, null, -1);
                             }
                         }
@@ -2437,6 +2443,7 @@ namespace Unity.SpaceGod.Core
                 if (m.Hp <= 0)
                 {
                     m.Gone = true;
+                    RoundLost(m);
                     Emit(FxKind.MissileKill, m.Pos, m.Pos, 0.08, m.Side, null, -1);
                 }
             }
@@ -2503,18 +2510,22 @@ namespace Unity.SpaceGod.Core
             prey.Hp -= m.Damage;
             if (prey.Hp > 0) return;
             prey.Gone = true;
+            RoundLost(prey);
             Emit(FxKind.MissileKill, prey.Pos, prey.Pos, 0.08, prey.Side, null, -1);
         }
 
         Missile NearestMissile(int side, DVec3 origin, double range)
         {
             Missile best = null;
-            double bestD = range;
+            double bestD = range * 2;
             foreach (var m in Missiles)
             {
                 // Another side's interceptors threaten nothing a laser need waste a shot on (U.SPC-T489).
                 if (m.Gone || m.Side == side || m.Kind == MissileKind.Interceptor) continue;
                 double d = (m.Pos - origin).Length;
+                if (d > range) continue;
+                // A Breacher round tumbling adrift threatens nobody (U.SPC-T519): shot at only with nothing live in reach.
+                if (m.Adrift) d += range;
                 if (d < bestD)
                 {
                     bestD = d;
@@ -2930,13 +2941,20 @@ namespace Unity.SpaceGod.Core
         /// <summary>
         /// A Breacher round in flight (U.SPC-T466): it coasts like a bullet, its thrusters bending its track only slightly
         /// toward where its target will be, and strikes the first hostile hull it flies through. One that strikes nothing
-        /// flies on until it is lost, with its team.
+        /// is not lost with its team (U.SPC-T519): once it has flown its course it goes adrift, tumbling on with the
+        /// marines alive inside, and coasts until point defence shoots it down or the fight ends and it is left drifting.
         /// </summary>
         void StepBreacher(Missile m, double dt)
         {
+            if (m.Adrift)
+            {
+                m.Pos += m.Vel * dt;
+                return;
+            }
             if (m.Life <= 0)
             {
-                m.Gone = true;
+                GoAdrift(m);
+                m.Pos += m.Vel * dt;
                 return;
             }
             var t = m.Target;
@@ -2961,21 +2979,42 @@ namespace Unity.SpaceGod.Core
                 }
             }
             if (hit == null) return;
-            m.Gone = true;
             var from = start - hit.Pos;
             if (from.LengthSquared < 1e-12) from = m.Vel * -1;
-            BreacherHit(m, hit, from.Normalized);
+            m.Gone = BreacherHit(m, hit, from.Normalized);
         }
 
         /// <summary>
-        /// A Breacher round strikes <paramref name="t"/> from direction <paramref name="from"/> (U.SPC-T466). A shield
-        /// holding more than a quarter of its strength turns it aside and the team is lost with it; otherwise its drill
+        /// A Breacher round goes adrift (U.SPC-T519): its thrusters give up the chase and it tumbles on along its line, a
+        /// derelict with its team alive inside. It no longer homes on anything or drills into anything.
+        /// </summary>
+        static void GoAdrift(Missile m)
+        {
+            m.Adrift = true;
+            m.Target = null;
+            m.TargetSub = null;
+        }
+
+        /// <summary>
+        /// A Breacher round is shot out of space (U.SPC-T519): the team inside dies with it.
+        /// </summary>
+        static void RoundLost(Missile m)
+        {
+            if (m.Kind != MissileKind.Breacher || m.Marines < 0.5) return;
+            Crews.RecordDeaths(m.Owner, m.Marines);
+            m.Marines = 0;
+        }
+
+        /// <summary>
+        /// A Breacher round strikes <paramref name="t"/> from direction <paramref name="from"/> (U.SPC-T466); true if it is
+        /// spent (drilled in, or the hull it struck died). A shield holding more than a quarter of its strength turns it aside:
+        /// it glances off and tumbles away adrift, its team still alive inside (U.SPC-T519, <see cref="GoAdrift"/>). Otherwise its drill
         /// bores in, it stays stuck in the plating, and its team storms out into the compartment it struck, where the
         /// boarding fight takes over and the hull's own marines try to stop them. If the hull is no longer theirs to take
         /// (struck its colours on terms that do not open it, already held, or boarded by another faction), the team stays
         /// in the round and is taken off by the ship that fired it.
         /// </summary>
-        void BreacherHit(Missile m, BattleUnit t, DVec3 from)
+        bool BreacherHit(Missile m, BattleUnit t, DVec3 from)
         {
             var c = t.Combat;
             var entry = t.Pos + from * t.Radius;
@@ -2983,10 +3022,14 @@ namespace Unity.SpaceGod.Core
             if (!AssaultBays.Opens(c))
             {
                 Emit(FxKind.PodBounce, entry, entry, t.LengthKm, t.Side, t, -1);
-                return;
+                // It glances off the shield and careens away, tumbling (U.SPC-T519).
+                m.Vel = t.Vel + DriftingRounds.Glance(m.Vel - t.Vel, from);
+                m.Pos = entry + from * 0.05;
+                GoAdrift(m);
+                return false;
             }
             ApplyDamage(t, PickSubsystem(t), m.Damage, contact, entry);
-            if (!t.Present) return;
+            if (!t.Present) return true;
             Embed(t, contact, m.Vel - t.Vel, m.Side, true);
             var local = t.ToLocal(contact);
             var space = c.Interior.Nearest(local.Z, local.Y);
@@ -2998,6 +3041,7 @@ namespace Unity.SpaceGod.Core
                 if (m.Source != null && m.Source.Present && !m.Source.Captured) m.Source.Combat.Interior.Embark(0, m.Marines);
             }
             Emit(FxKind.Breach, contact, contact + from * 0.1, t.LengthKm * 0.15, m.Side, t, space.Index);
+            return true;
         }
 
         /// <summary>
