@@ -63,7 +63,8 @@ namespace Unity.SpaceGod.Core
                 if (Unit.Kind != UnitKind.Fighter || Unit.Fighter == null) return "not a launched craft";
                 if (Battle.Over) return "the fight is over";
                 if (Unit.Dead) return "shot down";
-                if (Unit.Docked) return "back aboard its carrier";
+                // Down on a flight deck being turned round to launch again, it is still the player's (U.SPC-T518).
+                if (Unit.Docked && !FlightDecks.TurningRound(Unit)) return "back aboard its carrier";
                 if (!Unit.Present) return "gone";
                 if (Unit.Captured) return "taken as a prize";
                 return null;
@@ -287,6 +288,9 @@ namespace Unity.SpaceGod.Core
             if (Wingmen > 0) sb.Append("  ·  wing ").Append(Wingmen).Append(": ").Append(Wing.Label(u.Fighter.Order));
             if (u.Overheated) sb.Append("  ·  GUNS OVERHEATED");
             if (MissileWarning) sb.Append("  ·  MISSILE");
+            // Landing guidance for a friendly flight deck near (U.SPC-T518).
+            var deck = FlightDecks.Guidance(Battle, u);
+            if (deck != null) sb.Append("  ·  ").Append(deck);
             return sb.ToString();
         }
 

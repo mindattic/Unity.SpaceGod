@@ -8,7 +8,9 @@ namespace Unity.SpaceGod.Views
 {
     /// <summary>
     /// Every fighter in every battle: its hull, an engine glow kept a few pixels across so a squadron
-    /// reads as a cluster of sparks from afar, and a fading trail that traces its runs and break-offs.
+    /// reads as a cluster of sparks from afar, and a fading trail that traces its runs and break-offs. Craft down on a
+    /// flight deck are drawn on it, and every hull's flight decks (U.SPC-T518) are drawn as lit frames round their stern
+    /// and bow mouths, with the glide path astern while a craft is on it, once the hull is big enough on screen to show them.
     /// </summary>
     public sealed class FighterViews
     {
@@ -24,6 +26,15 @@ namespace Unity.SpaceGod.Views
         readonly UnitySpaceApp app;
         readonly Transform root;
         readonly Dictionary<BattleUnit, View> views = new Dictionary<BattleUnit, View>();
+
+        /// <summary>A flight deck's lights: the frames round its stern and bow mouths and its glide path.</summary>
+        sealed class DeckView
+        {
+            public LineStrip Stern, Bow, Path;
+        }
+
+        readonly Dictionary<FlightDeck, DeckView> deckViews = new Dictionary<FlightDeck, DeckView>();
+        readonly Vector3[] framePoints = new Vector3[5];
         readonly Vector3[] trailPoints = new Vector3[TrailLength];
         static Material glowMaterial, shipMaterial;
         static Mesh quad;
@@ -50,13 +61,17 @@ namespace Unity.SpaceGod.Views
         {
             float now = Time.unscaledTime;
             var live = new HashSet<BattleUnit>();
+            var liveDecks = new HashSet<FlightDeck>();
             var cam = app.UnityCamera.transform;
             double ppu = app.PixelsPerUnitAtUnitDistance();
             foreach (var b in app.World.War.Battles)
             {
                 foreach (var u in b.Units)
                 {
-                    if (u.Kind != UnitKind.Fighter || !u.Present) continue;
+                    if (u.Kind == UnitKind.Ship && u.Present) DrawDecks(b, u, ppu, liveDecks);
+                    // A craft down on a flight deck is drawn on it, inside its hull (U.SPC-T518).
+                    bool onDeck = FlightDecks.OnDeck(u) && !u.Fighter.Deck.Deck.Carrier.Dead && u.Fighter.Deck.Deck.Carrier.Present;
+                    if (u.Kind != UnitKind.Fighter || !(u.Present || onDeck)) continue;
                     live.Add(u);
                     if (!views.TryGetValue(u, out var v)) views[u] = v = Create(u);
                     var scene = app.BattleScene(b, u.Pos);
@@ -119,6 +134,68 @@ namespace Unity.SpaceGod.Views
                 v.Trail.Dispose();
                 views.Remove(u);
             }
+            var closed = new List<FlightDeck>();
+            foreach (var kv in deckViews)
+                if (!liveDecks.Contains(kv.Key)) closed.Add(kv.Key);
+            foreach (var d in closed)
+            {
+                var dv = deckViews[d];
+                dv.Stern.Dispose();
+                dv.Bow.Dispose();
+                dv.Path.Dispose();
+                deckViews.Remove(d);
+            }
+        }
+
+        /// <summary>Half the width and height of a deck's mouth, in its hull's lengths, and at least so many km.</summary>
+        const double MouthHalfWidth = 0.014, MouthHalfHeight = 0.007, MouthMinKm = 0.03;
+
+        static readonly Color DeckOpen = new Color(0.55f, 0.95f, 0.6f, 0.9f), DeckClosed = new Color(1f, 0.35f, 0.3f, 0.6f);
+
+        /// <summary>
+        /// <paramref name="carrier"/>'s flight decks (U.SPC-T518): a lit frame round each mouth, green while the deck is open and
+        /// red once its hangar is shot away, and the glide path from the approach gate to the stern mouth while a craft is on
+        /// it. Drawn only while the hull is big enough on screen (<see cref="FlightDecks.Lod"/>).
+        /// </summary>
+        void DrawDecks(Battle b, BattleUnit carrier, double ppu, HashSet<FlightDeck> liveDecks)
+        {
+            var decks = FlightDecks.Of(carrier);
+            if (decks.Count == 0) return;
+            var rel = app.Relative(app.BattleScene(b, carrier.Pos));
+            var tier = RenderLod.Tier(FlightDecks.Lod, RenderLod.ApparentPx(app.Scale.ShipLength(carrier.LengthKm), rel.magnitude, ppu));
+            bool shown = RenderLod.DrawsModel(tier);
+            double w = System.Math.Max(MouthMinKm, carrier.LengthKm * MouthHalfWidth), h = System.Math.Max(MouthMinKm * 0.5, carrier.LengthKm * MouthHalfHeight);
+            foreach (var d in decks)
+            {
+                liveDecks.Add(d);
+                if (!deckViews.TryGetValue(d, out var dv))
+                    deckViews[d] = dv = new DeckView { Stern = new LineStrip("Deck stern", root), Bow = new LineStrip("Deck bow", root), Path = new LineStrip("Glide path", root) };
+                dv.Stern.Visible = dv.Bow.Visible = shown;
+                dv.Path.Visible = false;
+                if (!shown) continue;
+                var color = d.Open ? DeckOpen : DeckClosed;
+                Frame(b, d, d.SternAlong, w, h, dv.Stern, color);
+                Frame(b, d, d.BowAlong, w, h, dv.Bow, color);
+                if (d.Open && d.Final != null && d.Final.Present)
+                {
+                    trailPoints[0] = app.Relative(app.BattleScene(b, d.Gate));
+                    trailPoints[1] = app.Relative(app.BattleScene(b, d.Stern));
+                    dv.Path.SetPoints(trailPoints, 2, color, 0.15f, 0.8f);
+                    dv.Path.Visible = true;
+                }
+            }
+        }
+
+        /// <summary>The lit frame round a deck's mouth <paramref name="along"/> km down its axis.</summary>
+        void Frame(Battle b, FlightDeck d, double along, double w, double h, LineStrip strip, Color color)
+        {
+            framePoints[0] = app.Relative(app.BattleScene(b, d.At(along, new DVec3(-w, -h, 0))));
+            framePoints[1] = app.Relative(app.BattleScene(b, d.At(along, new DVec3(w, -h, 0))));
+            framePoints[2] = app.Relative(app.BattleScene(b, d.At(along, new DVec3(w, h, 0))));
+            framePoints[3] = app.Relative(app.BattleScene(b, d.At(along, new DVec3(-w, h, 0))));
+            framePoints[4] = framePoints[0];
+            strip.SetPoints(framePoints, 5, color);
+            strip.Root.transform.localPosition = Vector3.zero;
         }
 
         View Create(BattleUnit u)

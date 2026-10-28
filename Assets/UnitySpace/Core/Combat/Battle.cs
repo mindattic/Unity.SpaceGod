@@ -782,6 +782,8 @@ namespace Unity.SpaceGod.Core
                 Think(u, dt);
                 Move(u, dt);
             }
+            // Craft down on a flight deck ride with their hull, are turned round and launched again (U.SPC-T518).
+            FlightDecks.Step(this, dt);
             for (int i = 0; i < Units.Count; i++)
             {
                 var u = Units[i];

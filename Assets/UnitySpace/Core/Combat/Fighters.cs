@@ -60,6 +60,10 @@ namespace Unity.SpaceGod.Core
         public DVec3 RunEntry, BreakPoint;
 
         public double Seed;
+
+        /// <summary>Its visit to a flight deck (U.SPC-T518, see <see cref="FlightDecks"/>): flying in to land, down on the deck
+        /// being turned round, or launching out of the bow; null while it is out in the fight.</summary>
+        public DeckVisit Deck;
     }
 
     /// <summary>The player's stick on a launched craft they have taken (U.SPC-T422, see <see cref="FighterSeat"/>).</summary>
@@ -170,12 +174,16 @@ namespace Unity.SpaceGod.Core
                 Carrier = carrier, Lead = lead, Squadron = q, Slot = k, Bomber = craft.Role == FighterRole.Bomber, Role = craft.Role, Phase = phase,
                 Skill = pilot.Skill, Reaction = pilot.Reaction, Discipline = pilot.Discipline, Seed = pilot.Seed,
             };
+            // Out through a flight deck and its bow mouth, in column with the rest of the launch (U.SPC-T518).
+            FlightDecks.Catapult(b, carrier, u);
             return lead ?? u;
         }
 
         public static void Step(Battle b, BattleUnit u, double dt)
         {
             var f = u.Fighter;
+            // On the glide path into a flight deck, or being launched out of one, the deck flies it (U.SPC-T518).
+            if (FlightDecks.Fly(b, u, dt)) return;
             // A boarding shuttle flies to its prize, not into the fight (U.SPC-T486).
             if (f.Role == FighterRole.AssaultShuttle)
             {
@@ -199,7 +207,21 @@ namespace Unity.SpaceGod.Core
                 Land(b, u, dt);
                 return;
             }
-            if (f.Lead != null && !f.Lead.Present) f.Lead = NewLead(b, u);
+            // Hurt or out of ordnance: home to the flight deck to rearm and repair, then out again (U.SPC-T518).
+            if (FlightDecks.WantsService(b, u))
+            {
+                if (f.Phase != FighterPhase.Return) Switch(f, FighterPhase.Return);
+                Land(b, u, dt);
+                return;
+            }
+            // Recalled and then sent back in (the shooting started again): it turns back to the fight.
+            if (f.Phase == FighterPhase.Return)
+            {
+                FlightDecks.Abort(u);
+                Switch(f, FighterPhase.Approach);
+            }
+            // A lead gone home to its deck leaves the squadron to the next in line until it is back.
+            if (f.Lead != null && (!f.Lead.Present || FlightDecks.Away(f.Lead))) f.Lead = NewLead(b, u);
             SharePower(b, u);
             if (f.Lead == null) Lead(b, u, dt);
             else Wingman(b, u, dt);
@@ -229,7 +251,7 @@ namespace Unity.SpaceGod.Core
             foreach (var o in b.Units)
             {
                 if (!o.Present || o.Kind != UnitKind.Fighter || o.Fighter.Squadron != u.Fighter.Squadron || o.Fighter.Carrier != u.Fighter.Carrier
-                    || BoardingShuttles.Is(o)) continue;
+                    || BoardingShuttles.Is(o) || (o != u && FlightDecks.Away(o))) continue;
                 if (best == null || o.Fighter.Slot < best.Fighter.Slot) best = o;
             }
             if (best == null || best == u) return null;
@@ -548,6 +570,8 @@ namespace Unity.SpaceGod.Core
             }
             u.Target = u.PlayerLockTarget;
             u.PlayerSecondaryHeld = stick.Secondary && stick.SecondaryGroup == WeaponGroup.Missiles;
+            // Lined up on a friendly flight deck's glide path, the deck takes it in, turns it round and launches it (U.SPC-T518).
+            if (FlightDecks.FlyManned(b, u, stick, dt)) return;
             if (u.Stunned > 0)
             {
                 u.Pos += u.Vel * dt;
@@ -615,6 +639,21 @@ namespace Unity.SpaceGod.Core
         static void Land(Battle b, BattleUnit u, double dt)
         {
             var carrier = u.Fighter.LandsOn;
+            // A hull with a flight deck open has it fly the approach (U.SPC-T518): to the gate astern of the deck, holding
+            // off while the deck is busy, then cleared onto the glide path and in through the stern mouth.
+            var flightDeck = FlightDecks.Assign(u);
+            if (flightDeck != null)
+            {
+                if (FlightDecks.TryFinal(b, u, flightDeck, dt))
+                {
+                    FlightDecks.Fly(b, u, dt);
+                    return;
+                }
+                var gate = FlightDecks.InboundGoal(b, u, flightDeck);
+                double lead = Math.Min(5, (gate - u.Pos).Length / Math.Max(1e-6, u.Combat.Spec.MaxSpeed));
+                Steer(b, u, gate + carrier.Vel * lead, u.Combat.Spec.MaxSpeed, dt, carrier.Vel, homing: true);
+                return;
+            }
             Subsystem bay = null;
             foreach (var s in carrier.Combat.Subsystems)
                 if (s.Kind == SubsystemKind.Hangar && !s.Destroyed) bay = s;
@@ -673,6 +712,7 @@ namespace Unity.SpaceGod.Core
             };
             u.BoardTarget = target;
             if (team > 0) u.Combat.Interior.Embark(0, team);
+            FlightDecks.Catapult(b, carrier, u);
             return u;
         }
 

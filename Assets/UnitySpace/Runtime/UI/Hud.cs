@@ -3592,11 +3592,49 @@ namespace Unity.SpaceGod.UI
             string line = app.SeatLine();
             if (line == null) return;
             DrawSeatSight();
+            DrawDeckGuide();
             var content = new GUIContent(line);
             float w = toast.CalcSize(content).x + 40;
             var r = new Rect((Screen.width - w) * 0.5f, Screen.height - 96, w, 34);
             GUI.Box(r, GUIContent.none, panel);
             GUI.Label(new Rect(r.x + 20, r.y + 7, w, 22), content, toast);
+        }
+
+        static readonly Color DeckLinedUpColor = new Color(0.45f, 1f, 0.55f, 0.95f);
+
+        /// <summary>
+        /// Landing guidance in a fighter's cockpit (U.SPC-T518, see <see cref="FlightDecks"/>): the nearest friendly flight deck's
+        /// approach gate as a ring, its stern mouth bracketed and the glide path between them, green once the craft is lined up
+        /// closely enough for the deck to take it in (or the deck has it), amber until then; launching, the bow mouth it goes out of.
+        /// </summary>
+        void DrawDeckGuide()
+        {
+            if (Event.current.type != EventType.Repaint || !(app.Seat is FighterSeat f)) return;
+            var b = f.Battle;
+            var deck = FlightDecks.GuideDeck(b, f.Unit);
+            if (deck == null) return;
+            var visit = FlightDecks.VisitOf(f.Unit);
+            bool lined = visit != null || FlightDecks.Capturing(b, f.Unit) == deck;
+            var color = lined ? DeckLinedUpColor : LockColor;
+            bool gateOn = app.ToGui(app.BattleScene(b, deck.Gate), out var gate, out _);
+            bool sternOn = app.ToGui(app.BattleScene(b, deck.Stern), out var stern, out _);
+            if (visit?.Stage == DeckStage.Launching)
+            {
+                if (app.ToGui(app.BattleScene(b, deck.Bow), out var bow, out _))
+                {
+                    DrawBrackets(new Rect(bow.x - 12, bow.y - 8, 24, 16), color, 1.5f);
+                    DrawLabel("LAUNCH", bow + new Vector2(16, -8), color, true);
+                }
+                return;
+            }
+            if (gateOn) DrawRing(gate, 9, color);
+            if (gateOn && sternOn) DrawLine(gate, stern, new Color(color.r, color.g, color.b, 0.5f), 1f);
+            if (sternOn)
+            {
+                DrawBrackets(new Rect(stern.x - 12, stern.y - 8, 24, 16), color, 1.5f);
+                string tag = visit == null ? "DECK " + RangeText((deck.Gate - f.Unit.Pos).Length) : visit.Stage == DeckStage.Final ? "LANDING" : "ON DECK";
+                DrawLabel(tag, stern + new Vector2(16, -8), color, true);
+            }
         }
 
         /// <summary>A seat's sight: four ticks about the middle of the screen, which the view follows.</summary>
