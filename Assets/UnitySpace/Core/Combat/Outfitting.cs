@@ -419,6 +419,47 @@ namespace Unity.SpaceGod.Core
         /// <summary>Internal space left for another facility, sections.</summary>
         public double FreeSpace => Math.Max(0, InternalSpace - UsedSpace);
 
+        /// <summary>The reactor output a hull keeps in reserve for its fittings, MW per unit of hull scale (U.SPC-T521): a
+        /// destroyer's reactor has 50 MW to spare beyond its drive, guns and shields, a carrier's about 200.</summary>
+        public const double ReactorReservePerScale = 50;
+
+        /// <summary>The share of a hull's crew that can be spared from running it to man its fittings (U.SPC-T521).</summary>
+        public const double CrewSpareShare = 0.25;
+
+        static double PowerOf(IEnumerable<FacilitySite> sites)
+        {
+            double mw = 0;
+            foreach (var s in sites) mw += s.Def?.PowerMw ?? 0;
+            return mw;
+        }
+
+        static double CrewOf(IEnumerable<FacilitySite> sites)
+        {
+            double n = 0;
+            foreach (var s in sites) n += s.Def?.Crew ?? 0;
+            return n;
+        }
+
+        /// <summary>The reactor power the hull has for its fittings, MW (U.SPC-T521): its reserve
+        /// (<see cref="ReactorReservePerScale"/>) plus whatever its design's own facilities draw, as its reactor was sized for them.</summary>
+        public double ReactorMw => ReactorReservePerScale * Scale + PowerOf(StockFacilities);
+
+        /// <summary>The reactor power its facilities draw now, MW.</summary>
+        public double PowerDrawMw => PowerOf(Facilities);
+
+        /// <summary>Reactor power still free for another fitting, MW.</summary>
+        public double FreePowerMw => Math.Max(0, ReactorMw - PowerDrawMw);
+
+        /// <summary>The hands the hull can spare to man its fittings (U.SPC-T521): a share of its crew
+        /// (<see cref="CrewSpareShare"/>) plus those its design's own facilities were crewed for.</summary>
+        public double FittingCrew => Math.Max(0, Base.Crew) * CrewSpareShare + CrewOf(StockFacilities);
+
+        /// <summary>The hands its facilities take to man now.</summary>
+        public double CrewManning => CrewOf(Facilities);
+
+        /// <summary>Hands still free to man another fitting.</summary>
+        public double FreeCrew => Math.Max(0, FittingCrew - CrewManning);
+
         /// <summary>Hardpoints fitted with <paramref name="k"/>, plus facilities that are that module (plate, racks, a
         /// scanner suite, a brig).</summary>
         public int Count(ModuleKind k)
@@ -621,8 +662,11 @@ namespace Unity.SpaceGod.Core
         public OutfitOutcome CanAdd(FacilityKind kind)
         {
             if (kind == null || !kind.Fittable || !kind.AllowedOn(Category, Class)) return OutfitOutcome.WontFit;
-            // A facility that needs another to work goes in only beside it (an assault bay beside a habitat, U.SPC-T466).
+            // A facility that needs another to work goes in only beside it (a Breacher bay beside a habitat, U.SPC-T466).
             if (kind.Requires != null && CountFacility(kind.Requires) == 0) return OutfitOutcome.WontFit;
+            // Only with the reactor power and the crew to spare for it (U.SPC-T521), and then the space.
+            if (kind.PowerMw > FreePowerMw + 1e-9) return OutfitOutcome.NoPower;
+            if (kind.Crew > FreeCrew + 1e-9) return OutfitOutcome.NoCrew;
             if (kind.Size > FreeSpace + 1e-9) return OutfitOutcome.NoRoom;
             return OutfitOutcome.Ok;
         }
@@ -632,7 +676,7 @@ namespace Unity.SpaceGod.Core
         public bool CanRemove(int index)
         {
             if (index < 0 || index >= Facilities.Count || Facilities[index].Def?.Fittable != true) return false;
-            // Nor the last of a kind another fitted facility needs (the habitat that supplies an assault bay, U.SPC-T466).
+            // Nor the last of a kind another fitted facility needs (the habitat that supplies a Breacher bay, U.SPC-T466).
             string kind = Facilities[index].Kind;
             if (CountFacility(kind) > 1) return true;
             foreach (var f in Facilities)
@@ -651,8 +695,9 @@ namespace Unity.SpaceGod.Core
         }
     }
 
-    /// <summary>Why a refit did or did not go through (<see cref="NoRoom"/>: the facility is bigger than the hull's free space).</summary>
-    public enum OutfitOutcome { Ok, NotAYard, CannotDock, Busy, NoSuchSlot, WontFit, AlreadyFitted, NoStock, CantAfford, HoldTooFull, BrigOccupied, YardCannotBuild, NoRoom }
+    /// <summary>Why a refit did or did not go through (<see cref="NoRoom"/>: the facility is bigger than the hull's free space;
+    /// <see cref="NoPower"/>, <see cref="NoCrew"/>: the hull has not the reactor power or the hands to spare for it, U.SPC-T521).</summary>
+    public enum OutfitOutcome { Ok, NotAYard, CannotDock, Busy, NoSuchSlot, WontFit, AlreadyFitted, NoStock, CantAfford, HoldTooFull, BrigOccupied, YardCannotBuild, NoRoom, NoPower, NoCrew }
 
     /// <summary>What a refit costs at a yard: the new module's materials bought from its market, the yard's labour,
     /// and what the part taken out fetches sold back into it.</summary>
@@ -996,7 +1041,7 @@ namespace Unity.SpaceGod.Core
         /// flush (<see cref="AiFlush"/> times its price, and two new hulls' worth besides) and the yard has the
         /// materials to spare (<see cref="AiStockMargin"/>): the facilities it wants first, as far as its free space goes
         /// (<see cref="NavyFacilities"/>: plate, a scanner and a brig; <see cref="RaiderFacilities"/>: plate, a brig and
-        /// racks for plunder), then hardened shields, the role weapons its doctrine favours (U.SPC-T505,
+        /// racks for plunder; for both a Breacher bay where there is room and a team to man it, U.SPC-T521), then hardened shields, the role weapons its doctrine favours (U.SPC-T505,
         /// <see cref="FleetPatterns.Wishes"/>: phaser arrays, plasma cannons), heavier guns on a big hull, a tachyon lance
         /// for a capital of a navy that favours one, then torch drives, and the lance last of all for any other navy.
         /// <paramref name="plan"/> is the owner's build plan, its doctrine (null: the balanced fleet's). Returns what was
@@ -1026,16 +1071,19 @@ namespace Unity.SpaceGod.Core
         public const double AiStockMargin = 4;
 
         /// <summary>The facilities a navy's warship wants in its free space, in order (facility kind ids; a new kind joins
-        /// the AI's designs by being added here).</summary>
+        /// the AI's designs by being added here). A Breacher bay (U.SPC-T521) comes after the brig, so a big hull with
+        /// room left takes one to fire its marines into prizes; it is wanted only by a hull whose habitats can fill a team.</summary>
         public static readonly List<string> NavyFacilities = new List<string>
         {
-            FacilityKinds.ArmourPlating, FacilityKinds.Scanner, FacilityKinds.ArmourPlating, FacilityKinds.Brig, FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating,
+            FacilityKinds.ArmourPlating, FacilityKinds.Scanner, FacilityKinds.ArmourPlating, FacilityKinds.Brig, FacilityKinds.BreacherBay,
+            FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating,
         };
 
-        /// <summary>The facilities a raider wants in its free space, in order.</summary>
+        /// <summary>The facilities a raider wants in its free space, in order (a Breacher bay after its racks, U.SPC-T521).</summary>
         public static readonly List<string> RaiderFacilities = new List<string>
         {
-            FacilityKinds.ArmourPlating, FacilityKinds.Brig, FacilityKinds.CargoRacks, FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating,
+            FacilityKinds.ArmourPlating, FacilityKinds.Brig, FacilityKinds.CargoRacks, FacilityKinds.BreacherBay, FacilityKinds.ArmourPlating,
+            FacilityKinds.ArmourPlating, FacilityKinds.ArmourPlating,
         };
 
         static bool Surplus(Settlement yard, IPartSpec part, double scale)
@@ -1058,6 +1106,8 @@ namespace Unity.SpaceGod.Core
             {
                 if (have.TryGetValue(id, out int n) && n > 0) { have[id] = n - 1; continue; }
                 var kind = FacilityKinds.Of(id);
+                // A Breacher bay is only worth its space where the habitats can fill a whole team (U.SPC-T521).
+                if (kind == BreacherBays.Kind && (BreacherBays.Count(ship) > 0 || !BreacherBays.CanMan(l))) continue;
                 if (l.CanAdd(kind) == OutfitOutcome.Ok) yield return (-1, default, kind);
             }
             bool big = ship.Spec.Class == ShipClass.Cruiser || ship.Spec.Class == ShipClass.Battleship || ship.Spec.Class == ShipClass.Carrier
