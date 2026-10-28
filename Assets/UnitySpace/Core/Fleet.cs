@@ -2353,7 +2353,7 @@ namespace Unity.SpaceGod.Core
 
         // An ore tug works to its operation's timetable, laden or not (U.SPC-T498): it never waits on a launch window.
         bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust && ship.Role != ShipRole.Tug && ship.Role != ShipRole.Hauler &&
-                                      !NavySupply(ship);
+                                      ship.Role != ShipRole.Colonist && !NavySupply(ship);  // nor does a colony ship (U.SPC-T524): it flies to its voyage's timetable
 
         // Nor does a navy's supply ship (U.SPC-T525), at its base or on its way to a war fleet that is waiting on it.
         static bool NavySupply(Ship ship) => ship.Role == ShipRole.Supply || ship.Voyage?.Purpose == VoyagePurpose.Supply;
