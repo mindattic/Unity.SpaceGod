@@ -32,7 +32,7 @@ namespace Unity.SpaceGod.Core
         /// throttle with heft.</summary>
         Bomber,
 
-        /// <summary>Fired rounds (U.SPC-T466): the Breacher, a marine team in an armoured round shot from a Breacher bay. It
+        /// <summary>Fired rounds (U.SPC-T466): the Breacher, a marine team in an armoured round shot from an assault bay. It
         /// flies like a bullet, its course corrected only slightly (<see cref="BallisticFlightModel"/>).</summary>
         Ballistic,
     }
@@ -251,8 +251,8 @@ namespace Unity.SpaceGod.Core
     /// <summary>
     /// The ballistic family's model (U.SPC-T466): a fired round, not a ship. Nothing drives it on or slows it: it coasts on
     /// the speed it was fired at, under gravity, its nose along its track, and the stick only bends that track a little
-    /// toward where it points, with the round's thrusters (<see cref="BreacherBays.SteerKmS2"/>, as a round in a battle is
-    /// steered, <see cref="BreacherBays.Correct"/>). Throttle, boost, strafe and roll do nothing.
+    /// toward where it points, with the round's thrusters (<see cref="AssaultBays.SteerKmS2"/>, as a round in a battle is
+    /// steered, <see cref="AssaultBays.Correct"/>). Throttle, boost, strafe and roll do nothing.
     /// </summary>
     public sealed class BallisticFlightModel : IFlightModel
     {
@@ -262,7 +262,7 @@ namespace Unity.SpaceGod.Core
         {
             if (dt <= 0) return;
             if (input.DesiredForward.LengthSquared > 1e-12)
-                s.Vel = BreacherBays.Correct(s.Vel, input.DesiredForward, BreacherBays.SteerKmS2.Value, dt);
+                s.Vel = AssaultBays.Correct(s.Vel, input.DesiredForward, AssaultBays.SteerKmS2.Value, dt);
             PilotFlight.Integrate(ref s, DVec3.Zero, gravityKmS2, dt);
             s.AngularVelocity = DVec3.Zero;
             if (s.Vel.LengthSquared > 1e-18)

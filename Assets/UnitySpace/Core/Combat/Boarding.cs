@@ -13,9 +13,8 @@ namespace Unity.SpaceGod.Core
         Midships,
         Bridge,
         Engineering,
-        /// <summary>A Breacher bay that fires Breacher rounds (U.SPC-T521, once the assault bay), or a round's own troop
-        /// compartment (U.SPC-T466).</summary>
-        BreacherBay,
+        /// <summary>An assault bay that fires Breacher rounds, or a round's own troop compartment (U.SPC-T466).</summary>
+        AssaultBay,
 
         /// <summary>A marine habitat (U.SPC-T465): where the ship's marines live and drill, and muster from to repel boarders.</summary>
         Barracks,
@@ -305,7 +304,7 @@ namespace Unity.SpaceGod.Core
                 foreach (var c in Barracks) c.Marines += marines / n;
                 return;
             }
-            (Of(CompartmentKind.Quarters) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.BreacherBay) ?? Compartments[Compartments.Count / 2]).Marines += marines;
+            (Of(CompartmentKind.Quarters) ?? Of(CompartmentKind.Midships) ?? Of(CompartmentKind.AssaultBay) ?? Compartments[Compartments.Count / 2]).Marines += marines;
         }
 
         /// <summary>Crew spread through the ship; marines in their habitats' barracks (or amidships, or wherever there is room).</summary>

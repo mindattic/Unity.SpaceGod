@@ -2352,7 +2352,11 @@ namespace Unity.SpaceGod.Core
         public static DriveKind DriveOf(Ship ship) => ship.Spec.AccelG >= TorchAccelG ? DriveKind.Torch : DriveKind.LowThrust;
 
         // An ore tug works to its operation's timetable, laden or not (U.SPC-T498): it never waits on a launch window.
-        bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust && ship.Role != ShipRole.Tug && ship.Role != ShipRole.Hauler;
+        bool UsesConics(Ship ship) => OrbitalTransfers && !ship.Spec.IsMilitary && DriveOf(ship) == DriveKind.LowThrust && ship.Role != ShipRole.Tug && ship.Role != ShipRole.Hauler &&
+                                      !NavySupply(ship);
+
+        // Nor does a navy's supply ship (U.SPC-T525), at its base or on its way to a war fleet that is waiting on it.
+        static bool NavySupply(Ship ship) => ship.Role == ShipRole.Supply || ship.Voyage?.Purpose == VoyagePurpose.Supply;
 
         /// <summary>
         /// What a day of the hull's time is worth to its owner (credits) when it trades time for propellant:

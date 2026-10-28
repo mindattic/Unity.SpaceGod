@@ -103,19 +103,35 @@ namespace Unity.SpaceGod.Core
 
     /// <summary>
     /// Supply ships a naval base sends after a war fleet (U.SPC-T93): tankers with its propellant, ammunition colliers
-    /// with its munitions and spares. They follow the fleet's way over the gates, and the way must still be open when they
-    /// come up with it: a gate cut or shut against them behind the fleet, and they cannot get through.
+    /// with its munitions and spares. Every one is a real hull (U.SPC-T525, <see cref="Hulls"/>): a freighter of its navy's
+    /// that sails from the base in formation with the rest, through the gates that will open for it to wherever the fleet
+    /// is now, and hands over what it carries only when it comes up with it. A gate cut or shut against them behind the
+    /// fleet and they cannot get through; whatever meets them on the way can destroy or take them, and what they carried
+    /// goes with them.
     /// </summary>
     public sealed class SupplyConvoy
     {
         public Campaign Campaign;
 
+        /// <summary>The navy whose ships they are.</summary>
+        public Faction Faction;
+
         /// <summary>The naval base it set out from, and its system.</summary>
         public Settlement Base;
         public StarSystem From;
 
+        /// <summary>When it set out, and when it was reckoned to come up with the fleet as it then lay (an estimate: it
+        /// delivers when its hulls actually get there).</summary>
         public double SetOutJd, DueJd;
+
+        /// <summary>How many of <see cref="Hulls"/> are tankers (the first ones) and ammunition colliers (the rest).</summary>
         public int Tankers, Colliers;
+
+        /// <summary>
+        /// The hulls themselves (U.SPC-T525): ships in their system's fleet, the first leading the rest, the first
+        /// <see cref="Tankers"/> of them tankers and the others colliers. Each delivers its share only if it gets there.
+        /// </summary>
+        public readonly List<Ship> Hulls = new List<Ship>();
 
         /// <summary>What it carries, as shares of the fleet's full load.</summary>
         public double Propellant, Munitions, Spares;
@@ -259,30 +275,205 @@ namespace Unity.SpaceGod.Core
             }
 
             var convoy = supply.Convoy;
-            if (convoy != null && jd >= convoy.DueJd) Arrive(c, convoy, system, leader, group, jd);
+            if (convoy != null) Track(c, convoy, system, leader, group, jd);
             if (supply.Convoy == null && station != null && supply.Lowest < FleetSupply.ResupplyBelow) Dispatch(c, station, route, system, leader, group, jd);
 
             double r = supply.Readiness;
             foreach (var s in group) s.Combat.Readiness = r;
         }
 
-        /// <summary>The convoy comes up with the fleet, if the way from its base is still open: it hands over what it carries.</summary>
+        /// <summary>How near (km) a convoy's leading hull must be to the war fleet's flagship to come up with it, when the two
+        /// are not lying at the same world.</summary>
+        public const double RendezvousKm = 0.01 * Astro.AuKm;
+
+        /// <summary>
+        /// A day of a convoy's way to its war fleet (U.SPC-T525), the fleet's flagship <paramref name="leader"/> in
+        /// <paramref name="system"/>: lost if every hull of it is gone (destroyed, a hulk, or taken), or if it cannot get
+        /// through to where the fleet is now; sent on after the fleet if it has moved to another system; and, its hulls come
+        /// up with the fleet, it hands over what it carries.
+        /// </summary>
+        void Track(Campaign c, SupplyConvoy convoy, StarSystem system, Ship leader, List<Ship> group, double jd)
+        {
+            if (Alive(convoy, 0, convoy.Hulls.Count) == 0)
+            {
+                Lost(c, convoy, system, jd, $"The {c.Faction.Name} supply ships ({convoy}) are lost on their way to the war fleet at {system.Name}");
+                return;
+            }
+            var (at, flag) = LeaderOf(convoy);
+            if (flag == null)
+            {
+                // Inside a gate: it is on its way.
+                if (InGate(convoy)) return;
+                // Its voyage given up (a gate shut against it for good) or its leading hull taken with nobody to carry on.
+                Lost(c, convoy, system, jd, $"The {c.Faction.Name} supply ships ({convoy}) cannot get through to the war fleet at {system.Name}: the way is shut to them");
+                return;
+            }
+            var v = flag.Voyage;
+            var traffic = galaxy.Traffic;
+            if (at == system)
+            {
+                if (Met(system.World, flag, leader, jd))
+                {
+                    Arrive(c, convoy, system, leader, group, jd);
+                    return;
+                }
+                // Here, but bound on through a gate for where the fleet was: it stops here, and makes for the fleet.
+                if (v.Destination != system) traffic?.Hold(system, flag, jd);
+                return;
+            }
+            // In another system, or bound for one the fleet has left: the way from where it is to where the fleet is now
+            // must be open to it, or it cannot get through.
+            var way = galaxy.Network?.Route(at, system, c.Faction, jd);
+            if (way == null || way.Count == 0)
+            {
+                Lost(c, convoy, system, jd, $"The {c.Faction.Name} supply ships ({convoy}) cannot get through to the war fleet at {system.Name}: the way behind it is cut");
+                return;
+            }
+            if (v.Destination != system && !v.AtGate && flag.Battle == null) traffic?.Redirect(at, flag, system, jd, force: false);
+        }
+
+        /// <summary>
+        /// Where a convoy's supply ships make for in <paramref name="system"/> (U.SPC-T525, the traffic's orders for a hull
+        /// on a <see cref="VoyagePurpose.Supply"/> voyage): the world its war fleet's flagship lies at or is bound for, or,
+        /// with the fleet not here, nowhere (it holds where it is until its navy sends it on).
+        /// </summary>
+        public int ConvoyOrders(StarSystem system, Ship ship, int here, double jd)
+        {
+            var convoy = ship.Voyage?.Convoy;
+            if (convoy?.Campaign == null) return -1;
+            ship.StakeoutKm = null;
+            var leader = FlagshipIn(system.World, convoy.Campaign);
+            if (leader == null) return here;
+            bool parked = leader.Phase == ShipPhase.Parked || leader.Phase == ShipPhase.Landed;
+            int port = parked ? InterstellarTraffic.PortOf(leader) : leader.DestinationBody;
+            if (port < 0) return here;
+            int root = system.Catalog.Root.Index;
+            if (port != root) return port;
+            // The fleet is out off a gate (holding it, or bound for it): the supply ships fly out to the same spot off the
+            // star, as raiders do to lie in wait off one, never to an orbit round the star itself.
+            DVec3? spot = leader.GateKm ?? leader.StakeoutKm ??
+                          (parked && leader.Orbit != null && leader.Orbit.Body == root ? leader.Orbit.OffsetAt(jd) : (DVec3?)null);
+            if (spot == null) return here;
+            ship.StakeoutKm = spot;
+            // Already off the star, but away from the spot: a real hop out to it, though it starts and ends at one body.
+            if (here == root && ship.Orbit != null && (ship.Orbit.OffsetAt(jd) - spot.Value).Length > RendezvousKm) ship.Homing = true;
+            return root;
+        }
+
+        /// <summary>Whether a convoy's leading hull, in port, has come up with the war fleet's flagship: lying at the same
+        /// world, or within <see cref="RendezvousKm"/> of it.</summary>
+        static bool Met(World world, Ship flag, Ship leader, double jd)
+        {
+            if (flag.Battle != null || (flag.Phase != ShipPhase.Parked && flag.Phase != ShipPhase.Landed)) return false;
+            if ((leader.Phase == ShipPhase.Parked || leader.Phase == ShipPhase.Landed) &&
+                InterstellarTraffic.PortOf(flag) == InterstellarTraffic.PortOf(leader)) return true;
+            return (world.Fleet.StateOf(flag, jd).HelioKm - world.Fleet.StateOf(leader, jd).HelioKm).Length <= RendezvousKm;
+        }
+
+        /// <summary>A campaign's flagship in <paramref name="world"/>, or null when it is not there.</summary>
+        static Ship FlagshipIn(World world, Campaign c)
+        {
+            foreach (var s in world.Fleet.Ships)
+                if (!s.Destroyed && !s.IsEscort && !s.Derelict && s.Faction == c.Faction && s.Voyage != null && s.Voyage.Campaign == c)
+                    return s;
+            return null;
+        }
+
+        /// <summary>The hull leading a convoy now (its first, or an heir if that was lost) and its system; (null, null) when
+        /// none is in any system (inside a gate, or none left on the voyage).</summary>
+        (StarSystem system, Ship ship) LeaderOf(SupplyConvoy convoy)
+        {
+            foreach (var s in galaxy.Systems)
+                foreach (var ship in s.World.Fleet.Ships)
+                    if (!ship.Destroyed && !ship.IsEscort && !ship.Derelict && ship.Faction == convoy.Faction && ship.Voyage?.Convoy == convoy)
+                        return (s, ship);
+            return (null, null);
+        }
+
+        bool InGate(SupplyConvoy convoy)
+        {
+            if (galaxy.Traffic == null) return false;
+            foreach (var p in galaxy.Traffic.InGates)
+                if (p.Leader.Voyage?.Convoy == convoy) return true;
+            return false;
+        }
+
+        /// <summary>How many of a convoy's hulls from <paramref name="from"/> (count <paramref name="count"/>) are still its navy's.</summary>
+        static int Alive(SupplyConvoy convoy, int from, int count)
+        {
+            int n = 0;
+            for (int i = from; i < from + count && i < convoy.Hulls.Count; i++)
+            {
+                var s = convoy.Hulls[i];
+                if (s != null && !s.Destroyed && !s.Derelict && s.Faction == convoy.Faction) n++;
+            }
+            return n;
+        }
+
+        /// <summary>A convoy that will never come up with its fleet: written off, and whatever is left of it turns for home.</summary>
+        void Lost(Campaign c, SupplyConvoy convoy, StarSystem system, double jd, string why)
+        {
+            c.Supply.Convoy = null;
+            convoys.Remove(convoy);
+            c.Supply.ConvoysLost++;
+            system.World.Log(jd, why, WorldEventKind.Loss, system.Catalog.Root.Index);
+            Release(convoy, jd);
+        }
+
+        /// <summary>
+        /// A convoy's work is over (delivered, lost or turned back): its hulls are no longer bound for the fleet, and those
+        /// still in a system turn for their base's system (home at once if they are there); those inside a gate turn back
+        /// when they come out.
+        /// </summary>
+        void Release(SupplyConvoy convoy, double jd)
+        {
+            var traffic = galaxy.Traffic;
+            if (traffic != null)
+                foreach (var p in traffic.InGates)
+                    if (p.Leader.Voyage?.Convoy == convoy) p.Leader.Voyage.Convoy = null;
+            var bound = new List<(StarSystem system, Ship ship)>();
+            foreach (var s in galaxy.Systems)
+                foreach (var ship in s.World.Fleet.Ships)
+                    if (ship.Voyage?.Convoy == convoy) bound.Add((s, ship));
+            foreach (var (s, ship) in bound)
+            {
+                var v = ship.Voyage;
+                v.Convoy = null;
+                ship.StakeoutKm = null;
+                ship.Homing = false;
+                if (ship.Destroyed || ship.Derelict || ship.IsEscort || ship.Faction != v.Faction || traffic == null) continue;
+                // Home now, or the way home; with no way open, it lies where it is and the traffic tries again later.
+                if (v.AtGate) traffic.Hold(s, ship, jd);
+                if (traffic.Redirect(s, ship, v.Home, jd, force: false)) continue;
+                v.Destination = s;
+                v.Route = new List<JumpGate>();
+                v.Leg = 0;
+                v.StayUntilJd = jd;
+            }
+        }
+
+        /// <summary>The convoy comes up with the fleet: its hulls that got there hand over what they carry.</summary>
         void Arrive(Campaign c, SupplyConvoy convoy, StarSystem system, Ship leader, List<Ship> group, double jd)
         {
             var supply = c.Supply;
             supply.Convoy = null;
             convoys.Remove(convoy);
             var world = system.World;
-            var way = convoy.From == system ? new List<JumpGate>() : galaxy.Network?.Route(convoy.From, system, c.Faction, jd);
-            if (way == null)
-            {
-                supply.ConvoysLost++;
-                world.Log(jd, $"The {c.Faction.Name} supply ships ({convoy}) cannot get through to the war fleet at {system.Name}: the way behind it is cut",
-                    WorldEventKind.Loss, system.Catalog.Root.Index);
-                return;
-            }
+            // Each tanker and collier brings its own share: those lost on the way bring nothing.
+            int tankers = Alive(convoy, 0, convoy.Tankers), colliers = Alive(convoy, convoy.Tankers, convoy.Colliers);
+            double tankShare = convoy.Tankers > 0 ? (double)tankers / convoy.Tankers : 0;
+            double collierShare = convoy.Colliers > 0 ? (double)colliers / convoy.Colliers : 0;
+            convoy.Propellant *= tankShare;
+            convoy.Munitions *= collierShare;
+            convoy.Spares *= collierShare;
             supply.Deliver(convoy);
             supply.ConvoysArrived++;
+            world.Log(jd, $"The {c.Faction.Name} supply ships from {convoy.Base?.Name} come up with the war fleet under the {leader.Name} at {system.Name}: " +
+                          $"{tankers} tanker{(tankers == 1 ? "" : "s")} and {colliers} collier{(colliers == 1 ? "" : "s")} hand over their loads",
+                WorldEventKind.Info, InterstellarTraffic.PortOf(leader));
+            foreach (var s in convoy.Hulls)
+                if (s != null && !s.Destroyed && s.Faction == convoy.Faction) s.Cargo = "Empty, back to " + (convoy.Base?.Name ?? "base");
+            Release(convoy, jd);
             // Tanks topped up and magazines filled from what the fleet now has aboard.
             foreach (var s in group)
             {
@@ -330,6 +521,12 @@ namespace Unity.SpaceGod.Core
             double mun = munNeed * munShare;
             double spares = (alloysNeed + elecNeed) * sparesShare;
             if (prop + mun + spares < 1) return;
+            // The supply ships sail from the base's own system (U.SPC-T525): no traffic to fly them, no convoy.
+            var from = SystemOf(station) ?? system;
+            if (galaxy.Traffic == null || (from != system && (route == null || route.Count == 0))) return;
+            int tankers = prop > 0 ? (int)Math.Ceiling(prop / TankerTonnes) : 0;
+            int colliers = mun + spares > 0 ? (int)Math.Ceiling((mun + spares) / CollierTonnes) : 0;
+            if (tankers + colliers == 0) return;
 
             double cost = 0;
             double fromWater = Math.Min(prop, stock[(int)Good.Water]);
@@ -341,20 +538,99 @@ namespace Unity.SpaceGod.Core
 
             var convoy = new SupplyConvoy
             {
-                Campaign = c, Base = station, From = SystemOf(station) ?? system, SetOutJd = jd,
+                Campaign = c, Faction = f, Base = station, From = from, SetOutJd = jd,
                 DueJd = jd + LoadingDays + GateNetwork.RouteDays(route) + CrossingDays,
-                Tankers = prop > 0 ? (int)Math.Ceiling(prop / TankerTonnes) : 0,
-                Colliers = mun + spares > 0 ? (int)Math.Ceiling((mun + spares) / CollierTonnes) : 0,
+                Tankers = tankers,
+                Colliers = colliers,
                 Propellant = (1 - supply.Propellant) * propShare,
                 Munitions = (1 - supply.Munitions) * munShare,
                 Spares = (1 - supply.Spares) * sparesShare,
                 Tonnes = prop + mun + spares, Cost = cost,
             };
+            Muster(convoy, station, from, jd);
+            // Fresh from port, with its way checked above, the leading hull always sails.
+            galaxy.Traffic.SendSupply(convoy.Hulls[0], from, system, route, convoy, jd);
             supply.Convoy = convoy;
             convoys.Add(convoy);
-            var baseWorld = convoy.From.World;
+            var baseWorld = from.World;
             baseWorld.Log(jd, $"{station.Name} sends {convoy.Tankers} tanker{(convoy.Tankers == 1 ? "" : "s")} and {convoy.Colliers} ammunition collier{(convoy.Colliers == 1 ? "" : "s")} after the {f.Name} war fleet at {system.Name}",
                 WorldEventKind.Launch, station.Body);
+        }
+
+        // ---------------------------------------------------------------- the supply ships' hulls (U.SPC-T525)
+
+        /// <summary>Names a navy gives its tankers and its ammunition colliers, in turn.</summary>
+        static readonly string[] TankerNames = { "Wellspring", "Deep Well", "Cistern", "Freshet", "Reservoir", "Brimming", "Spring Tide", "Aquifer" };
+        static readonly string[] CollierNames = { "Powder Hoy", "Magazine", "Quartermaster", "Sutler", "Armourer", "Stores", "Bandolier", "Caisson" };
+
+        int tankersNamed, colliersNamed;
+
+        /// <summary>
+        /// Gives <paramref name="convoy"/> its hulls (U.SPC-T525): the navy's supply ships lying idle in the base's system
+        /// first, then new ones fitted out at the base for the rest. The first <see cref="SupplyConvoy.Tankers"/> are its
+        /// tankers; the first leads, and the rest take station on it in formation.
+        /// </summary>
+        void Muster(SupplyConvoy convoy, Settlement station, StarSystem from, double jd)
+        {
+            var world = from.World;
+            var fleet = world.Fleet;
+            var f = convoy.Faction;
+            int need = convoy.Tankers + convoy.Colliers;
+            // The navy's supply ships in port here with nothing to do: each its own master again (a convoy home from a run
+            // still lies in formation on the hull that led it).
+            var idle = new List<Ship>();
+            foreach (var s in fleet.Ships)
+            {
+                if (s.Destroyed || s.Derelict || s.Faction != f || s.Battle != null || s.Voyage != null || s.GateKm != null || s == world.PilotedShip) continue;
+                if (world.Holdings != null && world.Holdings.Owns(s)) continue;
+                var head = s.Controller;
+                if (head.Role != ShipRole.Supply || head.Voyage != null || head.Battle != null || head.GateKm != null) continue;
+                if ((head.Phase != ShipPhase.Parked && head.Phase != ShipPhase.Landed) || head.Orbit == null) continue;
+                // Lying at this base: one at another world of the system is not here to load.
+                if (InterstellarTraffic.PortOf(head) != station.Body) continue;
+                idle.Add(s);
+            }
+            // Every one its own master first, so none left out of this convoy goes along on a leader that is in it.
+            foreach (var s in idle)
+                if (s.IsEscort) Stand(s, station, world, jd);
+            foreach (var s in idle)
+                if (convoy.Hulls.Count < need) convoy.Hulls.Add(s);
+            while (convoy.Hulls.Count < need)
+            {
+                bool tanker = convoy.Hulls.Count < convoy.Tankers;
+                string name = tanker ? Named(TankerNames, ref tankersNamed) : Named(CollierNames, ref colliersNamed);
+                var s = fleet.AddShip(name, ShipClass.Freighter, f, ShipRole.Supply);
+                s.CapacityTonnes = Economy.CapacityOf(ShipClass.Freighter);
+                Stand(s, station, world, jd);
+                world.NotifyAdded(s);
+                convoy.Hulls.Add(s);
+            }
+            var flag = convoy.Hulls[0];
+            for (int i = 0; i < convoy.Hulls.Count; i++)
+            {
+                var s = convoy.Hulls[i];
+                s.Cargo = i < convoy.Tankers
+                    ? $"Reaction mass for the {f.Name} war fleet"
+                    : $"Munitions and spares for the {f.Name} war fleet";
+                if (i > 0) fleet.AddEscort(flag, s, Fleet.SlotFor(i - 1));
+            }
+        }
+
+        static string Named(string[] names, ref int named)
+        {
+            string name = names[named % names.Length] + (named >= names.Length ? " " + (named / names.Length + 1) : "");
+            named++;
+            return name;
+        }
+
+        /// <summary>A supply ship its own master, lying at its naval base: there between runs, and making for it if elsewhere.</summary>
+        static void Stand(Ship s, Settlement station, World world, double jd)
+        {
+            s.Leader = null;
+            s.Role = ShipRole.Supply;
+            s.Route = null;
+            s.Ports = new[] { station.Body };
+            world.Fleet.Station(s, station.Body, jd);
         }
 
         /// <summary>Buys up to <paramref name="tonnes"/> of <paramref name="g"/> off <paramref name="s"/>'s market: what it cost.</summary>
@@ -366,10 +642,15 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>A campaign is over: whatever is still on its way to it turns back.</summary>
-        public void Ended(Campaign c)
+        public void Ended(Campaign c, double jd = double.NaN)
         {
-            if (c.Supply.Convoy != null) convoys.Remove(c.Supply.Convoy);
+            var convoy = c.Supply.Convoy;
             c.Supply.Convoy = null;
+            if (convoy == null) return;
+            convoys.Remove(convoy);
+            // Its supply ships, wherever they are, turn for home with what they carry (U.SPC-T525).
+            if (double.IsNaN(jd)) jd = convoy.From != null && !double.IsNaN(convoy.From.World.Jd) ? convoy.From.World.Jd : convoy.SetOutJd;
+            Release(convoy, jd);
         }
 
         StarSystem SystemOf(Settlement st)

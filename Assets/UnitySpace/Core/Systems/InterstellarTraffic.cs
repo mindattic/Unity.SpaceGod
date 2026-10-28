@@ -46,6 +46,11 @@ namespace Unity.SpaceGod.Core
         /// gate by gate (by the hyperlanes across each system where they run, see <see cref="Fleet"/>), through every system on the
         /// way, and its voyage ends on arrival.</summary>
         Plotted,
+
+        /// <summary>A navy's supply convoy (U.SPC-T525, see <see cref="MilitaryLogistics"/>): tankers and ammunition colliers
+        /// sailing from a naval base after a war fleet on campaign, through the gates to wherever it is now; they hand over what
+        /// they carry when they come up with it, and come home.</summary>
+        Supply,
     }
 
     /// <summary>
@@ -88,6 +93,10 @@ namespace Unity.SpaceGod.Core
 
         /// <summary>A war fleet's campaign (U.SPC-T92), or null.</summary>
         public Campaign Campaign;
+
+        /// <summary>The supply convoy a navy's supply ship sails in (U.SPC-T525), while it is still bound for its war fleet;
+        /// null once it has handed over its load, been turned back, or for any other voyage.</summary>
+        public SupplyConvoy Convoy;
 
         /// <summary>The enemy gate a war fleet holds beside, having come out of it, until it has taken it (U.SPC-T92); null when none.</summary>
         public JumpGate HoldGate;
@@ -945,6 +954,7 @@ namespace Unity.SpaceGod.Core
             VoyagePurpose.Ambush => "lying in wait between the stars",
             VoyagePurpose.Directed => "its orders beyond the gates",
             VoyagePurpose.Plotted => "a plotted course beyond the gates",
+            VoyagePurpose.Supply => "a supply run to the war fleet",
             _ => "a run beyond the gates",
         };
 
@@ -1019,6 +1029,12 @@ namespace Unity.SpaceGod.Core
                 case VoyagePurpose.Relocate:
                     Clans.Settle(system, ship, jd);
                     return;
+                case VoyagePurpose.Supply:
+                    // Here to come up with its war fleet (U.SPC-T525): its navy's logistics says where it goes next and when
+                    // it turns for home. Turned back on the way (its fleet's campaign over), it goes home at once.
+                    ship.Ports = world.FreeShipPorts();
+                    v.StayUntilJd = v.Convoy != null ? double.PositiveInfinity : jd;
+                    break;
             }
             ship.Role = v.Purpose == VoyagePurpose.Survey ? ShipRole.Free : v.HomeRole;
             if (ship.Role == ShipRole.Free || v.Purpose == VoyagePurpose.Raid || v.Purpose == VoyagePurpose.Expedition || v.Purpose == VoyagePurpose.Campaign || v.Purpose == VoyagePurpose.Hunt ||
@@ -1109,6 +1125,8 @@ namespace Unity.SpaceGod.Core
             var v = ship.Voyage;
             if (v == null || ship.GateKm != null) return -1;
             if (v.Purpose == VoyagePurpose.Campaign) return galaxy.Wars?.Orders(system, ship, here, jd) ?? -1;
+            // A navy's supply ships make for their war fleet wherever it is in this system, home or abroad (U.SPC-T525).
+            if (v.Purpose == VoyagePurpose.Supply && v.Convoy != null) return galaxy.Wars?.Logistics.ConvoyOrders(system, ship, here, jd) ?? -1;
             if (system == v.Home) return -1;
             var economy = system.World.Economy;
             var war = system.World.War;
@@ -1308,6 +1326,56 @@ namespace Unity.SpaceGod.Core
         }
 
         /// <summary>
+        /// Sends a navy's supply convoy (U.SPC-T525, <paramref name="ship"/> the hull leading it, in port at its naval base in
+        /// <paramref name="from"/>, the rest of its hulls in formation on it) after a war fleet in <paramref name="to"/> by
+        /// <paramref name="route"/> (gates that will open for it; empty when the fleet is in the base's own system, when it
+        /// just flies to it). The hulls carry <paramref name="convoy"/> on the voyage until they hand over its load.
+        /// </summary>
+        public Voyage SendSupply(Ship ship, StarSystem from, StarSystem to, List<JumpGate> route, SupplyConvoy convoy, double jd)
+        {
+            if (ship == null || from == null || to == null || ship.Voyage != null) return null;
+            Voyage v;
+            if (from == to || route == null || route.Count == 0)
+            {
+                if (from != to) return null;
+                // No gate to take: a voyage that never leaves home, so the hull is flown to the fleet by its orders here.
+                ship.StakeoutKm = null;
+                v = new Voyage
+                {
+                    Purpose = VoyagePurpose.Supply, Home = from, Destination = from, SetOutJd = jd, Faction = ship.Faction,
+                    HomeRole = ship.Role, HomeRoute = ship.Route, HomePorts = ship.Ports, StayUntilJd = double.PositiveInfinity,
+                };
+                ship.Voyage = v;
+                outCache?.Add(v);
+                ship.GateKm = null;
+                from.World.Fleet.ScheduleNext(ship, jd);
+            }
+            else v = SetOut(from, to, ship, VoyagePurpose.Supply, route, jd);
+            v.Convoy = convoy;
+            return v;
+        }
+
+        /// <summary>
+        /// Stops a hull on a voyage where it is (U.SPC-T525: supply ships that have found their war fleet in the system they
+        /// are in): whatever gate it was bound for, it now stays in <paramref name="system"/>, which its voyage now ends in.
+        /// </summary>
+        public void Hold(StarSystem system, Ship ship, double jd)
+        {
+            var v = ship.Voyage;
+            if (v == null) return;
+            atGates.RemoveAll(e => e.ship == ship);
+            v.AtGate = false;
+            v.HoldGate = null;
+            v.WaitingSinceJd = double.NaN;
+            v.Destination = system;
+            v.Route = new List<JumpGate>();
+            v.Leg = 0;
+            v.ByCruise = false;
+            ship.GateKm = null;
+            if (ship.Battle == null) system.World.Fleet.ScheduleNext(ship, jd);
+        }
+
+        /// <summary>
         /// Sends a jump strike group (<paramref name="ship"/>, its carrier or FTL capital flagship idle in <paramref name="from"/>)
         /// on <paramref name="campaign"/> to <paramref name="to"/> under its own drives (U.SPC-T474, see <see cref="FleetDoctrine"/>):
         /// out to the edge of the well, across open space with its escorts clamped to the carrier, and in on the flank of
@@ -1353,8 +1421,10 @@ namespace Unity.SpaceGod.Core
         /// Points a war fleet on campaign (<paramref name="ship"/>, its flagship in <paramref name="system"/>) at another
         /// system (U.SPC-T92): on to its next goal, or (<paramref name="to"/> its home) back where it set out from, the way it
         /// can fight through. At home already, it takes up its old duties at once. False if there is no way (it stays).
+        /// <paramref name="force"/> false keeps it to gates that will open for it (a navy's supply ships, U.SPC-T525, which
+        /// cannot fight their way through).
         /// </summary>
-        public bool Redirect(StarSystem system, Ship ship, StarSystem to, double jd)
+        public bool Redirect(StarSystem system, Ship ship, StarSystem to, double jd, bool force = true)
         {
             var v = ship.Voyage;
             if (v == null) return false;
@@ -1379,8 +1449,8 @@ namespace Unity.SpaceGod.Core
             List<JumpGate> route = null;
             if (system != to)
             {
-                route = Network.Route(system, to, ship.Faction, jd, force: true);
-                if (route == null) return false;
+                route = Network.Route(system, to, ship.Faction, jd, force: force);
+                if (route == null || (!force && route.Count == 0)) return false;
             }
             atGates.RemoveAll(e => e.ship == ship);
             v.AtGate = false;
@@ -1693,6 +1763,8 @@ namespace Unity.SpaceGod.Core
                 }
                 // A war fleet comes home when its campaign says so (see InterstellarWars).
                 if (v.Purpose == VoyagePurpose.Campaign) continue;
+                // So do supply ships still bound for their war fleet, when their navy's logistics says so (U.SPC-T525).
+                if (v.Purpose == VoyagePurpose.Supply && v.Convoy != null) continue;
                 bool hurt = (ship.Spec.IsMilitary || ship.Faction.IsPirate) && ship.Combat.HullDamage > 0.45;
                 // A group its polity sent here stays while its objective here stands (U.SPC-T423).
                 if (v.Purpose == VoyagePurpose.Directed && !hurt && galaxy.Polities.Command.Holds(ship, world)) continue;

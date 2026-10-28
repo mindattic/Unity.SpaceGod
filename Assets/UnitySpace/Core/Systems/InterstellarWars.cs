@@ -1178,7 +1178,7 @@ namespace Unity.SpaceGod.Core
         {
             c.Stage = CampaignStage.Over;
             c.EndedJd = jd;
-            Logistics.Ended(c);
+            Logistics.Ended(c, jd);
             landings.RemoveAll(l => l.Campaign == c && l.Troops <= 0);
         }
 

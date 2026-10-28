@@ -334,9 +334,8 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(logistics.Convoys, Does.Contain(convoy));
             double munitions = c.Supply.Munitions;
 
-            // The gate behind the fleet is cut while the supply ships are on their way: when they are due, they cannot get through.
+            // The gate behind the fleet is cut while the supply ships are on their way: they cannot get through.
             g.Network.Between(ac, barnard).AtB.Damage(1);
-            convoy.DueJd = jd + 1;
             logistics.Day(c, barnard, leader, jd + 1);
             Assert.That(c.Supply.ConvoysLost, Is.EqualTo(lost + 1), "the convoy got through a cut gate");
             Assert.That(c.Supply.ConvoysArrived, Is.EqualTo(arrived));
@@ -344,6 +343,86 @@ namespace Unity.SpaceGod.Core.Tests
             Assert.That(c.Supply.OutOfSupply, Is.True);
             Assert.That(c.Supply.Convoy, Is.Null, "and no base can send another");
             Assert.That(logistics.Convoys, Does.Not.Contain(convoy));
+            Assert.That(convoy.Hulls.Where(s => !s.Destroyed).All(s => s.Voyage?.Convoy == null), Is.True, "its hulls are no longer bound for the fleet");
+        }
+
+        // ------------------------------------------------------------ the supply ships are real hulls (U.SPC-T525)
+
+        /// <summary>The Accord's fleet in Barnard's Star, run down, and the convoy its home base sends after it.</summary>
+        static (Campaign c, Ship leader, SupplyConvoy convoy, double jd) ConvoyAfterTheFleet(Galaxy g, StarSystem ac, StarSystem barnard, StarSystem luhman)
+        {
+            var (war, c) = Campaign(g, ac, luhman, out double jd);
+            Ship Flagship() => barnard.World.Fleet.Ships.FirstOrDefault(x => !x.Destroyed && !x.IsEscort && x.Voyage?.Campaign == c);
+            jd = Run(g, jd, 60, () => Flagship() != null);
+            var leader = Flagship();
+            Assert.That(leader, Is.Not.Null, "the fleet never came through Barnard's Star");
+            var logistics = g.Wars.Logistics;
+            if (c.Supply.Convoy != null) logistics.Ended(c, jd);
+            c.Supply.Munitions = 0.5;
+            c.Supply.Propellant = 0.5;
+            logistics.Day(c, barnard, leader, jd);
+            Assert.That(c.Supply.Convoy, Is.Not.Null, "no supply ships sent");
+            return (c, leader, c.Supply.Convoy, jd);
+        }
+
+        [Test]
+        public void EveryTankerAndCollierIsARealHullSailingFromTheBase()
+        {
+            var g = Line(out var ac, out var barnard, out var luhman);
+            var (c, _, convoy, _) = ConvoyAfterTheFleet(g, ac, barnard, luhman);
+
+            Assert.That(convoy.Hulls, Has.Count.EqualTo(convoy.Tankers + convoy.Colliers), "one hull for every tanker and collier counted");
+            Assert.That(convoy.Tankers, Is.GreaterThan(0));
+            Assert.That(convoy.Colliers, Is.GreaterThan(0));
+            foreach (var s in convoy.Hulls)
+            {
+                Assert.That(ac.World.Fleet.IsPresent(s), Is.True, $"{s.Name} is not a ship in its base's fleet");
+                Assert.That(s.Spec.Class, Is.EqualTo(ShipClass.Freighter));
+                Assert.That(s.Faction, Is.SameAs(c.Faction));
+                Assert.That(s.Orbit, Is.Not.Null, $"{s.Name} is nowhere");
+            }
+            var flag = convoy.Hulls[0];
+            Assert.That(flag.Voyage, Is.Not.Null);
+            Assert.That(flag.Voyage.Purpose, Is.EqualTo(VoyagePurpose.Supply));
+            Assert.That(flag.Voyage.Convoy, Is.SameAs(convoy));
+            Assert.That(flag.Voyage.Destination, Is.SameAs(barnard), "bound for the fleet's system");
+            Assert.That(convoy.Hulls.Skip(1).All(s => s.Leader == flag), Is.True, "the rest sail in formation on the first");
+        }
+
+        [Test]
+        public void AConvoyDestroyedOnTheWayDeliversNothing()
+        {
+            var g = Line(out var ac, out var barnard, out var luhman);
+            var (c, leader, convoy, jd) = ConvoyAfterTheFleet(g, ac, barnard, luhman);
+            var logistics = g.Wars.Logistics;
+            int arrived = c.Supply.ConvoysArrived, lost = c.Supply.ConvoysLost;
+            double munitions = c.Supply.Munitions;
+
+            // Whatever met them on the way has destroyed them all.
+            foreach (var s in convoy.Hulls) s.Destroyed = true;
+            logistics.Day(c, barnard, leader, jd + 0.5);
+            Assert.That(c.Supply.ConvoysLost, Is.EqualTo(lost + 1));
+            Assert.That(c.Supply.ConvoysArrived, Is.EqualTo(arrived));
+            Assert.That(c.Supply.Munitions, Is.LessThanOrEqualTo(munitions), "nothing delivered");
+            Assert.That(logistics.Convoys, Does.Not.Contain(convoy));
+        }
+
+        [Test]
+        public void TheSupplyShipsDeliverOnlyWhenTheyComeUpWithTheFleetAndThenGoHome()
+        {
+            var g = Line(out var ac, out var barnard, out var luhman);
+            var (c, _, convoy, jd) = ConvoyAfterTheFleet(g, ac, barnard, luhman);
+            // Nothing is handed over at the base: the stores fill only when the hulls get there.
+            Assert.That(c.Supply.ConvoysArrived, Is.Zero);
+            Assert.That(c.Supply.Munitions, Is.LessThan(1));
+
+            jd = Run(g, jd, 40, () => c.Supply.ConvoysArrived > 0 || c.Supply.ConvoysLost > 0 || !c.Active);
+            Assume.That(c.Active || c.Supply.ConvoysArrived > 0, "the campaign ended before the convoy came up");
+            Assert.That(c.Supply.ConvoysArrived, Is.EqualTo(1), "the convoy never came up with the fleet");
+            var flag = convoy.Hulls.First(s => !s.Destroyed);
+            Assert.That(flag.Voyage?.Convoy, Is.Null, "its work is done");
+            Assert.That(g.Systems.Any(s => s != ac && s.World.Fleet.IsPresent(flag)) || g.Traffic.InGates.Any(p => p.Ships.Contains(flag)) || ac.World.Fleet.IsPresent(flag),
+                Is.True, "the hull is still somewhere");
         }
     }
 }

@@ -328,9 +328,8 @@ namespace Unity.SpaceGod.Core
     }
 
     /// <summary>Why a construction plan's fitting did or did not go through (<see cref="NoRoom"/>: the facility is bigger
-    /// than the hull's free internal space; <see cref="NoPower"/>, <see cref="NoCrew"/>: the hull has not the reactor power
-    /// or the hands to spare for it, U.SPC-T521).</summary>
-    public enum ConstructionOutcome { Ok, NoSuchSocket, WontFit, NoRoom, NoPower, NoCrew }
+    /// than the hull's free internal space).</summary>
+    public enum ConstructionOutcome { Ok, NoSuchSocket, WontFit, NoRoom }
 
     /// <summary>
     /// Building a hull from scratch (U.SPC-T377): pick a <see cref="HullFrame"/>, fit what goes on each of its hardpoints
@@ -375,8 +374,6 @@ namespace Unity.SpaceGod.Core
         {
             var can = Loadout.CanAdd(kind);
             if (can == OutfitOutcome.NoRoom) return ConstructionOutcome.NoRoom;
-            if (can == OutfitOutcome.NoPower) return ConstructionOutcome.NoPower;
-            if (can == OutfitOutcome.NoCrew) return ConstructionOutcome.NoCrew;
             if (can != OutfitOutcome.Ok) return ConstructionOutcome.WontFit;
             Loadout.Facilities.Add(FacilitySite.Fitted(kind));
             return ConstructionOutcome.Ok;

@@ -144,6 +144,14 @@ namespace Unity.SpaceGod.Core
         /// where it goes, and its load is never sold.
         /// </summary>
         Hauler,
+
+        /// <summary>
+        /// A navy's supply ship (U.SPC-T525, see <see cref="MilitaryLogistics"/>): a tanker or an ammunition collier that lies
+        /// at its naval base between runs and sails, with the rest of a <see cref="SupplyConvoy"/> in formation, through the
+        /// gates to a war fleet on campaign, hands over what it carries when it comes up with it, and comes home. Its navy's
+        /// logistics, not a market, decides where it goes, and what it carries is never sold.
+        /// </summary>
+        Supply,
     }
 
     public enum ShipPhase

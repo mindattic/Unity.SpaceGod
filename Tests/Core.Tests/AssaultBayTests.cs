@@ -5,14 +5,13 @@ using NUnit.Framework;
 namespace Unity.SpaceGod.Core.Tests
 {
     /// <summary>
-    /// The Breacher as a fired boarding round (U.SPC-T466): a whole marine team in an armoured round, fired from a Breacher
-    /// Bay (the Assault Bay until U.SPC-T521, now a fitting any ship with the space, reactor power and crew may carry)
-    /// fitted beside a Marine Habitat that supplies the teams, flying like a bullet with only a slight course correction
+    /// The Breacher as a fired boarding round (U.SPC-T466): a whole marine team in an armoured round, fired from an Assault
+    /// Bay fitted beside a Marine Habitat that supplies the teams, flying like a bullet with only a slight course correction
     /// until it strikes a hull, drills in and lets its team out into the compartment it hit, where the boarding fight takes
     /// over. The bay reloads only as fast as the habitats ready the next team, and the Breacher is no longer a flown class.
     /// </summary>
     [TestFixture]
-    public class BreacherBayTests
+    public class AssaultBayTests
     {
         const double StartJd = 2461324.0;
 
@@ -31,7 +30,7 @@ namespace Unity.SpaceGod.Core.Tests
         static Ship Raider()
         {
             var s = Hull(ShipClass.Cruiser, Red, 0);
-            Assert.That(BreacherBays.Equip(s), Is.True, "the cruiser took no Breacher bay");
+            Assert.That(AssaultBays.Equip(s), Is.True, "the cruiser took no assault bay");
             return s;
         }
 
@@ -54,17 +53,13 @@ namespace Unity.SpaceGod.Core.Tests
         // ---------------------------------------------------------------- the facility
 
         [Test]
-        public void TheBreacherBayIsAFacilityFittedOnlyBesideAMarineHabitat()
+        public void TheAssaultBayIsACapitalsFacilityFittedOnlyBesideAMarineHabitat()
         {
-            var bay = FacilityKinds.Of(FacilityKinds.BreacherBay);
-            Assert.That(bay, Is.SameAs(BreacherBays.Kind));
-            Assert.That(bay.Name, Is.EqualTo("Breacher bay"));
-            Assert.That(FacilityKinds.Of(FacilityKinds.OldBreacherBayId), Is.SameAs(bay), "a hull saved with an assault bay still has its bay");
+            var bay = FacilityKinds.Of(FacilityKinds.AssaultBay);
+            Assert.That(bay, Is.SameAs(AssaultBays.Kind));
             Assert.That(bay.Fittable, Is.True);
             Assert.That(bay.Size, Is.EqualTo(2));
-            Assert.That(bay.PowerMw, Is.EqualTo(BreacherBays.PowerMw).And.GreaterThan(0));
-            Assert.That(bay.Crew, Is.EqualTo(BreacherBays.Crew).And.GreaterThan(0));
-            Assert.That(bay.Compartment, Is.EqualTo(CompartmentKind.BreacherBay));
+            Assert.That(bay.Compartment, Is.EqualTo(CompartmentKind.AssaultBay));
             Assert.That(bay.Requires, Is.EqualTo(FacilityKinds.MarineHabitat));
             Assert.That(bay.Bill.Length, Is.GreaterThan(0));
 
@@ -87,88 +82,24 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void AnyShipWithTheSpaceReactorPowerAndCrewMayFitABreacherBay()
-        {
-            var bay = BreacherBays.Kind;
-
-            // A destroyer: 50 MW of reactor and 70 hands to spare for fittings; the bay takes 30 MW and 20 of them.
-            var destroyer = new ConstructionPlan(HullFrames.ForClass(ShipClass.Destroyer));
-            var l = destroyer.Loadout;
-            Assert.That(l.ReactorMw, Is.EqualTo(Loadout.ReactorReservePerScale).Within(1e-9));
-            Assert.That(l.FittingCrew, Is.EqualTo(CombatSpec.Of(ShipClass.Destroyer).Crew * Loadout.CrewSpareShare).Within(1e-9));
-            Assert.That(destroyer.FitFacility(bay), Is.EqualTo(ConstructionOutcome.Ok));
-            Assert.That(l.FreePowerMw, Is.EqualTo(l.ReactorMw - BreacherBays.PowerMw).Within(1e-9));
-            Assert.That(l.FreeCrew, Is.EqualTo(l.FittingCrew - BreacherBays.Crew).Within(1e-9));
-            // Stripped out again, its power and hands are free once more.
-            int at = destroyer.Facilities.ToList().FindIndex(f => f.Kind == FacilityKinds.BreacherBay);
-            Assert.That(destroyer.RemoveFacility(at), Is.EqualTo(ConstructionOutcome.Ok));
-            Assert.That(l.FreePowerMw, Is.EqualTo(l.ReactorMw).Within(1e-9));
-
-            // A corvette has a habitat's room and the hands, but not the reactor for the breech.
-            var corvette = new ConstructionPlan(HullFrames.ForClass(ShipClass.Corvette));
-            Assert.That(corvette.FitFacility(MarineHabitats.Kind), Is.EqualTo(ConstructionOutcome.Ok));
-            Assert.That(corvette.Loadout.ReactorMw, Is.LessThan(BreacherBays.PowerMw));
-            Assert.That(corvette.FitFacility(bay), Is.EqualTo(ConstructionOutcome.NoPower));
-
-            // A freighter's security post supplies marines and its reactor would do, but its forty hands cannot man a bay.
-            var freighter = new ConstructionPlan(HullFrames.ForClass(ShipClass.Freighter));
-            Assert.That(freighter.Loadout.FittingCrew, Is.LessThan(BreacherBays.Crew));
-            Assert.That(freighter.FitFacility(bay), Is.EqualTo(ConstructionOutcome.NoCrew));
-
-            // Navies design one into the boarding ship, whose reactor and crew were sized for it.
-            var gb = new ConstructionPlan(HullFrames.ForClass(ShipClass.GateBreaker));
-            Assert.That(FacilityLayouts.CountOf(FacilityLayouts.For(ShipClass.GateBreaker), FacilityKinds.BreacherBay), Is.EqualTo(1));
-            Assert.That(gb.Loadout.FreePowerMw, Is.EqualTo(gb.Loadout.ReactorMw - BreacherBays.PowerMw).Within(1e-9));
-            Assert.That(gb.Loadout.FreePowerMw, Is.EqualTo(Loadout.ReactorReservePerScale * gb.Loadout.Scale).Within(1e-9));
-            var hull = Hull(ShipClass.GateBreaker, Blue, 9);
-            Assert.That(BreacherBays.Count(hull), Is.EqualTo(1));
-            Assert.That(BreacherBays.IntervalSeconds(hull), Is.LessThan(double.PositiveInfinity));
-
-            // And a navy's or raider's big hull takes one as a yard refit, after its plate, scanner and brig.
-            Assert.That(Outfitting.NavyFacilities, Has.Member(FacilityKinds.BreacherBay));
-            Assert.That(Outfitting.RaiderFacilities, Has.Member(FacilityKinds.BreacherBay));
-        }
-
-        [Test]
-        public void AMerchantsEscortFiresItsBayAtARaiderButNeverAtALawfulHull()
-        {
-            var trader = new Faction("Trade", "TRD", new Rgb(0, 1, 0)) { MarineQuality = 1 };
-            foreach (var (victim, fires) in new[] { (Red, true), (Blue, false) })
-            {
-                var b = NewBattle(11);
-                var escort = Hull(ShipClass.Destroyer, trader, 0);
-                Assert.That(BreacherBays.Equip(escort), Is.True, "a merchant's escort may carry a bay");
-                var u = b.AddShip(escort, 0, new DVec3(8, 0, 0), -DVec3.UnitX);
-                u.Combat.Subsystems.Where(s => s.Def.IsWeapon).ToList().ForEach(s => s.Hp = 0);
-                var target = b.AddShip(Hull(ShipClass.Freighter, victim, 1), 1, new DVec3(-4, 0, 0), DVec3.UnitX);
-                foreach (var s in target.Combat.Subsystems)
-                    if (s.Kind == SubsystemKind.ShieldGenerator || s.Kind == SubsystemKind.Engine || s.Def.IsWeapon) s.Hp = 0;
-                target.Combat.ZeroAllShields();
-                target.MoraleThreshold = double.MaxValue;
-                for (int i = 0; i < 50 && Round(b) == null; i++) b.Advance(0.1);
-                Assert.That(Round(b) != null, Is.EqualTo(fires), victim.Name);
-            }
-        }
-
-        [Test]
         public void AHabitatReadiesTeamsAndTheBayFiresNoFasterThanItDoes()
         {
             var cruiser = Raider();
-            Assert.That(BreacherBays.Count(cruiser), Is.EqualTo(1));
-            Assert.That(BreacherBays.Habitats(cruiser), Is.EqualTo(1));
-            Assert.That(BreacherBays.IntervalSeconds(cruiser),
-                Is.EqualTo(Math.Max(BreacherBays.CycleSeconds.Value, BreacherBays.ReadySeconds.Value)).Within(1e-9));
-            double one = BreacherBays.IntervalSeconds(cruiser);
+            Assert.That(AssaultBays.Count(cruiser), Is.EqualTo(1));
+            Assert.That(AssaultBays.Habitats(cruiser), Is.EqualTo(1));
+            Assert.That(AssaultBays.IntervalSeconds(cruiser),
+                Is.EqualTo(Math.Max(AssaultBays.CycleSeconds.Value, AssaultBays.ReadySeconds.Value)).Within(1e-9));
+            double one = AssaultBays.IntervalSeconds(cruiser);
             Assert.That(Outfitting.Install(cruiser, MarineHabitats.Kind), Is.True);
-            Assert.That(BreacherBays.IntervalSeconds(cruiser), Is.LessThan(one), "a second habitat readies teams faster");
+            Assert.That(AssaultBays.IntervalSeconds(cruiser), Is.LessThan(one), "a second habitat readies teams faster");
 
             // A destroyer's one habitat quarters fewer than a team: a raider's fits a second to supply its bay.
             var destroyer = Hull(ShipClass.Destroyer, Red, 3);
-            Assert.That(BreacherBays.Equip(destroyer), Is.True);
-            Assert.That(BreacherBays.Habitats(destroyer), Is.EqualTo(2));
-            Assert.That(destroyer.Combat.Spec.Marines, Is.GreaterThanOrEqualTo(BreacherBays.TeamSize.Value));
+            Assert.That(AssaultBays.Equip(destroyer), Is.True);
+            Assert.That(AssaultBays.Habitats(destroyer), Is.EqualTo(2));
+            Assert.That(destroyer.Combat.Spec.Marines, Is.GreaterThanOrEqualTo(AssaultBays.TeamSize.Value));
 
-            Assert.That(BreacherBays.IntervalSeconds(Hull(ShipClass.Cruiser, Red, 4)), Is.EqualTo(double.PositiveInfinity), "no bay, no rounds");
+            Assert.That(AssaultBays.IntervalSeconds(Hull(ShipClass.Cruiser, Red, 4)), Is.EqualTo(double.PositiveInfinity), "no bay, no rounds");
         }
 
         // ---------------------------------------------------------------- in battle
@@ -180,7 +111,7 @@ namespace Unity.SpaceGod.Core.Tests
             var raider = b.AddShip(Raider(), 0, new DVec3(8, 0, 0), -DVec3.UnitX);
             var prize = Prize(b, new DVec3(-4, 0, 0));
             double ready = MarineHabitats.Ready(raider.Combat.Interior);
-            double team = BreacherBays.TeamSize.Value;
+            double team = AssaultBays.TeamSize.Value;
 
             Missile round = null;
             for (int i = 0; i < 50 && round == null; i++)
@@ -188,11 +119,11 @@ namespace Unity.SpaceGod.Core.Tests
                 b.Advance(0.1);
                 round = Round(b);
             }
-            Assert.That(round, Is.Not.Null, "the Breacher bay never fired");
+            Assert.That(round, Is.Not.Null, "the assault bay never fired");
             Assert.That(round.Marines, Is.EqualTo(team).Within(1e-9), "a whole team rides in the round");
             Assert.That(round.Source, Is.SameAs(raider));
-            Assert.That(raider.BreacherBayReload, Is.GreaterThan(BreacherBays.IntervalSeconds(raider.Ship) - 1));
-            Assert.That((round.Vel - raider.Vel).Length, Is.EqualTo(BreacherBays.RoundSpeedKmS.Value).Within(1e-6), "fired at the bay's velocity");
+            Assert.That(raider.AssaultBayReload, Is.GreaterThan(AssaultBays.IntervalSeconds(raider.Ship) - 1));
+            Assert.That((round.Vel - raider.Vel).Length, Is.EqualTo(AssaultBays.RoundSpeedKmS.Value).Within(1e-6), "fired at the bay's velocity");
 
             for (int i = 0; i < 200 && !round.Gone; i++) b.Advance(0.1);
             Assert.That(round.Gone, Is.True);
@@ -237,7 +168,7 @@ namespace Unity.SpaceGod.Core.Tests
         }
 
         [Test]
-        public void ARoundFliesLikeABulletAndATargetThatJinksAsideIsMissedAndTheRoundGoesAdrift()
+        public void ARoundFliesLikeABulletAndATargetThatJinksAsideIsMissedAndTheTeamLost()
         {
             var b = NewBattle(6);
             var raider = b.AddShip(Raider(), 0, new DVec3(12, 0, 0), -DVec3.UnitX);
@@ -252,16 +183,15 @@ namespace Unity.SpaceGod.Core.Tests
             double ready = MarineHabitats.Ready(raider.Combat.Interior);
             // Two km aside the moment it is fired: a missile would turn after it, the round can barely bend its track.
             prize.Pos += new DVec3(0, 2, 0);
-            for (int i = 0; i < 400 && !round.Gone && !round.Adrift; i++)
+            for (int i = 0; i < 400 && !round.Gone; i++)
             {
                 prize.Vel = DVec3.Zero;
                 b.Advance(0.1);
             }
-            // A miss goes adrift with its team alive (U.SPC-T519), not home to the habitats mid-fight.
-            Assert.That(round.Adrift, Is.True, "the round never ran out its flight");
+            Assert.That(round.Gone, Is.True, "the round never ran out its flight");
             Assert.That(b.Embedded.Any(e => e.Breacher), Is.False, "the round struck a target it could not have reached");
             Assert.That(prize.Combat.Interior.Boarder, Is.Null);
-            Assert.That(MarineHabitats.Ready(raider.Combat.Interior), Is.LessThanOrEqualTo(ready + 1e-9), "the drifting team came home");
+            Assert.That(MarineHabitats.Ready(raider.Combat.Interior), Is.LessThanOrEqualTo(ready + 1e-9), "the lost team came home");
         }
 
         [Test]
@@ -309,7 +239,7 @@ namespace Unity.SpaceGod.Core.Tests
             var b = NewBattle(8);
             var raider = b.AddShip(Raider(), 0, new DVec3(8, 0, 0), -DVec3.UnitX);
             Prize(b, new DVec3(-4, 0, 0));
-            MarineHabitats.Draw(raider.Combat.Interior, MarineHabitats.Ready(raider.Combat.Interior) - BreacherBays.TeamSize.Value + 1);
+            MarineHabitats.Draw(raider.Combat.Interior, MarineHabitats.Ready(raider.Combat.Interior) - AssaultBays.TeamSize.Value + 1);
             for (int i = 0; i < 50; i++) b.Advance(0.1);
             Assert.That(b.Missiles.Any(m => m.Kind == MissileKind.Breacher), Is.False);
         }
@@ -346,7 +276,7 @@ namespace Unity.SpaceGod.Core.Tests
             // A raider band's leader is the hull its lane interdictor (the escort fitted with a field projector) keeps station on.
             var leaders = w.Fleet.Ships.Where(x => x.Faction.IsPirate && w.Fleet.Ships.Any(e => e.Leader == x && LaneInterdictors.Carries(e))).ToList();
             Assert.That(leaders, Is.Not.Empty);
-            Expect.All(leaders, l => Assert.That(BreacherBays.Count(l), Is.EqualTo(1), l.Name + " leads a band with no Breacher bay"));
+            Expect.All(leaders, l => Assert.That(AssaultBays.Count(l), Is.EqualTo(1), l.Name + " leads a band with no assault bay"));
         }
 
         [Test]
@@ -356,7 +286,7 @@ namespace Unity.SpaceGod.Core.Tests
             foreach (var key in new[] { "war.breacherTeam", "war.breacherReady", "war.breacherCycle", "war.breacherSpeed", "war.breacherSteer",
                                         "war.breacherRange", "war.breacherImpact" })
                 Assert.That(SettingsRegistry.Default.Find(key), Is.Not.Null, key);
-            Assert.That(SettingsRegistry.Default.Find("war.breacherTeam"), Is.SameAs(BreacherBays.TeamSize));
+            Assert.That(SettingsRegistry.Default.Find("war.breacherTeam"), Is.SameAs(AssaultBays.TeamSize));
         }
     }
 }

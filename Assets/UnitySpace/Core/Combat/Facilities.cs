@@ -25,7 +25,7 @@ namespace Unity.SpaceGod.Core
     /// (<see cref="Loadout.InternalSpace"/>), in sections (one section is what an internal bay was before facilities).
     /// Every kind is data in <see cref="FacilityKinds"/>: its size, mass and bill of materials, which hull categories
     /// may fit it, whether a yard fits and strips it, the boarding compartment it gives the hull's interior, and what it
-    /// does to the hull's fighting spec (<see cref="Effect"/>). A new facility (a marine habitat, a Breacher bay, a
+    /// does to the hull's fighting spec (<see cref="Effect"/>). A new facility (a marine habitat, an assault bay, a
     /// radiator, a drive room) is a new registered kind, never an edit to the code that fits the first.
     /// </summary>
     public sealed class FacilityKind : IPartSpec
@@ -133,17 +133,9 @@ namespace Unity.SpaceGod.Core
         /// (U.SPC-T472). Asked with the hull's class, or null for a station or satellite.</summary>
         public Func<ShipClass?, bool> ClassFilter { get; set; }
 
-        /// <summary>The id of a facility the hull must already carry to fit this one, or null (U.SPC-T466): a Breacher bay
+        /// <summary>The id of a facility the hull must already carry to fit this one, or null (U.SPC-T466): an assault bay
         /// is fitted only where a marine habitat supplies its teams, and that habitat cannot be stripped from under it.</summary>
         public string Requires { get; set; }
-
-        /// <summary>The reactor power one draws, MW (U.SPC-T521): a hull fits it only with that much of its reactor's reserve
-        /// for fittings still free (<see cref="Loadout.FreePowerMw"/>). Zero for most (a projector brings its own reactor).</summary>
-        public double PowerMw { get; set; }
-
-        /// <summary>The crew one takes to man, beyond the hull's running crew (U.SPC-T521): a hull fits it only with that many
-        /// hands still to spare (<see cref="Loadout.FreeCrew"/>). Zero for most.</summary>
-        public double Crew { get; set; }
 
         /// <summary>Whether a hull of <paramref name="category"/> and <paramref name="cls"/> may carry it at all: not one the
         /// class bars (<see cref="FacilityLayouts.Bars"/>), and, for a kind with <see cref="Classes"/>, only those.</summary>
@@ -159,8 +151,8 @@ namespace Unity.SpaceGod.Core
     /// The registry of facility kinds (U.SPC-T470). The hull's structure (bridge, engineering, quarters, hangar deck,
     /// holds, batteries' magazines, the bow and midships sections, a Breacher round's troop compartment) and the four fittable
     /// facilities that were internal-bay modules (armour plate, cargo racks, a scanner suite, a brig) are registered
-    /// here, with the marine habitat (U.SPC-T465, <see cref="MarineHabitats"/>) and the Breacher bay that fires Breacher
-    /// rounds (U.SPC-T466, U.SPC-T521, <see cref="BreacherBays"/>); new kinds plug in with <see cref="Register"/>.
+    /// here, with the marine habitat (U.SPC-T465, <see cref="MarineHabitats"/>) and the assault bay that fires Breacher
+    /// rounds (U.SPC-T466, <see cref="AssaultBays"/>); new kinds plug in with <see cref="Register"/>.
     /// </summary>
     public static class FacilityKinds
     {
@@ -175,20 +167,9 @@ namespace Unity.SpaceGod.Core
         public const string ArmourPlating = "armour-plating", CargoRacks = "cargo-racks", Scanner = "scanner-suite", Brig = "brig",
                             MarineHabitat = "marine-habitat";
 
-        /// <summary>The firing room that launches Breacher rounds (U.SPC-T466, U.SPC-T521, see <see cref="BreacherBays"/>): any
-        /// ship's to fit that has the space, the reactor power and the crew for it, and only beside a marine habitat to
-        /// supply its teams.</summary>
-        public const string BreacherBay = "breacher-bay";
-
-        /// <summary>The Breacher bay's id before U.SPC-T521 renamed it; <see cref="Of"/> still finds the bay by it.</summary>
-        public const string OldBreacherBayId = "assault-bay";
-
-        /// <summary>The hulls that may fit a Breacher bay (U.SPC-T521): any ship that can quarter marines, navy, pirate or a
-        /// merchant's escort, so long as it has the space, power and crew for it; never a station.</summary>
-        public static readonly HullCategory[] BreacherHulls =
-        {
-            HullCategory.Freighter, HullCategory.Warship, HullCategory.Battleship, HullCategory.Carrier, HullCategory.Support,
-        };
+        /// <summary>The firing room that launches Breacher rounds (U.SPC-T466, see <see cref="AssaultBays"/>): a capital's to
+        /// fit, and only beside a marine habitat to supply its teams.</summary>
+        public const string AssaultBay = "assault-bay";
 
         /// <summary>The hulls big enough for a marine habitat (U.SPC-T465): every one but fighters, small craft and
         /// satellites, whose crews repel boarders alone.</summary>
@@ -249,7 +230,7 @@ namespace Unity.SpaceGod.Core
             Register(Structure(Bow, "Bow section", 1, CompartmentKind.Bow));
             Register(Structure(Midships, "Midships", 1, CompartmentKind.Midships));
             // The team's seats inside a Breacher round (U.SPC-T466): what boarders storm out of once it has drilled in.
-            Register(Structure(TroopCompartment, "Troop compartment", 2, CompartmentKind.BreacherBay));
+            Register(Structure(TroopCompartment, "Troop compartment", 2, CompartmentKind.AssaultBay));
 
             Register(FacilityKind.OfModule(ArmourPlating, ModuleKind.ArmourPlating, 1));
             Register(FacilityKind.OfModule(CargoRacks, ModuleKind.CargoRack, 1));
@@ -269,16 +250,13 @@ namespace Unity.SpaceGod.Core
                 new[] { (Good.Electronics, 50.0), (Good.Alloys, 10.0) }, Capitals));
             Register(new FacilityKind(TargetingComputers, "Targeting computers", 1, 40, false,
                 new[] { (Good.Electronics, 40.0), (Good.Machinery, 5.0) }, Capitals));
-            // The Breacher bay (U.SPC-T466, U.SPC-T521): the breech, the loading cradle and the round magazine, two sections,
-            // drawing on the reactor and manned by its own crew, so any ship with the space, power and hands may fit one. A
-            // boarding fight inside the hull can be fought through it like any other space.
-            Register(new FacilityKind(BreacherBay, "Breacher bay", 2, 400, false,
+            // The assault bay (U.SPC-T466): the breech, the loading cradle and the round magazine, two sections. A boarding
+            // fight inside the hull can be fought through it like any other space.
+            Register(new FacilityKind(AssaultBay, "Assault bay", 2, 400, false,
                 new[] { (Good.Alloys, 160.0), (Good.Machinery, 60.0), (Good.Electronics, 20.0) },
-                BreacherHulls, true, CompartmentKind.BreacherBay)
+                Capitals, true, CompartmentKind.AssaultBay)
             {
                 Requires = MarineHabitat,
-                PowerMw = BreacherBays.PowerMw,
-                Crew = BreacherBays.Crew,
             });
             // Only the classes the owner's roster lets carry a drive when fitted (battleships, command cruisers) may fit it
             // (U.SPC-T472); a carrier has its own already, a cruiser or destroyer none.
@@ -337,13 +315,7 @@ namespace Unity.SpaceGod.Core
 
         public static IReadOnlyList<FacilityKind> Catalogue => All;
 
-        public static FacilityKind Of(string id)
-        {
-            if (id == null) return null;
-            if (ById.TryGetValue(id, out var k)) return k;
-            // A hull saved before the Assault Bay became the Breacher bay (U.SPC-T521) still names it by its old id.
-            return string.Equals(id, OldBreacherBayId, StringComparison.OrdinalIgnoreCase) && ById.TryGetValue(BreacherBay, out k) ? k : null;
-        }
+        public static FacilityKind Of(string id) => id != null && ById.TryGetValue(id, out var k) ? k : null;
 
         /// <summary>The facility that is <paramref name="module"/>, or null if the module goes on a hardpoint.</summary>
         public static FacilityKind ForModule(ModuleKind module)
@@ -501,9 +473,6 @@ namespace Unity.SpaceGod.Core
                 new FacilitySite(FacilityKinds.MarineHabitat, "Boarding teams' barracks", 0.04, -0.06, 2, 340),
                 new FacilitySite(FacilityKinds.Hangar, "Shuttle deck", -0.05, -0.05, 3),
                 new FacilitySite(FacilityKinds.SiegeEngineering, "Siege engineering bay", -0.26, 0, 3),
-                // A Breacher bay beside the barracks (U.SPC-T521): the boarding ship fires its teams into a fort or a
-                // crippled hull as well as ferrying them over in its shuttles.
-                new FacilitySite(FacilityKinds.BreacherBay, "Breacher bay", 0.2, -0.05, 6),
             },
             // A truss freighter (U.SPC-T482): the cockpit at the bow, the pod gantry down the spine, the pods and spheres clamped
             // along it (no space of their own: nobody walks into a pod) and the engine room astern.

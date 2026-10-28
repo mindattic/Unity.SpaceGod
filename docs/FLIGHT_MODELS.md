@@ -24,7 +24,7 @@ To add a way of flying: write an `IFlightModel` and its handling struct, then ca
 
 **Tunables are data.** Each model takes a `readonly struct` of handling numbers (for example `LightFighterHandling`) with a `Default`. When the settings registry (U.SPC-T431) lands, each field becomes a declared setting, and the model reads whatever value the registry holds.
 
-**The light/heavy fighter split** is made at the family level. The heavy fighter is the Gunship (U.SPC-T467), an armoured multi-crew hull with two crewed turrets and a spinal light railgun, built for brawling and anti-corvette work. It holds the heavy-fighter slots in patrol wings, escort wings (at the heavy hire fee) and the scene tour that the Breacher used to fill. The Fighter and Courier are the light fighters. The Breacher is not a fighter, and since U.SPC-T466 not a flown ship at all: it is a boarding round fired from a Breacher Bay, in a ballistic family of its own (see [Fired rounds](#fired-rounds-the-breacher)).
+**The light/heavy fighter split** is made at the family level. The heavy fighter is the Gunship (U.SPC-T467), an armoured multi-crew hull with two crewed turrets and a spinal light railgun, built for brawling and anti-corvette work. It holds the heavy-fighter slots in patrol wings, escort wings (at the heavy hire fee) and the scene tour that the Breacher used to fill. The Fighter and Courier are the light fighters. The Breacher is not a fighter, and since U.SPC-T466 not a flown ship at all: it is a boarding round fired from an Assault Bay, in a ballistic family of its own (see [Fired rounds](#fired-rounds-the-breacher)).
 
 | Class | Family | Model today |
 | --- | --- | --- |
@@ -159,15 +159,15 @@ The Courier flies as a light fighter for now: it shares the free-aim controls an
 
 ## Fired rounds: the Breacher
 
-**Implemented** (U.SPC-T466, U.SPC-T521, `BallisticFlightModel` in `Core/Combat/FlightModels.cs`, `BreacherBays` in `Core/Combat/BreacherBays.cs`, tests in `Tests/Core.Tests/BreacherBayTests.cs`).
+**Implemented** (U.SPC-T466, `BallisticFlightModel` in `Core/Combat/FlightModels.cs`, `AssaultBays` in `Core/Combat/AssaultBays.cs`, tests in `Tests/Core.Tests/AssaultBayTests.cs`).
 
-A Breacher is a whole marine team (70 by default) sealed in an armoured round and fired at high velocity from a Breacher Bay (the Assault Bay until U.SPC-T521). It is not a ship anyone flies. It belongs to the **Ballistic** family:
+A Breacher is a whole marine team (70 by default) sealed in an armoured round and fired at high velocity from an Assault Bay. It is not a ship anyone flies. It belongs to the **Ballistic** family:
 
 1. **It flies like a bullet.** It keeps the speed it was fired at (2.5 km/s past the firing ship's own by default). Throttle, boost, strafe and roll do nothing, and its nose stays along its track.
-2. **Only a slight course correction.** Its thrusters bend the track toward the target by at most a small sideways push (0.02 km/s² by default). That is enough to follow a target that holds its course, but a hull that jinks hard after the round is fired is missed. A round that misses flies on and goes adrift with its team alive inside, for its side to recover after the fight (U.SPC-T519).
+2. **Only a slight course correction.** Its thrusters bend the track toward the target by at most a small sideways push (0.02 km/s² by default). That is enough to follow a target that holds its course, but a hull that jinks hard after the round is fired is missed. A round that misses flies on and is lost with its team.
 3. **It strikes the first hostile hull in its path.** A shield holding more than a quarter of its strength turns it aside. Otherwise the drill bores in, the round stays stuck in the plating, and its team storms out into the compartment it struck. The ordinary compartment-by-compartment boarding fight takes over from there, and the target's own marines muster from their barracks to stop them.
 
-The Breacher Bay is a facility of two sections that any ship (navy, pirate or a merchant's escort) may fit, so long as it has the free internal space, the reactor power (30 MW) and the crew to man it (20) to spare, and a Marine Habitat to supply the teams. The yard's outfitting screen shows each facility's sections, power and crew, and the hull's reactor power and hands left. It fires again only as fast as the habitats ready the next team: two minutes for one habitat by default, faster with more. The gate breaker is designed with one, navies and raiders refit one into a hull with the room and a team's worth of marines, every raider band's leader carries one, and a raider destroyer fits a second habitat to supply it. Its captain, of whatever side, fires at the most weakened hostile hull in range whose shields are down (a lawful ship only at raiders) to take it as a prize. The twelve-marine boarding pods remain the lighter option. Every figure is in Settings > Broadsides.
+The Assault Bay is a facility (two sections, warships, battleships and carriers) that a yard fits only into a hull that also carries a Marine Habitat to supply the teams. It fires again only as fast as the habitats ready the next team: two minutes for one habitat by default, faster with more. Every raider band's leader carries one, and a raider destroyer fits a second habitat to supply it. The twelve-marine boarding pods remain the lighter option. Every figure is in Settings > Broadsides.
 
 ## Work plan
 

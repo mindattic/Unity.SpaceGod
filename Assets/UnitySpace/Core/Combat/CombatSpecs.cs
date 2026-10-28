@@ -659,7 +659,7 @@ namespace Unity.SpaceGod.Core
                 },
             } },
             // The Breacher as it flew before U.SPC-T466, kept so a saved game's breachers still load and fight. Nothing builds
-            // one now: a Breacher is a round fired from a Breacher bay (BreacherBays, MissileKind.Breacher), not a ship.
+            // one now: a Breacher is a round fired from an assault bay (AssaultBays, MissileKind.Breacher), not a ship.
             [ShipClass.Breacher] = new[] { new CombatSpec
             {
                 DesignName = "Breacher", LengthKm = 0.18,
