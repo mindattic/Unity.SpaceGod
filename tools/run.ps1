@@ -23,6 +23,11 @@
 .PARAMETER Launch
     After publishing, immediately run the deployed Unity.SpaceGod.exe.
 
+.PARAMETER Headless
+    Launch the deployed player with no window in the shared headless mode (implies -Launch): runs
+    ..\Unity.Shared\tools\Start-Headless.ps1 (--headless -batchmode -nographics), skips the main
+    menu and waits for the MINDATTIC_HEADLESS_READY log line (U.SPC-T603).
+
 .PARAMETER Force
     Rebuild and republish even when the deployed commit already matches the player source (skips
     only the up-to-date check; it clears nothing more than a normal rebuild does). The repo-root
@@ -42,7 +47,17 @@
     powershell -ExecutionPolicy Bypass -File tools\run.ps1 -Force -Launch
     powershell -ExecutionPolicy Bypass -File tools\run.ps1 -LauncherOnly
 #>
-param([switch]$Launch, [switch]$SkipHdrp, [switch]$Force, [switch]$LauncherOnly)
+param([switch]$Launch, [switch]$SkipHdrp, [switch]$Force, [switch]$LauncherOnly, [switch]$Headless)
+
+if ($Headless) { $Launch = $true }
+# Launches the published player: normally, or with no window via the shared launcher (-Headless).
+function Start-Player([string]$exePath) {
+    if ($Headless) {
+        & (Join-Path $PSScriptRoot '..\..\Unity.Shared\tools\Start-Headless.ps1') -Exe $exePath -Wait
+    } else {
+        Start-Process -FilePath $exePath -WorkingDirectory (Split-Path $exePath)
+    }
+}
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -98,7 +113,7 @@ if (-not $Force -and (Test-Path (Join-Path $out $exeName)) -and (Test-Path $mark
 }
 if ($upToDate) {
     Write-Host "  Already deployed at $head (no player source changed) - skipping rebuild." -ForegroundColor Green
-    if ($Launch) { Start-Process -FilePath (Join-Path $out $exeName) -WorkingDirectory $out }
+    if ($Launch) { Start-Player (Join-Path $out $exeName) }
     exit 0
 }
 
@@ -183,7 +198,7 @@ Write-Host ''
 
 if ($Launch) {
     Write-Host '  Launching...' -ForegroundColor Cyan
-    Start-Process $exe
+    Start-Player $exe
 }
 
 # An explicit success code: nothing above sets $LASTEXITCODE (Unity runs via Start-Process), so a

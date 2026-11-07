@@ -299,6 +299,10 @@ powershell -ExecutionPolicy Bypass -File tools\run.ps1
 
 Development launches are silent. `tools\launch.ps1` (every menu choice) and the `/run` hook start the game with `-muted` and `MINDATTIC_CLI_MUTED=1`, which turn on Unity.Shared's session mute before the first scene loads; `SessionAudio` then holds `AudioListener.volume` at 0, even when the profile's master volume is applied. The mute lasts that run only and never changes the saved master volume or `settings.json`. Pass `-Sound` (`tools\launch.ps1 -Sound`) to launch with audio. The Desktop shortcut and a plain double-click on the exe play sound as usual.
 
+### Headless mode
+
+Off by default. `Unity.SpaceGod.exe --headless` (or `MINDATTIC_HEADLESS=1`) is the shared MindAttic headless mode from Unity.Shared (muted, runs in the background, vSync off, logs `MINDATTIC_HEADLESS_READY Unity.SpaceGod`), and here it also skips the main menu and goes straight into a normal session, like `-demo`, so a script has no menu to click. Scripted launch with no window: `tools\run.ps1 -Headless` (deploys, then runs `..\Unity.Shared\tools\Start-Headless.ps1`, which adds `-batchmode -nographics` and a log file). Without the flag nothing changes.
+
 ## Command line
 
 | Flag | Result |

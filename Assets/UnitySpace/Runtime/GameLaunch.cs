@@ -17,9 +17,9 @@ namespace Unity.SpaceGod
         /// <summary>Whether this game was started from the main menu (not straight into the game scene).</summary>
         public static bool FromMenu { get; private set; }
 
-        /// <summary>Flags that go straight into the game, with no menu to click through.</summary>
+        /// <summary>Flags that go straight into the game, with no menu to click through (<c>--headless</c> too: nobody can click it).</summary>
         public static bool SkipsMenu =>
-            Bootstrap.HasCommandLineFlag("-demo") || Bootstrap.HasCommandLineFlag("-capture") || Bootstrap.HasCommandLineFlag("-continue");
+            Bootstrap.HasCommandLineFlag("-demo") || Bootstrap.HasCommandLineFlag("-capture") || Bootstrap.HasCommandLineFlag("-continue") || Unity.Shared.Core.Headless.IsActive;
 
         public static void NewGame() => Start(null);
 
